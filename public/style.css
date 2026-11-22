@@ -2047,11 +2047,20 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
   align-items: baseline;
   gap: 8px;
   width: 100%;
-  padding: 4px 8px;
+  /* The head is console text, not chrome: at 4px/8px this padding was a fifth and a third of the console's own
+     size, so it is written in em and grows and shrinks WITH the one size instead of crowding the head at 24px or
+     swallowing it at 7px. */
+  padding: .35em .7em;
   border: 0;
   background: #161d26;
   color: var(--dim);
   font: inherit;
+  /* ONE console size. The head is the console's text: its size and its mono face are named here from --term-size, the
+     one property Settings writes and a card's Ctrl+wheel zoom overrides, so a head cannot sit at one size while the
+     rows around it move. Its weight and its line-height still inherit the box it is drawn in (the console's row
+     spacing), and the em padding above scales with the text at both ends of the zoom's clamp. */
+  font-family: var(--mono);
+  font-size: var(--term-size);
   text-align: left;
   cursor: pointer;
 }
@@ -2101,18 +2110,22 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
    spacing (the card's margin in the console); the three paddings are the INSIDE one (the text against the frame). */
 /* The body's padding is its four sides, from three variables: `--cmd-pad` the sides (8px today), and
    `--cmd-pad-top` / `--cmd-pad-bottom` the air above the prompt's first row and below its last (0 today, which is
-   the look the card has always had). The fold is a WHOLE number of this card's 18px rows (`--cmd-rows`, a
-   border-box max-height), so the clamp adds the two new paddings back on: the same number of preview rows stays on
-   the page at any value of the setting, instead of the padding eating a row. */
+   the look the card has always had). The fold is a WHOLE number of this card's rows (`--cmd-rows`, a border-box
+   max-height at the card's own 1.5 line-height), so the clamp adds the two new paddings back on: the same number of
+   preview rows stays on the page at any value of the setting, instead of the padding eating a row.
+   THE TEXT IS THE CONSOLE'S. The body used to say `12px/1.5`: a second size that Settings and a Ctrl+wheel zoom
+   could not move, so the prompt, its label and the category glyphs sat at 12px in a console the reader had just
+   zoomed to 24px. It now resolves from `--term-size` - the ONE size - and keeps the mono face and the 1.5 ratio. */
 .code-box.is-cmd > .code-body {
-  font: 12px/1.5 var(--mono);
+  font: var(--term-size)/1.5 var(--mono);
   color: #cfd8e3;
   padding: var(--cmd-pad-top, 0px) var(--cmd-pad, 8px) var(--cmd-pad-bottom, 0px);
 }
 .code-box.is-cmd.is-clamped > .code-body { max-height: calc(var(--cmd-rows, 2) * 1.5em + var(--cmd-pad-top, 0px) + var(--cmd-pad-bottom, 0px)); overflow: hidden; }
 /* The card's own box, as the reader wants it beside the console's text: its side margin, and the blank lines above
-   and below it on top of the 4px frame margin it has always carried (one line here is the body's own 18px). */
-.code-box.is-cmd { margin: calc(4px + var(--cmd-blank, 0) * 18px) var(--cmd-side, 0px); }
+   and below it on top of the 4px frame margin it has always carried (one line here is the body's own 1.5 line-height,
+   so a blank line is a blank line at 7px and at 24px too, not a fixed 18px against a 36px row). */
+.code-box.is-cmd { margin: calc(4px + var(--cmd-blank, 0) * 1.5em) var(--cmd-side, 0px); }
 /* The three dots that end a folded card's last preview row, written by public/board/console.js at the character the
    clamp cuts. Quiet - they are the card saying "there is more", not a word of the prompt - and never bold, so the
    Prompt: label beside them keeps its weight on its own. */
@@ -2136,9 +2149,11 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* A SPAWN's TODOs, as bullet rows BETWEEN the head and the body: the two-line clamp cuts the BODY, so a folded card
    still shows every item the tree has to do. Each row is one line of text (glyph, category, the item), escaped by the
    module that draws it. */
-/* The bullets keep the body's own side padding, the item text one glyph-width in from it (8px + 14px = the 22px this
-   row has always used), so a card's list and its prompt stay in one column at any value of the setting. */
-.code-box.is-cmd > .code-bullets { display: flex; flex-direction: column; gap: 2px; padding: 3px var(--cmd-pad, 8px) 5px calc(var(--cmd-pad, 8px) + 14px); font: 12px/1.5 var(--mono); color: #cfd8e3; }
+/* The bullets keep the body's own side padding, the item text one glyph-width in from it (14px at the 12px size this
+   row used to be pinned to, now 1.17em so the indent holds at every console size), so a card's list and its prompt
+   stay in one column at any value of the setting. The text is the console's ONE size, like the body above it: the
+   bullet's category glyph and its words move with a zoom instead of sitting at a fixed 12px inside a zoomed card. */
+.code-box.is-cmd > .code-bullets { display: flex; flex-direction: column; gap: 2px; padding: .25em var(--cmd-pad, 8px) .42em calc(var(--cmd-pad, 8px) + 1.17em); font: var(--term-size)/1.5 var(--mono); color: #cfd8e3; }
 .code-box.is-cmd > .code-bullets + .code-body { border-top: 1px solid var(--line); }
 .code-bullet { display: flex; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
 .code-bullet-glyph { flex: none; }

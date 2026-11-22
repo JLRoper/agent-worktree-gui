@@ -23,7 +23,11 @@
 //      two inside paddings back on, so a reader who raises them keeps the same number of preview rows;
 //   6. a bold `Prompt:` label starts the body's first row, inline, so it costs no preview row of its own;
 //   7. display only: the line the panel executes and the text it copies are untouched (the card carries the line in
-//      `data-ltext`, and copy reads that).
+//      `data-ltext`, and copy reads that);
+//   8. ONE SIZE: the card's body, its bullet rows and its head resolve from the console's `--term-size` - the one
+//      property Settings writes and a card's Ctrl+wheel zoom overrides - instead of a second 12px pin no zoom could
+//      reach. The mono face and the 1.5 ratio stay, and the padding that is a ratio (the bullets' air and hanging
+//      indent) is written in em so it scales with the text at both ends of the zoom's clamp.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -111,11 +115,13 @@ test("the folded height is the reader's number of preview rows, and its fallback
     /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: calc\(var\(--cmd-rows, 2\) \* 1\.5em \+ var\(--cmd-pad-top, 0px\) \+ var\(--cmd-pad-bottom, 0px\)\); overflow: hidden; \}/,
   );
   assert.doesNotMatch(css, /max-height: 3em;/);
-  // The arithmetic, not a claim: a 12px body at 1.5 is an 18px row, and two of them are the 36px = 3em this rule
-  // used to spell out. So the default draws the card exactly as it drew before the setting existed.
-  const row = 12 * 1.5;
-  assert.equal(row * 2, 36);
-  assert.equal(3 * 12, 36);
+  // The arithmetic, not a claim: the card's text is the console's own size, so at the default 11.5px a row is 17.25px
+  // and two of them are 34.5px - which is the 3em this rule spells out, at the size the console really draws. The card
+  // used to pin itself to 12px/18px and two 18px rows were 36px; that second size is what a Ctrl+wheel zoom could not
+  // reach, so it is gone (see the "the card's text is the console's ONE size" test below).
+  const row = 11.5 * 1.5;
+  assert.equal(row * 2, 34.5);
+  assert.equal(3 * 11.5, 34.5);
   // The attribute and the stylesheet are written from the same setting: the card asks the page for the number.
   assert.match(read("../public/core/assistant-command.js"), /const rows = Number\(clamp\) > 0 \? Number\(clamp\) : previewRows\(\);/);
   // …and every kind but TO is folded to it. A TO is the one exception, and it is named where the clamp is passed:
@@ -137,19 +143,37 @@ test("the folded height is the reader's number of preview rows, and its fallback
   assert.match(app, /box\.setAttribute\("data-code-clamp", String\(cmdLookState\.rows\)\);/);
 });
 
+test("the card's text is the console's ONE size, head and bullets and body alike", () => {
+  // The console has one size: --term-size, written on the root by Settings and overridden on a card by Ctrl+wheel.
+  // The card used to pin its body and its bullets to 12px/1.5, a SECOND size neither writer could move - so a console
+  // the reader zoomed to 24px carried a prompt, a Prompt: label and bullet rows still at 12px. Every one of those
+  // rules now names the one size, in the console's mono face, at the card's own 1.5 ratio.
+  assert.match(css, /\.code-box\.is-cmd > \.code-body \{\n  font: var\(--term-size\)\/1\.5 var\(--mono\);/);
+  assert.match(css, /\.code-box\.is-cmd > \.code-bullets \{[^}]*font: var\(--term-size\)\/1\.5 var\(--mono\);/);
+  assert.match(css, /\.code-box\.is-cmd > \.code-bullets \{[^}]*padding: \.25em var\(--cmd-pad, 8px\) \.42em calc\(var\(--cmd-pad, 8px\) \+ 1\.17em\);/);
+  // The head is console text too: its size and its mono face come from the one property, while its weight and its
+  // line-height still inherit the console around it (the reader's row spacing).
+  assert.match(css, /\.code-head \{[^}]*font-family: var\(--mono\);\n  font-size: var\(--term-size\);/);
+  assert.match(css, /\.code-head \{[^}]*font: inherit;/);
+  // No second knob and no leftover pin: nothing in the command card writes a fixed 12px/18px size, so a zoom cannot
+  // drift out of step with Settings and there is no --cmd-size for either writer to learn.
+  assert.doesNotMatch(css, /font: 12px\/1\.5 var\(--mono\)/);
+  assert.doesNotMatch(css, /\.code-box\.is-cmd > \.code-bullets \{[^}]*font-size: 12px/);
+});
+
 test("the card's seven settings default to exactly the look the panel had, and one is a floor of 1", () => {
   // The defaults ARE today's numbers, and they are the same numbers the stylesheet falls back to.
   assert.match(app, /const CMD_LOOK_DEFAULTS = Object\.freeze\(\{ rows: 2, side: 0, pad: 8, padTop: 0, padBottom: 0, blank: 0, con: 10 \}\);/);
   // The body's four sides, from three variables: the sides are the 8px the card has always had, and the top and the
   // bottom are 0 - which is exactly the `padding: 0 var(--cmd-pad, 8px)` this rule used to write.
   assert.match(css, /padding: var\(--cmd-pad-top, 0px\) var\(--cmd-pad, 8px\) var\(--cmd-pad-bottom, 0px\);/);
-  assert.match(css, /\.code-box\.is-cmd \{ margin: calc\(4px \+ var\(--cmd-blank, 0\) \* 18px\) var\(--cmd-side, 0px\); \}/);
+  assert.match(css, /\.code-box\.is-cmd \{ margin: calc\(4px \+ var\(--cmd-blank, 0\) \* 1\.5em\) var\(--cmd-side, 0px\); \}/);
   // The console's own text: the inset inside its box, which was 10px before these rows existed.
   assert.match(css, /\n  padding: 8px var\(--con-side, 10px\);/);
   assert.doesNotMatch(css, /\.job-cmd, \.job-out, \.job-foot \{ margin-left: var\(--con-side/);
   // The head and the bullet rows follow the same SIDE padding, so the card's texts stay in one column at any value.
   assert.match(css, /\.code-box\.is-cmd > \.code-head \{ align-items: flex-start; padding-left: var\(--cmd-pad, 8px\); padding-right: var\(--cmd-pad, 8px\); \}/);
-  assert.match(css, /padding: 3px var\(--cmd-pad, 8px\) 5px calc\(var\(--cmd-pad, 8px\) \+ 14px\);/);
+  assert.match(css, /padding: \.25em var\(--cmd-pad, 8px\) \.42em calc\(var\(--cmd-pad, 8px\) \+ 1\.17em\);/);
   // The floor: 1 preview row is the minimum, and the ceiling is the one the markup offers (8).
   assert.match(app, /rows: \[1, 8\],/);
   assert.match(app, /const v = Number\.isFinite\(n\) \? Math\.min\(hi, Math\.max\(lo, Math\.round\(n\)\)\) : CMD_LOOK_DEFAULTS\[name\];/);

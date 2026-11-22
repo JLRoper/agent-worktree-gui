@@ -1,4 +1,5 @@
-// The console's fonts, measured through the browser's OWN platform fonts, and the console's row spacing.
+// The console's fonts, measured through the browser's OWN platform fonts, the console's row spacing, and the one size
+// everything drawn inside a console resolves to - ordinary rows and an assistant command card alike.
 // HARNESS: LIVE GATE - a seeded fixture, so it runs anywhere Playwright is installed.
 //
 //   node tools/verify-console-fonts.mjs                     # the gate: every entry measured, every pair diffed
@@ -22,9 +23,12 @@
 //
 // WHAT IS DRIVEN (nothing synthetic reaches the page): a throwaway panel of its own (tools/panel-testkit.mjs - spare
 // port, own PANEL_CONFIG / HERMES_HOME / jobs.json, API_SERVER_KEY empty), no gateway, the assistant's own rules off,
-// and ONE thread whose newest turn is drawn OPEN so its console is the transcript a reader reads a reply in:
+// ONE thread whose newest turn is drawn OPEN so its console is the transcript a reader reads a reply in, and a second
+// thread on the board's list carrying the SAME transcript and never touched by the wheel:
 //
+//   a != b -> c => d <= e, 100 != 200  the ligature row the console fonts are measured on
 //   console row one / two / three      three physical lines: the vertical gap between two of them is the row spacing
+//   SPAWN IN ... + TODO lines          an assistant command card: its head, its bullet rows and its Prompt: label
 //   read_file · lib/jobs.js            a tool call row
 //   patched the guard / 412 lines      the output under it
 //   the long one: wrap wrap wrap ...   one row that wraps, so a leading change moves a height a reader can count
@@ -36,14 +40,21 @@
 //       pixels - that is the duplicate the lists used to be full of;
 //   (3) AN ENTRY THAT CHANGES NOTHING IS NOT AN ENTRY: every console entry draws the console differently from the
 //       default one (pixels), and every UI entry draws the UI label differently from the default one;
-//   (4) THE ROW SPACING IS ONE VARIABLE, and every console row follows it: at 1.2, 1.5 and 2.4 the console's computed
-//       line-height is --con-row-space x --term-size, the distance between two lines of console text is that
-//       line-height, a wrapped row grows by whole lines, the reasoning block and the tool rows move with the prose,
-//       and the PROMPT BOX's own padding never moves at all;
+//   (4) THE ROW SPACING IS ONE VARIABLE, and every console row outside a command card follows it: at 1.2, 1.5 and 2.4
+//       the console's computed line-height is --con-row-space x --term-size, the distance between two lines of console
+//       text is that line-height, a wrapped row grows by whole lines, the reasoning block and the tool rows move with
+//       the prose, and the PROMPT BOX's own padding never moves at all (a card keeps its own 1.5 fold ratio, which the
+//       zoom section measures on the card);
 //   (5) DEFAULTS ARE TODAY'S LOOK: with no key stored the console draws 1.5 (17.25px at 11.5px), the slider sits there,
 //       and one press of `use defaults` puts a changed value back;
 //   (6) the choice is SAVED with the other wtgui.* settings, and RE-APPLIED on the next load of the page;
-//   (7) nothing pressed here raised a page error.
+//   (7) nothing pressed here raised a page error;
+//   (8) THE CONSOLE HAS ONE SIZE, and the assistant's command card is drawn at it: a Ctrl+wheel over the console that
+//       holds a SPAWN card moves the ordinary rows by one 1px step and the card's bullet text, its head, its Prompt:
+//       label and its category glyph by the same step; at rest and at both ends of the clamp (7px and 24px) they are
+//       one size, in the console's mono face, at its 1.5 line-height, with padding that scales instead of crowding the
+//       text; a second console the wheel never touched keeps Settings' size, and Settings' own Console size moves the
+//       unzoomed card too - ONE property, no second knob a zoom could drift out of step with.
 //
 // Exit codes: 0 held; 1 a check failed; 2 the run did not measure what it claims (no Playwright, no console, no CDP).
 import { execFileSync } from "node:child_process";
@@ -65,6 +76,10 @@ const HTML_OUT = opt("--html");
 const SUITE = opt("--suite");
 const VERSION = opt("--version");
 const THREAD = "panel-assistant";
+// The control: a second console on the board's own list, carrying the SAME transcript (a command card and the plain
+// rows around it) and never touched by the wheel. The zoom proof measures the assistant's card against this one, and
+// the captures put the two in one frame: a zoomed card beside console text at the size the reader has not changed.
+const CONTROL_THREAD = "console-fonts-control";
 
 // The fixture. Three physical lines, a tool call, its output, and one long wrapping row - the four shapes a console row
 // comes in, so "every console row follows the spacing" is measured on all of them and not on the prose alone. The first
@@ -75,6 +90,12 @@ const TRANSCRIPT = [
   "console row one",
   "console row two",
   "console row three",
+  // An assistant command card, in the console: a SPAWN line whose TODO lines fold into its bullet rows. Its head, its
+  // bullets and the Prompt: label under them are the panel's own text, drawn inside the console the reader zooms, so
+  // this is the fixture the one-size proof is measured on.
+  "SPAWN IN .worktrees/cf-1 | measure",
+  "TODO [proof] follows the size",
+  "TODO [clamp] 7 and 24",
   "read_file · lib/jobs.js",
   "patched the guard, 412 lines",
   "the long row: " + "wrap ".repeat(80).trim(),
@@ -94,6 +115,7 @@ const out = {
   shots: SHOTS,
   fonts: { ui: [], term: [] },
   spacing: [],
+  zoom: { steps: [], settings: [], clamp: [], shots: [] },
   duplicated: [],
   checks: [],
   errors: [],
@@ -113,6 +135,7 @@ mkdirSync(path.join(dir, "logs"), { recursive: true });
 const now = Date.now();
 const seedPath = path.join(TREE, ".worktrees", "console-fonts-fixture-0001").replace(/\\/g, "/");
 const message = TRANSCRIPT.join("\n");
+const lines = TRANSCRIPT.map((text, i) => ({ kind: /read_file/.test(text) ? "tool" : /patched the guard/.test(text) ? "tool-out" : "text", text, lid: i + 1, at: now - 31_000 + i }));
 const job = {
   id: "confonts1",
   thread: THREAD,
@@ -128,9 +151,23 @@ const job = {
   ownerPath: seedPath,
   worktreePath: seedPath,
   worktree: "console-fonts-fixture-0001",
-  lines: TRANSCRIPT.map((text, i) => ({ kind: /read_file/.test(text) ? "tool" : /patched the guard/.test(text) ? "tool-out" : "text", text, lid: i + 1, at: now - 31_000 + i })),
+  lines,
 };
-writeFileSync(path.join(dir, "logs", "jobs.json"), JSON.stringify({ savedAt: new Date(now).toISOString(), jobs: [job] }, null, 1));
+// The control console: the same transcript and the same command card, on a thread the board lists as an unattached
+// agent. It is the "before" a zoom is read against - the reader has not touched it, so it keeps the size Settings
+// wrote on the root - and it is what the two captures show beside the zoomed card.
+const controlJob = {
+  ...job,
+  id: "confonts2",
+  thread: CONTROL_THREAD,
+  prompt: "the same console, never zoomed",
+  cwd: seedPath,
+  ownerPath: null,
+  worktreePath: null,
+  worktree: "",
+  lines,
+};
+writeFileSync(path.join(dir, "logs", "jobs.json"), JSON.stringify({ savedAt: new Date(now).toISOString(), jobs: [job, controlJob] }, null, 1));
 
 const { freePort, startPanel } = await import(pathToFileURL(path.join(TREE, "tools", "panel-testkit.mjs")).href);
 const port = await freePort();
@@ -230,6 +267,9 @@ const readSpacing = (page, thread) =>
     const pre = turn ? turn.querySelector("pre.job-out") : null;
     if (!pre) return null;
     const rows = [...pre.querySelectorAll(".jl, .jl-tool, .jl-tool-out")].filter((el) => {
+      // A command card's own text keeps its 1.5 ratio (its fold is a whole number of 1.5em rows), so it is not one of
+      // the console rows this check is about; the zoom section measures the card's line-height of its own.
+      if (el.closest(".code-box")) return false;
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
@@ -285,11 +325,80 @@ const readSpacing = (page, thread) =>
     };
   }, thread);
 
+// ---- the console's ONE size, on the assistant's command card ------------------------------------------------------
+// A card's head, its bullets, the bold Prompt: label and the category glyph are the panel's own text, drawn inside the
+// console the reader zooms. This reads every one of them - and the ordinary console row beside them - out of
+// getComputedStyle, so the proof is what the browser RESOLVED, never the stylesheet's text. The control console on the
+// board is read in the same pass: it was never touched by the wheel, so it is the size a zoom is measured against.
+const readZoom = (page) =>
+  page.evaluate(({ thread, control }) => {
+    const job = document.querySelector(`#assistant .job[data-thread="${thread}"]`);
+    const pre = job ? job.querySelector("pre.job-out") : null;
+    const controlJob = document.querySelector(`#jobs .job[data-thread="${control}"]`);
+    const controlPre = controlJob ? controlJob.querySelector("pre.job-out") : null;
+    const card = pre ? pre.querySelector(".code-box.is-cmd") : null;
+    if (!pre || !card) return null;
+    const css = (el) => {
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        size: Math.round((parseFloat(s.fontSize) || 0) * 100) / 100,
+        line: Math.round((parseFloat(s.lineHeight) || 0) * 100) / 100,
+        family: s.fontFamily,
+        weight: s.fontWeight,
+      };
+    };
+    const q = (sel, root = card) => root.querySelector(sel);
+    const plain = [...pre.querySelectorAll(".jl")].find((el) => !card.contains(el)) || null;
+    const controlCard = controlPre ? controlPre.querySelector(".code-box.is-cmd") : null;
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) };
+    };
+    const pad = (el) => {
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        top: Math.round((parseFloat(s.paddingTop) || 0) * 100) / 100,
+        right: Math.round((parseFloat(s.paddingRight) || 0) * 100) / 100,
+        bottom: Math.round((parseFloat(s.paddingBottom) || 0) * 100) / 100,
+        left: Math.round((parseFloat(s.paddingLeft) || 0) * 100) / 100,
+        text: [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].join(" "),
+      };
+    };
+    return {
+      found: true,
+      console: css(plain),
+      head: css(q(".code-head")),
+      what: css(q(".code-head .code-what")),
+      bullets: css(q(".code-bullets")),
+      bulletText: css(q(".code-bullet-text")),
+      glyph: css(q(".code-bullet-glyph")),
+      label: css(q(".code-prompt-label")),
+      body: css(q(".code-body")),
+      control: css(controlPre ? controlPre.querySelector(".jl") : null),
+      controlCard: controlCard ? { head: css(controlCard.querySelector(".code-head")), bullet: css(controlCard.querySelector(".code-bullet-text")) } : null,
+      cardVar: job ? getComputedStyle(job).getPropertyValue("--term-size").trim() : "",
+      rootVar: getComputedStyle(document.documentElement).getPropertyValue("--term-size").trim(),
+      jobStyle: job ? [...job.style] : [],
+      pad: { bullets: pad(q(".code-bullets")), head: pad(q(".code-head")), body: pad(q(".code-body")) },
+      cardBox: box(card),
+      preBox: box(pre),
+      preScroll: pre ? { top: pre.scrollTop, height: pre.scrollHeight, client: pre.clientHeight } : null,
+      controlCardBox: box(controlCard),
+      controlPreBox: box(controlPre),
+      controlPreScroll: controlPre ? { top: controlPre.scrollTop, height: controlPre.scrollHeight, client: controlPre.clientHeight } : null,
+      cardScroll: card ? { width: card.scrollWidth, client: card.clientWidth } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  }, { thread: THREAD, control: CONTROL_THREAD });
+
 const alive = [];
 out.reaped = null;
 try {
   console.log(`console fonts + row spacing gate on ${TREE}`);
-  console.log(`  sandbox: ${panel.base} - one seeded turn, seven console rows, no gateway - shots ${SHOTS}`);
+  console.log(`  sandbox: ${panel.base} - two seeded consoles (one with a command card, one control), no gateway - shots ${SHOTS}`);
   mkdirSync(SHOTS, { recursive: true });
 
   await withBrowser(
@@ -408,6 +517,14 @@ try {
       // that holds the glyphs, not the console box around it (a box's own text is empty and it reports nothing). One
       // line is picked once and marked: the ligature row where it is on the page, otherwise the longest line, so the
       // same text is measured under every entry and the strips are comparable.
+      //
+      // A console sticks to its newest rows, and with a command card in the seeded fixture the top of the transcript
+      // can be scrolled out of the box while the rest is on screen. Bring the console back to its first row first:
+      // the line this pass marks and measures has to be a line the strips can actually photograph.
+      await page.evaluate(() => {
+        for (const pre of document.querySelectorAll("pre.job-out")) pre.scrollTop = 0;
+      });
+      await page.waitForTimeout(120);
       const shape = await page.evaluate(() => {
         const pre = document.querySelector("pre.job-out");
         if (!pre) return null;
@@ -417,7 +534,15 @@ try {
       const probe = await page.evaluate(() => {
         const pre = document.querySelector("pre.job-out");
         if (!pre) return null;
-        const lines = [...pre.querySelectorAll(".jl, .jl-text, .md-para, .tgrp-head")].filter((el) => el.children.length === 0 && String(el.textContent || "").trim().length > 3 && el.getBoundingClientRect().height > 0);
+        // Only the rows the console is actually SHOWING: a console that has scrolled (it sticks to the newest rows)
+        // can have a row in its layout that no pixel of the strip could photograph, and elementFromPoint below would
+        // be pointing at whatever the scrolled-away box's coordinate now holds.
+        const view = pre.getBoundingClientRect();
+        const lines = [...pre.querySelectorAll(".jl, .jl-text, .md-para, .tgrp-head")].filter((el) => {
+          if (el.children.length !== 0 || String(el.textContent || "").trim().length <= 3) return false;
+          const r = el.getBoundingClientRect();
+          return r.height > 0 && r.top >= view.top && r.bottom <= view.bottom && r.left >= view.left && r.right <= view.right;
+        });
         const lig = lines.find((el) => /=>/.test(String(el.textContent || "")));
         const pick = lig || lines.sort((a, b) => String(b.textContent || "").length - String(a.textContent || "").length)[0];
         if (!pick) return null;
@@ -803,6 +928,152 @@ try {
       check(reset.store === String(NOW.mult), "and the store agrees with it", reset.store);
       check(Math.abs(deltaAt(reset) - NOW.line) < 0.02, "the gap between two lines is the one the panel started with", `${deltaAt(reset)}px`);
 
+      // ---- (8) THE ASSISTANT'S COMMAND CARD IS THE CONSOLE'S TEXT, AND THE WHEEL MOVES BOTH ------------------
+      // The card's head, its bullet rows, the bold Prompt: label and the category glyph were pinned at 12px, so a
+      // console the reader zoomed to 24px still carried a card at 12. This drives the real input path - a CDP
+      // mouseWheel with Ctrl held, dispatched at a point INSIDE the console that holds the card - and reads every
+      // one of those elements back from getComputedStyle. The board's second console carries the same card and is
+      // never touched: it is the control the zoom is read against, and the two captures put the pair in one frame.
+      await page.click("#btn-settings-close");
+      await page.waitForTimeout(120);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(250);
+      const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.02;
+      const ratio = (s, r) => (s && s.size ? Math.round((s.line / s.size) * 1000) / 1000 === r : false);
+      const wheelAt = await page.evaluate((t) => {
+        const pre = document.querySelector(`#assistant .job[data-thread="${t}"] pre.job-out`);
+        if (!pre) return null;
+        const r = pre.getBoundingClientRect();
+        return { x: Math.round(r.left + Math.min(120, r.width / 2)), y: Math.round(r.top + 24) };
+      }, THREAD);
+      check(Boolean(wheelAt), "the console that holds the card is on the page, so the pointer has somewhere to be", wheelAt ? `${wheelAt.x},${wheelAt.y}` : "no console");
+      if (!wheelAt) throw new Error("the seeded assistant console is not on the page");
+      await page.mouse.move(wheelAt.x, wheelAt.y);
+      const wheelStep = async (n = 1, dir = 1) => {
+        for (let i = 0; i < n; i += 1) {
+          await cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: wheelAt.x, y: wheelAt.y, deltaX: 0, deltaY: dir > 0 ? -1 : 1, modifiers: 2, pointerType: "mouse" });
+          await page.waitForTimeout(90);
+        }
+        return readZoom(page);
+      };
+      const atRest = await readZoom(page);
+      out.zoom.steps.push({ step: 0, ...atRest });
+      check(Boolean(atRest), "the assistant console draws a command card, and the board draws the unzoomed control", atRest ? `${atRest.console.size}px console` : "no card");
+      if (!atRest || !atRest.controlCard) throw new Error("the seeded command card or the unzoomed control is missing");
+      check(
+        atRest && near(atRest.console.size, TERM_PX) && near(atRest.head.size, TERM_PX) && near(atRest.bulletText.size, TERM_PX) && near(atRest.label.size, TERM_PX) && near(atRest.glyph.size, TERM_PX),
+        "at rest the head, the bullets, the Prompt: label and the glyph are the console's own 11.5px, not a fixed 12px",
+        atRest ? `console ${atRest.console.size}, head ${atRest.head.size}, bullet ${atRest.bulletText.size}, label ${atRest.label.size}, glyph ${atRest.glyph.size}` : "no card",
+      );
+      check(atRest && atRest.head.family === atRest.console.family && atRest.bullets.family === atRest.console.family, "and they are drawn in the console's mono face", atRest ? atRest.head.family : "no card");
+      check(atRest && ratio(atRest.head, 1.5) && ratio(atRest.bullets, 1.5) && ratio(atRest.body, 1.5), "the card keeps the console's 1.5 line-height ratio", atRest ? `head ${atRest.head.line}, bullets ${atRest.bullets.line}` : "no card");
+      check(atRest && near(atRest.control.size, TERM_PX) && atRest.controlCard && near(atRest.controlCard.head.size, TERM_PX) && near(atRest.controlCard.bullet.size, TERM_PX), "the board's second console is the control: same card, same 11.5px, no wheel over it", atRest && atRest.control ? `${atRest.control.size}px` : "no control");
+
+      let prev = atRest;
+      for (let step = 1; step <= 3; step += 1) {
+        const s = await wheelStep(1);
+        out.zoom.steps.push({ step, ...s });
+        check(s && near(s.console.size, prev.console.size + 1), `wheel step ${step}: the ordinary console text moves one 1px step`, `${prev.console.size} -> ${s ? s.console.size : "?"}`);
+        check(s && near(s.bulletText.size, prev.bulletText.size + 1), `wheel step ${step}: the card's bullet text moves the same step`, `${prev.bulletText.size} -> ${s ? s.bulletText.size : "?"}`);
+        check(s && near(s.head.size, prev.head.size + 1), `wheel step ${step}: the card's head moves the same step`, `${prev.head.size} -> ${s ? s.head.size : "?"}`);
+        check(s && near(s.console.size, s.bulletText.size) && near(s.console.size, s.head.size), `wheel step ${step}: console, bullet and head are one size, not three`, s ? `${s.console.size} / ${s.bulletText.size} / ${s.head.size}` : "?");
+        check(s && near(s.label.size, s.console.size) && near(s.glyph.size, s.console.size) && near(s.body.size, s.console.size) && near(s.what.size, s.console.size), `wheel step ${step}: the prompt label, the glyph, the body and the head's title all follow it`, s ? `${s.label.size} / ${s.glyph.size} / ${s.body.size} / ${s.what.size}` : "?");
+        check(s && ratio(s.head, 1.5) && ratio(s.bullets, 1.5) && ratio(s.body, 1.5), `wheel step ${step}: the 1.5 ratio holds at the new size`, s ? `${s.head.line}/${s.head.size}` : "?");
+        check(s && near(s.control.size, TERM_PX) && s.controlCard && near(s.controlCard.bullet.size, TERM_PX), `wheel step ${step}: the console the wheel never pointed at is still 11.5px`, s && s.control ? `${s.control.size}px` : "?");
+        check(s && s.jobStyle.length === 1 && s.jobStyle[0] === "--term-size" && near(parseFloat(s.cardVar), s.console.size) && near(parseFloat(s.rootVar), TERM_PX), `wheel step ${step}: the wheel wrote the ONE property on the card; the root still holds Settings' size`, s ? `card ${s.cardVar}, root ${s.rootVar}, style [${s.jobStyle.join(",")}]` : "?");
+        prev = s;
+      }
+      const zoomed = await readZoom(page);
+
+      // ---- (8a) the captures: the zoomed card beside the unzoomed console, at 1440 and at 768 -----------------
+      const captureBoth = async (name, width) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.waitForTimeout(320);
+        await page.evaluate((control) => {
+          const el = document.querySelector(`#jobs .job[data-thread="${control}"] .code-box.is-cmd`);
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          window.scrollTo(0, Math.max(0, window.scrollY + r.top - 200));
+        }, CONTROL_THREAD);
+        await page.waitForTimeout(280);
+        // Seat both cards at the top of their own console's scroll window: the console can hold more rows than it
+        // shows, and a card cut by its console's edge would be a picture of a fragment rather than of the card.
+        await page.evaluate(({ thread, control }) => {
+          const seat = (pre) => {
+            if (!pre) return;
+            const card = pre.querySelector(".code-box.is-cmd");
+            if (!card) return;
+            const top = card.getBoundingClientRect().top - pre.getBoundingClientRect().top + pre.scrollTop;
+            pre.scrollTop = Math.max(0, top - 24);
+          };
+          seat(document.querySelector(`#assistant .job[data-thread="${thread}"] pre.job-out`));
+          seat(document.querySelector(`#jobs .job[data-thread="${control}"] pre.job-out`));
+        }, { thread: THREAD, control: CONTROL_THREAD });
+        await page.waitForTimeout(220);
+        const s = await readZoom(page);
+        const buf = await page.screenshot({ type: "png" });
+        const file = path.join(SHOTS, `${name}.png`);
+        writeFileSync(file, buf);
+        out.zoom.shots.push({ name, width, height: 900, file, b64: buf.toString("base64"), card: s && s.cardBox, pre: s && s.preBox, preScroll: s && s.preScroll, control: s && s.controlCardBox, controlPre: s && s.controlPreBox, controlScroll: s && s.controlPreScroll, viewport: s && s.viewport });
+        return s;
+      };
+      for (const [name, width] of [["zoom-1440", 1440], ["zoom-768", 768]]) {
+        const s = await captureBoth(name, width);
+        const inside = (b, pre) => Boolean(b && pre) && b.top >= Math.max(0, pre.top) - 1 && b.bottom <= Math.min(900, pre.bottom) + 1 && b.right > 0 && b.left < width;
+        const beside = (a, b) => Boolean(a && b) && (a.right <= b.left || b.right <= a.left);
+        out.zoom.shots[out.zoom.shots.length - 1].checks = { inFrame: inside(s && s.cardBox, s && s.preBox) && inside(s && s.controlCardBox, s && s.controlPreBox), beside: beside(s && s.cardBox, s && s.controlCardBox) };
+        check(s && s.viewport && s.viewport.width === width, `${name}: the capture is at ${width}px`, s && s.viewport ? `${s.viewport.width}x${s.viewport.height}` : "no viewport");
+        check(s && inside(s.cardBox, s.preBox) && inside(s.controlCardBox, s.controlPreBox), `${name}: the zoomed card and the unzoomed control are both in the frame, whole, inside their consoles`, s ? `card ${JSON.stringify(s.cardBox)} in ${JSON.stringify(s.preBox)}, control ${JSON.stringify(s.controlCardBox)} in ${JSON.stringify(s.controlPreBox)}` : "?");
+        check(s && beside(s.cardBox, s.controlCardBox), `${name}: and they sit beside each other, not stacked`, s ? `card ${s.cardBox.left}..${s.cardBox.right}, control ${s.controlCardBox.left}..${s.controlCardBox.right}` : "?");
+        check(s && near(s.console.size, zoomed.console.size) && near(s.bulletText.size, zoomed.console.size) && s.controlCard && near(s.controlCard.bullet.size, TERM_PX), `${name}: the shot carries a ${zoomed.console.size}px card beside an 11.5px one`, s ? `${s.bulletText.size} / ${s.controlCard && s.controlCard.bullet.size}` : "?");
+      }
+
+      // ---- (8b) Settings writes the SAME property: the unzoomed card follows, the wheel's card keeps its step ----
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await openSettingsGroup(page, "display");
+      await page.selectOption("#term-size-select", "15");
+      await page.waitForTimeout(220);
+      const size15 = await readZoom(page);
+      out.zoom.settings.push({ name: "settings-15", ...size15 });
+      check(size15 && size15.rootVar === "15px", "Settings' Console size writes the one root property", size15 ? size15.rootVar : "?");
+      check(size15 && near(size15.control.size, 15) && size15.controlCard && near(size15.controlCard.head.size, 15) && near(size15.controlCard.bullet.size, 15), "the console Settings writes moves to 15px, and the command card inside it moves with it", size15 && size15.controlCard ? `${size15.control.size} / ${size15.controlCard.head.size} / ${size15.controlCard.bullet.size}` : "?");
+      check(size15 && near(size15.console.size, zoomed.console.size) && near(size15.head.size, zoomed.console.size) && near(size15.bulletText.size, zoomed.console.size), "the card the wheel zoomed keeps its own step: one property, a per-card override, no second knob", size15 ? `${size15.console.size} / ${size15.head.size} / ${size15.bulletText.size}` : "?");
+      await page.click('[data-text-reset="console"]');
+      await page.waitForTimeout(200);
+      const afterReset = await readZoom(page);
+      out.zoom.settings.push({ name: "settings-reset", ...afterReset });
+      check(afterReset && afterReset.rootVar === `${TERM_PX}px` && near(afterReset.control.size, TERM_PX), "`use defaults` puts the console back to 11.5px, and the control returns with it", afterReset ? `${afterReset.control.size}px` : "?");
+      await page.click("#btn-settings-close");
+      await page.waitForTimeout(150);
+
+      // ---- (8c) BOTH ENDS OF THE CLAMP: 24px and 7px, padding and ratio still sane ---------------------------
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(150);
+      const topEnd = await wheelStep(40);
+      out.zoom.clamp.push({ name: "24px", ...topEnd });
+      check(topEnd && near(topEnd.console.size, 24) && near(topEnd.head.size, 24) && near(topEnd.bulletText.size, 24) && near(topEnd.label.size, 24) && near(topEnd.glyph.size, 24), "at the clamp's top the whole card is 24px - head, bullet, label and glyph", topEnd ? `${topEnd.console.size} / ${topEnd.head.size} / ${topEnd.bulletText.size} / ${topEnd.label.size} / ${topEnd.glyph.size}` : "?");
+      check(topEnd && near(topEnd.head.line, 36) && near(topEnd.bullets.line, 36) && near(topEnd.body.line, 36), "and its 1.5 line-height ratio at 24px is 36px", topEnd ? `${topEnd.head.line}px` : "?");
+      check(
+        topEnd && near(topEnd.pad.bullets.top, 0.25 * 24) && near(topEnd.pad.bullets.bottom, 0.42 * 24) && near(topEnd.pad.bullets.left, 8 + 1.17 * 24) && near(topEnd.pad.head.top, 0.35 * 24) && near(topEnd.pad.head.bottom, 0.35 * 24),
+        "the card's own padding scales with the 24px text instead of crowding it",
+        topEnd ? `bullets ${topEnd.pad.bullets.text}, head ${topEnd.pad.head.text}` : "?",
+      );
+      check(topEnd && topEnd.cardScroll && topEnd.cardScroll.width <= topEnd.cardScroll.client + 1, "at 24px nothing inside the card overflows its frame", topEnd && topEnd.cardScroll ? `${topEnd.cardScroll.width} / ${topEnd.cardScroll.client}` : "?");
+      const bottomEnd = await wheelStep(70, -1);
+      out.zoom.clamp.push({ name: "7px", ...bottomEnd });
+      check(bottomEnd && near(bottomEnd.console.size, 7) && near(bottomEnd.head.size, 7) && near(bottomEnd.bulletText.size, 7) && near(bottomEnd.label.size, 7) && near(bottomEnd.glyph.size, 7), "at the clamp's bottom the whole card is 7px, still in step with the console", bottomEnd ? `${bottomEnd.console.size} / ${bottomEnd.head.size} / ${bottomEnd.bulletText.size} / ${bottomEnd.label.size} / ${bottomEnd.glyph.size}` : "?");
+      check(bottomEnd && near(bottomEnd.head.line, 10.5) && near(bottomEnd.bullets.line, 10.5) && near(bottomEnd.body.line, 10.5), "and its 1.5 line-height ratio at 7px is 10.5px", bottomEnd ? `${bottomEnd.head.line}px` : "?");
+      check(
+        bottomEnd && near(bottomEnd.pad.bullets.top, 0.25 * 7) && near(bottomEnd.pad.bullets.bottom, 0.42 * 7) && near(bottomEnd.pad.bullets.left, 8 + 1.17 * 7) && near(bottomEnd.pad.head.top, 0.35 * 7),
+        "the padding shrinks with the 7px text instead of swallowing it",
+        bottomEnd ? `bullets ${bottomEnd.pad.bullets.text}, head ${bottomEnd.pad.head.text}` : "?",
+      );
+      check(bottomEnd && bottomEnd.cardScroll && bottomEnd.cardScroll.width <= bottomEnd.cardScroll.client + 1, "at 7px nothing inside the card overflows its frame", bottomEnd && bottomEnd.cardScroll ? `${bottomEnd.cardScroll.width} / ${bottomEnd.cardScroll.client}` : "?");
+      check(bottomEnd && near(bottomEnd.pad.head.right, 8) && near(bottomEnd.pad.body.right, 8) && near(topEnd.pad.head.right, 8) && near(topEnd.pad.body.right, 8), "the reader's own side padding stays 8px at both ends - it is a setting, not a ratio", bottomEnd ? `head ${bottomEnd.pad.head.right}, body ${bottomEnd.pad.body.right}` : "?");
+
       const errors = [...pageErrors];
       out.errors = errors.map((e) => String(e && e.message ? e.message : e));
       check(errors.length === 0, "no press raised a page error", `${errors.length}`);
@@ -883,6 +1154,9 @@ function scrubDeep(v) {
 if (JSON_OUT) {
   const ledger = scrubDeep({ ...out, suite: SUITE || null, version: VERSION || null });
   for (const kind of ["ui", "term"]) for (const e of ledger.fonts[kind]) delete e.b64;
+  // The two zoom captures stay in the full ledger and the page (where they are inlined); the plain ledger keeps their
+  // numbers and boxes, not another copy of the pixels.
+  if (ledger.zoom) for (const s of ledger.zoom.shots) delete s.b64;
   writeFileSync(JSON_OUT, JSON.stringify(ledger, null, 2));
   console.log(`      ledger ${JSON_OUT}`);
 }
@@ -892,7 +1166,9 @@ if (LEDGER_OUT) {
   console.log(`      full ledger ${LEDGER_OUT}`);
 }
 if (HTML_OUT) {
-  writeFileSync(HTML_OUT, reportHtml({ ...out, suite: SUITE || null, version: VERSION || null }));
+  // The page is scrubbed like the ledgers: a report that is committed may not name a folder on this machine. Only the
+  // data is scrubbed, never the template, so the inline images and the markup are untouched.
+  writeFileSync(HTML_OUT, reportHtml(scrubDeep({ ...out, suite: SUITE || null, version: VERSION || null })));
   console.log(`      report ${HTML_OUT}`);
 }
 console.log(`\n${checks - failures}/${checks} checks held${failures ? `, ${failures} FAILED` : ""}`);
@@ -938,6 +1214,24 @@ ${rows}
   const failed = ledger.checks.filter((c) => !c.ok);
   const verdict = ledger.verdict || { held: 0, checks: ledger.checks.length, failures: failed.length };
   const reaped = ledger.reaped || {};
+  // The console's ONE size: the wheel's steps, Settings writing the same property, and the two ends of the clamp.
+  const zoom = ledger.zoom || { steps: [], settings: [], clamp: [], shots: [] };
+  const cell = (n) => (n == null ? "" : `${n}px`);
+  const zoomSteps = zoom.steps
+    .map(
+      (s) => `<tr><td class="id">${s.step ? `wheel +${esc(s.step)}` : "at rest"}</td><td class="num">${cell(s.console && s.console.size)}</td><td class="num">${cell(s.head && s.head.size)}</td><td class="num">${cell(s.bulletText && s.bulletText.size)}</td><td class="num">${cell(s.label && s.label.size)}</td><td class="num">${cell(s.glyph && s.glyph.size)}</td><td class="num">${cell(s.body && s.body.size)}</td><td class="num">${s.head ? `${esc(s.head.line)}px` : ""}</td><td class="num">${cell(s.control && s.control.size)}</td><td class="mono">${esc((s.jobStyle || []).join(", ") || "(none)")} ${esc(s.cardVar || "")}</td></tr>`,
+    )
+    .join("\n");
+  const zoomStates = [...(zoom.settings || []), ...(zoom.clamp || [])]
+    .map(
+      (s) => `<tr><td class="id">${esc(s.name)}</td><td class="num">${cell(s.console && s.console.size)}</td><td class="num">${cell(s.head && s.head.size)}</td><td class="num">${cell(s.bulletText && s.bulletText.size)}</td><td class="num">${s.pad ? esc(s.pad.bullets.text) : ""}</td><td class="num">${s.pad ? esc(s.pad.head.text) : ""}</td><td class="num">${cell(s.control && s.control.size)}</td><td class="mono">root ${esc(s.rootVar || "")}</td></tr>`,
+    )
+    .join("\n");
+  const zoomFigs = (zoom.shots || [])
+    .map(
+      (s) => `<figure><img alt="${esc(s.name)}" src="data:image/png;base64,${s.b64}"><figcaption><b>${esc(s.name)}</b> - ${esc(s.width)}px wide: the card the wheel zoomed (right) beside the console it never touched (left). The zoomed card is <span class="num">${esc(s.card && s.card.left)}..${esc(s.card && s.card.right)}</span> x <span class="num">${esc(s.card && s.card.top)}..${esc(s.card && s.card.bottom)}</span>, the control <span class="num">${esc(s.control && s.control.left)}..${esc(s.control && s.control.right)}</span> x <span class="num">${esc(s.control && s.control.top)}..${esc(s.control && s.control.bottom)}</span>; both whole, inside their own console, side by side.</figcaption></figure>`,
+    )
+    .join("\n");
   // The entries the audit removed, re-drawn from the base commit's own stack: the "before" of the two tables above.
   const removed = (kind) => {
     const list = (ledger.retired && ledger.retired[kind]) || [];
@@ -955,7 +1249,7 @@ ${rows}
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>The console's fonts, and the console's row spacing</title>
+<title>The console's fonts, its row spacing, and its one size</title>
 <style>
   body { margin: 0; padding: 28px 32px 60px; background: #0d1117; color: #cfd8e3; font: 14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
   h1 { font-size: 21px; margin: 0 0 6px; color: #e6edf6; }
@@ -979,10 +1273,11 @@ ${rows}
 </style>
 </head>
 <body>
-<h1>The console's fonts, and the console's row spacing</h1>
+<h1>The console's fonts, its row spacing, and its one size</h1>
 <p class="lede"><b class="${failed.length ? "bad" : "ok"}">${verdict.held} of ${verdict.checks} checks held${failed.length ? `, ${failed.length} FAILED` : ""}</b>.
-Measured in headless Chromium at 1440x900 on a throwaway panel: one open turn whose console carries three physical
-lines, a tool call, its output and one long wrapping row. Each entry below was applied through the page's own
+Measured in headless Chromium on a throwaway panel: one open turn whose console carries three physical lines, an
+assistant command card, a tool call, its output and one long wrapping row - plus a second console on the board with the
+same transcript, never touched by the wheel. Each font entry below was applied through the page's own
 <code>applyFont</code>, then the browser was asked which face actually drew the glyphs
 (<code>CSS.getPlatformFontsForNode</code>), and the SAME rect of text was captured and diffed pixel by pixel against
 every other entry. A row in <b>both</b> tables that drew the same faces <i>and</i> the same pixels is the duplicate this
@@ -1005,6 +1300,34 @@ ${spacingRows}
 </tbody>
 </table>
 ${spacingFigs}
+
+<h2>The console's one size, on an assistant command card</h2>
+<p class="lede">An assistant command card is the panel's own text drawn <i>inside</i> the console: a SPAWN head, its TODO
+bullet rows, a bold <code>Prompt:</code> label under them and a category glyph. The head inherited the console's size,
+but the bullet rows, the label and the glyph were pinned at <code>12px</code>, so a console the reader Ctrl+wheel-zoomed
+carried a card that stayed behind, at 12px against 24px of console. The card now resolves from the same
+<code>--term-size</code> as the console around it: Settings and the wheel write ONE property, so a zoom cannot drift out
+of step with the reader's own size. Every number below is <code>getComputedStyle</code> after a real Ctrl+wheel event
+dispatched over the console that holds the card. The board's second console carries the same card, was never touched,
+and is the control.</p>
+<table>
+<thead><tr><th>the wheel</th><th>console</th><th>card head</th><th>bullet text</th><th>Prompt: label</th><th>glyph</th><th>card body</th><th>line box</th><th>control console</th><th>the card's own style</th></tr></thead>
+<tbody>
+${zoomSteps}
+</tbody>
+</table>
+<p class="lede">The two ends of the zoom's clamp, and Settings writing the same property. At 24px and at 7px the card's
+head, bullets, label and glyph are still one size with the console, the mono face and the 1.5 line-height ratio hold, and
+the card's own padding scales with the text (<code>.25em</code> and <code>.42em</code> around the bullet list,
+<code>1.17em</code> of hanging indent) instead of staying at 3px, 5px and 14px against a 36px row. The side padding stays
+the reader's <code>--cmd-pad</code> at both ends, because it is a setting and not a ratio.</p>
+<table>
+<thead><tr><th>state</th><th>console</th><th>card head</th><th>bullet text</th><th>bullet padding</th><th>head padding</th><th>control console</th><th>the root</th></tr></thead>
+<tbody>
+${zoomStates}
+</tbody>
+</table>
+${zoomFigs}
 
 <h2>The gate</h2>
 <table>
