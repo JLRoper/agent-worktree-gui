@@ -99,6 +99,7 @@
     "verify:append-tax": "node tools/verify-append-tax.mjs",
     "verify:queue-holds": "node tools/verify-queue-holds.mjs",
     "verify:queue-multi-hold": "node tools/verify-queue-multi-hold.mjs",
+    "verify:queue-held-snapshot-race": "node tools/verify-queue-held-snapshot-race.mjs",
     "verify:spawn-links-queue": "node tools/verify-spawn-links-queue.mjs",
     "verify:queue-drag": "node tools/verify-queue-drag.mjs",
     "verify:assistant-queue-ui": "node tools/verify-assistant-queue-ui.mjs",

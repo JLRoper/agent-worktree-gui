@@ -4139,6 +4139,21 @@ function applyHeldReplies(list) {
   const records = Array.isArray(list) ? list : [];
   const byId = new Map(records.map((r) => [r.id, r]));
   const threads = new Set();
+  // ONE PRESS IS ONE ENTRY, even though a press writes to the panel twice before it is done: the entry goes into this
+  // Map at once, and the panel's own record of it comes back - in the POST's answer, and in the `held-replies`
+  // broadcast the drain sends - before that answer has had a chance to stamp `heldId` on the entry. So for a moment
+  // the page holds an entry with no id, and a record it cannot find by id read as a record the page did NOT hold:
+  // `queueReply` pushed one chip and this function pushed its twin, which is the reader's "2 queued" for one Enter.
+  // The entry's own `at` is the identity the queue already works in, the panel stores and echoes it with the record,
+  // and the text rides with it so a same-millisecond press in another tab cannot claim this entry's record. A record
+  // that matches an entry this way is THAT entry: its id is adopted and nothing is added.
+  const sameEntry = (entry, rec) =>
+    entry.heldId
+      ? String(entry.heldId) === String(rec.id)
+      : entry.at != null &&
+        String(entry.at) === String(rec.at) &&
+        String(entry.text ?? "") === String(rec.text ?? "");
+  const entryFor = (thread, rec) => (state.replyQueue.get(thread) || []).find((e) => e && sameEntry(e, rec)) || null;
   // A record the panel settled: the page's copy of it is a duplicate.
   for (const [thread, q] of [...state.replyQueue]) {
     const keep = [];
@@ -4165,6 +4180,14 @@ function applyHeldReplies(list) {
     if (!rec || known.has(rec.id)) continue;
     if (rec.state !== "held" && rec.state !== "sending") continue;
     if (!rec.thread || !String(rec.text || "").trim()) continue;
+    const mine = entryFor(rec.thread, rec);
+    if (mine) {
+      // This page's own press, seen again before its answer stamped the id: the entry IS the record, so it takes the
+      // panel's id (which the × and the drain both need) and the card is not given a second chip for one press.
+      mine.heldId = rec.id;
+      known.add(rec.id);
+      continue;
+    }
     const q = state.replyQueue.get(rec.thread) || [];
     q.push({ text: rec.text, at: Number(rec.at) || Date.now(), attachments: rec.attachments || [], heldId: rec.id });
     q.sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
