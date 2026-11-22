@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Initiatives tab, The Route: the implementation report, before and after (rebuilt)</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #181d26; --sunk: #13181f; --line: #262c37; --hair: #3c424d;
+    --text: #e6e9ef; --dim: #9aa4b2; --meta: #7c8798;
+    --ok: #7ee787; --done: #6fcf97; --wait: #f0c674; --bad: #ff9c94; --info: #9ecbff; --violet: #c8a6ff; --link: #7fb2e8;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 48px 28px 120px; }
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 34px; }
+  .eyebrow { font: 600 11.5px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--meta); }
+  h1 { font-size: 34px; line-height: 1.18; letter-spacing: -.015em; margin: 14px 0 12px; font-weight: 650; }
+  .lede { font-size: 17px; line-height: 1.55; color: var(--dim); max-width: 78ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .meta b { color: var(--dim); font-weight: 600; }
+  h2 { font-size: 24px; line-height: 1.3; letter-spacing: -.01em; margin: 58px 0 6px; font-weight: 650; }
+  h2 .n { color: var(--meta); font: 600 13px/1 var(--mono); margin-right: 10px; vertical-align: 4px; }
+  h3 { font-size: 17px; line-height: 1.4; margin: 34px 0 8px; font-weight: 620; }
+  p { margin: 10px 0; max-width: 84ch; }
+  .kicker { color: var(--dim); max-width: 80ch; margin: 0 0 18px; }
+  ul, ol { max-width: 84ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 12.5px/1.5 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e2; }
+  pre { font: 12.5px/1.6 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #cfd6e2; }
+  pre code { background: none; border: 0; padding: 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(127,178,232,.3); }
+  a:hover { border-bottom-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); border-bottom-color: var(--hair); }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  tbody tr:hover td { background: rgba(255,255,255,.015); }
+  figure { margin: 20px 0 26px; }
+  figure img { display: block; width: auto; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--sunk); }
+  figcaption { font: 12px/1.55 var(--mono); color: var(--meta); margin-top: 9px; }
+  figcaption b { color: var(--dim); font-weight: 600; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; margin: 20px 0 30px; }
+  .duo figure { margin: 0; }
+  .duo .tag { font: 600 10.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--meta); margin-bottom: 6px; display: block; }
+  @media (max-width: 900px) { .duo { grid-template-columns: 1fr; } }
+  .note { border: 1px solid var(--hair); border-left: 3px solid var(--wait); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 26px 0 10px; }
+  .note h4 { margin: 0 0 8px; font-size: 13px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--wait); }
+  .note p { margin: 8px 0; max-width: 92ch; font-size: 14px; }
+  .finding { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 18px 0; background: var(--card); }
+  .finding h4 { margin: 0 0 6px; font-size: 15px; font-weight: 620; }
+  .finding p { margin: 6px 0; font-size: 14px; }
+  .finding .trust { color: var(--dim); font-size: 13.5px; border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 10px; }
+  .b { display: inline-block; font: 600 10px/1.5 var(--mono); letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 1px 8px; border: 1px solid; vertical-align: 1px; white-space: nowrap; }
+  .b.rm { color: var(--ok); border-color: rgba(126,231,135,.4); background: rgba(126,231,135,.08); }
+  .b.ql { color: var(--wait); border-color: rgba(240,198,116,.4); background: rgba(240,198,116,.08); }
+  .b.dv { color: var(--info); border-color: rgba(158,203,255,.4); background: rgba(158,203,255,.08); }
+  .b.bad { color: var(--bad); border-color: rgba(255,156,148,.4); background: rgba(255,156,148,.08); }
+  .legend { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; margin: 16px 0 8px; font-size: 13.5px; color: var(--dim); }
+  .legend > div { display: contents; }
+  .big { font: 600 13px/1.4 var(--mono); color: var(--text); }
+  .ok { color: var(--ok); }
+  .warn { color: var(--wait); }
+  .dead { color: var(--meta); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 16px 0; background: var(--sunk); }
+  summary { cursor: pointer; font: 600 12px/1.5 var(--mono); color: var(--dim); }
+  footer { margin-top: 70px; border-top: 1px solid var(--line); padding-top: 18px; font: 12px/1.6 var(--mono); color: var(--meta); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">agent-worktree-gui - Initiatives tab - implementation report</div>
+  <h1>The Route, as it landed: the Initiatives tab before and after</h1>
+  <p class="lede">One harness, one fixture, two renders: the tab at 1.157.1 and the tab at 1.157.4, measured rather than
+  described, photographed rather than asserted. Every capture the landing committed is on this page, and every number
+  says whether it was re-measured after the landing or is quoted from the landing itself.</p>
+  <div class="meta">
+    <span><b>Landing</b> PR 852, merged 2026-11-22 18:32 UTC as <code>da17dce</code>, version 1.157.3</span>
+    <span><b>This rebuild</b> cut from <code>origin/main</code> <code>ef14eea</code> (1.157.4)</span>
+    <span><b>Re-measured</b> 2026-11-22, after the landing</span>
+    <span><b>Product files changed here</b> none</span>
+  </div>
+
+  <div class="note">
+    <h4>This page is a rebuild. The first one was lost.</h4>
+    <p>The original implementation report was written by row 205's worker into
+    <code>docs/reports/initiatives-redesign-route-2026-11-22.html</code> as an <b>untracked</b> file in its worktree. When
+    the worktree went away the file went with it, and it never entered the landing: <code>git diff c2692598 ddea5f49 --
+    docs/reports</code> prints nothing, which is the whole diagnosis. That is why the redesign shipped with its captures
+    on main and no page that paired them with its deltas.</p>
+    <p>There is a second half to the cause, and it is the one that made the loss silent: this clone's
+    <code>.git/info/exclude</code> carries <code>docs/reports/*.html</code> under the comment "Generated reports are
+    local artefacts", and <code>info/exclude</code> is shared by every worktree. <code>git check-ignore -v</code> names
+    the line. A report written under <code>docs/reports/</code> therefore does not appear in <code>git status</code> at
+    all, so "untracked" here does not mean "visible and forgotten" - it means invisible, and a worker who checks
+    <code>git status</code> before committing sees a clean tree and believes it. Every <code>.html</code> report that is
+    on main got there through <code>git add -f</code>; this one does too.</p>
+    <p>What changed in this rebuild, said plainly:</p>
+    <ul>
+      <li>It is written to the tree and <b>committed</b> before the push, which is the fix for the cause, not a
+      different cause.</li>
+      <li>Every number is re-measured at the current head with a named probe, or marked <span class="b ql">quoted</span>
+      from PR 852. The <b>before</b> column is re-measured too, from a <code>git archive</code> of <code>86bea38</code>
+      (1.157.1) served by the same harness, so both columns are the same day's reads rather than one old ledger and one
+      new one.</li>
+      <li>Where PR 852's prose and its own measurement ledger disagree, both are shown and the one that is trusted is
+      named. Four such places are recorded in <a href="#disagreements">section 5</a>; none is smoothed over.</li>
+      <li>The 25 PNG captures under <code>docs/assets/initiatives-redesign/route/</code> are inlined here unchanged. The
+      brief that ordered this rebuild said "28 captures"; the directory holds 28 <i>files</i>, of which 25 are images and
+      3 are the two capture ledgers and the harness. All 25 images are on this page; the ledgers are linked.</li>
+    </ul>
+  </div>
+</header>
+
+<h2 id="what-landed"><span class="n">1</span>What landed</h2>
+<p class="kicker">The reader chose <b>The Route</b> - round A's recommended direction - built with <b>round B's token
+values</b>. The two research reports were read before any code was written, and both are on main beside this page.</p>
+
+<table>
+  <thead><tr><th>File</th><th>What moved</th></tr></thead>
+  <tbody>
+    <tr><td class="num"><code>public/style.css</code> 4873</td><td>One token layer, declared on <code>#as-initiatives</code> and never on <code>:root</code>: 60 definitions inside the block, 0 outside it, 0 in <code>:root</code>. Five surfaces, two lines, three inks, five type steps, six space steps, five radii, three fixed heights, one focus ring. Below the tokens, The Route: the folded ledger row, the opened plate with its numbered station route, the lane blocks, the density setting.</td></tr>
+    <tr><td class="num"><code>public/core/initiative-fold.js</code> 288</td><td><code>routeGlyph(wave read)</code>: one dot per wave in that wave's own state, plus the word that says where the work has got to. It says <b>no waves</b> or <b>waves unreadable</b> rather than drawing an empty route.</td></tr>
+    <tr><td class="num"><code>public/assistant.js</code> 3864</td><td>The folded row draws that mark in a 27px gutter with the status word at the end of its counts (<code>data-init-status</code>).</td></tr>
+    <tr><td class="num"><code>public/assistant.js</code> 4052</td><td>The pane gains a toolbar where the preamble was: <b>About</b>, which holds that preamble word for word, and <b>Compact rows</b>, round B's density as a toggle. Both join the focus-restore list, so the four-second repaint cannot lose a keyboard reader.</td></tr>
+    <tr><td class="num"><code>public/core/waves-lane.js</code> 104</td><td>The lane block is its <b>own row</b>, a sibling of the member strip rather than a flex item of it. Without that, two lanes can only stack. The join sentence is drawn only when the lane set is not refused.</td></tr>
+  </tbody>
+</table>
+
+<p>No selector a test or another module depends on was renamed. Two attributes were added. The version carried 1.157.3,
+one line above the 1.157.2 the branch was rebased onto.</p>
+
+<p>Earlier parts of this piece, all on main: <a href="initiatives-redesign-research-a-2026-11-22.html">round A, the three
+directions</a>, <a href="initiatives-redesign-research-b-visual-system-2026-11-22.html">round B, the visual system as
+tokens</a>, and <a href="initiatives-redesign-review-2026-11-22.html">the after-review of the tab as shipped</a>.</p>
+
+<h2 id="provenance"><span class="n">2</span>How to read a number here</h2>
+<p class="kicker">Three marks, and nothing on this page carries a number without one.</p>
+<div class="legend">
+  <div><span class="b rm">re-measured</span></div><div>Read out of the painted page at <code>ef14eea</code> (1.157.4) by the probe named in the row, after the landing. The <b>before</b> column comes from the same probe run against a <code>git archive</code> of <code>86bea38</code> (1.157.1), unpacked outside the repo: the harness is this tree's, only the product it serves moves, which is what makes a row a comparison of the tab rather than of the measurement.</div>
+  <div><span class="b ql">quoted</span></div><div>From PR 852's own body, or from the committed ledger beside the captures. Reproduced because the landing said it, not because this run re-derived it. Where the ledger and the prose disagree, both are printed.</div>
+  <div><span class="b dv">derived</span></div><div>Arithmetic on two numbers that are themselves measured, or a contrast ratio computed from the two hexes named in the source. The row says which.</div>
+</div>
+
+<p>The probe is one script, run twice, with the same page function as the landed harness. It measures the folded row's
+height, the open plate's height, the pane's width and scroll height, the computed type step of every run of text, the
+contrast ratio of each ink <b>composited through every translucent layer above its ground</b> (so a chip on a card is
+measured against the card), and it looks for all 78 strings the API document holds in the rendered tab with every fold
+open. Nothing it reports is read out of the source; the source is only read afterward, to explain what it found.</p>
+
+<details>
+<summary>The measurement function, as the probe runs it (folded rows, plate, pane, contrast)</summary>
+<pre><code>const pane = document.getElementById("as-initiatives");
+const foldedRows = [...document.querySelectorAll("#as-initiatives .init-card.is-titlecard")];
+const openCard = document.querySelector("#as-initiatives .init-card:not(.is-titlecard)");
+// contrast: the text colour over the first opaque stack of ancestor backgrounds
+// (rgba composited down to the ground the pane is painted on), WCAG 2.x relative luminance
+return {
+  pane:   { width: Math.round(pane.getBoundingClientRect().width),
+            scroll: Math.round(pane.scrollHeight) },
+  folded: foldedRows[0] ? Math.round(foldedRows[0].getBoundingClientRect().height) : null,
+  foldedRowHeights: foldedRows.map((el) =&gt; Math.round(el.getBoundingClientRect().height)),
+  openCard: openCard ? Math.round(openCard.getBoundingClientRect().height) : null,
+  contrast: { desc: contrast("#as-initiatives .init-desc"), ... },
+};</code></pre>
+</details>
+
+<h2 id="numbers"><span class="n">3</span>The measurements</h2>
+<p class="kicker">The same fixture, the same six surfaces, the same widths. "Plate" is the opened initiative
+(<code>init_sso</code>); "pane" is the tab's own scroll container, which is the assistant's rail when it is docked.</p>
+
+<h3>The geometry</h3>
+<table>
+  <thead><tr><th>At 1440, assistant docked (pane 479)</th><th>Before 1.157.1</th><th>After 1.157.4</th><th>Delta</th></tr></thead>
+  <tbody>
+    <tr><td>Folded row, first of three</td><td class="num">166</td><td class="num">145</td><td class="num ok">-21</td></tr>
+    <tr><td>Folded rows, all three</td><td class="num">166 / 133 / 153</td><td class="num">145 / 142 / 141</td><td class="num ok">mean -8.0, spread 33 -> 4</td></tr>
+    <tr><td>Opened plate</td><td class="num">931</td><td class="num">1164</td><td class="num warn">+233</td></tr>
+    <tr><td>Pane scroll height</td><td class="num">1660</td><td class="num">1830</td><td class="num warn">+170</td></tr>
+    <tr><td>Pane width</td><td class="num">479</td><td class="num">479</td><td class="num">0</td></tr>
+  </tbody>
+</table>
+<p><span class="b rm">re-measured</span> every row, by the route probe at both commits. The "before" figures agree to the
+pixel with the landed <code>captures-before.json</code> and the "after" figures with <code>captures-after.json</code>, so
+the landed ledger is confirmed rather than replaced.</p>
+
+<table>
+  <thead><tr><th>At 768, assistant docked (pane 347)</th><th>Before 1.157.1</th><th>After 1.157.4</th><th>Delta</th></tr></thead>
+  <tbody>
+    <tr><td>Folded row, first of three</td><td class="num">166</td><td class="num">166</td><td class="num">0</td></tr>
+    <tr><td>Folded rows, all three</td><td class="num">166 / 133 / 153</td><td class="num">166 / 142 / 162</td><td class="num bad">mean +6.0, spread 33 -> 24</td></tr>
+    <tr><td>Opened plate</td><td class="num">1161</td><td class="num">1429</td><td class="num warn">+268</td></tr>
+    <tr><td>Pane scroll height</td><td class="num">1946</td><td class="num">2209</td><td class="num warn">+263</td></tr>
+    <tr><td>Pane width</td><td class="num">347</td><td class="num">347</td><td class="num">0</td></tr>
+  </tbody>
+</table>
+<p><span class="b rm">re-measured</span> every row. Note the direction: at this width the folded ledger is <b>taller</b>,
+not flatter. See <a href="#disagreements">finding 2</a>.</p>
+
+<table>
+  <thead><tr><th>At 1440, assistant floated (pane 1382)</th><th>Before 1.157.1</th><th>After 1.157.4</th><th>Delta</th></tr></thead>
+  <tbody>
+    <tr><td>Folded row, first of three</td><td class="num">153</td><td class="num">142</td><td class="num ok">-11</td></tr>
+    <tr><td>Folded rows, all three</td><td class="num">153 / 133 / 153</td><td class="num">142 / 142 / 141</td><td class="num ok">mean -4.7, spread 20 -> 1</td></tr>
+    <tr><td>Opened plate</td><td class="num">767</td><td class="num">866</td><td class="num warn">+99</td></tr>
+    <tr><td>Pane scroll height</td><td class="num">1483</td><td class="num">1501</td><td class="num warn">+18</td></tr>
+    <tr><td>Pane width</td><td class="num">1382</td><td class="num">1382</td><td class="num">0</td></tr>
+  </tbody>
+</table>
+<p><span class="b rm">re-measured</span> every row. The +18 is the only cost the wide plate pays for the route, and it is
+the number PR 852 quotes.</p>
+
+<p>The compact density setting exists only after the redesign, so it has no before column: the same plate on the tighter
+token set is a folded row of <b>130</b>, a plate of <b>778</b>, and a pane scroll of <b>1357</b> at 1382.
+<span class="b rm">re-measured</span>.</p>
+
+<h3>The ink and the type</h3>
+<table>
+  <thead><tr><th>Measure</th><th>Before 1.157.1</th><th>After 1.157.4</th><th>How it is read</th></tr></thead>
+  <tbody>
+    <tr><td>Description, folded preview</td><td class="num">6.7:1</td><td class="num">4.9:1</td><td><span class="b rm">re-measured</span> composited over the pane's ground <code>#171c24</code>: <code>#9aa4b2</code> becomes <code>#7f8a9a</code></td></tr>
+    <tr><td>Description, on the plate's surface</td><td class="num">6.99:1</td><td class="num">5.04:1</td><td><span class="b dv">derived</span> the same two inks over <code>#141922</code>, the plate's own surface</td></tr>
+    <tr><td>Folded preview type</td><td class="num">12px / 19 lh</td><td class="num">13px / 20 lh</td><td><span class="b rm">re-measured</span> computed style; the plate's body step is the exact 12.5px, the ledger rounds it to 13</td></tr>
+    <tr><td>Title</td><td class="num">14px / 600 / 18 lh</td><td class="num">15.5px / 600 / 19 lh</td><td><span class="b rm">re-measured</span> computed style; rounded to 16 in the ledger</td></tr>
+    <tr><td>Chips in the pane</td><td class="num">36 chips, 13 buttons</td><td class="num">36 chips, 15 buttons</td><td><span class="b rm">re-measured</span> the chip count is unchanged; the two new buttons are About and Compact rows</td></tr>
+  </tbody>
+</table>
+<p>The third ink step is annotated <code>5.0:1</code> in the token block at <code>public/style.css:4889</code>, and the
+probe reads 4.9 for the folded preview. Both are right about different backgrounds; <a href="#disagreements">finding
+3</a> has the arithmetic.</p>
+
+<h3>The gates, re-run today</h3>
+<table>
+  <thead><tr><th>Gate</th><th>Answer at 1.157.4</th><th>What it covers</th></tr></thead>
+  <tbody>
+    <tr><td class="num">tools/verify-initiatives-redesign.mjs</td><td class="ok"><b>11/11 claims</b>, <b>16/16</b> docked</td><td><span class="b rm">re-measured</span> type scale, contrast, the 4px grid, control heights, chip fit, one reading edge, line length, the empty tab, the focus ring, hover, pressed, Enter on a fold, and focus surviving the pane's own 4.6s repaint. The before column is the recorded 1.142.2 baseline it scores against: 4/16 there, 16/16 here.</td></tr>
+    <tr><td class="num">tools/verify-initiatives-redesign.mjs (wide)</td><td class="warn"><b>15/16</b>, miss named <code>alignment</code></td><td><span class="b rm">re-measured</span> the deliberate second column: words left, cast right. Everything else holds at 1382. The 900px window does not scroll sideways: pane 449, scrollWidth 449, 0 elements past the right edge. 0 page errors, 0 console errors.</td></tr>
+    <tr><td class="num">tools/verify-waves-lane.mjs</td><td class="ok"><b>40/40</b> at 1440 and 768</td><td><span class="b rm">re-measured</span> the wave row, its head, both gate strips, the member strip, the lane set, the state words and the template - no horizontal overflow at either width, no page or console errors.</td></tr>
+    <tr><td class="num">tools/verify-initiatives-tab.mjs</td><td class="ok"><b>89/89</b></td><td><span class="b rm">re-measured</span> the tab's own contract: the empty state, the free write, the chart column in both states, the permission question, the folds, the words being free to change.</td></tr>
+    <tr><td class="num">test/waves-lane.test.js + test/initiative-fold.test.js</td><td class="ok"><b>49 pass, 0 fail</b></td><td><span class="b rm">re-measured</span> the two new contracts: the lane set is the wave's own row, and an abandoned gate answer is a chip of its own rather than drawn as met or as cannot tell.</td></tr>
+    <tr><td class="num">the fact pass</td><td class="ok"><b>78 checked, 0 missing</b> at 480 and at 347</td><td><span class="b rm">re-measured</span> every title, description, project, tree, branch, assistant, count, wave field, lane and member the API document holds, looked for in the rendered tab with every fold open. The preamble behind About is found too, because the pass presses About.</td></tr>
+  </tbody>
+</table>
+<p>All six answers match what PR 852 recorded. They were not copied from it: each command was run against this head
+during the rebuild, and their output is quoted in <a href="#reproduce">section 8</a> as the commands a reader can
+repeat.</p>
+
+<h2 id="captures"><span class="n">4</span>The captures, before and after</h2>
+<p class="kicker">25 images, taken by the landing and inlined here unaltered. Twelve are pairs; the thirteenth after-shot
+has no before because the density control did not exist before it. Each caption names the shot's own dimensions, which
+is why an element shot is taller after: it is the same element with more inside it.</p>
+
+<div class="duo">
+  <figure><span class="tag">01 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/01-1440-list.png" alt="Before: the folded Initiatives ledger at 1440, the assistant docked at 480">
+    <figcaption><b>before</b> 1440x900 window. The folded ledger with the assistant docked at 480: four initiatives as cards, each with a title, a grey preview and its counts.</figcaption>
+  </figure>
+  <figure><span class="tag">01 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/01-1440-list.png" alt="After: the folded Initiatives ledger at 1440, the assistant docked at 480">
+    <figcaption><b>after</b> 1440x900 window. The same four initiatives as rows on one ground: a 27px route gutter with a dot per wave, a larger title, the preview a step quieter, the status word at the end of the counts.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">01b - before</span>
+    <img src="../assets/initiatives-redesign/route/before/01b-1440-pane.png" alt="Before: the whole Initiatives tab at 1440 docked, element shot">
+    <figcaption><b>before</b> 479x888, element shot of <code>#as-initiatives</code>. The whole tab at its resting state.</figcaption>
+  </figure>
+  <figure><span class="tag">01b - after</span>
+    <img src="../assets/initiatives-redesign/route/after/01b-1440-pane.png" alt="After: the whole Initiatives tab at 1440 docked, element shot">
+    <figcaption><b>after</b> 479x815, the same element. 73px shorter even though its rows are larger: the preamble moved behind About, which is the one structural concession the redesign makes.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">02 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/02-1440-open.png" alt="Before: one initiative open at 1440 docked">
+    <figcaption><b>before</b> 1440x900 window. The open card, its description folded, its Projects column beneath.</figcaption>
+  </figure>
+  <figure><span class="tag">02 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/02-1440-open.png" alt="After: one initiative open at 1440 docked, the plate and its route">
+    <figcaption><b>after</b> 1440x900 window. The plate and its route: the numbered stations, the wave block, the tier sentence that says who may change the map, still visible.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">02b - before</span>
+    <img src="../assets/initiatives-redesign/route/before/02b-1440-plate.png" alt="Before: the open initiative at 1440 docked, element shot">
+    <figcaption><b>before</b> 463x933, element shot of the open card. 931px of content in the ledger's own measurement.</figcaption>
+  </figure>
+  <figure><span class="tag">02b - after</span>
+    <img src="../assets/initiatives-redesign/route/after/02b-1440-plate.png" alt="After: the open initiative at 1440 docked, element shot">
+    <figcaption><b>after</b> 463x1165, the same card. 1164px: the route and the lane blocks are what the +233 bought.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">02c - before</span>
+    <img src="../assets/initiatives-redesign/route/before/02c-1440-waves.png" alt="Before: the wave block at 1440 docked">
+    <figcaption><b>before</b> 437x469, element shot of <code>.init-wavefold</code>. The wave block as a flat list: no spine, no lane, no gate strip of its own.</figcaption>
+  </figure>
+  <figure><span class="tag">02c - after</span>
+    <img src="../assets/initiatives-redesign/route/after/02c-1440-waves.png" alt="After: the wave block at 1440 docked">
+    <figcaption><b>after</b> 429x656. The wave as a row with a state spine, its entry and exit gates as chips, and its members inside it.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">03 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/03-1440-all-folds.png" alt="Before: every fold open at 1440, the fact check's own reading">
+    <figcaption><b>before</b> 1440x900 window. Every fold open: the state the fact check reads, so the two renders are compared on the same content.</figcaption>
+  </figure>
+  <figure><span class="tag">03 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/03-1440-all-folds.png" alt="After: every fold open at 1440, the fact check's own reading">
+    <figcaption><b>after</b> 1440x900 window. Every fold open, including the preamble behind About. 78 strings looked for, 0 missing, in both renders.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">04 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/04-768-list.png" alt="Before: the folded ledger at 768">
+    <figcaption><b>before</b> 768x900 window. The narrowest dock: a pane around 350px.</figcaption>
+  </figure>
+  <figure><span class="tag">04 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/04-768-list.png" alt="After: the folded ledger at 768">
+    <figcaption><b>after</b> 768x900 window. The same rows, and the one width where they are taller: the preview wraps further at this size.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">05 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/05-768-open.png" alt="Before: one initiative open at 768">
+    <figcaption><b>before</b> 768x900 window. The open card at 347px of pane.</figcaption>
+  </figure>
+  <figure><span class="tag">05 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/05-768-open.png" alt="After: one initiative open at 768">
+    <figcaption><b>after</b> 768x900 window. The plate and its route at 347: the lanes stack, because a lane set of two cannot be side by side in 247px.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">05b - before</span>
+    <img src="../assets/initiatives-redesign/route/before/05b-768-waves.png" alt="Before: the wave block at 768">
+    <figcaption><b>before</b> 305x680. The wave block at 768.</figcaption>
+  </figure>
+  <figure><span class="tag">05b - after</span>
+    <img src="../assets/initiatives-redesign/route/after/05b-768-waves.png" alt="After: the wave block at 768">
+    <figcaption><b>after</b> 297x900. The same block with its gates, its members and its stacked lanes; the element is taller because it holds more.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">06 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/06-wide-list.png" alt="Before: the ledger at 1440 with the assistant floated">
+    <figcaption><b>before</b> 1440x900 window. The ledger with the assistant floated full width: the plate's two-column home.</figcaption>
+  </figure>
+  <figure><span class="tag">06 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/06-wide-list.png" alt="After: the ledger at 1440 with the assistant floated">
+    <figcaption><b>after</b> 1440x900 window. The same list at 1382 of pane: one row of 142 rather than 153, and a spread of 1px across the three.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">07 - before</span>
+    <img src="../assets/initiatives-redesign/route/before/07-wide-open.png" alt="Before: the wide plate at 1440 floated">
+    <figcaption><b>before</b> 1440x900 window. The wide plate: words left, cast right, one column.</figcaption>
+  </figure>
+  <figure><span class="tag">07 - after</span>
+    <img src="../assets/initiatives-redesign/route/after/07-wide-open.png" alt="After: the wide plate at 1440 floated">
+    <figcaption><b>after</b> 1440x900 window. The same plate with the route full width beneath the two columns. 866 against 767, and the pane 18px longer.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure><span class="tag">07b - before</span>
+    <img src="../assets/initiatives-redesign/route/before/07b-wide-waves.png" alt="Before: the wave block at the wide plate">
+    <figcaption><b>before</b> 1208x418. The wave followed by its members as a flat strip.</figcaption>
+  </figure>
+  <figure><span class="tag">07b - after</span>
+    <img src="../assets/initiatives-redesign/route/after/07b-wide-waves.png" alt="After: the lane set side by side on the wide plate">
+    <figcaption><b>after</b> 1332x493. The lane set side by side: two 637px columns, each a lane with its own member. This is the shot that needed the lane to be a sibling row: as a flex item of the member strip, two lanes can only stack.</figcaption>
+  </figure>
+</div>
+
+<figure>
+  <span class="tag" style="font: 600 10.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--meta); display: block; margin-bottom: 6px;">08 - after only</span>
+  <img src="../assets/initiatives-redesign/route/after/08-wide-compact.png" alt="After: the same plate on the compact token set">
+  <figcaption><b>after only</b> 1440x900 window. The compact density: the same tokens, one step tighter. No colour moves, so the type scale, the contrast and every state role are identical to the shot above it; only the rhythm changes. Folded 130 against 142, plate 778 against 866, pane 1357 against 1501. There is no before image because the panel had no such control before the redesign.</figcaption>
+</figure>
+
+<h3>Every file in the set</h3>
+<table>
+  <thead><tr><th>File</th><th>Size</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/route/before/captures-before.json">before/captures-before.json</a></td><td class="num">ledger</td><td>The landed before measurement: 12 shots, three widths, the fact pass. Re-read here; every geometry figure in it was reproduced to the pixel.</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/route/after/captures-after.json">after/captures-after.json</a></td><td class="num">ledger</td><td>The landed after measurement: 13 shots, four widths, the fact pass.</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/route/capture-route.mjs">capture-route.mjs</a></td><td class="num">harness</td><td>One script, two renders. <code>ROUTE_ROOT</code> is the tree whose <code>server.js</code> and <code>public/</code> are served; <code>ROUTE_LABEL</code> names the column. This is the file the rebuild's probe copies its page function from.</td></tr>
+    <tr><td class="num">before/*.png</td><td class="num">12 images</td><td>01, 01b, 02, 02b, 02c, 03, 04, 05, 05b, 06, 07, 07b - inlined above.</td></tr>
+    <tr><td class="num">after/*.png</td><td class="num">13 images</td><td>The same twelve plus 08-wide-compact - inlined above.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="disagreements"><span class="n">5</span>Where the record disagrees with itself</h2>
+<p class="kicker">These are the places a reader could take a wrong number from the landing. None is reconciled silently:
+both readings are printed, and the one this report trusts is named with its reason.</p>
+
+<div class="finding">
+  <h4>1. "+263 at 347" is the pane's scroll delta, not the plate's. The plate grows 268.</h4>
+  <p>PR 852 says: "The opened plate is 1164px against 931px at 480 (+233), pane scroll +170; at 347 the pane grows
+  +263." The ledger at 347 reads the plate as 1429 against 1161 - a delta of <b>+268</b> - and the pane's scroll as 2209
+  against 1946 - a delta of <b>+263</b>. The sentence pairs a plate delta at one width with a scroll delta at the other,
+  and calls both "the opened plate".</p>
+  <p class="trust">Trusted: the ledger rows, which are re-measured here twice over (this run and the landing's own).
+  Plate at 347: 1161 -> 1429, <b>+268</b>. Pane scroll at 347: 1946 -> 2209, <b>+263</b>. At 480: plate 931 -> 1164,
+  <b>+233</b>; scroll 1660 -> 1830, <b>+170</b>. Four numbers, four different quantities; two of them were in the PR's
+  sentence and one was wearing the other's label.</p>
+</div>
+
+<div class="finding">
+  <h4>2. "mean row 145px vs 166px" - 145 and 166 are the first rows. The means are 142.7 and 150.7.</h4>
+  <p>The ledger's three folded rows at 1440 docked are <b>166 / 133 / 153</b> before and <b>145 / 142 / 141</b> after.
+  Their means are <b>150.7</b> and <b>142.7</b>; the spread collapses from <b>33</b> to <b>4</b>, which is the claim the
+  sentence is really making and which the ledger does support. 145 and 166 are the first row of each set, not the mean
+  of it.</p>
+  <p>And the flattening is a 1440-docked result. At 347 the first row is 166 in both, and the mean <b>rises</b> from
+  150.7 to <b>156.7</b>, spread 33 -> 24. At the wide float it falls from 146.3 to 141.7, spread 20 -> 1.</p>
+  <p class="trust">Trusted: the per-row arrays, which are raw reads. The sentence's "flatter" is true at 1440 docked and
+  at the wide plate, false at 347, and the redesign did not claim otherwise anywhere else.</p>
+</div>
+
+<div class="finding">
+  <h4>3. 4.9:1 and the token comment's 5.0:1 are the same ink on two different grounds.</h4>
+  <p>The token block annotates <code>--tab-ink-3: #7f8a9a</code> as <b>5.0:1</b> on <code>--tab-surface</code>
+  (<code>#141922</code>), and the flat pair does compute to <b>5.04:1</b>. The probe reads <b>4.9:1</b> because the
+  description's first instance in the pane is the <b>folded preview</b>, which sits on the pane's own ground
+  <code>#171c24</code>, not on a plate; <code>#7f8a9a</code> on <code>#171c24</code> is <b>4.89:1</b>. The before ink
+  <code>#9aa4b2</code> reads 6.78:1 on that same ground, which is the 6.7 in the PR.</p>
+  <p class="trust">Trusted: the probe for the folded preview (4.9 / 6.7, which is the comparison the PR makes and the
+  state a reader meets first), and the flat pair for the plate (5.04 / 6.99). Neither is a regression of the other; a
+  reader who quotes 5.0 for the folded row would be quoting the wrong background, and one who quotes 4.9 for the plate
+  would be doing the same in reverse.</p>
+</div>
+
+<div class="finding">
+  <h4>4. "28 captures" is 28 files: 25 images, two ledgers and the harness.</h4>
+  <p>The directory holds 28 entries. 25 of them are PNGs: 12 before, 13 after. The other three are
+  <code>captures-before.json</code>, <code>captures-after.json</code> and <code>capture-route.mjs</code>. This page
+  inlines all 25 images and links the other three.</p>
+  <p class="trust">Trusted: the directory listing, which is the only reading that survives a reader opening the folder
+  and counting.</p>
+</div>
+
+<h2 id="what-it-does"><span class="n">6</span>What the tab does now, surface by surface</h2>
+<p class="kicker">The numbers above measure a design; this is what the design is, in the order a reader meets it.</p>
+
+<h3>The folded ledger is a ledger</h3>
+<p>Four initiatives, one ground, a hairline between rows. Each row carries a 27px route gutter with one dot per wave in
+that wave's own state, the title at 15.5px, a two-line preview at the third ink, and the counts with the status word at
+their end. A row that has no waves says <b>no waves</b>; a row whose wave store cannot be read says <b>waves
+unreadable</b> rather than drawing an empty route. That is <code>routeGlyph</code> at
+<code>public/core/initiative-fold.js:288</code>, drawn at <code>public/assistant.js:3864</code>, styled at
+<code>public/style.css:5062</code> and <code>:5133</code>. The row heights at 1440 docked are 145, 142 and 141: the
+spread is 4px where it was 33.</p>
+
+<h3>The plate is a plate</h3>
+<p>Opening a row lifts it onto a surface with one radius and one elevation. Inside: the numbered station route, the
+description at the body step, the Projects column, the tier sentence that says who may change the map, and the wave
+block. The preamble that used to sit above all of this is behind <b>About</b>, word for word
+(<code>public/assistant.js:4052</code>); that is the structural concession, and it is what makes the resting tab 73px
+shorter while the plate is 233px taller.</p>
+
+<h3>The lane is a row, not a flex item</h3>
+<p>The wave block is a sibling of the member strip rather than a member of it (<code>public/core/waves-lane.js:104</code>
+and <code>:155</code>). Only with that in place can a lane set of two sit side by side on the wide plate - 637px and
+637px - and stack when the pane is 247 wide. A refused lane set draws its own alert and drops the join sentence, because
+a wave whose lanes cannot be isolated cannot honestly promise a one-commit close.</p>
+
+<h3>The density is the reader's</h3>
+<p><b>Compact rows</b> re-declares the same tokens one step tighter: space and two fixed heights move, no colour does.
+The plates in shots 07 and 08 are the same page at the two settings, and the type scale, the contrast and every state
+role are identical between them.</p>
+
+<h3>Everything the document holds is still on the page</h3>
+<p>78 strings - every title, description, project, tree, branch, assistant, count, wave field, lane and member - looked
+for in the rendered tab with every fold open, at both widths, before and after. 0 missing in all four passes. The pane's
+chip count is unchanged at 36; the two buttons it gained are the two new controls.</p>
+
+<h2 id="limits"><span class="n">7</span>What this report does not measure</h2>
+<ul>
+  <li><b>The full suite.</b> PR 852 recorded <code>npm test</code> as 3589 tests with 7 failures, each named and none in
+  a file the diff touched. This rebuild ran the four gates above and the two unit files, not the suite: this branch
+  changes no product file, so the suite would be answering a question about main, not about this change.</li>
+  <li><b>The screenshots.</b> Not retaken. They are the landing's evidence, they are committed, and re-shooting them
+  would produce a second set that no longer matches the ledger beside them.</li>
+  <li><b>Speed.</b> Nothing here times a render, a repaint or a keystroke. The one interaction that is timed is already
+  in the redesign gate: keyboard focus survives the pane's 4.6s repaint, and it does.</li>
+  <li><b>Anything outside the tab.</b> The redesign is scoped to <code>#as-initiatives</code>; the panel's other tabs are
+  untouched and unmeasured here.</li>
+</ul>
+
+<h2 id="reproduce"><span class="n">8</span>Reproduce it</h2>
+<p class="kicker">Every number in this report comes from one of these commands. They need no dependencies: the panel has
+zero, and Playwright is resolved from the global install by <code>tools/browser.mjs</code>.</p>
+
+<pre><code># the proof the original report never landed: prints nothing
+git diff c2692598 ddea5f49 -- docs/reports
+
+# the before column: the old tree, unpacked outside the repo, served by this tree's harness
+git archive 86bea38 | tar -x -C &lt;scratch&gt;/before-86bea38
+
+# the probe, run twice. TREE is the product served; HARNESS is the tree whose tools/ are run
+env TREE=&lt;tree&gt; HARNESS=&lt;tree&gt; OUT=&#36;SCRATCH/after.json ROUTE_HOME=&#36;SCRATCH/home-a node remeasure-route.mjs
+env TREE=&lt;scratch&gt;/before-86bea38 HARNESS=&lt;tree&gt; OUT=&#36;SCRATCH/before.json ROUTE_HOME=&#36;SCRATCH/home-b node remeasure-route.mjs
+
+# the gates, each on its own scratch home so nothing touches the reader's panel
+node tools/verify-initiatives-redesign.mjs --home &lt;scratch&gt;/gate --json &lt;scratch&gt;/gate.json
+node tools/verify-waves-lane.mjs --home &lt;scratch&gt;/lane
+node tools/verify-initiatives-tab.mjs --shots &lt;scratch&gt;/shots
+node --test test/waves-lane.test.js test/initiative-fold.test.js
+
+# the captures themselves, when a reader wants a fresh pair rather than the landed one
+env ROUTE_ROOT=&lt;tree&gt; ROUTE_OUT=&lt;scratch&gt;/after ROUTE_LABEL=after node docs/assets/initiatives-redesign/route/capture-route.mjs</code></pre>
+
+<p>The probe's page function is byte-for-byte the one in <code>capture-route.mjs</code>; it lives in scratch rather than
+in the repo because it is a re-read of a landed measurement, not a new one, and a second committed copy of "how big is a
+row" would be two definitions of the thing under test. If a future run wants a permanent re-check, the honest move is to
+teach <code>capture-route.mjs</code> a <code>ROUTE_MEASURE_ONLY</code> flag rather than to add a second harness.</p>
+
+<footer>
+  Rebuilt on branch <code>wtgui/rebuild-the-redesign-s-implementation-be462f</code>, cut from <code>origin/main</code>
+  <code>ef14eea</code> (1.157.4). The landing it describes is PR 852, merge commit <code>da17dce</code>, version 1.157.3.
+  No product file changed in this branch: this page, and the note that it replaces one that was never committed.
+</footer>
+
+</div>
+</body>
+</html>
