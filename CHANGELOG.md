@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.157.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.157.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-688 releases from v0.1.0 (2026-10-20) to v1.157.5 (2026-11-22), 2426 commits between the tags. Every release is anchored by an
+689 releases from v0.1.0 (2026-10-20) to v1.157.6 (2026-11-22), 2431 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.157.6 — 2026-11-22 · 5 commits
+
+[`dbdf897`](https://github.com/JLRoper/agent-worktree-gui/commit/dbdf89753738de90d2ae17a0ab931437dcbdbeff) · [compare v1.157.5...v1.157.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.5...v1.157.6)
+
+### Fixed
+
+- fix(initiatives): the scroll gate asks for the reachable bottom ([`9cc5d2d`](https://github.com/JLRoper/agent-worktree-gui/commit/9cc5d2db763f213bd5008681101f53c87d6267dc))
+- fix(initiatives): one folded edge, ink-2 preview, four actions on one row ([`0a9a5bf`](https://github.com/JLRoper/agent-worktree-gui/commit/0a9a5bf19c59fbf080d2fd8741cdd4fc7fd9b483))
+
+### Docs & tests
+
+- docs: render the changelog - 688 releases ([`eb7b889`](https://github.com/JLRoper/agent-worktree-gui/commit/eb7b889e9a0a2915696553375cdc79fa6fdef31e))
+- test(initiatives): the sample enters the folded row, its hover and the lane ([`74357f2`](https://github.com/JLRoper/agent-worktree-gui/commit/74357f2ef8ae50ef45d054db066ac480aac9e904))
+
+### Other
+
+- chore: 1.157.6 - the after-review landing, its gate list and captures ([`dbdf897`](https://github.com/JLRoper/agent-worktree-gui/commit/dbdf89753738de90d2ae17a0ab931437dcbdbeff))
 
 ## v1.157.5 — 2026-11-22 · 4 commits
 
