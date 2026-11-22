@@ -15,6 +15,11 @@
 //     (lib/waves.js `waveLanes`); a wave with no lane of its own holds ONE IMPLICIT LANE and is drawn exactly as it
 //     was before lanes existed, with no lane block and no new attribute. Two or more lanes are drawn as lanes, because
 //     that is the fact the close depends on - and a lane whose read answered cannot tell says so, never "no trees".
+//   * THE AUTO SWITCH IS DRAWN AS THE READ ANSWERED IT. `auto` is the wave's own record; `autoOpen` is what the read
+//     derived from the wave BEFORE it (lib/waves.js `waveAutoOpens`). A wave whose predecessor has the switch off
+//     draws exactly the markup it drew before this row - nothing extra - and a wave a switch opened says which wave
+//     opened it, in a sentence that also says nothing was started. A switch that is on and did not open says why,
+//     with the gate's own word: a cannot-tell predecessor is drawn "cannot tell", never as a wait that looks healthy.
 //
 // Published on globalThis as `wtWavesLane`, loaded as a classic script by public/index.html before assistant.js, and
 // imported by test/waves-lane.test.js - the same load contract public/core/initiative-fold.js has. Nothing here
@@ -107,6 +112,22 @@
     const why = wave && wave.stateWhy ? String(wave.stateWhy) : "";
     const members = Array.isArray(wave && wave.members) ? wave.members : [];
     const gates = (wave && wave.gates) || {};
+    // What the switch on the PREVIOUS wave answered for this one (lib/waves.js `waveAutoOpens`). A predecessor with
+    // auto off draws nothing extra: the markup stays exactly the one this lane drew before the switch existed, which
+    // is the "absent or false means today's behaviour" rule, measured in test/waves-lane.test.js.
+    const autoOpen = wave && wave.autoOpen && typeof wave.autoOpen === "object" ? wave.autoOpen : null;
+    const autoFrom = autoOpen && autoOpen.from ? String(autoOpen.from) : "";
+    const autoOpened = Boolean(autoOpen && autoOpen.open === true && autoFrom);
+    const autoWaiting = Boolean(autoOpen && autoOpen.open !== true && autoOpen.switchOn === true && autoFrom);
+    const autoOn = Boolean(wave && wave.auto);
+    const autoTitle = autoOn
+      ? "on: the next wave opens by itself once the exit gate of this wave reads met on a live read - on the next read, never in the background, and nothing is started"
+      : "off: this wave never opens the next one, however its exit gate reads - a person opens it";
+    const autoOpenChip = autoOpened
+      ? `<span class="chip wave-auto-open is-on" data-wave-auto-open="true" data-auto-from="${esc(autoFrom)}" title="${esc(String(autoOpen.why || ""))}">opened by ${esc(autoFrom)}</span>`
+      : autoWaiting
+        ? `<span class="chip wave-auto-open is-wait" data-wave-auto-wait="true" data-auto-from="${esc(autoFrom)}" data-auto-gate="${esc((autoOpen.gate && autoOpen.gate.state) || "none")}" title="${esc(String(autoOpen.why || ""))}">auto wait - ${esc(autoOpen.gate && autoOpen.gate.met === true ? "not closed" : gateWord(autoOpen.gate))}</span>`
+        : "";
     const current = Boolean(wave && wave.id && currentId && wave.id === currentId);
     const template = wave && wave.template ? String(wave.template) : "";
     const unresolved = Boolean(template) && wave && wave.templateResolved === false;
@@ -134,7 +155,8 @@
       <div class="wave-gates">
         ${gateChipHtml("entry", gates.entry, esc)}
         ${gateChipHtml("exit", gates.exit, esc)}
-        <span class="chip wave-auto ${wave && wave.auto ? "is-on" : "is-off"}" title="${wave && wave.auto ? "unattended starts are asked for by this wave - but never over the Assistant's own spawn setting, and nothing in this slice acts on it" : "off: this wave never starts a member unattended"}">auto ${wave && wave.auto ? "on" : "off"}</span>
+        <span class="chip wave-auto ${autoOn ? "is-on" : "is-off"}" title="${esc(autoTitle)}">auto ${autoOn ? "on" : "off"}</span>
+        ${autoOpenChip}
       </div>
       ${joined}
       <div class="wave-members">${memberHtmlAll}</div>

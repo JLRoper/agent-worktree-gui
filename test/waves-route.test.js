@@ -225,12 +225,57 @@ test("the wave never reads green on an exit nobody can see: unknown, then ready 
   assert.match(doc.waves[0].gates.exit.why, /names no pull request/);
 });
 
+test("the auto switch rides on the read: off opens nothing, and cannot tell is named as unreadable", async () => {
+  const records = (auto) => [
+    { id: "wave_01", initiativeId, position: 1, title: "The read path", entryGate: { check: "clean" }, exitGate: { check: "pr-merged" }, template: "poc-to-uat", auto },
+    { id: "wave_02", initiativeId, position: 2, title: "The next wave", entryGate: null, exitGate: null, template: null },
+  ];
+  const write = (auto) => {
+    const text = `${JSON.stringify({ version: 1, byInitiative: { [initiativeId]: records(auto) } }, null, 2)}\n`;
+    writeFileSync(wavesFile, text, "utf8");
+    return text;
+  };
+
+  let written = write(true);
+  const on = await wavesOf();
+  const [first, second] = on.waves;
+  assert.equal(first.auto, true, "the wave's own switch rides the read");
+  assert.equal(first.autoOpen.open, false, "the first wave is never opened by a switch: there is none before it");
+  assert.equal(first.autoOpen.from, null);
+  assert.equal(second.autoOpen.switchOn, true);
+  assert.equal(second.autoOpen.from, "wave_01");
+  // The sandbox has no remote, so wave_01's pr-merged exit CANNOT TELL. That blocks the auto open, and the reason is
+  // the evidence reader's own: the stored word is not consulted and a cannot-tell gate is never a pass.
+  assert.equal(second.autoOpen.gate.state, "unknown");
+  assert.equal(second.autoOpen.open, false, "cannot tell opens nothing");
+  assert.match(second.autoOpen.why, /exit gate cannot be read/);
+  assert.match(second.autoOpen.why, /names no pull request/);
+  assert.equal(readWaves(), written, "the read wrote nothing: no open, no state, no timestamp");
+
+  // The tab carries the identical answer, because it is the same fold.
+  const tab = await get("/api/initiatives");
+  const card = tab.json.initiatives.find((i) => i.id === initiativeId);
+  assert.deepEqual(card.waves, on.waves);
+
+  // And switching auto back off shuts wave_02 on the very next read, with the default-off sentence.
+  written = write(false);
+  const off = await wavesOf();
+  assert.equal(off.waves[1].autoOpen.open, false);
+  assert.equal(off.waves[1].autoOpen.switchOn, false);
+  assert.match(off.waves[1].autoOpen.why, /wave_01 has auto off/);
+  assert.equal(readWaves(), written);
+});
+
 test("no wave-state field is written to the wave store by any of the reads above", () => {
   const doc = JSON.parse(readWaves());
   for (const rec of doc.byInitiative[initiativeId]) {
     assert.equal("state" in rec, false, `${rec.id} carries no state field`);
     assert.equal("members" in rec, false, `${rec.id} carries no member list`);
     assert.equal("current" in rec, false);
+    // The auto open is a fact about a READ, not a row: nothing a switch decided is written back.
+    assert.equal("autoOpen" in rec, false, `${rec.id} carries no autoOpen`);
+    assert.equal("openedBy" in rec, false);
+    assert.equal("openedAt" in rec, false);
   }
 });
 

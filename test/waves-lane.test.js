@@ -100,8 +100,78 @@ test("both gates are drawn, and a wave with no entry gate says so", () => {
 });
 
 test("the auto chip is drawn off by default, and on only when the record says true", () => {
-  assert.match(lane.waveHtml(wave(), null), /wave-auto is-off" title="off: this wave never starts a member unattended">auto off</);
-  assert.match(lane.waveHtml(wave({ auto: true }), null), /wave-auto is-on/);
+  assert.match(lane.waveHtml(wave(), null), /wave-auto is-off" title="off: this wave never opens the next one, however its exit gate reads - a person opens it">auto off</);
+  assert.match(lane.waveHtml(wave({ auto: true }), null), /wave-auto is-on" title="on: the next wave opens by itself once the exit gate of this wave reads met/);
+});
+
+test("a predecessor with the switch off adds nothing to the markup: default-off draws exactly as before", () => {
+  const plain = wave();
+  const readBack = wave({ autoOpen: { open: false, by: "hand", from: "wave_00", switchOn: false, gate: null, why: "wave_00 has auto off" } });
+  assert.equal(lane.waveHtml(readBack, null), lane.waveHtml(plain, null), "the switch-off answer draws no chip at all");
+  assert.doesNotMatch(lane.waveHtml(readBack, null), /wave-auto-open/);
+});
+
+test("a wave a switch opened says which wave opened it, and the sentence rides the title", () => {
+  const html = lane.waveHtml(
+    wave({
+      auto: false,
+      autoOpen: {
+        open: true,
+        by: "auto",
+        from: "wave_01",
+        switchOn: true,
+        gate: { state: "met", met: true },
+        why: "wave_01 has auto on and its exit gate reads met (origin/main holds the content), so wave_02 opened by itself on this read - nothing was started",
+      },
+    }),
+    null,
+  );
+  assert.match(html, /data-wave-auto-open="true" data-auto-from="wave_01"/);
+  assert.match(html, />opened by wave_01</);
+  assert.match(html, /title="wave_01 has auto on and its exit gate reads met/);
+  assert.match(html, /nothing was started/);
+  // The opened wave's OWN switch is still its record's: off here, and the lane says so beside the open.
+  assert.match(html, /wave-auto is-off/);
+});
+
+test("a switch that is on and did not open says why, with the gate's own word", () => {
+  const blocked = lane.waveHtml(
+    wave({
+      autoOpen: {
+        open: false,
+        by: "hand",
+        from: "wave_01",
+        switchOn: true,
+        gate: { state: "unknown", cannotTell: true },
+        why: "wave_01 has auto on, but its exit gate cannot be read: wave_02 stays shut - the member names no pull request",
+      },
+    }),
+    null,
+  );
+  assert.match(blocked, /data-wave-auto-wait="true" data-auto-from="wave_01" data-auto-gate="unknown"/);
+  assert.match(blocked, />auto wait - cannot tell</);
+  assert.match(blocked, /names no pull request/);
+  assert.doesNotMatch(blocked, /data-wave-auto-open/);
+  assert.doesNotMatch(blocked, /wave-auto-open is-on/);
+
+  // A met gate under a wave that has not closed is not "met" on this chip: the gate passed, the wave did not close,
+  // and a chip that said "auto wait - met" would read as if the open were being held for no reason.
+  const notClosed = lane.waveHtml(
+    wave({
+      autoOpen: {
+        open: false,
+        by: "hand",
+        from: "wave_01",
+        switchOn: true,
+        gate: { state: "met", met: true },
+        why: "wave_01 has auto on and its exit gate reads met, but wave_01 still reads running: #2 is running - a successor never opens under a wave that has not closed",
+      },
+    }),
+    null,
+  );
+  assert.match(notClosed, /data-auto-gate="met"/);
+  assert.match(notClosed, />auto wait - not closed</);
+  assert.doesNotMatch(notClosed, /data-wave-auto-open/);
 });
 
 test("a template is drawn with its resolution, and an unresolved one says so", () => {
