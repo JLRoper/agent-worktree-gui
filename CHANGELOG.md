@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.155.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.155.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-678 releases from v0.1.0 (2026-10-20) to v1.155.2 (2026-11-22), 2390 commits between the tags. Every release is anchored by an
+679 releases from v0.1.0 (2026-10-20) to v1.155.3 (2026-11-22), 2394 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.155.3 — 2026-11-22 · 4 commits
+
+[`f56da08`](https://github.com/JLRoper/agent-worktree-gui/commit/f56da0843a1d6d69f5bc0a88d3839581e8235788) · [compare v1.155.2...v1.155.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.155.2...v1.155.3)
+
+### Fixed
+
+- fix(collisions): one live pair is one record, and a gone pair leaves the count ([`f56da08`](https://github.com/JLRoper/agent-worktree-gui/commit/f56da0843a1d6d69f5bc0a88d3839581e8235788))
+
+### Docs & tests
+
+- docs: keep the run's scratch paths out of the research report ([`8bc065e`](https://github.com/JLRoper/agent-worktree-gui/commit/8bc065e5b3bda2070951eb58883835c59b59f0f9))
+- docs: render the changelog - 678 releases ([`f76c9be`](https://github.com/JLRoper/agent-worktree-gui/commit/f76c9be8e78444323a49f87d17348a117f2c2cef))
+
+### Other
+
+- the stale test expectations follow the code they were written for ([`17c7806`](https://github.com/JLRoper/agent-worktree-gui/commit/17c78060e2d0cbaedcfa274e2a77da265df19e2c))
 
 ## v1.155.2 — 2026-11-22 · 5 commits
 
