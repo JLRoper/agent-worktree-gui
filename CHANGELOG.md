@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.155.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.155.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-680 releases from v0.1.0 (2026-10-20) to v1.155.5 (2026-11-22), 2398 commits between the tags. Every release is anchored by an
+681 releases from v0.1.0 (2026-10-20) to v1.155.6 (2026-11-22), 2401 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.155.6 — 2026-11-22 · 3 commits
+
+[`c7f155f`](https://github.com/JLRoper/agent-worktree-gui/commit/c7f155f7aa546a7a9bff22cfa26326d50cfcab35) · [compare v1.155.5...v1.155.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.155.5...v1.155.6)
+
+### Docs & tests
+
+- docs: render the changelog - 680 releases ([`9d083c9`](https://github.com/JLRoper/agent-worktree-gui/commit/9d083c949545b630a423f17cd7a27a4199ee4c22))
+
+### Other
+
+- a TO line is a console card too, with its thread on the head and its message never clamped ([`8d65048`](https://github.com/JLRoper/agent-worktree-gui/commit/8d650482ac4966684be6e8ea4242ace90ecf35e9))
+- chore: 1.155.6 - the version this landing carries ([`c7f155f`](https://github.com/JLRoper/agent-worktree-gui/commit/c7f155f7aa546a7a9bff22cfa26326d50cfcab35))
 
 ## v1.155.5 — 2026-11-22 · 4 commits
 
