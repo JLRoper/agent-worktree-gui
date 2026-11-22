@@ -21,10 +21,16 @@
 //   2. THERE IS SOMETHING BELOW THE FOLD: with every card expanded, the pane's scrollHeight exceeds its clientHeight
 //      by more than one card, and the last card's box sits below the pane's own box.
 //   3. THE SCROLL IS THE PANE'S: a wheel over the pane (the reader's own gesture) moves the pane's scrollTop, leaves
-//      `.as-body` and the document where they were, and the pane reaches its maximum - where the last card's box is
-//      inside the pane's visible box.
+//      `.as-body` and the document where they were, and the pane reaches its maximum - where the last card's REACHABLE
+//      BOTTOM is inside the pane's visible box. The whole box is asserted only when the card fits: the last card is
+//      747px tall with its fills open inside a 727px pane, so its top and bottom cannot both be on screen at any scroll
+//      position. Demanding the whole box was this gate's own defect - it answered 31/33 at the tree the round shipped
+//      (d0df8ca) while the scroll itself was correct at 8612 of 8612, and 33/33 on the archived parent c2692598 only
+//      because that parent's card was shorter. The gate now asserts what the reader needs (the end of the list) and
+//      says so in its failure line, so a future card that grows past the pane cannot turn a correct scroll red again.
 //   4. THE SCROLL SURVIVES THE TAB'S OWN RE-READ: the pane reads /api/initiatives every four seconds and repaints
-//      from that answer; five seconds later it is still where the reader left it and the last card is still in view.
+//      from that answer; five seconds later it is still where the reader left it and the last card's reachable bottom
+//      is still on screen (and its whole box, when it fits).
 //   5. A TAB THAT FITS GROWS NO SCROLL BAR: each panel-level pane on the row (Role, Watchdog, Bridge) is measured with
 //      its own content on screen; every one whose content fits reads scrollHeight === clientHeight, so no scroll bar
 //      is drawn, and none of them hangs below the body.
@@ -202,7 +208,12 @@ try {
               cards: cards.length,
               lastTop: lr ? Math.round(lr.top) : null,
               lastBottom: lr ? Math.round(lr.bottom) : null,
+              lastHeight: lr ? Math.round(lr.height) : null,
               lastInPane: lr ? lr.top >= pr.top - 1 && lr.bottom <= pr.bottom + 1 : false,
+              // The bottom, not the box: an open card can be taller than the pane, and then no scrollTop puts its whole
+              // box on screen. The reader needs its end reachable, and that is what this reads.
+              lastBottomInPane: lr ? lr.bottom <= pr.bottom + 1 : false,
+              lastTallerThanPane: lr ? lr.height > pane.clientHeight : false,
               lastBelowPane: lr ? lr.bottom > pr.bottom + 1 : false,
             };
           });
@@ -321,7 +332,13 @@ try {
         const bottom = await geometry();
         note(`at the foot: scrollTop ${bottom.scrollTop} of ${bottom.maxScroll}`);
         ok("the pane reaches its own maximum", Math.abs(bottom.scrollTop - bottom.maxScroll) <= 2, `${bottom.scrollTop} of ${bottom.maxScroll}`);
-        ok("the last card's box is inside the pane's visible box", bottom.lastInPane, `last ${bottom.lastTop}..${bottom.lastBottom} in ${bottom.paneTop}..${bottom.paneBottom}`);
+        // THE REACHABLE BOTTOM, NOT THE WHOLE BOX. With its own folds open the last card is 747px tall inside a 727px
+        // pane, so its top and its bottom cannot be on screen at once and "the whole box is in the pane" was false at
+        // every scroll position - the gate's own defect, not the tab's (it answered 31/33 at d0df8ca while the scroll
+        // itself was at 8612 of 8612). The reader needs the end of the card; that is asserted here, and the whole box is
+        // still asserted whenever the card fits.
+        ok("the last card's reachable bottom is inside the pane's visible box at maximum scroll", bottom.lastBottomInPane && Math.abs(bottom.scrollTop - bottom.maxScroll) <= 2, `last ${bottom.lastTop}..${bottom.lastBottom} (${bottom.lastHeight}px) in ${bottom.paneTop}..${bottom.paneBottom}, ${bottom.clientHeight}px pane; scrollTop ${bottom.scrollTop} of ${bottom.maxScroll}`);
+        ok("the last card's whole box is on screen when it fits - and is reported as taller than the pane when it does not", bottom.lastTallerThanPane ? bottom.lastBottomInPane : bottom.lastInPane, bottom.lastTallerThanPane ? `card ${bottom.lastHeight}px in ${bottom.clientHeight}px pane: taller, so only its bottom can be in view` : `card ${bottom.lastHeight}px fits in ${bottom.clientHeight}px`);
         await shotPane("scrolled");
 
         // ---- 4. the scroll survives the tab's own four-second re-read ------------------------------
@@ -329,9 +346,10 @@ try {
         const before = bottom.scrollTop;
         await sleep(5200);
         const later = await geometry();
-        note(`after a re-read: scrollTop ${later.scrollTop}, last card in pane ${later.lastInPane}`);
+        note(`after a re-read: scrollTop ${later.scrollTop}, last card bottom in pane ${later.lastBottomInPane}`);
         ok("the pane is still where the reader left it after the pane re-read the store", later.scrollTop > 0 && Math.abs(later.scrollTop - before) <= 2, `${before} -> ${later.scrollTop}`);
-        ok("the last card is still in view", later.lastInPane, `last ${later.lastTop}..${later.lastBottom}`);
+        ok("the last card's reachable bottom is still on screen after the re-read", later.lastBottomInPane, `last ${later.lastTop}..${later.lastBottom} (${later.lastHeight}px), pane bottom ${later.paneBottom}`);
+        ok("the whole box is still on screen after the re-read when the card fits", later.lastTallerThanPane || later.lastInPane, later.lastTallerThanPane ? `card ${later.lastHeight}px in ${later.clientHeight}px pane` : `lastInPane ${later.lastInPane}`);
 
         // ---- 5. the other panel-level tabs are scrollers too ---------------------------------------
         console.log("\n== 5. the other panel-level tabs are scrollers, not panes that hang below the float ==");
