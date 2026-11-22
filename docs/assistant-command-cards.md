@@ -3,6 +3,7 @@
 A reply ends with lines in the panel's own vocabulary, and the reader met them as monospace prose:
 
 ```
+TO wtgui-settings-must-explain-the-pa-71fef6: read docs/reports/card.html:12 and land it
 QUEUE assistant-3 | [Playwright test] corner resize the rail's card and capture it folded
 QUEUE assistant-3 | corner resize
 MESSAGE assistant-3 | the deploy moved
@@ -18,7 +19,8 @@ that SPAWN's card (see [A SPAWN's TODOs are its card's bullets](#a-spawns-todos-
 turn tail (`public/turns.js`), the Messages pane (`public/assistant.js`), and the agent card's own transcript, whose
 turn body is drawn by `public/render-jobs.js`. It is drawn in the *same* frame a tool's result is drawn in -
 `core/console-format.js`'s `.code-box` - with the kind's emoji and the recipient on the head, the title appended only
-when one parses, and the body folded to two lines behind a click:
+when one parses, and the body folded to two lines behind a click. A TO is the one kind whose body is NOT folded: its
+message is the text a worker acts on, so it opens on the whole of it (see [The fold](#the-fold)).
 
 ```
 [▸] 🧾 assistant-3 | Playwright test          click to read
@@ -26,6 +28,9 @@ when one parses, and the body folded to two lines behind a click:
 
 [▸] ✉️ assistant-3                            click to read
     the deploy moved
+
+[▸] 📨 wtgui-settings-must-explain-the-pa-71fef6       1 line
+    <the whole TO message, opened by the head - never clamped>
 ```
 
 ## Every readable line, titled or not
@@ -35,6 +40,9 @@ card; a line it cannot read, or one with nothing to show, is exactly the line it
 
 | line                                    | head                            | body                     |
 | --------------------------------------- | ------------------------------- | ------------------------ |
+| `TO wtgui-worker-a: go` | `📨 wtgui-worker-a` | `go` (not folded) |
+| `TO wtgui-worker-a: read docs/x.html:12` | `📨 wtgui-worker-a` | `read docs/x.html:12` - the colon after the thread is the only break |
+| `TO wtgui-worker-a:` | `📨 wtgui-worker-a (no text)` | (no body - the message starts on the next line, and the card still names the worker) |
 | `QUEUE assistant-3 \| [Playwright test] go` | `🧾 assistant-3 \| Playwright test` | `go`                |
 | `QUEUE assistant-3 \| corner resize`    | `🧾 assistant-3`                | `corner resize`          |
 | `QUEUE assistant-3 \| [never closed`    | `🧾 assistant-3`                | `[never closed`          |
@@ -46,16 +54,22 @@ card; a line it cannot read, or one with nothing to show, is exactly the line it
 | `TODO DONE 3`                           | (not a card)                    | the prose line it has always been |
 | `see above`                             | (not a card)                    | the prose line it has always been |
 
-Three of those deserve a word:
+Four of those deserve a word:
 
 - a kind that addresses nobody *and* carries no title draws its emoji and its own kind name (`📏 RULE`, `📝 NOTE`),
   so a head is never a bare glyph;
+- a TO's field break is its **own**: the first colon after the thread, never the pipe QUEUE/MESSAGE/SPAWN use. The
+  thread is one token (quotes around it are display dressing and are trimmed), and the payload is everything after
+  that colon, so a `file:line` or a drive letter in the message is never a second field. An empty payload
+  (`TO <thread>:`) is still a card - the line names the worker - and the head says `(no text)`; the executing grammar
+  requires text after the colon, so that line sends nothing, exactly as it did before;
 - an id op (`TODO DONE 3`, `TODO DOING 2`) carries an id and no text, so there is nothing a body could show: the
   prose line IS the whole command, and the card builder answers `""` for it. The same is true of a command with an
   empty payload (`TODO ADD`), which is what the panel would refuse anyway;
 - the shapes are the grammar's own (`lib/assistant/actions.js`, and `lib/todos.js` for TODO): `NOTE: text`,
   `WATCH <thread>: <sentence>`, `RULE [Never PROD] text`, `RESTART gateway | text`. A line the executing grammar
-  would not read as a command is not a card, because a card must never invent a reading the panel does not have.
+  would not read as a command is not a card, because a card must never invent a reading the panel does not have -
+  the one named exception is the empty-payload TO above, drawn because the recipient is the thing the reader needs.
 
 ## A SPAWN's TODOs are its card's bullets
 
@@ -159,6 +173,7 @@ One emoji per kind, and one only - a kind without a glyph is a bug, not a card d
 
 | kind    | emoji | head reads                                  |
 | ------- | ----- | ------------------------------------------- |
+| TO      | 📨    | `📨 wtgui-worker-a`                         |
 | QUEUE   | 🧾    | `🧾 assistant-3 \| Playwright test`         |
 | MESSAGE | ✉️    | `✉️ assistant-2 \| the deploy moved`        |
 | SPAWN   | 🌱    | `🌱 IN #12 agent-worktree-gui \| Card`      |
@@ -169,9 +184,12 @@ One emoji per kind, and one only - a kind without a glyph is a bug, not a card d
 | CHARTER | 📜    | `📜 SSO cut over`                           |
 | RESTART | ♻️    | `♻️ panel \| serve 1.95.0`                  |
 
-`TO` is deliberately not in the list: it addresses a worker thread and is not the panel's own command, so it keeps
-its prose line. The recipient is the field the kind addresses (the assistant for QUEUE/MESSAGE, the tree for SPAWN,
-the thread for WATCH, `gateway`/`panel` for RESTART); a kind that addresses nobody draws the emoji and the title
+`TO` used to be left out of this list on purpose: it addresses a worker thread and is not the panel's own command.
+That reason was about OWNERSHIP, never about readability, and the reader has decided the readability wins - a TO is
+the one line in a reply that a worker actually receives, and the hardest of them to find in a wall of prose. It has
+its own glyph (📨, an outgoing envelope, beside MESSAGE's ✉️) and its own colon grammar; nothing about the send path
+changed. The recipient is the field the kind addresses (the thread for TO and WATCH, the assistant for QUEUE/MESSAGE,
+the tree for SPAWN, `gateway`/`panel` for RESTART); a kind that addresses nobody draws the emoji and the title
 alone, or the emoji and the kind's own name when it has no title either.
 
 ## The fold
@@ -182,6 +200,12 @@ who never clicks. The head is a real `<button>` carrying `aria-expanded`, so Tab
 it - the same control the tool cards use, not a div pretending to be one. `public/app.js`'s press handler reads
 `data-code-clamp` and toggles `is-clamped`, so a clamped card is never `hidden` and a second press folds it back to
 two lines.
+
+**A TO is the one kind that is not clamped.** Its card is the frame's ordinary shut body - no `data-code-clamp`, no
+`is-clamped`, the body `hidden` until the head is pressed - so the whole message is one press away and no two-line
+preview can read as if it were the whole of it. That is deliberate: a TO is the text a worker acts on, and a preview
+that cuts it mid-sentence hides the end of an instruction. Every other kind folds exactly as it did, and the fold is
+written where the clamp is passed (`clamp: parsed.kind === "TO" ? 0 : rows`).
 
 The open state is kept by key in the page's `state.codeBoxOpen` book: `cmd|<scope>|<line>`, where the scope is the
 turn (`<turn id>`), the message (`msg|…`), the peek (`peek|…`), the compact card (`compact|…`), and the line is the
@@ -194,13 +218,22 @@ plain row it was being written as, and the card appears when the line is complet
 
 ## Proof
 
-- `test/assistant-command-card.test.js` - the emoji map (nine kinds), the 80-character rule (80 is a title, 81 is
-  not, and both are cards), untitled QUEUE/MESSAGE/SPAWN plus a titled one, the id op that is not a card, the four
-  proof lines through the executing grammar, the queue row's byte-for-byte text, the frame coming from
-  `core/console-format.js`, the clamp and the button head, the transcript route through `core/console-markdown.js`
-  (four cards when asked, none when not, keyed by the line's id, each carrying `data-ltext`), the copy walker's rule,
-  the compact snippet (`public/turns.js` loaded as the classic script it is), and where the module sits in
-  `public/index.html`.
+- `test/assistant-command-card.test.js` - the emoji map (ten kinds), the 80-character rule (80 is a title, 81 is
+  not, and both are cards), untitled QUEUE/MESSAGE/SPAWN plus a titled one, the id op that is not a card, a TO card
+  with its thread on the head and its own colon grammar (the first colon after the thread; a `file:line` and a drive
+  letter in the payload stay in it; an empty payload still cards; the card is never clamped, and a press opens the
+  whole message), the reply with a TO/QUEUE/SPAWN/NOTE and every prose line around them still prose, the four proof
+  lines through the executing grammar, the queue row's byte-for-byte text, the TO line's card reading equal to the
+  executor's thread and text, the frame coming from `core/console-format.js`, the clamp and the button head, the
+  transcript route through `core/console-markdown.js` (four cards when asked, none when not, keyed by the line's id,
+  each carrying `data-ltext`), the copy walker's rule, the compact snippet (`public/turns.js` loaded as the classic
+  script it is), and where the module sits in `public/index.html`.
+- `tools/verify-to-card.mjs` - a real browser on a throwaway panel at 1440x900: a reply holding a TO, a SPAWN and a
+  NOTE, with the TO card shut and unclamped beside the SPAWN's two-row fold; a press on the TO's head opens the whole
+  message (its height equals its scroll height, and more than the SPAWN's two rows); the SPAWN is untouched by the
+  press; the prose above them is still prose; the store the page read is hashed before and after and unchanged; no
+  page error. It writes `docs/reports/to-card-<date>.html` with the shots inline as data URIs (`to-card-1440.png`,
+  `to-card-1440-cards.png`, `to-card-1440-open.png`).
 - `tools/verify-assistant-command-card.mjs` - a real browser on a throwaway panel: a seeded thread of six turns, a
   card folded (36px at an 18px line, 62px of body), a click that opens it (`aria-expanded` true, the whole body on the
   page), a second click that folds it back, the TODO card, the three untitled lines drawn as cards with a head of the

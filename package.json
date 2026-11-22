@@ -147,6 +147,7 @@
     "verify:role-pane": "node tools/verify-role-pane.mjs",
     "verify:assistant-director": "node tools/verify-assistant-director.mjs",
     "verify:assistant-rename": "node tools/verify-assistant-rename.mjs",
+    "verify:to-card": "node tools/verify-to-card.mjs",
     "verify:no-thread-log": "node tools/verify-no-thread-log.mjs",
     "verify:waves-lane": "node tools/verify-waves-lane.mjs",
     "seed:pipeline-bundle": "node tools/seed-pipeline-bundle.mjs",
