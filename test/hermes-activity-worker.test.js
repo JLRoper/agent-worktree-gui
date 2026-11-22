@@ -71,8 +71,11 @@ test("simultaneous session callers share the worker result without blocking a ti
   db.prepare("insert into sessions values (?, ?, ?, ?, ?)").run("one", "One", "C:/work/tree", Date.now() / 1000, null);
   db.prepare("insert into messages values (?, ?, ?, ?)").run(1, "one", Date.now() / 1000, 'read C:/work/tree/src/file.js');
   db.close();
+  let closeWorkers = async () => {};
   try {
-    const { hermesSessions, hermesTouchedPaths, hermesSessionRoots } = await import("../lib/activity.js");
+    const mod = await import("../lib/activity.js");
+    const { hermesSessions, hermesTouchedPaths, hermesSessionRoots } = mod;
+    closeWorkers = mod.closeActivityWorkers;
     let ticked = false;
     const timer = new Promise((resolve) => setTimeout(() => { ticked = true; resolve(); }, 0));
     const [first, second, touched] = await Promise.all([hermesSessions(), hermesSessions(), hermesTouchedPaths()]);
@@ -86,6 +89,7 @@ test("simultaneous session callers share the worker result without blocking a ti
     assert.equal(roots.get("c:/work/tree/src")[0].matched, "work");
     assert.equal((await hermesSessionRoots(["C:/work/tree"], { exclude: new Set(["one"]) })).size, 0);
   } finally {
+    await closeWorkers();
     if (oldHome === undefined) delete process.env.HERMES_HOME;
     else process.env.HERMES_HOME = oldHome;
     rmSync(home, { recursive: true, force: true });
