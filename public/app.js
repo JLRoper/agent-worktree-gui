@@ -2213,13 +2213,23 @@ function questionPrompt(turn, copy = "") {
   // An answer for THIS question is already on its way: every copy of the box greys every control, so a
   // second click on either surface cannot send a second answer for the same request id.
   const sending = Boolean(questionInFlight(turn.id, q.requestId));
+  // WHEN THIS CARD DIES, from the window the gateway is enforcing (lib/jobs.js writes both numbers from the
+  // gateway's own timeout_s or the one resolution of its config; no constant lives here). The deadline is counted
+  // from arrival, which is a second or two after the gateway began waiting, so the clock runs that much late and is
+  // drawn with a tilde; past it the card stops offering an answer rather than letting a press land on a wait that is
+  // already gone.
+  const deadline = Number(q.deadline) || 0;
+  const windowMs = (Number(q.timeoutSeconds) || 0) * 1000;
+  const leftMs = deadline - Date.now();
+  const spent = Boolean(deadline) && leftMs <= 0;
+  const shut = sending || spent;
   const rows = choices
     .map((c, i) =>
       multi
         ? `<label class="tq-choice is-multi${picks.has(i) ? " on" : ""}" data-qvalue="${esc(c)}" title="tick the answers you want, then send them">
-      <input type="checkbox" data-qpick="1" data-qturn="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qindex="${i}"${picks.has(i) ? " checked" : ""}${sending ? " disabled" : ""}>
+      <input type="checkbox" data-qpick="1" data-qturn="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qindex="${i}"${picks.has(i) ? " checked" : ""}${shut ? " disabled" : ""}>
       <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</label>`
-        : `<button type="button" class="tq-choice" data-qanswer="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}" data-qvalue="${esc(c)}"${sending ? " disabled" : ""} title="send this answer — the agent carries on with it">
+        : `<button type="button" class="tq-choice" data-qanswer="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}" data-qvalue="${esc(c)}"${shut ? " disabled" : ""} title="send this answer — the agent carries on with it">
       <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</button>`,
     )
     .join("");
@@ -2227,35 +2237,35 @@ function questionPrompt(turn, copy = "") {
   // it; with choices, Settings can take the box away, and a multi-select question then keeps a bare Send
   // button (it would otherwise be unanswerable).
   const showTyped = qLookState.typed || choices.length === 0;
-  const note = !showTyped
-    ? multi
-      ? "tick any that apply, then Send answer"
-      : "click a choice above"
-    : multi
-      ? "tick any that apply, then Send answer · a typed answer replaces the ticks"
-      : choices.length
-        ? "click a choice above, or type your own answer · Enter sends"
-        : "type your answer · Enter sends, Shift+Enter adds a line";
-  const sendBtn = `<button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${sending ? " disabled" : ""}>Send answer</button>`;
+  const note = spent
+    ? WINDOW_OVER_NOTE
+    : !showTyped
+      ? multi
+        ? "tick any that apply, then Send answer"
+        : "click a choice above"
+      : multi
+        ? "tick any that apply, then Send answer · a typed answer replaces the ticks"
+        : choices.length
+          ? "click a choice above, or type your own answer · Enter sends"
+          : "type your answer · Enter sends, Shift+Enter adds a line";
+  const sendBtn = `<button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${shut ? " disabled" : ""}>Send answer</button>`;
   const answerRow = showTyped
     ? `<div class="tq-other-row">
-      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words"${sending ? " disabled" : ""}>${esc(draft)}</textarea>
+      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words"${shut ? " disabled" : ""}>${esc(draft)}</textarea>
       ${sendBtn}
     </div>`
     : multi
       ? `<div class="tq-other-row is-send-only">${sendBtn}</div>`
       : "";
-  // The countdown: the gateway stops waiting for this answer when the window it is configured with runs out.
-  // Rendered with its current width so the first paint is right, then driven by the page's one clock tick.
-  const deadline = Number(q.deadline) || 0;
-  const windowMs = (Number(q.timeoutSeconds) || 0) * 1000;
-  const leftMs = deadline - Date.now();
+  // The countdown: the gateway stops waiting for this answer when the window it is enforcing runs out.
+  // Rendered with its current width so the first paint is right, then driven by the page's one clock tick - and
+  // both read `clockLabel`, so the first paint and the tick can never describe the same moment differently.
   const pct = deadline && windowMs ? Math.max(0, Math.min(100, (leftMs / windowMs) * 100)).toFixed(2) : null;
   const clock = pct === null
     ? ""
-    : `<div class="tq-foot${pct <= 12 ? " is-low" : ""}" data-q-clock data-q-deadline="${deadline}" data-q-window="${windowMs}" title="time left before the gateway stops waiting for this answer — measured from when the question reached the panel, so it is a second or two optimistic">
+    : `<div class="tq-foot${leftMs <= 0 ? " is-over" : pct <= 12 ? " is-low" : ""}" data-q-clock data-q-deadline="${deadline}" data-q-window="${windowMs}" title="time left before the gateway stops waiting for this answer - measured from when the question reached the panel, so it is a second or two optimistic">
       <div class="tq-timer"><span style="width:${pct}%"></span></div>
-      <span class="tq-left mono">~${fmtLeft(leftMs)} left</span>
+      <span class="tq-left mono">${clockLabel(leftMs)}</span>
     </div>`;
   // How many times the panel has asked the reader again about this same question (lib/assistant.js
   // re-asks an hour after it parked, then hourly). It is a count on THIS box, not a second box: the
@@ -2285,6 +2295,25 @@ function questionPrompt(turn, copy = "") {
   </div>`;
 }
 
+// The one sentence a spent window says, and the two things every surface has to agree on: when the card is over
+// (its own record's deadline, never a clock of its own) and what it says so. `questionPrompt` draws it dead, the
+// page's tick kills it at the second, and `paintQuestionFlight` must not bring it back to life when an in-flight
+// answer ends badly - a live button on a dead wait is the whole defect this card exists to stop.
+const WINDOW_OVER_NOTE = "the gateway's window has run out - this answer can no longer be delivered";
+function cardWindowOver(card) {
+  const clock = card && card.querySelector("[data-q-clock]");
+  const deadline = Number(clock && clock.dataset.qDeadline) || 0;
+  return Boolean(deadline) && deadline - Date.now() <= 0;
+}
+
+// What a countdown says at a given moment. ONE function, read by the card's first paint and by the page's tick
+// below, so the two cannot word the same instant differently ("~0s left" against "time is up" was the drift that
+// makes a reader stop believing the number). It lives beside the card that reads it, and the card's own tests slice
+// from `questionPrompt` to the comment below, so both halves run the shipped helper rather than a copy.
+function clockLabel(leftMs) {
+  return leftMs <= 0 ? "time is up" : `~${fmtLeft(leftMs)} left`;
+}
+
 // "~49m left", "~90s left": the countdown is an estimate, so it carries the panel's tilde.
 function fmtLeft(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -2296,6 +2325,10 @@ function fmtLeft(ms) {
 
 // One clock for the page, not one interval per card: every countdown already carries its deadline, so the
 // tick only repaints the bars that are on screen and a repaint or a board poll never has to drive it.
+//
+// When a clock reaches zero the card STOPS OFFERING AN ANSWER, here and not only at the next repaint: the
+// gateway has given up on that wait by then, so a press could only come back refused. The controls are the ones
+// `questionPrompt` greys while an answer is in flight, so the two states cannot look different to a reader.
 function tickQuestionClocks() {
   const now = Date.now();
   for (const el of placedNodes("[data-q-clock]")) {
@@ -2307,9 +2340,21 @@ function tickQuestionClocks() {
     const fill = el.querySelector(".tq-timer > span");
     if (fill) fill.style.width = `${pct.toFixed(2)}%`;
     const label = el.querySelector(".tq-left");
-    if (label) label.textContent = left <= 0 ? "time is up" : `~${fmtLeft(left)} left`;
+    if (label) label.textContent = clockLabel(left);
     el.classList.toggle("is-low", pct <= 12);
     el.classList.toggle("is-over", left <= 0);
+    if (left <= 0) {
+      const card = el.closest(".turn-question");
+      if (!card) continue;
+      for (const ctl of card.querySelectorAll("input[data-qpick], button.tq-choice, textarea.tq-other, button.tq-send")) {
+        ctl.disabled = true;
+      }
+      const note = card.querySelector("[data-qnote]");
+      if (note && !note.dataset.qnoteOver) {
+        note.dataset.qnoteOver = "1";
+        note.textContent = WINDOW_OVER_NOTE;
+      }
+    }
   }
 }
 
@@ -2355,11 +2400,14 @@ function paintQuestionFlight(turnId, requestId, mode, text = "") {
     card.classList.toggle("is-sending", sending);
     if (sending) card.setAttribute("aria-busy", "true");
     else card.removeAttribute("aria-busy");
-    for (const el of card.querySelectorAll("button, textarea, input")) el.disabled = sending;
+    // A card whose window is spent stays shut: re-enabling it here would put a live button back on a wait the
+    // gateway has already given up on, which is exactly what the countdown exists to prevent.
+    const over = cardWindowOver(card);
+    for (const el of card.querySelectorAll("button, textarea, input")) el.disabled = sending || over;
     // The note is where "sending" is SAID, and it is set here as well as at render time: a press repaints nothing,
     // so a card waiting for the next snapshot would otherwise show dead controls with no reason for them.
     const note = card.querySelector("[data-qnote]");
-    if (note) note.textContent = sending ? "sending your answer, one moment..." : note.dataset.qnote || "";
+    if (note) note.textContent = sending ? "sending your answer, one moment..." : over ? WINDOW_OVER_NOTE : note.dataset.qnote || "";
     const warn = card.querySelector("[data-qwarn]");
     if (warn) warn.textContent = sending ? "" : mode === "error" ? text : "";
   }
