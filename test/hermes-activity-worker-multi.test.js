@@ -23,14 +23,14 @@ function fixture(t) {
   db.prepare("insert into sessions (id, title, cwd, last_activity_at, ended_at) values (?, ?, ?, ?, ?)").run(
     "s1",
     "One",
-    "C:/work/tree",
+    "fixture/tree",
     1_700_000_100,
     null,
   );
   db.prepare("insert into sessions (id, title, cwd, last_activity_at, ended_at) values (?, ?, ?, ?, ?)").run(
     "s2",
     "Two",
-    "C:/work/other",
+    "fixture/other",
     1_700_000_050,
     1,
   );
@@ -38,7 +38,7 @@ function fixture(t) {
   db.prepare("insert into messages (session_id, timestamp, tool_calls) values (?, ?, ?)").run(
     "s1",
     1_700_000_090,
-    '{"path":"C:/work/tree/a.js"}',
+    '{"path":"fixture/tree/a.js"}',
   );
   t.after(() => {
     try {
@@ -92,7 +92,7 @@ test("two requests are answered on one worker, and a bad store does not kill it"
   const touched = await ask(worker, { id: 3, kind: "touched", dbPath, now: 1_700_000_200 });
   assert.equal(touched.id, 3);
   assert.equal(touched.rows.length, 1);
-  assert.match(touched.rows[0].tool_calls, /C:\/work\/tree\/a\.js/);
+  assert.match(touched.rows[0].tool_calls, /fixture\/tree\/a\.js/);
 
   const missing = await ask(worker, { id: 4, kind: "sessions", dbPath: path.join(dbPath, "..", "nope.db"), now: 1 });
   assert.equal(missing.id, 4);
