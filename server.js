@@ -26,7 +26,7 @@ import { heldBack, failed as hostFailed, answered as hostAnswered, looksLikeHost
 import { Store } from "./lib/store.js";
 import { TreeCache } from "./lib/tree-cache.js";
 import { Scheduler, yieldToLoop } from "./lib/scheduler.js";
-import { ProjectRegistry } from "./lib/projects.js";
+import { ProjectRegistry, projectsOf } from "./lib/projects.js";
 // isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
 // previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
 // server.js has no use for the name any more — the import keeps their new name and drops the moved one.
@@ -830,7 +830,7 @@ let scheduler = new Scheduler({
   pool,
   registry,
   hosts,
-  getProjects: () => registry.projects,
+  getProjects: () => projectsOf(registry),
   panelAgents: () => jobs.agentPaths(),
   panelThreads: () => jobs.panelRunThreads(),
   // Every worktree a listing turns up, before it becomes a row: the naming ledger's seeding (see seedTreeName).
@@ -1746,7 +1746,7 @@ const rowsWithProject = () =>
 
 const spawnFeature = createSpawn({
   getConfig: () => config,
-  getProjects: () => registry.projects,
+  getProjects: () => projectsOf(registry),
   jobs,
   // The rows the scanner already wrote, read at the cut: before a tree is made, the spawner asks whether the
   // project already holds an unfinished tree carrying this task (lib/spawn-reuse.js). The same rows the assistant
@@ -1778,7 +1778,7 @@ const waveTemplateExists = waveTemplateLookup(config.pipelineBundleFile);
 assistant = new Assistant({
   config,
   jobs,
-  getProjects: () => registry.projects,
+  getProjects: () => projectsOf(registry),
   // The rows the scanner already produced (dirty files, commits ahead, verdict) — no second git pass — and the
   // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream. Each row carries the
   // project it belongs to (see rowsWithProject), because the queue card draws that name.
@@ -1943,9 +1943,13 @@ const PREFIX_MOUNTS = [
   // The SPAWN pre-flight (routes/assistant-spawn-check.js): what the cut would refuse, and what would fix it, asked
   // BEFORE the line is written. Read only - the same restriction the digest's reader lives under - and computed
   // from the cut's own checks (lib/spawn-check.js), so its answer cannot drift from what the cut would do.
+  // The project list comes from the SAME accessor the Assistant and the Scheduler get (lib/projects.js `projectsOf`),
+  // never a spelling of its own: this row once passed `() => registry.list()`, and the registry's `list` is the ARRAY
+  // it cached, not a method, so every pre-flight answered "the panel could not answer that: registry.list is not a
+  // function". A test (test/spawn-check-wiring.test.js) reads every accessor in this file and fails on a second shape.
   {
     prefix: SPAWN_CHECK_PATH,
-    handles: createSpawnCheckRoutes({ assistant, getProjects: () => registry.list(), config, sendJson, authorised }),
+    handles: createSpawnCheckRoutes({ assistant, getProjects: () => projectsOf(registry), config, sendJson, authorised }),
   },
   // The header search (routes/assistant-search.js): one read over the turns the job store kept, for one assistant
   // or all of them. The Assistant owns the store read and the thread set, the module owns the query's meaning.
@@ -2352,7 +2356,7 @@ const element = new ElementChannel({
   jobs,
   approvals,
   assistant,
-  getProjects: () => registry.projects,
+  getProjects: () => projectsOf(registry),
   getRows: rowsWithProject,
   bridge: createBridgeChannel({ config, status: () => matrixBridge.state() }),
   onLog: log,
@@ -7597,7 +7601,7 @@ const server = createServer(async (req, res) => {
           store,
           pool,
           registry,
-          getProjects: () => registry.projects,
+          getProjects: () => projectsOf(registry),
           panelAgents: () => jobs.agentPaths(),
           panelThreads: () => jobs.panelRunThreads(),
           onWorktreeSeen: (project, tree) => seedTreeName(project, tree),
