@@ -11,6 +11,10 @@
 //     check name alone would make an unknown gate look passed.
 //   * A MEMBER'S STATE IS THE TASK'S OWN. queued, running, parked and done are the queue's four states; the lane draws
 //     them verbatim and never infers one from the wave.
+//   * A LANE IS DRAWN ONLY WHEN THE WAVE HOLDS MORE THAN ONE. A wave's lanes are derived on the read
+//     (lib/waves.js `waveLanes`); a wave with no lane of its own holds ONE IMPLICIT LANE and is drawn exactly as it
+//     was before lanes existed, with no lane block and no new attribute. Two or more lanes are drawn as lanes, because
+//     that is the fact the close depends on - and a lane whose read answered cannot tell says so, never "no trees".
 //
 // Published on globalThis as `wtWavesLane`, loaded as a classic script by public/index.html before assistant.js, and
 // imported by test/waves-lane.test.js - the same load contract public/core/initiative-fold.js has. Nothing here
@@ -65,6 +69,36 @@
     return `<span class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b><span class="wave-member-title">${esc(member && member.title ? member.title : "")}</span>${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span></span>`;
   }
 
+  /** One lane: the name it runs under, the state its members fold to, and the read saying what it can be pinned to. */
+  function laneRowHtml(lane, esc = defaultEsc) {
+    const label = String((lane && (lane.name || lane.label)) || "unlaned");
+    const state = MEMBER_STATES.includes(lane && lane.state) ? lane.state : "queued";
+    const read = lane && lane.read && typeof lane.read === "object" ? lane.read : null;
+    const ok = Boolean(read && read.ok);
+    const trees = Array.isArray(lane && lane.trees) ? lane.trees.length : 0;
+    const why = read && read.why ? String(read.why) : "";
+    const say = ok ? `runs in ${trees} tree${trees === 1 ? "" : "s"}` : why;
+    const members = Array.isArray(lane && lane.members) ? lane.members : [];
+    return `<div class="wave-lane" data-wave-lane="${esc(label)}" data-lane-state="${esc(state)}" data-lane-read="${ok ? "ok" : "cannot-tell"}" title="${esc(why)}">
+        <span class="chip wave-mstate is-${esc(state)}">lane ${esc(label)} - ${esc(state)}</span>
+        <span class="as-hint wave-lane-read">${esc(say)}</span>
+        <div class="wave-members">${members.map((m) => memberHtml(m, esc)).join("")}</div>
+      </div>`;
+  }
+
+  /**
+   * A wave's lanes, and the sentence when two of them hold one tree. Empty for one lane: a wave with no lane of its
+   * own holds the one implicit lane and is drawn as it always was.
+   */
+  function lanesHtml(wave, esc = defaultEsc) {
+    const lanes = Array.isArray(wave && wave.lanes) ? wave.lanes : [];
+    if (lanes.length < 2) return "";
+    const refused = wave && wave.laneRefused ? String(wave.laneRefused) : "";
+    const bad = refused ? `<div class="as-ask is-bad wave-lanes-bad" role="alert"><b>The lanes cannot be isolated, so this wave cannot close.</b> ${esc(refused)}</div>` : "";
+    const isolation = wave && wave.laneIsolation ? ` data-lane-isolation="${esc(wave.laneIsolation)}"` : "";
+    return `${bad}<div class="wave-lanes" data-wave-lanes="${lanes.length}"${isolation}>${lanes.map((lane) => laneRowHtml(lane, esc)).join("")}</div>`;
+  }
+
   /** One wave: position, title, the derived state word, the current mark, both gates, its template and its members. */
   function waveHtml(wave, currentId = null, esc = defaultEsc) {
     const position = Number(wave && wave.position) > 0 ? Number(wave.position) : null;
@@ -79,9 +113,16 @@
     const templateLine = template
       ? `<div class="wave-template as-hint" data-wave-template="${esc(template)}" data-template-resolved="${wave.templateResolved === true ? "true" : wave.templateResolved === false ? "false" : "unchecked"}">template <span class="mono">${esc(template)}</span>${unresolved ? " <b class=\"wave-unresolved\">unresolved - the bundle does not hold this id</b>" : wave.templateResolved === true ? " - members that name none inherit it" : ""}</div>`
       : "";
-    const memberHtmlAll = members.length
-      ? members.map((m) => memberHtml(m, esc)).join("")
-      : `<span class="as-hint wave-no-members">no task names this wave yet</span>`;
+    const laneCount = Array.isArray(wave && wave.lanes) ? wave.lanes.length : 0;
+    const joined = laneCount >= 2 && wave && wave.laneJoinOwed ? `<div class="wave-join as-hint" data-wave-join="${laneCount}">${laneCount} lanes - closing this wave is ONE commit that names them all</div>` : "";
+    // More than one lane draws its members INSIDE their lanes: the lane a member runs in is the fact this read adds,
+    // and a flat list beside it would leave the grouping unreadable.
+    const memberHtmlAll =
+      laneCount >= 2
+        ? lanesHtml(wave, esc)
+        : members.length
+          ? members.map((m) => memberHtml(m, esc)).join("")
+          : `<span class="as-hint wave-no-members">no task names this wave yet</span>`;
     return `<div class="wave-row" data-wave-id="${esc(wave && wave.id ? wave.id : "")}" data-wave-state="${esc(state)}"${current ? ' data-wave-current="true"' : ""}>
       <div class="wave-head">
         <span class="wave-pos" title="wave ${esc(position || "?")} of this initiative">${esc(position ? `W${position}` : "W?")}</span>
@@ -95,6 +136,7 @@
         ${gateChipHtml("exit", gates.exit, esc)}
         <span class="chip wave-auto ${wave && wave.auto ? "is-on" : "is-off"}" title="${wave && wave.auto ? "unattended starts are asked for by this wave - but never over the Assistant's own spawn setting, and nothing in this slice acts on it" : "off: this wave never starts a member unattended"}">auto ${wave && wave.auto ? "on" : "off"}</span>
       </div>
+      ${joined}
       <div class="wave-members">${memberHtmlAll}</div>
     </div>`;
   }
@@ -139,6 +181,8 @@
     gateWord,
     gateChipHtml,
     memberHtml,
+    laneRowHtml,
+    lanesHtml,
     waveHtml,
     laneHtml,
   };
