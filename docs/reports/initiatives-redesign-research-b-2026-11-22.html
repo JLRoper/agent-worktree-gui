@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round B: a visual system for the Initiatives tab</title>
+<style>
+  /* This page is itself drawn with the system it describes: the same five surfaces, two lines, three inks and five
+     type steps, at a reading scale. There is no font file, no script and no server: open it from disk. */
+  :root{
+    --ground:#0f1115; --surface:#141922; --row:#171d27; --raised:#1c2330; --sunken:#10151c;
+    --line:#232a36; --line-2:#35404f;
+    --ink:#e9edf4; --ink-2:#aeb8c6; --ink-3:#7f8a9a;
+    --green:#3fb950; --green-2:#56d364; --link:#79b8ff; --warn:#e3b341; --bad:#ff7b72; --violet:#d8c7ff;
+    --ui:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --mono:"Cascadia Mono","Consolas","SF Mono",Menlo,monospace;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+    --r1:4px; --r2:8px; --r3:12px; --r4:16px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.65 var(--ui);-webkit-font-smoothing:antialiased}
+  a{color:var(--link);text-decoration:none;text-underline-offset:2px}
+  a:hover{text-decoration:underline}
+  code,kbd{font-family:var(--mono);font-size:.82em;color:var(--ink-2);background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:1px 5px;white-space:nowrap}
+  .wrap{max-width:1240px;margin:0 auto;padding:40px 28px 96px;display:grid;grid-template-columns:212px minmax(0,1fr);gap:56px;align-items:start}
+  .index{position:sticky;top:24px;font-size:12.5px;line-height:1.5;color:var(--ink-3)}
+  .index b{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+  .index a{display:block;color:var(--ink-2);padding:4px 0;border-left:1px solid var(--line);padding-left:12px}
+  .index a:hover{color:var(--ink);border-left-color:var(--green);text-decoration:none}
+  .index .sub{padding-left:24px;font-size:11.5px;color:var(--ink-3)}
+  main{min-width:0}
+  header.top{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:36px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--green-2)}
+  .kicker::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green)}
+  h1{font-size:clamp(30px,4.4vw,46px);line-height:1.08;letter-spacing:-.02em;font-weight:650;margin:14px 0 14px;max-width:20ch}
+  .standfirst{font-size:18px;line-height:1.55;color:var(--ink-2);max-width:70ch;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:22px;font-size:12px;color:var(--ink-3)}
+  .meta span{display:inline-flex;align-items:center;gap:6px}
+  .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--ink-3);opacity:.75}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r4);padding:var(--s5);box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 1px 2px rgba(0,0,0,.35)}
+  .card + .card{margin-top:var(--s4)}
+  h2{font-size:22px;line-height:1.25;letter-spacing:-.01em;font-weight:650;margin:56px 0 6px;display:flex;align-items:baseline;gap:12px}
+  h2 .n{font-family:var(--mono);font-size:12px;color:var(--ink-3);font-weight:400}
+  h2::after{content:"";flex:1 1 auto;height:1px;background:var(--line);transform:translateY(-6px)}
+  h3{font-size:16px;font-weight:650;letter-spacing:-.005em;margin:32px 0 8px;color:var(--ink)}
+  h4{font-size:13px;font-weight:600;margin:22px 0 6px;color:var(--ink-2)}
+  p{margin:0 0 14px;max-width:72ch;color:var(--ink-2)}
+  p strong{color:var(--ink);font-weight:600}
+  ul,ol{margin:0 0 16px;padding-left:22px;max-width:72ch;color:var(--ink-2)}
+  li{margin:0 0 7px}
+  li strong{color:var(--ink);font-weight:600}
+  .lede{font-size:17px;color:var(--ink-2)}
+  .small{font-size:12.5px;line-height:1.55;color:var(--ink-3)}
+  table{width:100%;border-collapse:collapse;margin:6px 0 22px;font-size:13.5px}
+  th{text-align:left;font-size:11.5px;font-weight:600;color:var(--ink-3);padding:0 10px 8px 0;border-bottom:1px solid var(--line-2);letter-spacing:0}
+  td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+  td:first-child{color:var(--ink)}
+  td code,td kbd,th code{white-space:normal;overflow-wrap:anywhere}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;padding-right:0}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;border:1px solid rgba(255,255,255,.18);vertical-align:-1px;margin-right:7px;background:var(--c)}
+  .tag{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:var(--sunken);font-size:10.5px;font-weight:600;color:var(--ink-3);white-space:nowrap}
+  .tag.good{color:var(--green-2);border-color:rgba(46,160,67,.42);background:rgba(46,160,67,.14)}
+  .tag.warn{color:var(--warn);border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.12)}
+  .tag.bad{color:var(--bad);border-color:rgba(229,83,75,.4);background:rgba(229,83,75,.12)}
+  .tag.info{color:var(--link);border-color:rgba(56,139,253,.38);background:rgba(56,139,253,.12)}
+  .tag::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+  .tag.plain::before{display:none}
+  figure{margin:18px 0 26px}
+  figure a{display:block;line-height:0}
+  figure img{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:var(--r3);background:var(--sunken)}
+  figcaption{margin-top:9px;font-size:12px;line-height:1.55;color:var(--ink-3)}
+  figcaption b{color:var(--ink-2);font-weight:600}
+  .pair{display:grid;grid-template-columns:1fr;gap:14px}
+  .pair figure{margin:0}
+  .pair-2{grid-template-columns:1fr 1fr}
+  .wide{max-width:480px}
+  .row-2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .callout{background:var(--sunken);border:1px solid var(--line);border-left:2px solid var(--green);border-radius:0 var(--r2) var(--r2) 0;padding:14px 18px;margin:18px 0;color:var(--ink-2);font-size:13.5px}
+  .callout b{color:var(--ink)}
+  .warnbox{border-left-color:var(--warn)}
+  .badbox{border-left-color:var(--bad)}
+  pre{background:var(--sunken);border:1px solid var(--line);border-radius:var(--r2);padding:14px 16px;overflow:auto;font:12px/1.65 var(--mono);color:var(--ink-2);margin:10px 0 20px}
+  pre .c{color:var(--ink-3)}
+  pre .k{color:var(--violet)}
+  pre .v{color:var(--green-2)}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}
+  .grid-2 ul{margin:0}
+  .kv{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:6px 16px;font-size:13px;margin:8px 0 18px}
+  .kv dt{color:var(--ink-3)}
+  .kv dd{margin:0;color:var(--ink-2)}
+  .change{border:1px solid var(--line);border-radius:var(--r3);background:var(--surface);padding:20px 22px;margin:18px 0}
+  .change .rank{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .change .rank .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:var(--r2);background:var(--raised);border:1px solid var(--line-2);font:600 12px var(--mono);color:var(--green-2)}
+  .change h3{margin:0;font-size:17px}
+  .change .buy{font-size:13px;color:var(--ink-3);margin:0 0 12px}
+  .change dl{display:grid;grid-template-columns:88px 1fr;gap:6px 14px;font-size:13px;margin:0}
+  .change dt{color:var(--ink-3)}
+  .change dd{margin:0;color:var(--ink-2)}
+  footer{margin-top:64px;border-top:1px solid var(--line);padding-top:20px;font-size:12px;color:var(--ink-3);max-width:74ch}
+  .anchor{scroll-margin-top:24px}
+  @media (max-width:980px){
+    .wrap{grid-template-columns:1fr;gap:0;padding:28px 20px 72px}
+    .index{position:static;margin-bottom:28px;display:flex;flex-wrap:wrap;gap:4px 14px;border-bottom:1px solid var(--line);padding-bottom:12px}
+    .index b{width:100%;margin-bottom:4px}
+    .index a{border:0;padding:2px 0}
+    .index .sub{display:none}
+    .pair-2,.row-2,.grid-2{grid-template-columns:1fr}
+  }
+  @media print{body{background:#fff;color:#111}.index{display:none}.wrap{display:block;max-width:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="index" aria-label="Contents">
+  <b>Contents</b>
+  <a href="#summary">In one page</a>
+  <a href="#keep">1. What it gets right</a>
+  <a href="#system">2. The visual system</a>
+  <a class="sub" href="#tokens-surfaces">Surfaces and lines</a>
+  <a class="sub" href="#tokens-ink">Ink and contrast</a>
+  <a class="sub" href="#tokens-state">State roles</a>
+  <a class="sub" href="#tokens-type">Type</a>
+  <a class="sub" href="#tokens-space">Space and radius</a>
+  <a href="#applied">3. Applied to the real tab</a>
+  <a href="#waves">4. The wave lane</a>
+  <a href="#smallest">5. Three smallest changes</a>
+  <a href="#breaks">6. What breaks</a>
+  <a href="#method">7. Method</a>
+  <a href="#cite">A. Citations</a>
+  <a href="#export">B. Token export</a>
+</nav>
+
+<main>
+
+<header class="top anchor" id="top">
+  <span class="kicker">Round B, independent second opinion</span>
+  <h1>A visual system for the Initiatives tab</h1>
+  <p class="standfirst">The tab as tokens with values, applied to a real capture at 480, 768, 1024 and 1440: what the look should become, what the current one already gets right and must survive, the three smallest changes that buy the most, and the wave lane carried as a first class surface.</p>
+  <div class="meta">
+    <span>2026-11-22</span><span class="dot"></span>
+    <span>base <code>8bc065e5</code> (1.155.2)</span><span class="dot"></span>
+    <span>read only on <code>public/</code>, <code>lib/</code>, <code>server.js</code></span><span class="dot"></span>
+    <span>16 captures, 4 viewports</span>
+  </div>
+  <p class="small" style="margin:10px 0 0">Independent second opinion: round A's report was not read and its pull request was not opened.</p>
+</header>
+
+<section class="card anchor" id="summary">
+  <h2 style="margin-top:0">In one page <span class="n">the six sentences this report exists to land</span></h2>
+  <ol>
+    <li><strong>The tab is not undesigned.</strong> It passes its own 16 check redesign gate 16/16, its worst sampled contrast is 6.7:1, its text shares one left edge within 16px, and its focus ring survives the four second repaint. The keep list is long and this report starts there.</li>
+    <li><strong>What dates it is not spacing, it is rank.</strong> Twenty one chips, mono, 10.5 to 11px, in the same pill for a count of projects, a gate that says "met", a wave's state and a member's state. The card has no display step and no surface step: the title, the rows and the wave rows are the same weight of line and nearly the same fill.</li>
+    <li><strong>The system is small and numeric:</strong> 5 surfaces, 2 lines, 3 inks, 6 state roles, 5 type steps, 6 spacing steps, 5 radii, 3 fixed heights, 2 elevations, 1 focus ring. Every pair is AA except one at 4.51:1, named below.</li>
+    <li><strong>Applied to the same live DOM</strong> at 1440, 1024, 768 and the 480 rail, it buys hierarchy and air, and it costs height: the card +52px at 1440 and +41px in the rail, the wave lane +15% at 1440 and +41% in the rail. Density becomes a setting, not a constant.</li>
+    <li><strong>The wave lane is the most organised surface in the product and the least designed:</strong> <code>.wave-lane</code> has zero CSS rules today. The system gives it a 2px state spine, lane blocks that sit side by side (645px each at 1440, 457px at 1024) and stack below 900px of pane, gate pills with one dot, and member pills, with no markup change and no wave fact dropped.</li>
+    <li><strong>Three smallest changes, ranked:</strong> the card's type scale and metadata sentence (CSS, about 28 declarations); the wave spine and lane set (CSS, about 34); sentence case section heads with a hairline (CSS, 7). The tab gate encodes the old type and must be updated with the first, not deleted; three wave chips are below AA today.</li>
+  </ol>
+</section>
+
+<section class="anchor" id="keep">
+  <h2><span class="n">1</span>What the current tab gets right, and must survive</h2>
+  <p class="lede">The reader kept this structure on purpose. A restyle is only allowed to earn its keep by preserving every fact and every behaviour below; the failure mode this section exists to prevent is a prettier card that has quietly dropped the sentence behind a gate.</p>
+
+  <h3>The tab already passes a written rubric</h3>
+  <p>The repository's own gate, <code>tools/verify-initiatives-redesign.mjs</code>, scores the tab against 16 claims and against a recorded baseline of the 1.142.2 tab. Run on this base, in a scratch fixture home: <strong>16 of 16</strong>, against <strong>4 of 16</strong> for the recorded baseline. The tab is the result of that work, so the system below competes with a solved floor, not with a blank page.</p>
+  <div class="row-2">
+    <table>
+      <thead><tr><th>Check</th><th>What the tab answers</th></tr></thead>
+      <tbody>
+        <tr><td>type-title</td><td>13.5px, weight 600</td></tr>
+        <tr><td>type-body</td><td>12px / 18.6px</td></tr>
+        <tr><td>type-fold</td><td>12px fold, 12px tree, 12px assistant</td></tr>
+        <tr><td>type-meta</td><td>11px hint, 10.5px chip</td></tr>
+        <tr><td>contrast-aa</td><td>worst 6.7:1 at <code>.init-desc</code></td></tr>
+        <tr><td>spacing-4</td><td>3 distinct values, all multiples of 4</td></tr>
+        <tr><td>hit-targets</td><td>9 controls, smallest 28px</td></tr>
+        <tr><td>chips-fit</td><td>21 chips, widest 168.1px, none clipped</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Check</th><th>What the tab answers</th></tr></thead>
+      <tbody>
+        <tr><td>alignment</td><td>left edges 982, 982, 982, 982, 982, 998 (spread 16px)</td></tr>
+        <tr><td>line-length</td><td>72 ch at 466px</td></tr>
+        <tr><td>empty-state</td><td>heading h5, 213 chars, primary action</td></tr>
+        <tr><td>focus-ring</td><td>2px, 8.3:1</td></tr>
+        <tr><td>hover</td><td>fold, mini button and tree link each change a colour or decoration</td></tr>
+        <tr><td>active</td><td>pressed transform and background</td></tr>
+        <tr><td>keyboard</td><td>fold reached in 5 Tabs, Enter flipped aria-expanded</td></tr>
+        <tr><td>focus-persist</td><td>4.6s after Tab, still ringed, still the same row</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <a href="../assets/initiatives-redesign/b/03-1440-page-float-real.png"><img src="../assets/initiatives-redesign/b/03-1440-page-float-real.png" alt="The whole panel at 1440 with the Initiatives tab open as it ships"></a>
+    <figcaption><b>The ground the system is judged against.</b> 1440 x 900, assistant floating 1384 x 820, pane 1382. <code>env node docs/assets/initiatives-redesign/b/capture-b.mjs</code>. The tab as it ships, with three waves on the Menu SSO migration.</figcaption>
+  </figure>
+
+  <h3>Eight things that must survive the restyle</h3>
+  <ol>
+    <li><strong>The map, in this order:</strong> initiative, then projects, then worktrees on their branches, then the assistant and history folds, then waves across the width of the card. The tree names are links and the branch is a chip beside them (<code>public/assistant.js:3785</code>). Nothing in a token pass may move a fact to a second screen.</li>
+    <li><strong>The measured description cut.</strong> The two line preview is measured from the rendered line box and cut on a word boundary; the dots appear only when something was cut (<code>public/assistant.js:3762</code>, <code>public/core/initiative-fold.js</code>). A CSS <code>-webkit-line-clamp</code> would cut mid-word and lose the property the tab's own test calls "never mid-word" (<code>tools/verify-initiatives-tab.mjs:431</code>).</li>
+    <li><strong>Focus that outlives the repaint.</strong> The pane rebuilds from a read every four seconds (<code>INIT_READ_GAP_MS</code>, <code>public/assistant.js:3418</code>) and restores the ring to the row that had it. The gate proves it at 4.6s. Any restyle that adds controls has to enter <code>restoreInitFocus</code> or a keyboard reader loses their place four times a minute.</li>
+    <li><strong>One reading edge and a 72ch measure.</strong> The card's prose, chips and folds share one left edge; the description is capped at 72ch and does not run the width of a 1382px pane (<code>public/style.css:4853</code>).</li>
+    <li><strong>The tier sentence.</strong> "Initiative changes: ask me for everything" is the reader's only statement of who may change the map (<code>routes/initiatives.js</code>, tier from <code>lib/initiative-permissions.js</code>). It must not become a tooltip.</li>
+    <li><strong>The provenance line,</strong> "edited 6h ago by assistant-1", on the same row as the counts. It is the only answer to "who touched this last".</li>
+    <li><strong>The wave lane's honesty.</strong> No state is invented, every chip carries the sentence behind its answer in <code>title</code>, an unreadable store is said rather than drawn as "no waves", a template id the bundle no longer holds is drawn as unresolved, and skipped waves are listed. That vocabulary (<code>public/core/waves-lane.js</code>) is the best thing in the tab; smoothing it away would be the restyle's worst outcome.</li>
+    <li><strong>The dark green theme.</strong> The accent is the panel's green, the links are the panel's blue, and the tab reads as part of the panel, not as a product page inside it. The system below changes the values of the washes, never the family.</li>
+  </ol>
+
+  <div class="callout"><b>What I would retire, and only after the list above is safe:</b> the mono chip used for words ("met", "running", "2 projects"); the uppercase 11px section heads, five per card; the 8px card radius with 12px padding and no elevation; the state chip that floats 900px from the wave title it belongs to; and two count chips that are always drawn in the zero style (section 6).</div>
+</section>
+
+<section class="anchor" id="system">
+  <h2><span class="n">2</span>The visual system, as tokens with values</h2>
+  <p class="lede">The whole system is one file, <a href="../assets/initiatives-redesign/b/tokens.css"><code>docs/assets/initiatives-redesign/b/tokens.css</code></a>. It is not imported by the product: the capture harness injects it into the live DOM after the page is up, so every pixel below is the product's own markup, with the panel's own variables remapped inside <code>#as-initiatives</code> and no JS touched.</p>
+
+  <p>Two rules decide the values. First, a token is a job before it is a number: five surfaces because there are five depths (page, card, row, raised, well), two lines because there is one hairline and one emphasis, three inks because there are three reading weights. Second, nothing is invented where the panel already has a role: the accent, link, warn, bad and idle families come from <code>public/style.css:1-40</code>, and the tab remaps them rather than adding a second palette beside them.</p>
+
+  <h3 id="tokens-surfaces">2.1 Surfaces, lines and elevation</h3>
+  <table>
+    <thead><tr><th>Token</th><th>Value</th><th>What it is for</th><th>Where it lands</th></tr></thead>
+    <tbody>
+      <tr><td><code>--tab-ground</code></td><td><span class="sw" style="--c:#0f1115"></span><code>#0f1115</code></td><td>the pane behind everything; the panel's own <code>--bg</code></td><td><code>#as-initiatives</code></td></tr>
+      <tr><td><code>--tab-surface</code></td><td><span class="sw" style="--c:#141922"></span><code>#141922</code></td><td>the card: one step off the ground, never a second dark</td><td><code>.init-card</code>, <code>.init-empty</code></td></tr>
+      <tr><td><code>--tab-row</code></td><td><span class="sw" style="--c:#171d27"></span><code>#171d27</code></td><td>a row inside the card; the wave row's own fill</td><td><code>.init-card</code> remap of <code>--card</code>, <code>.wave-row</code></td></tr>
+      <tr><td><code>--tab-raised</code></td><td><span class="sw" style="--c:#1c2330"></span><code>#1c2330</code></td><td>hover, and the current wave; the only "lifted" fill</td><td><code>.init-proj:hover</code>, <code>.wave-row[data-wave-current=true]</code></td></tr>
+      <tr><td><code>--tab-sunken</code></td><td><span class="sw" style="--c:#10151c"></span><code>#10151c</code></td><td>wells: inputs, the position marker, lane blocks, the tier box</td><td><code>.init-form</code>, <code>.wave-pos</code>, <code>.wave-lane</code></td></tr>
+      <tr><td><code>--tab-line</code></td><td><span class="sw" style="--c:#232a36"></span><code>#232a36</code></td><td>the one hairline: card edge, row edge, lane edge</td><td>all borders</td></tr>
+      <tr><td><code>--tab-line-strong</code></td><td><span class="sw" style="--c:#35404f"></span><code>#35404f</code></td><td>emphasis: the current wave's edge, a lane's left bar, a section rule that must be seen</td><td><code>.wave-row[data-wave-current]</code>, <code>.wave-lane</code></td></tr>
+      <tr><td><code>--tab-e1</code></td><td><code>inset 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.35)</code></td><td>on a dark ground elevation is a top hairline plus one soft shadow, not a glow</td><td><code>.init-card</code>, current wave</td></tr>
+      <tr><td><code>--tab-e2</code></td><td><code>0 8px 24px rgba(0,0,0,.28)</code></td><td>reserved for a floating layer; not used on the tab today</td><td>none in the capture</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="tokens-ink">2.2 Ink, with the contrast ratio measured</h3>
+  <table>
+    <thead><tr><th>Token</th><th>Value</th><th>Ratio on <code>--tab-surface</code></th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><code>--tab-ink</code></td><td><span class="sw" style="--c:#e9edf4"></span><code>#e9edf4</code></td><td class="num">15.0:1</td><td>titles, names, the one thing on a row that must be read first</td></tr>
+      <tr><td><code>--tab-ink-2</code></td><td><span class="sw" style="--c:#aeb8c6"></span><code>#aeb8c6</code></td><td class="num">8.8:1</td><td>description, tree names, member titles: body copy</td></tr>
+      <tr><td><code>--tab-ink-3</code></td><td><span class="sw" style="--c:#7f8a9a"></span><code>#7f8a9a</code></td><td class="num">5.0:1</td><td>counts, hints, the provenance line, positions: a full step below body, still AA</td></tr>
+      <tr><td><code>--tab-link</code></td><td><span class="sw" style="--c:#79b8ff"></span><code>#79b8ff</code></td><td class="num">8.5:1</td><td>tree links; the panel's blue, one step lighter</td></tr>
+      <tr><td><code>--tab-accent</code></td><td><span class="sw" style="--c:#3fb950"></span><code>#3fb950</code></td><td class="num">6.0:1</td><td>the green thread: done, the spine of a finished wave, the kicker on this page</td></tr>
+    </tbody>
+  </table>
+  <p class="small">The tightest pair in the system is <code>--tab-ink-3</code> on <code>--tab-raised</code> at <b>4.51:1</b>, used only for the 10px project tag inside a member pill. It passes AA and is the floor, not a habit: if a later round puts any more words on that fill, it should use <code>--tab-ink-2</code> (8.4:1 on the same fill).</p>
+
+  <h3 id="tokens-state">2.3 State roles: a foreground, a wash and a line each</h3>
+  <p>Every state in the tab is drawn three ways in the same colour family: a pill's text, its wash, and (on a wave row) a 2px spine. That is what makes a running wave read from across the room without reading the word. The foreground on its own wash is given, because a wash changes the ground under the text.</p>
+  <table>
+    <thead><tr><th>Role</th><th>Foreground</th><th>Wash / line</th><th>On wash</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>ready</td><td><span class="sw" style="--c:#9ecbff"></span><code>#9ecbff</code></td><td><code>rgba(56,139,253,.12)</code> / <code>.38</code></td><td class="num">8.6:1</td><td>a wave whose entry gate is met and whose exit is open</td></tr>
+      <tr><td>running</td><td><span class="sw" style="--c:#56d364"></span><code>#56d364</code></td><td><code>rgba(46,160,67,.14)</code> / <code>.42</code></td><td class="num">7.3:1</td><td>a wave with a running member; its spine is this green</td></tr>
+      <tr><td>done</td><td><span class="sw" style="--c:#3fb950"></span><code>#3fb950</code></td><td>accent, no wash</td><td class="num">6.0:1</td><td>exit gate met; the spine closes the wave</td></tr>
+      <tr><td>warn</td><td><span class="sw" style="--c:#e3b341"></span><code>#e3b341</code></td><td><code>rgba(210,153,34,.12)</code> / <code>.40</code></td><td class="num">7.2:1</td><td>cannot tell, blocked, auto on, auto waiting</td></tr>
+      <tr><td>bad</td><td><span class="sw" style="--c:#ff7b72"></span><code>#ff7b72</code></td><td><code>rgba(229,83,75,.12)</code> / <code>.40</code></td><td class="num">5.9:1</td><td>abandoned, an unresolved template, a refused lane set</td></tr>
+      <tr><td>idle</td><td><span class="sw" style="--c:#8b95a5"></span><code>#8b95a5</code></td><td><code>rgba(139,149,165,.10)</code> / <code>.32</code></td><td class="num">5.6:1</td><td>not entered, no gate, no members, auto off</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="tokens-type">2.4 Type: five steps, two of them the same size on purpose</h3>
+  <p>Chromium reports a computed font size in whole pixels, so a declared half step reads as the next integer; the table gives both, and the line box follows the declared value. The scale is not a ratio, it is a set of jobs: a display step for the one title, a title step for a wave, a body step for prose and names, a meta step for counts and hints, a chip step for the shortest answer the tab can give.</p>
+  <table>
+    <thead><tr><th>Token</th><th>Declared</th><th>Measured</th><th>Weight / line</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><code>--tab-fs-display</code></td><td>15.5px</td><td>16px</td><td>600 / 1.25, -0.01em</td><td>the initiative title, opened or folded; the tab's one display line</td></tr>
+      <tr><td><code>--tab-fs-title</code></td><td>13px</td><td>13px</td><td>600 / 1.25</td><td>a wave title, a project name</td></tr>
+      <tr><td><code>--tab-fs-body</code></td><td>12.5px</td><td>13px</td><td>400 / 1.6</td><td>description, tree names, member titles</td></tr>
+      <tr><td><code>--tab-fs-meta</code></td><td>11.5px</td><td>12px</td><td>400 / 1.5</td><td>counts, hints, provenance, branch chips</td></tr>
+      <tr><td><code>--tab-fs-chip</code></td><td>10.5px</td><td>11px</td><td>500 to 600 / 1.4</td><td>the shortest answer: a state, a gate, an auto switch</td></tr>
+      <tr><td><code>--tab-font-ui</code></td><td><code>var(--ui)</code></td><td>Segoe UI</td><td></td><td>every word; the tab stops borrowing the terminal's face for its words</td></tr>
+      <tr><td><code>--tab-font-mono</code></td><td><code>var(--mono)</code></td><td>Cascadia Mono</td><td></td><td>ids, branches, positions: strings a reader compares character by character</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>The one type decision worth arguing about:</b> the current tab sets the chip face to mono for every chip (<code>public/style.css:1122</code>), so the word "met" is drawn in the face reserved for branch names. The system keeps mono for <code>W2</code>, <code>#13</code>, <code>wtgui/...</code> and <code>oauth2-multi</code>, and gives words the UI face. That single change is most of the difference between "terminal readout" and "designed panel".</div>
+
+  <h3 id="tokens-space">2.5 Space, radius, density and the focus ring</h3>
+  <div class="row-2">
+    <table>
+      <thead><tr><th>Token</th><th>Value</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td><code>--tab-s1</code></td><td>4px</td><td>inside a chip, the caret's gap</td></tr>
+        <tr><td><code>--tab-s2</code></td><td>8px</td><td>between related rows, pill gaps</td></tr>
+        <tr><td><code>--tab-s3</code></td><td>12px</td><td>inside a wave row, a form's padding</td></tr>
+        <tr><td><code>--tab-s4</code></td><td>16px</td><td>the card's padding, one indent step</td></tr>
+        <tr><td><code>--tab-s5</code></td><td>24px</td><td>the gap between the card's two columns</td></tr>
+        <tr><td><code>--tab-s6</code></td><td>32px</td><td>the empty state's air</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Token</th><th>Value</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td><code>--tab-r1</code></td><td>4px</td><td>position marker, branch chip, small wells</td></tr>
+        <tr><td><code>--tab-r2</code></td><td>8px</td><td>controls, member pills, lane blocks</td></tr>
+        <tr><td><code>--tab-r3</code></td><td>12px</td><td>a wave row, a form, a figure</td></tr>
+        <tr><td><code>--tab-r4</code></td><td>16px</td><td>the card; the one large radius in the tab</td></tr>
+        <tr><td><code>--tab-r-pill</code></td><td>999px</td><td>a state, a gate: a pill, never a rectangle</td></tr>
+        <tr><td><code>--tab-row</code></td><td>32px</td><td>a fold row, an input: the height a finger and a mouse both hit</td></tr>
+        <tr><td><code>--tab-control</code></td><td>30px</td><td>a mini button</td></tr>
+        <tr><td><code>--tab-chip</code></td><td>20px</td><td>a state, a gate, an auto word</td></tr>
+        <tr><td><code>--tab-ring</code></td><td><code>2px solid #79b8ff</code>, offset 2</td><td>one ring on every control, in the link's blue</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.6 How it is applied without touching the markup</h3>
+  <p>Two moves, in this order. First remap the panel's variables inside the tab, so every rule that already exists inherits the new ink and surfaces:</p>
+  <pre><span class="c">/* 2. the panel's own variables, remapped inside this tab only */</span>
+#as-initiatives {
+  --surface: var(--tab-surface);  --card: var(--tab-row);
+  --panel:   var(--tab-ground);   --line: var(--tab-line);
+  --text:    var(--tab-ink);      --dim:  var(--tab-ink-2);
+  --dimmer:  var(--tab-ink-3);    --hover: var(--tab-raised);
+  --blue:    var(--tab-link);
+}</pre>
+  <p>Then touch geometry and rank only where the current tab is weakest: the card, the metadata row, the section heads, the wave spine and the lane groups. Three representative rules, quoted from the file:</p>
+  <pre><span class="c">/* the metadata row becomes a sentence, not a wall of capsules */</span>
+#as-initiatives .init-chips .chip {
+  height: auto; padding: 0; border: 0; background: transparent;
+  color: var(--tab-ink-3); font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta); font-variant-numeric: tabular-nums;
+}
+#as-initiatives .init-chips .chip + .chip::before { content: "\00b7"; margin: 0 7px; color: var(--tab-ink-3); }
+
+<span class="c">/* a wave row carries its state on its leading edge, from the server's own attribute */</span>
+.wave-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--tab-idle); }
+.wave-row[data-wave-state="running"]::before { background: var(--tab-run); }
+.wave-row[data-wave-state="done"]::before    { background: var(--tab-accent); }
+.wave-row[data-wave-state="unknown"]::before,
+.wave-row[data-wave-state="blocked"]::before { background: var(--tab-warn); }
+
+<span class="c">/* the lane set takes the row, then two lanes sit side by side above 900px of pane */</span>
+.wave-members &gt; .wave-lanes { flex: 1 0 100%; width: 100%; }
+@container (min-width: 900px) {
+  .wave-lanes { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+}</pre>
+  <p>Every selector is prefixed with <code>#as-initiatives</code> in the file, so the layer cannot leak into the rest of the panel; the snippets above drop the prefix for width.</p>
+
+  <h3>2.7 What the system deliberately does not do</h3>
+  <ul>
+    <li><strong>No motion.</strong> The pane is rebuilt from a read every four seconds; a transition on a wave row would restart on every repaint and read as a flicker. The tab is static, and hover is a fill change, not an animation.</li>
+    <li><strong>No new markup and no new classes.</strong> Every hook the layer uses is emitted today: <code>data-wave-state</code>, <code>data-wave-current</code>, <code>data-gate-state</code>, <code>data-lane-read</code>, <code>data-init-card</code>, <code>is-titlecard</code> (<code>public/core/waves-lane.js:144-163</code>).</li>
+    <li><strong>No switch affordance on the auto chip.</strong> There is no write route behind it (<code>routes/waves.js:1-26</code>), so it stays a status word: "auto on" and "auto off", not a toggle a reader will click and find dead.</li>
+    <li><strong>No second palette.</strong> The accent, link and state families are the panel's; the layer changes their washes and their type, not their hue.</li>
+  </ul>
+</section>
+
+<section class="anchor" id="applied">
+  <h2><span class="n">3</span>The same DOM, before and after</h2>
+  <p class="lede">Each pair below is the same page, the same fixture and the same open card; the only difference is that <code>tokens.css</code> was injected before the second frame. Nothing was re-rendered, re-seeded or re-worded between the two, which is why the pairs can be read as a look diff.</p>
+
+  <h3>3.1 At 1440, floating at 1382px of pane</h3>
+  <div class="pair">
+    <figure>
+      <a href="../assets/initiatives-redesign/b/02-1440-tab-real.png"><img src="../assets/initiatives-redesign/b/02-1440-tab-real.png" alt="The Initiatives tab at 1440 as it ships"></a>
+      <figcaption><b>As it ships.</b> 1440 x 900, float 1384 x 820, pane 1382. Two column card, 543px + 640px, 24px gap. Mono count chips, uppercase section heads, 8px card radius, the wave state chip at the far right of a 1207px row.</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/05-1440-tab-tokens.png"><img src="../assets/initiatives-redesign/b/05-1440-tab-tokens.png" alt="The same tab at 1440 with the token layer applied"></a>
+      <figcaption><b>With the token layer.</b> Same state, same viewport, same DOM. Title 16px, body 13px, counts as one sentence with dots, section heads in sentence case with a hairline, 16px card radius and a 16px padding, the wave row's state packed beside its title.</figcaption>
+    </figure>
+  </div>
+
+  <h3>3.2 In the reader's default rail: the 480px dock</h3>
+  <p>The dock is the state most reads happen in, so it is the pair that matters most. The system holds at 480: the title wraps to two lines, the metadata sentence wraps to one line under it, and the wave rows keep their pills without clipping. The cost is height, and it is named in 3.4.</p>
+  <div class="pair pair-2">
+    <figure>
+      <a href="../assets/initiatives-redesign/b/01-1440-docked-tab-real.png"><img src="../assets/initiatives-redesign/b/01-1440-docked-tab-real.png" alt="The docked 480px rail as it ships"></a>
+      <figcaption><b>Ships.</b> 1440 x 900, docked, pane 479.</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/09-1440-docked-tab-tokens.png"><img src="../assets/initiatives-redesign/b/09-1440-docked-tab-tokens.png" alt="The docked 480px rail with tokens"></a>
+      <figcaption><b>Tokens.</b> Same rail, 16px title, sentence metadata, 16px card.</figcaption>
+    </figure>
+  </div>
+  <div class="pair pair-2">
+    <figure>
+      <a href="../assets/initiatives-redesign/b/01b-1440-docked-wave-real.png"><img src="../assets/initiatives-redesign/b/01b-1440-docked-wave-real.png" alt="The wave lane in the 480px rail as it ships"></a>
+      <figcaption><b>Ships:</b> the lane set is a 386px shrink-wrapped stack of bare divs; the state chip sits to the right of the title.</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/10-1440-docked-wave-tokens.png"><img src="../assets/initiatives-redesign/b/10-1440-docked-wave-tokens.png" alt="The wave lane in the 480px rail with tokens"></a>
+      <figcaption><b>Tokens:</b> state spine, lane blocks with their read, gate pills with one dot, member pills.</figcaption>
+    </figure>
+  </div>
+
+  <h3>3.3 At 1024 and 768</h3>
+  <div class="pair pair-2">
+    <figure>
+      <a href="../assets/initiatives-redesign/b/02-1024-tab-real.png"><img src="../assets/initiatives-redesign/b/02-1024-tab-real.png" alt="The tab at 1024 as it ships"></a>
+      <figcaption><b>Ships, 1024 x 900.</b> Pane 1006; with the 8px pane padding the tab's content box is 990, under the product's 1000px container query, so one column.</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/05-1024-tab-tokens.png"><img src="../assets/initiatives-redesign/b/05-1024-tab-tokens.png" alt="The tab at 1024 with tokens"></a>
+      <figcaption><b>Tokens, 1024.</b> One column, 16px title, the metadata sentence with visible separators, lanes still side by side (lane 457px each).</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/02-768-tab-real.png"><img src="../assets/initiatives-redesign/b/02-768-tab-real.png" alt="The tab at 768 as it ships"></a>
+      <figcaption><b>Ships, 768 x 900.</b> Pane 750, one column.</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/05-768-tab-tokens.png"><img src="../assets/initiatives-redesign/b/05-768-tab-tokens.png" alt="The tab at 768 with tokens"></a>
+      <figcaption><b>Tokens, 768.</b> The title wraps to two lines, the counts stay one line, the tier box stays 68ch wide.</figcaption>
+    </figure>
+  </div>
+  <figure class="wide">
+    <a href="../assets/initiatives-redesign/b/08-768-wave-tokens.png"><img src="../assets/initiatives-redesign/b/08-768-wave-tokens.png" alt="The wave lane at 768 with tokens"></a>
+    <figcaption><b>The lane at 768 with the system.</b> Below 900px of pane the two lanes stack, the member pills wrap inside their lane, and no row is pushed sideways. Captured at 768 x 900, pane 750, lane 666px wide.</figcaption>
+  </figure>
+
+  <h3>3.4 The delta, in numbers rather than adjectives</h3>
+  <table>
+    <thead><tr><th>Measured element</th><th class="num">Ships</th><th class="num">Tokens</th><th>Why it is the change</th></tr></thead>
+    <tbody>
+      <tr><td>Card radius / padding</td><td class="num">8px / 12px</td><td class="num">16px / 16px</td><td>one large radius and one pad step; the card reads as a card, not a bordered group</td></tr>
+      <tr><td>Initiative title</td><td class="num">15px (14 at 1024/768)</td><td class="num">16px</td><td>one display step that survives the container query instead of shrinking with the pane</td></tr>
+      <tr><td>Description</td><td class="num">12px / 19px</td><td class="num">13px / 20px</td><td>body copy at a reading size; the fold re-measures, so the cut stays on a word</td></tr>
+      <tr><td>Count chip</td><td class="num">11px mono, pill, 22px high, 76px wide</td><td class="num">12px UI, no border, 17px high, 50px wide</td><td>counts become a sentence with 7px dots; the capsule wall goes</td></tr>
+      <tr><td>Section head</td><td class="num">11px, uppercase, .06em, dim</td><td class="num">12px, sentence, 600, ink + hairline</td><td>five labels per card stop reading as form labels</td></tr>
+      <tr><td>Wave row</td><td class="num">8px radius, 8/10 pad, 94px high</td><td class="num">12px radius, 12/16 pad, 108px high, 2px spine</td><td>a state you can see before you read the word</td></tr>
+      <tr><td>Gate pill</td><td class="num">11px mono, 21px high</td><td class="num">11px UI, 20px high, 5px dot</td><td>the answer's colour is a dot, and the check's name is a word</td></tr>
+      <tr><td>Lane block</td><td class="num">no CSS rule: 386 x 50, shrink-wrapped</td><td class="num">645 x 70 each, side by side; 457 at 1024; stacked at 768/480</td><td>the lane set is the wave's strongest fact and had no form</td></tr>
+      <tr><td>Card height (init_sso)</td><td class="num">153px at 1440, 166px at 480</td><td class="num">205px at 1440, 207px at 480</td><td>+52px and +41px: the price of the air</td></tr>
+      <tr><td>Wave fold height</td><td class="num">417px at 1440, 468px at 480</td><td class="num">478px at 1440, 661px at 480</td><td>+15% wide, +41% in the rail; see the density note</td></tr>
+    </tbody>
+  </table>
+  <div class="callout warnbox"><b>Density has to become a setting, not a constant.</b> In the 480 rail the token layer costs 41px on the card and 193px on the wave fold for this one initiative, which is about half a screen. The three heights (<code>--tab-row</code> 32, <code>--tab-control</code> 30, <code>--tab-chip</code> 20) and the spacing scale are already the only knobs needed: a <code>data-density="compact"</code> override that sets s3 to 8, s4 to 12, the row to 28 and the member pill to 22 would return most of that without touching a colour. It should ship as a reader choice in the same change, not as a later fix.</div>
+</section>
+
+<section class="anchor" id="waves">
+  <h2><span class="n">4</span>The wave lane, as a first class surface</h2>
+  <p class="lede">Waves are the strongest organised idea in the initiative: a named position, a gate that only opens on a live read, a switch that can open the next wave, lanes that run in parallel and close in one commit. The lane already carries all of it in the payload (<code>routes/initiatives.js:179</code>), and the tab draws it (<code>public/assistant.js:3873</code>). What it does not have is a form: <code>.wave-lane</code>, <code>.wave-lanes</code>, <code>.wave-join</code>, <code>.wave-auto-open</code> and <code>.wave-lane-read</code> have <b>zero CSS rules</b> in <code>public/style.css</code>.</p>
+
+  <h3>4.1 What the lane draws, field by field</h3>
+  <table>
+    <thead><tr><th>Props</th><th>Attribute or class</th><th>What it means, and where it comes from</th></tr></thead>
+    <tbody>
+      <tr><td><code>W1</code> marker</td><td><code>.wave-pos</code></td><td>the wave's position in the initiative's order; <code>lib/waves.js</code> refuses duplicate positions</td></tr>
+      <tr><td>title</td><td><code>.wave-title</code></td><td>up to 120 characters, authored in the wave; never inferred</td></tr>
+      <tr><td>state</td><td><code>.wave-state.is-*</code>, <code>data-wave-state</code></td><td>one of empty, unentered, unknown, ready, running, blocked, done, abandoned; folded from members and gates, never stored</td></tr>
+      <tr><td>current</td><td><code>.wave-current</code>, <code>data-wave-current</code></td><td>the lowest position the stated order makes current: running, then ready, then not entered</td></tr>
+      <tr><td>entry / exit gate</td><td><code>[data-wave-gate]</code>, <code>data-gate-state</code></td><td>a check from the 14 name vocabulary, and the live answer: met, unmet, unknown, none, abandoned. "Cannot tell" blocks</td></tr>
+      <tr><td>auto</td><td><code>.wave-auto.is-on/.is-off</code></td><td>whether this wave may open the next one, and only on a read</td></tr>
+      <tr><td>auto open</td><td><code>[data-wave-auto-open]</code> / <code>[data-wave-auto-wait]</code></td><td>whether the wave before opened this one, naming it, or why it is still waiting</td></tr>
+      <tr><td>join</td><td><code>.wave-join</code>, <code>data-wave-join</code></td><td>with two or more lanes: closing is one commit that names them all</td></tr>
+      <tr><td>lanes</td><td><code>.wave-lane</code>, <code>data-lane-read</code></td><td>the lane's state, the trees it runs in, and whether it can be pinned: ok or cannot-tell</td></tr>
+      <tr><td>members</td><td><code>.wave-member</code>, <code>data-member-state</code></td><td>task id, title, project and the task's own state; membership is the task's <code>waveId</code></td></tr>
+      <tr><td>template</td><td><code>.wave-template</code>, <code>data-template-resolved</code></td><td>the bundle id the members inherit, or an honest "unresolved"</td></tr>
+      <tr><td>skipped / store</td><td><code>.wave-skipped</code>, <code>.wave-store-bad</code></td><td>why a wave was skipped, and an unreadable store said as itself</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 The capture that proves the lane carries waves, lanes and members</h3>
+  <p>The fixture ships no waves, so this round seeds <code>waves.json</code> with the shape <code>lib/waves.js</code> reads and gives two tasks a <code>waveId</code> and a <code>lane</code>. The result on the route, asserted by the capture script before a single screenshot is taken:</p>
+  <ul>
+    <li>three waves on <code>init_sso</code>: <b>W1 done</b> (both gates met), <b>W2 running</b> (entry met, exit <code>pr-open</code> cannot tell), <b>W3 empty</b> (no gates, template <code>sefl-review-loop</code> unresolved);</li>
+    <li><b>W2 is current</b> and was opened by W1's switch: <code>autoOpen.open === true</code>, <code>from === "wave-proof"</code>;</li>
+    <li><b>two named lanes</b>, <code>cookie</code> and <code>login</code>, in two different worktrees, so the set closes in one commit; each lane reads <code>ok</code> and names its tree;</li>
+    <li><b>two members</b>: <code>#11</code> running in <code>cookie</code> on <code>menu-sso-state-cookie</code>, <code>#13</code> done in <code>login</code> on <code>menu-login-page</code>.</li>
+  </ul>
+  <div class="pair">
+    <figure>
+      <a href="../assets/initiatives-redesign/b/04-1440-wave-real.png"><img src="../assets/initiatives-redesign/b/04-1440-wave-real.png" alt="The wave lane at 1440 as it ships"></a>
+      <figcaption><b>As it ships.</b> 1440 x 900, pane 1382; the lane fold at 1207px. The lane set is a bare 386px block (lane blocks have no rule), and the state chip sits at the far edge of the row.</figcaption>
+    </figure>
+    <figure>
+      <a href="../assets/initiatives-redesign/b/07-1440-wave-tokens.png"><img src="../assets/initiatives-redesign/b/07-1440-wave-tokens.png" alt="The wave lane at 1440 with the token layer"></a>
+      <figcaption><b>With the system.</b> A 2px spine per state, the state packed beside the title, gates as dotted pills, lanes side by side at 645px each, members inside their lane, the unresolved template in red, and W3's "no members" honest.</figcaption>
+    </figure>
+  </div>
+
+  <h3>4.3 Four findings about the lane that are not cosmetic</h3>
+  <ol>
+    <li><strong>The lane set is nested inside the members flex box.</strong> <code>waveHtml</code> wraps lanes and members in the same <code>.wave-members</code> (<code>public/core/waves-lane.js:163</code>), and <code>.wave-members</code> is a wrapping flex row (<code>public/style.css:4960</code>). A lane set is therefore a flex item and shrinks to its content: at 1440 it measured 386px, and two lanes could only stack. The fix in the layer is one rule, <code>.wave-members &gt; .wave-lanes { flex: 1 0 100% }</code>, and it is the difference between a lane lane and a lane list. It is worth fixing in the markup in the implementation round: the lanes are not members and should not be their children.</li>
+    <li><strong>The join sentence contradicts a refusal.</strong> <code>laneHtml</code> draws "2 lanes - closing this wave is ONE commit" whenever <code>laneJoinOwed</code> is true (<code>public/core/waves-lane.js:138</code>), even when <code>laneRefused</code> has already drawn "The lanes cannot be isolated, so this wave cannot close" (<code>:101-104</code>). A reader sees both sentences at once. The condition should be <code>laneJoinOwed &amp;&amp; !laneRefused</code>: one line, JS, and it is a truth fix rather than a look fix.</li>
+    <li><strong>Three wave texts are below AA.</strong> <code>.wave-gate.is-none</code> and <code>.wave-auto.is-off</code> use <code>--dimmer</code> <code>#6b7482</code> on the wave row (<code>public/style.css:4955</code>, <code>:4959</code>), and <code>.wave-member-project</code> uses the same ink at 10.5px (<code>:4964</code>). The measured ratio is <b>3.84:1</b>. The tab's gate reports 6.7:1 worst because its contrast sample stops at <code>.init-desc</code> and never enters the lane (<code>tools/initiatives-measure.mjs:441-446</code>). The fix is <code>--dim</code> (7.19:1) or the system's <code>ink-3</code> (5.04:1 on the surface).</li>
+    <li><strong>The lane is read only, and must look it.</strong> <code>routes/waves.js:1-26</code> states the slice deliberately has no write route, no evaluator, no scheduler and no auto start; the auto switch is evaluated by a read. Styling a gate pill or the auto chip as a control would promise an action the product does not have. The system keeps them as pills and words, and says so here so the implementation round does not "discover" it by wiring a click that posts nowhere.</li>
+  </ol>
+
+  <h3>4.4 What the system gives waves, in rules</h3>
+  <ul>
+    <li><strong>A spine, not a badge.</strong> The wave's state is a 2px leading edge colour, from <code>data-wave-state</code>, plus a pill. Two independent reads of the same fact: the row reads at a glance, the pill reads at a word.</li>
+    <li><strong>The state beside the name.</strong> The title no longer stretches to push its chip 900px away; the chip follows the title, and the template takes the next line. On a 1207px row the state is now 8px from the name.</li>
+    <li><strong>Gates as answers.</strong> A 5px dot in the answer's colour, the check's name, and the answer in words. <code>no check</code> keeps its dashed border, so "nothing to check" cannot be mistaken for "not met".</li>
+    <li><strong>Lanes as parallel blocks.</strong> Two lanes at 1440 and 1024, stacked at 768 and 480; each names its own read ("runs in 1 tree") and holds its own members. A refused lane set keeps the red alert and its sentence.</li>
+    <li><strong>Members as pills with the id in mono.</strong> The id is the string a reader types into a queue; the title is prose; the project is a tag; the state is a pill. Four ranks, four treatments.</li>
+    <li><strong>Nothing dropped.</strong> The diff adds no markup and removes no node: skipped waves, store errors, unresolved templates and the auto-wait sentence all keep their place.</li>
+  </ul>
+</section>
+
+<section class="anchor" id="smallest">
+  <h2><span class="n">5</span>The three smallest changes that buy the most, ranked</h2>
+  <p class="lede">Each is CSS only, each can ship alone, and each is ranked by perceived modernity per file touched. The measured deltas are from the captures in section 3; the gate impacts are from the source of the two tab gates, not from a run of them (see 7.4).</p>
+
+  <div class="change">
+    <div class="rank"><span class="n">1</span><h3>The card's type scale, surface, and the metadata sentence</h3></div>
+    <p class="buy">Buy: a display step, a body step and a card that sits above the page. It is the change every card wears, folded or open, in every state.</p>
+    <dl>
+      <dt>What</dt><dd>Title 15.5/600/-0.01em; description 12.5/1.6; counts as 11.5px UI text with 7px dots and no border; card 16px padding, 16px radius, one soft elevation; 16px between blocks. Section heads are <em>not</em> in this change (rank 3).</dd>
+      <dt>Files</dt><dd><code>public/style.css</code> only: <code>.init-card</code> (:4834), <code>.init-title</code> (:4851), <code>.init-desc</code> (:4853), <code>.init-chips</code> and its chips (:4862-4864), the wide card rule (:4979). About 28 declarations, no JS.</dd>
+      <dt>Measured</dt><dd>Card 153 to 205px at 1440; title 15 to 16px; description 12/19 to 13/20; count chip 22px pill to 17px text.</dd>
+      <dt>Risk</dt><dd><span class="tag warn">medium</span> <code>tools/verify-initiatives-tab.mjs:431</code> asserts the title card preview is exactly <code>11.5px</code> and <code>:524</code> asserts <code>.init-tree</code> rows are <code>11.5px</code>. A type change turns those red until the expected values are updated in the same commit. Update them; do not delete them.</dd>
+      <dt>Gate</dt><dd>chips-fit still passes (the <code>.init-chips .chip</code> spans stay); type-meta reads the new 11.5px; contrast improves (counts from 6.9:1 to 5.0:1 at worst, still AA).</dd>
+    </dl>
+  </div>
+
+  <div class="change">
+    <div class="rank"><span class="n">2</span><h3>The wave spine and the lane set</h3></div>
+    <p class="buy">Buy: the newest, most structured surface stops looking like a footnote. This is the change a reader sees first as "modern", because it is the only place where the product shows parallel work.</p>
+    <dl>
+      <dt>What</dt><dd>2px state spine from <code>data-wave-state</code>; current wave raised; 12px radius and 12/16 padding; the state pill packed beside the title; gate pills with a dot; member pills at 8px; the lane set given the row and two columns above 900px of pane; the lane's own read and members inside it.</dd>
+      <dt>Files</dt><dd><code>public/style.css</code> only: <code>.wave-row</code> (:4937), <code>.wave-pos</code> (:4939), <code>.wave-title</code> (:4942), <code>.wave-gates</code> and gate tones (:4953-4957), <code>.wave-members</code> and <code>.wave-member</code> (:4960-4964), plus new rules for <code>.wave-lanes</code> and <code>.wave-lane</code>, which have none. About 34 declarations, no JS.</dd>
+      <dt>Measured</dt><dd>Wave row 94 to 108px; lane 386x50 shrink-wrapped to 645x70 side by side at 1440, 457x70 at 1024, stacked at 768 and 480.</dd>
+      <dt>Risk</dt><dd><span class="tag info">low</span> <code>tools/verify-waves-lane.mjs</code> makes no font or size claims; it asserts the data attributes and clips at 1440/900. The one trap is the nesting in 4.3: without <code>flex: 1 0 100%</code> the lanes silently stay stacked, which is exactly what the first capture showed.</dd>
+      <dt>Gate</dt><dd>No existing check covers the lane's typography or its lane layout, so this change is invisible to both gates. That is a hole, not a safety: add a lane check (see 6.1).</dd>
+    </dl>
+  </div>
+
+  <div class="change">
+    <div class="rank"><span class="n">3</span><h3>Sentence case section heads, with a hairline</h3></div>
+    <p class="buy">Buy: five labels per card stop reading as form captions. It is seven declarations, it repeats five times per card, and it is the highest repetition per line of CSS in the tab.</p>
+    <dl>
+      <dt>What</dt><dd>Section heads at 12px/600 in sentence case, ink, with a 1px rule that flexes to meet the count; the count becomes a plain numeral in tabular figures; the wavefold's own override follows (<code>.init-wavefold .init-sechead .chip</code>, :4930).</dd>
+      <dt>Files</dt><dd><code>public/style.css</code> only: <code>.init-sechead</code> (:4866), the wavefold head count (:4930), and one new <code>::after</code> rule. 7 declarations, no JS.</dd>
+      <dt>Measured</dt><dd>11px uppercase at .06em to 12px sentence at 600; the head grows 21 to 17px of line box because the uppercase tracking goes.</dd>
+      <dt>Risk</dt><dd><span class="tag good">low</span> No gate asserts the case, the size or the tracking of a section head. The only visual risk is the count landing too far right on a 1382px card; the hairline makes that distance read as a rule, not a gap.</dd>
+      <dt>Gate</dt><dd>None. Ship it with rank 1 if the implementation round wants one commit; it is listed separately because it is the cheapest of the three and can lead.</dd>
+    </dl>
+  </div>
+
+  <h3>5.4 Three repairs to carry in whichever commit ships first</h3>
+  <p>These are not ranked because they do not buy modernity; they stop the tab from lying, and they are one line each.</p>
+  <ul>
+    <li><strong>The Join sentence when the lanes are refused:</strong> condition on <code>!laneRefused</code> (<code>public/core/waves-lane.js:138</code>).</li>
+    <li><strong>The two counts drawn as zero:</strong> <code>public/assistant.js:3885</code> and <code>:3893</code> stamp <code>class="chip is-zero"</code> on the Assistants and History counts whatever the number is, so "2 assistants" wears the zero style. Drop the fixed class and let the count decide.</li>
+    <li><strong>The three below-AA wave texts:</strong> <code>--dimmer</code> to <code>--dim</code> on the no-gate pill, the auto-off word and the member's project tag (<code>public/style.css:4955</code>, <code>:4959</code>, <code>:4964</code>).</li>
+  </ul>
+</section>
+
+<section class="anchor" id="breaks">
+  <h2><span class="n">6</span>What breaks if only the look changes</h2>
+  <p class="lede">A token pass is safe against the data model: it cannot drop a wave fact, because it adds no markup. It is not safe against the tab's own tests, its contrast sample, or the four second repaint. This is the list to read before the implementation row starts.</p>
+
+  <h3>6.1 The gates: two go red, one goes quiet</h3>
+  <ul>
+    <li><strong>Red: the type assertions.</strong> <code>tools/verify-initiatives-tab.mjs:431</code> (preview at <code>11.5px</code>) and <code>:524</code> (<code>.init-tree</code> at <code>11.5px</code>) encode the current scale. Any rank 1 type change fails them. They are good assertions; update the expected numbers with the new scale and keep the shape of the check.</li>
+    <li><strong>Red at the widest float: alignment.</strong> The gate's own wide run already misses <code>alignment</code> (15/16) while the normal run is 16/16. A restyle that moves the chips row's left edge has to re-run the widest state, not only the default one.</li>
+    <li><strong>Quiet: chips-fit on an empty set.</strong> <code>tools/initiatives-measure.mjs:459</code> passes when <code>clipped.length === 0</code>, including when there are zero chips. If rank 1 turns the counts into text and a later round removes the spans, the check reports "0 chips" and passes. Make it require the branch chip and the member pills, or it stops protecting the thing it was written for.</li>
+    <li><strong>Blind: the contrast sample.</strong> The sample is title, description, chip, hint, fold, tree, mini, assist (<code>tools/initiatives-measure.mjs:441-446</code>). It never enters the wave lane, which is how 16/16 and 3.84:1 coexist. Add <code>.wave-gate</code>, <code>.wave-auto</code> and <code>.wave-member-project</code> before trusting a restyle's contrast number.</li>
+  </ul>
+
+  <h3>6.2 The JS contracts a CSS pass must not break</h3>
+  <ul>
+    <li><strong>The measured description cut.</strong> <code>paintInitDescription</code> reads the rendered line height and cuts on a word (<code>public/assistant.js:3762</code>). It survives a type change, and it will not survive a CSS clamp. Keep <code>white-space: pre-wrap</code> and the unitless line height.</li>
+    <li><strong>Focus through the repaint.</strong> The pane re-renders every four seconds (<code>INIT_READ_GAP_MS</code>, <code>:3418</code>) and <code>restoreInitFocus</code> puts the ring back from <code>INIT_FOCUS_ATTRS</code>. A new control needs an attribute in that list, or it loses focus four times a minute.</li>
+    <li><strong>The scroll position.</strong> The pane keeps its scroll across a repaint; an element screenshot of the wave lane scrolls it. The captures reset it in three passes before a frame shot, and so should any harness that photographs the tab.</li>
+    <li><strong>The container query measures the content box.</strong> A 1024 window gives a 1006px pane and, after the pane's 8px padding, a 990px content box, so the product's 1000px two-column query does not fire: 1024 is one column by design. Do not "fix" that by measuring the border box; the 480 rail depends on the same rule.</li>
+  </ul>
+
+  <h3>6.3 What must change anyway, look or no look</h3>
+  <ol>
+    <li><strong>The lane set needs markup or a rule.</strong> Lanes are children of <code>.wave-members</code> (<code>public/core/waves-lane.js:163</code>); the system works around it with <code>flex: 1 0 100%</code>, but the implementation should move the lane block out of the members flex and give it its own row.</li>
+    <li><strong>The join/refusal contradiction</strong> (4.3, one line of JS).</li>
+    <li><strong>The always-zero counts</strong> (<code>public/assistant.js:3885</code>, <code>:3893</code>).</li>
+    <li><strong>The below-AA dimmer texts</strong> (<code>public/style.css:4955</code>, <code>:4959</code>, <code>:4964</code>).</li>
+    <li><strong>The wave surface is read only.</strong> Either add the write half (route, control, confirmation) or say in the tab that the lane is a read. Styling it as actionable without the route is the one thing this system refuses to do.</li>
+    <li><strong>The empty lane is silent.</strong> An initiative with no waves draws no lane at all (<code>public/core/waves-lane.js:170-175</code>). That is a defensible choice, but it means a reader cannot learn from the tab that waves exist; the implementation round should decide whether the empty state gets one sentence, not a control.</li>
+    <li><strong>The brief's starting file is the wrong one.</strong> The inventory starts from <code>public/app.js</code> (20,238 lines); the Initiatives tab is painted by <code>public/assistant.js</code> (7,539 lines, <code>initCardHtml</code> at 3785), and <code>public/app.js</code> is the board. A round that starts at <code>app.js</code> will inventory the wrong file.</li>
+  </ol>
+
+  <h3>6.4 The honest limit of a token layer</h3>
+  <p>A token layer can make the tab look like it was designed this year while every fact underneath stays the same. It cannot make the lane interactive, choose a different current wave, or stop a refused lane set from contradicting itself. Those are data and JS decisions, and they are listed in 6.3 so the look change is not mistaken for the whole change.</p>
+</section>
+
+<section class="anchor" id="method">
+  <h2><span class="n">7</span>Method, reproduction, and what this round did not do</h2>
+
+  <h3>7.1 The two commands</h3>
+  <pre><span class="c"># the captures: fixture home, free port, 16 PNGs, one manifest</span>
+env node docs/assets/initiatives-redesign/b/capture-b.mjs
+
+<span class="c"># the tab's own redesign gate, on a scratch home, for section 1</span>
+env node tools/verify-initiatives-redesign.mjs --home C:/Users/roper/AppData/Local/Temp/wag/0c39a98a/gate-home --json C:/Users/roper/AppData/Local/Temp/wag/0c39a98a/gate.json</pre>
+  <p>The capture script writes <code>docs/assets/initiatives-redesign/b/captures.json</code>: the exact command, the viewport and the fixture panel for every image, plus the route facts the images are trusted on. It builds the fixture through <code>tools/initiatives-fixture.mjs</code>, seeds <code>waves.json</code>, patches two task rows, and boots its own <code>server.js</code> on a free port. The reader's live panel at 7331 is never a capture target; it was read once, at the start, for the queue row, and never written.</p>
+
+  <h3>7.2 Every image, its viewport and its frame</h3>
+  <table>
+    <thead><tr><th>File</th><th class="num">Viewport</th><th class="num">Pane</th><th>What it shows</th></tr></thead>
+    <tbody>
+      <tr><td><code>00-1440-page-docked-real</code></td><td class="num">1440 x 900</td><td class="num">479</td><td>the whole page, assistant docked at 480</td></tr>
+      <tr><td><code>01-1440-docked-tab-real</code></td><td class="num">1440 x 900</td><td class="num">479</td><td>the docked tab, as it ships</td></tr>
+      <tr><td><code>01b-1440-docked-wave-real</code></td><td class="num">1440 x 900</td><td class="num">479</td><td>the docked wave lane, as it ships</td></tr>
+      <tr><td><code>09-1440-docked-tab-tokens</code></td><td class="num">1440 x 900</td><td class="num">479</td><td>the docked tab with tokens</td></tr>
+      <tr><td><code>10-1440-docked-wave-tokens</code></td><td class="num">1440 x 900</td><td class="num">479</td><td>the docked wave lane with tokens</td></tr>
+      <tr><td><code>02-1440-tab-real</code> / <code>05-1440-tab-tokens</code></td><td class="num">1440 x 900</td><td class="num">1382</td><td>the float pair</td></tr>
+      <tr><td><code>03-1440-page-float-real</code> / <code>06-1440-page-float-tokens</code></td><td class="num">1440 x 900</td><td class="num">1382</td><td>the whole page, float pair</td></tr>
+      <tr><td><code>04-1440-wave-real</code> / <code>07-1440-wave-tokens</code></td><td class="num">1440 x 900</td><td class="num">1382</td><td>the wave lane, pair</td></tr>
+      <tr><td><code>02-1024-tab-real</code> / <code>05-1024-tab-tokens</code></td><td class="num">1024 x 900</td><td class="num">1006</td><td>one column, pair</td></tr>
+      <tr><td><code>02-768-tab-real</code> / <code>05-768-tab-tokens</code></td><td class="num">768 x 900</td><td class="num">750</td><td>one column, pair</td></tr>
+      <tr><td><code>08-768-wave-tokens</code></td><td class="num">768 x 900</td><td class="num">750</td><td>the lane stacked</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.3 The base, and why it is not the one in the brief</h3>
+  <p>The brief names <code>ac327faf</code> (1.155.1). This tree is cut from <code>8bc065e5</code> (1.155.2), five commits later; the range touches <code>lib/jobs.js</code> and <code>lib/session-usage.js</code> and no file the tab draws (<code>public/</code>, <code>routes/initiatives.js</code> and <code>lib/waves.js</code> are identical). The tab and the wave lane are the same pixels either way.</p>
+
+  <h3>7.4 What this round did not do</h3>
+  <ul>
+    <li><strong>It did not read round A.</strong> <code>docs/reports/initiatives-redesign-research-a-2026-11-22.html</code> was not opened, PR 843 was not read, and no other agent was asked what it said. The two rounds are meant to disagree; this one reached its numbers from the source and the captures. Main carries round A's report and assets; they were left untouched.</li>
+    <li><strong>It did not change a product file.</strong> <code>git status</code> before the commit shows only <code>docs/assets/initiatives-redesign/b/</code> and this report. <code>public/</code>, <code>lib/</code> and <code>server.js</code> are byte for byte as cut.</li>
+    <li><strong>It did not run <code>verify:initiatives-tab</code>.</strong> The assertions quoted in 5.1 and 6.1 are read from the source, not re-run; they are the reason the implementation must update them, and the implementation round is where they should be run against a changed type scale.</li>
+    <li><strong>It did not test the lane's write half,</strong> because there is none (<code>routes/waves.js:1-26</code>).</li>
+    <li><strong>It did not use a motion token,</strong> because the four second repaint would restart any transition (2.7).</li>
+  </ul>
+
+  <h3>7.5 What the tests answered</h3>
+  <ul>
+    <li><strong><code>node tools/test-changed.mjs</code></strong> names one changed path, <code>docs/assets/initiatives-redesign/b/</code>, and says in its own words that no test names or imports it. That is a sentence, not a pass.</li>
+    <li><strong><code>npm test</code></strong> ran once, at 07:22 local, on this branch. It printed <b>1,550 passing assertions</b> and <b>6 failing lines</b>, then ended with exit 127 and no summary line: <code>test/gateway-permissions.test.js</code> crashed on load (Node.js v26.3.0 stack at the end of the output). The six failures are the gateway permission whitelist, the search popover's keyboard scroll, the child route cut, the gateway-permissions file itself, the moved stream control's handler, and the junctioned <code>node_modules</code> measurement. None is in a file that names or imports this change, which adds only HTML, PNG, CSS and a capture script under <code>docs/</code>.</li>
+    <li><strong>It is not evidence that the product is green.</strong> It is evidence that this round's change did not add to a suite that already has six failures on this host, and that the two tab gates named in 6.1 are the ones the implementation round must run.</li>
+  </ul>
+</section>
+
+<section class="anchor" id="cite">
+  <h2><span class="n">A</span>Citations</h2>
+  <p class="small">Line numbers are from this tree's <code>8bc065e5</code> unless stated.</p>
+  <table>
+    <thead><tr><th>Claim</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>The tab's scale, its comment and its card</td><td><code>public/style.css:4827-4853</code></td></tr>
+      <tr><td>Counts, the provenance line, section heads</td><td><code>public/style.css:4862-4866</code></td></tr>
+      <tr><td>The chip base and its mono face</td><td><code>public/style.css:1122-1135</code></td></tr>
+      <tr><td>The wave lane's styles, and the three dimmer texts</td><td><code>public/style.css:4933-4964</code></td></tr>
+      <tr><td>The wide card, two columns, and the focus ring</td><td><code>public/style.css:4979-5008</code></td></tr>
+      <tr><td>The card markup, counts and the wave call</td><td><code>public/assistant.js:3785-3873</code></td></tr>
+      <tr><td>The two counts always in the zero style</td><td><code>public/assistant.js:3885</code>, <code>:3893</code></td></tr>
+      <tr><td>The measured description cut</td><td><code>public/assistant.js:3762-3780</code>, <code>public/core/initiative-fold.js</code></td></tr>
+      <tr><td>The four second repaint and the focus restore</td><td><code>public/assistant.js:3418</code>, <code>:3973-4042</code></td></tr>
+      <tr><td>Gate, state, lane and member markup</td><td><code>public/core/waves-lane.js:36-163</code></td></tr>
+      <tr><td>The join sentence and the refusal</td><td><code>public/core/waves-lane.js:101-104</code>, <code>:138</code></td></tr>
+      <tr><td>The lane set inside the members flex</td><td><code>public/core/waves-lane.js:163</code>, <code>public/style.css:4960</code></td></tr>
+      <tr><td>The wave status in the initiative payload</td><td><code>routes/initiatives.js:98</code>, <code>:179</code>, <code>:218</code></td></tr>
+      <tr><td>No wave write route, no scheduler</td><td><code>routes/waves.js:1-26</code></td></tr>
+      <tr><td>The wave model, the states, the lanes and the auto switch</td><td><code>lib/waves.js</code> (header rules 1-7, <code>WAVE_STATES</code>, <code>waveLanes</code>, <code>waveAutoOpens</code>)</td></tr>
+      <tr><td>The contrast sample that stops at the card</td><td><code>tools/initiatives-measure.mjs:441-446</code></td></tr>
+      <tr><td>chips-fit passes on zero chips</td><td><code>tools/initiatives-measure.mjs:459</code></td></tr>
+      <tr><td>The tab gate's type assertions</td><td><code>tools/verify-initiatives-tab.mjs:431</code>, <code>:524</code></td></tr>
+      <tr><td>The redesign gate and its baseline</td><td><code>tools/verify-initiatives-redesign.mjs</code>, <code>tools/initiatives-redesign-baseline.json</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="anchor" id="export">
+  <h2><span class="n">B</span>The token export</h2>
+  <p>The full, applied file is <a href="../assets/initiatives-redesign/b/tokens.css"><code>docs/assets/initiatives-redesign/b/tokens.css</code></a> (597 lines: tokens, the variable remap, the tab, the lane). The token block itself, verbatim, so this page can be read without opening the file:</p>
+<pre><span class="c">/* surfaces, lines, ink, roles, type, space, radius, density */</span>
+--tab-ground:#0f1115;  --tab-surface:#141922; --tab-row:#171d27;
+--tab-raised:#1c2330;  --tab-sunken:#10151c;
+--tab-line:#232a36;    --tab-line-strong:#35404f;
+--tab-ink:#e9edf4;     --tab-ink-2:#aeb8c6;   --tab-ink-3:#7f8a9a;
+--tab-accent:#3fb950;  --tab-link:#79b8ff;
+--tab-ready:#9ecbff;   --tab-run:#56d364;     --tab-warn:#e3b341;
+--tab-bad:#ff7b72;     --tab-idle:#8b95a5;
+
+--tab-fs-display:15.5px; --tab-fs-title:13px;  --tab-fs-body:12.5px;
+--tab-fs-meta:11.5px;    --tab-fs-chip:10.5px;
+--tab-lh-tight:1.25;     --tab-lh-body:1.6;
+
+--tab-s1:4px; --tab-s2:8px; --tab-s3:12px; --tab-s4:16px; --tab-s5:24px; --tab-s6:32px;
+--tab-r1:4px; --tab-r2:8px; --tab-r3:12px; --tab-r4:16px; --tab-r-pill:999px;
+--tab-row:32px; --tab-control:30px; --tab-chip:20px;
+--tab-e1:inset 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.35);
+--tab-e2:0 8px 24px rgba(0,0,0,.28);
+--tab-ring:2px solid #79b8ff;</pre>
+  <p class="small">The applied layer's remap and its 40 rules are in the same file under "2. the panel's own variables" and "3. the tab", and the lane rules under "4. the wave lane". The file is not imported by the product; the capture harness injects it.</p>
+</section>
+
+<footer>
+  <p><b>Round B, the Initiatives tab.</b> Written 2026-11-22 on <code>wtgui/research-round-b-for-the-initiatives-tab-ac77d9</code>, base <code>8bc065e5</code> (1.155.2). 16 captures from a scratch fixture at 1440, 1024, 768 and the 480 dock; the tab's redesign gate read 16/16 against a 4/16 baseline. No product file was changed. This report is the independent second opinion and was written without reading round A's report or its pull request.</p>
+</footer>
+
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,616 @@
+/* THE INITIATIVES TAB: A VISUAL SYSTEM AS TOKENS, ROUND B (2026-11-22).
+ *
+ * This file is NOT imported by the product. It is the specimen layer the round B report applies to a real capture of
+ * the tab, in a sandbox panel, to show the tokens doing their work on the real markup. public/style.css is untouched.
+ *
+ * HOW IT APPLIES: the first block states the tokens. The second remaps the panel's own variables inside
+ * #as-initiatives, so the existing rules inherit the new ink, surfaces and lines. The third block touches geometry and
+ * type only where the current tab is weakest: the card, the metadata row, the section heads, the wave spine and the
+ * lane groups. Every value below is either a token or a multiple of the 4px grid.
+ */
+
+/* ---- 1. TOKENS ------------------------------------------------------------------------------------------------ */
+:root {
+  /* surfaces: four steps, each a real elevation on the dark ground */
+  --tab-ground: #0f1115;
+  --tab-surface: #141922; /* the card */
+  --tab-row: #171d27; /* a row inside the card */
+  --tab-raised: #1c2330; /* hover and the current wave */
+  --tab-sunken: #10151c; /* wells: inputs, the position marker */
+
+  /* lines: one hairline, one emphasis line. Nothing heavier. */
+  --tab-line: #232a36;
+  --tab-line-strong: #35404f;
+
+  /* ink: three weights. 4.5:1 is the floor for body, 3:1 for meta on the card. */
+  --tab-ink: #e9edf4;
+  --tab-ink-2: #aeb8c6;
+  --tab-ink-3: #7f8a9a;
+
+  /* roles: accent is the panel's green, links are the panel's blue. */
+  --tab-accent: #3fb950;
+  --tab-link: #79b8ff;
+
+  /* state roles: a foreground, a wash and a line each, so a chip and a spine read as one thing. */
+  --tab-ready: #9ecbff;
+  --tab-ready-bg: rgba(56, 139, 253, 0.12);
+  --tab-ready-line: rgba(56, 139, 253, 0.38);
+  --tab-run: #56d364;
+  --tab-run-bg: rgba(46, 160, 67, 0.14);
+  --tab-run-line: rgba(46, 160, 67, 0.42);
+  --tab-warn: #e3b341;
+  --tab-warn-bg: rgba(210, 153, 34, 0.12);
+  --tab-warn-line: rgba(210, 153, 34, 0.4);
+  --tab-bad: #ff7b72;
+  --tab-bad-bg: rgba(229, 83, 75, 0.12);
+  --tab-bad-line: rgba(229, 83, 75, 0.4);
+  --tab-idle: #8b95a5;
+  --tab-idle-bg: rgba(139, 149, 165, 0.1);
+  --tab-idle-line: rgba(139, 149, 165, 0.32);
+
+  /* type: five sizes with one job each, two line heights, one family pair. */
+  --tab-fs-display: 15.5px; /* the initiative title, opened */
+  --tab-fs-title: 13px; /* a wave title, a project name */
+  --tab-fs-body: 12.5px; /* description, tree names */
+  --tab-fs-meta: 11.5px; /* counts, hints, branch chips */
+  --tab-fs-chip: 10.5px; /* state and gate pills */
+  --tab-lh-tight: 1.25;
+  --tab-lh-body: 1.6;
+  --tab-font-ui: var(--ui);
+  --tab-font-mono: var(--mono);
+
+  /* spacing: the 4px grid, named by step. */
+  --tab-s1: 4px;
+  --tab-s2: 8px;
+  --tab-s3: 12px;
+  --tab-s4: 16px;
+  --tab-s5: 24px;
+  --tab-s6: 32px;
+
+  /* radius: four steps and a pill. */
+  --tab-r1: 4px; /* position marker, tiny wells */
+  --tab-r2: 8px; /* controls and member pills */
+  --tab-r3: 12px; /* a wave row */
+  --tab-r4: 16px; /* the card */
+  --tab-r-pill: 999px;
+
+  /* density: three fixed heights, so a row cannot drift by a pixel between surfaces. */
+  --tab-row: 32px;
+  --tab-control: 30px;
+  --tab-chip: 20px;
+
+  /* elevation: light comes from above; on a dark ground that is a hairline top edge plus one soft shadow. */
+  --tab-e1: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.35);
+  --tab-e2: 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* focus: one ring, two pixels, outside the control. */
+  --tab-ring: 2px solid var(--tab-link);
+}
+
+/* ---- 2. THE PANEL'S OWN VARIABLES, REMAPPED INSIDE THIS TAB ------------------------------------------------ */
+#as-initiatives {
+  --surface: var(--tab-surface);
+  --card: var(--tab-row);
+  --panel: var(--tab-ground);
+  --line: var(--tab-line);
+  --text: var(--tab-ink);
+  --dim: var(--tab-ink-2);
+  --dimmer: var(--tab-ink-3);
+  --hover: var(--tab-raised);
+  --blue: var(--tab-link);
+  container-type: inline-size;
+}
+
+/* ---- 3. THE TAB, GEOMETRY AND TYPE ------------------------------------------------------------------------ */
+#as-initiatives > .as-group:first-child {
+  padding: var(--tab-s4);
+  border-radius: var(--tab-r4);
+  border-color: var(--tab-line);
+}
+#as-initiatives > .as-group:first-child h4 {
+  font-size: var(--tab-fs-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: var(--tab-lh-tight);
+  color: var(--tab-ink);
+}
+#as-initiatives > .as-group:first-child h4 .as-hint {
+  font-weight: 400;
+  color: var(--tab-ink-3);
+}
+#as-initiatives .as-help {
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+  color: var(--tab-ink-3);
+}
+#as-initiatives > .as-group:first-child .as-help {
+  max-width: 68ch;
+}
+#as-initiatives .init-tier {
+  margin-top: var(--tab-s2);
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+}
+#as-initiatives .init-tier b {
+  color: var(--tab-ink);
+  font-weight: 600;
+}
+
+/* THE CARD: one surface, a 16px radius, a soft edge, and a rhythm of 16 between blocks. */
+#as-initiatives .init-card {
+  padding: var(--tab-s4);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  box-shadow: var(--tab-e1);
+  margin-bottom: var(--tab-s3);
+}
+#as-initiatives .init-head {
+  gap: var(--tab-s3);
+  margin-bottom: var(--tab-s3);
+  align-items: center;
+}
+#as-initiatives .init-head-btn {
+  min-height: 36px;
+  padding: 0;
+  gap: var(--tab-s2);
+}
+#as-initiatives .init-title {
+  font-size: var(--tab-fs-display);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.01em;
+  color: var(--tab-ink);
+}
+#as-initiatives .init-caret {
+  width: 14px;
+  color: var(--tab-ink-3);
+  font-size: 9px;
+  line-height: 1.4;
+}
+#as-initiatives .init-desc {
+  max-width: 68ch;
+  margin-bottom: var(--tab-s4);
+  font-size: var(--tab-fs-body);
+  line-height: var(--tab-lh-body);
+  color: var(--tab-ink-2);
+}
+#as-initiatives .init-desc.is-empty {
+  color: var(--tab-ink-3);
+}
+
+/* THE METADATA ROW: counts are a sentence, not a wall of capsules. The one provenance line keeps its own weight. */
+#as-initiatives .init-chips {
+  gap: 0;
+  margin-bottom: var(--tab-s4);
+  padding-top: var(--tab-s3);
+  border-top: 1px solid var(--tab-line);
+  align-items: baseline;
+}
+#as-initiatives .init-chips .chip {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+}
+#as-initiatives .init-chips .chip + .chip::before {
+  content: "\00b7";
+  margin: 0 7px;
+  color: var(--tab-ink-3);
+}
+#as-initiatives .init-chips .init-meta {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--tab-fs-meta);
+  color: var(--tab-ink-3);
+}
+
+/* SECTION HEADS: sentence case, one weight, a hairline that carries the eye to the count. */
+#as-initiatives .init-sechead {
+  display: flex;
+  align-items: center;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tab-ink);
+}
+#as-initiatives .init-sechead::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--tab-line);
+}
+#as-initiatives .init-sechead .chip {
+  order: 2;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* FOLD ROWS: a control height, a hover that is a surface rather than a colour, a caret with air. */
+#as-initiatives .init-proj {
+  min-height: var(--tab-row);
+  padding: var(--tab-s1) var(--tab-s2);
+  margin-left: calc(var(--tab-s2) * -1);
+  border-radius: var(--tab-r2);
+  color: var(--tab-ink-2);
+  font-size: 12px;
+}
+#as-initiatives .init-proj:hover {
+  background: var(--tab-raised);
+  color: var(--tab-ink);
+}
+#as-initiatives .init-proj .init-proj-name {
+  font-family: var(--tab-font-ui);
+  font-weight: 500;
+}
+#as-initiatives .init-trees {
+  margin: var(--tab-s1) 0 var(--tab-s2) 6px;
+  padding-left: var(--tab-s4);
+  border-left: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tree {
+  gap: var(--tab-s2);
+  padding: var(--tab-s3) 0;
+}
+#as-initiatives .init-tree-main {
+  min-height: 24px;
+}
+#as-initiatives .init-tree-name {
+  min-height: 24px;
+  font-size: var(--tab-fs-body);
+  color: var(--tab-link);
+}
+#as-initiatives .init-branch {
+  padding: 2px var(--tab-s2);
+  border-radius: var(--tab-r1);
+  background: var(--tab-sunken);
+  border: 1px solid var(--tab-line);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-meta);
+}
+#as-initiatives .init-mini {
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-size: var(--tab-fs-meta);
+}
+#as-initiatives .init-mini:hover {
+  background: var(--tab-raised);
+  border-color: var(--tab-line-strong);
+  color: var(--tab-ink);
+}
+#as-initiatives .init-mini:active {
+  transform: none;
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-form {
+  padding: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-form input[type="text"],
+#as-initiatives .init-form select {
+  min-height: var(--tab-row);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  border-color: var(--tab-line);
+}
+#as-initiatives .init-none {
+  padding: var(--tab-s3);
+  border-radius: var(--tab-r3);
+  border-color: var(--tab-line);
+  color: var(--tab-ink-3);
+}
+#as-initiatives .init-empty {
+  padding: var(--tab-s6);
+  border-radius: var(--tab-r4);
+  border-color: var(--tab-line-strong);
+  background: var(--tab-surface);
+}
+
+/* ---- 4. THE WAVE LANE: THE SPINE --------------------------------------------------------------------------- */
+#as-initiatives .init-wavefold {
+  margin: 0 0 var(--tab-s4);
+  padding-top: var(--tab-s4);
+  border-top: 1px solid var(--tab-line);
+}
+#as-initiatives .init-waves {
+  gap: var(--tab-s2);
+}
+
+/* A WAVE ROW: a card within the card, and a 2px state spine on its leading edge. The spine is drawn from the
+   server's own data-wave-state attribute, so it can never disagree with the state pill beside the title. */
+#as-initiatives .wave-row {
+  position: relative;
+  padding: var(--tab-s3) var(--tab-s4) var(--tab-s3) var(--tab-s4);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-row);
+  overflow: hidden;
+}
+#as-initiatives .wave-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--tab-idle);
+}
+#as-initiatives .wave-row[data-wave-state="running"]::before { background: var(--tab-run); }
+#as-initiatives .wave-row[data-wave-state="ready"]::before { background: var(--tab-ready); }
+#as-initiatives .wave-row[data-wave-state="done"]::before { background: var(--tab-accent); }
+#as-initiatives .wave-row[data-wave-state="unknown"]::before { background: var(--tab-warn); }
+#as-initiatives .wave-row[data-wave-state="blocked"]::before { background: var(--tab-warn); }
+#as-initiatives .wave-row[data-wave-state="abandoned"]::before { background: var(--tab-bad); }
+#as-initiatives .wave-row[data-wave-state="empty"]::before,
+#as-initiatives .wave-row[data-wave-state="unentered"]::before { background: var(--tab-line-strong); }
+#as-initiatives .wave-row[data-wave-current="true"] {
+  border-color: var(--tab-line-strong);
+  background: linear-gradient(180deg, var(--tab-raised), var(--tab-row));
+  box-shadow: var(--tab-e1);
+}
+
+#as-initiatives .wave-head {
+  gap: var(--tab-s2);
+}
+#as-initiatives .wave-pos {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r1);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-3);
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+#as-initiatives .wave-title {
+  flex: 0 1 auto;
+  max-width: min(100%, 760px);
+  font-size: var(--tab-fs-title);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.005em;
+  color: var(--tab-ink);
+}
+/* The state belongs to the title, not to the far edge of a 1380px row: pack it beside the name and let the template
+   take a line of its own. */
+#as-initiatives .wave-head .chip { margin-left: 0; }
+#as-initiatives .wave-template { flex: 1 0 100%; }
+#as-initiatives .wave-head .chip { height: var(--tab-chip); padding: 0 var(--tab-s2); border-radius: var(--tab-r-pill); font-size: var(--tab-fs-chip); font-weight: 600; }
+#as-initiatives .wave-current {
+  color: #d8c7ff;
+  border-color: #5b4a86;
+  background: rgba(163, 113, 247, 0.14);
+}
+
+/* GATE PILLS: a dot of the answer's own colour, the check, the word. The dot is the only decoration. */
+#as-initiatives .wave-gates {
+  gap: 6px;
+  margin-top: var(--tab-s2);
+}
+#as-initiatives .wave-gate,
+#as-initiatives .wave-auto,
+#as-initiatives .wave-auto-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--tab-chip);
+  padding: 0 var(--tab-s2);
+  border-radius: var(--tab-r-pill);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#as-initiatives .wave-gate[data-gate-state="met"]::before,
+#as-initiatives .wave-gate[data-gate-state="unmet"]::before,
+#as-initiatives .wave-gate[data-gate-state="unknown"]::before,
+#as-initiatives .wave-gate[data-gate-state="abandoned"]::before,
+#as-initiatives .wave-gate[data-gate-state="none"]::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+#as-initiatives .wave-gate[data-gate-state="none"] {
+  border-style: solid;
+  border-color: var(--tab-line);
+  border-style: dashed;
+}
+#as-initiatives .wave-gate.is-met { border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-gate.is-unknown { border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-gate.is-unmet { border-color: var(--tab-idle-line); background: transparent; color: var(--tab-idle); }
+#as-initiatives .wave-gate.is-abandoned { border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .wave-auto {
+  border-color: var(--tab-line);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-3);
+}
+#as-initiatives .wave-auto.is-on {
+  color: var(--tab-warn);
+  border-color: var(--tab-warn-line);
+  background: var(--tab-warn-bg);
+}
+#as-initiatives .wave-auto-open.is-on {
+  color: #d8c7ff;
+  border-color: #5b4a86;
+  background: rgba(163, 113, 247, 0.14);
+}
+#as-initiatives .wave-auto-open.is-wait {
+  color: var(--tab-warn);
+  border-color: var(--tab-warn-line);
+  background: var(--tab-warn-bg);
+}
+#as-initiatives .wave-join {
+  display: block;
+  margin-top: 6px;
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-meta);
+}
+
+/* LANES: the group a wave's close depends on, drawn as a block with a hairline and a name. Before this layer the
+   lane markup had no rule at all; here it gets one, and the member pills sit inside their lane. */
+#as-initiatives .wave-lanes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--tab-s2);
+  margin-top: var(--tab-s2);
+}
+/* THE LANE SET IS A FLEX ITEM OF .wave-members IN THE PRODUCT MARKUP (waves-lane.js waveHtml wraps lanes and members
+   in the same box), so without this it shrinks to its content and the two lanes can only stack. The set takes the
+   row, and then the columns below can do their job. */
+#as-initiatives .wave-members > .wave-lanes {
+  flex: 1 0 100%;
+  width: 100%;
+}
+/* Lanes run SIDE BY SIDE, so the lane set is drawn that way wherever the pane can hold two; below that they stack. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-lanes {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  }
+}
+#as-initiatives .wave-lane {
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-line-strong);
+  border-radius: 0 var(--tab-r2) var(--tab-r2) 0;
+  background: var(--tab-sunken);
+}
+#as-initiatives .wave-lane[data-lane-read="cannot-tell"] {
+  border-left-color: var(--tab-warn);
+}
+#as-initiatives .wave-lane .wave-lane-read {
+  margin-left: var(--tab-s2);
+  font-size: var(--tab-fs-meta);
+  color: var(--tab-ink-3);
+}
+#as-initiatives .wave-lane .wave-members {
+  margin-top: 6px;
+}
+
+#as-initiatives .wave-members {
+  gap: 6px;
+  margin-top: var(--tab-s2);
+}
+#as-initiatives .wave-member {
+  padding: 3px var(--tab-s2);
+  gap: 6px;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-surface);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+}
+#as-initiatives .wave-member-id {
+  font-size: 11px;
+  color: var(--tab-ink-3);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#as-initiatives .wave-member-title {
+  color: var(--tab-ink-2);
+}
+#as-initiatives .wave-member-project {
+  padding: 0 5px;
+  border-radius: var(--tab-r1);
+  background: var(--tab-raised);
+  color: var(--tab-ink-3);
+  font-size: 10px;
+}
+#as-initiatives .wave-member .chip {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--tab-r-pill);
+  font-size: 10px;
+  font-family: var(--tab-font-ui);
+}
+#as-initiatives .wave-template {
+  margin-top: 6px;
+  font-size: var(--tab-fs-meta);
+  color: var(--tab-ink-3);
+}
+#as-initiatives .wave-template .mono {
+  color: var(--tab-ink-2);
+}
+#as-initiatives .wave-unresolved {
+  color: var(--tab-bad);
+  font-weight: 600;
+}
+
+/* THE FOLDS BELOW THE MAP. */
+#as-initiatives .init-assistfold,
+#as-initiatives .init-histfold {
+  margin-top: var(--tab-s4);
+  padding-top: var(--tab-s3);
+  border-top: 1px solid var(--tab-line);
+}
+#as-initiatives .init-assists,
+#as-initiatives .init-history,
+#as-initiatives .init-tasks {
+  margin-left: 6px;
+  padding-left: var(--tab-s4);
+  border-left: 1px solid var(--tab-line);
+}
+#as-initiatives .init-hist-row,
+#as-initiatives .init-assist {
+  font-size: 12px;
+  color: var(--tab-ink-2);
+}
+#as-initiatives .init-hist-when,
+#as-initiatives .init-assist-when {
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-meta);
+}
+
+/* FOCUS: one ring, on every control, at the token's colour. */
+#as-initiatives button:focus-visible,
+#as-initiatives a:focus-visible,
+#as-initiatives select:focus-visible,
+#as-initiatives input:focus-visible,
+#as-initiatives textarea:focus-visible,
+#as-initiatives .init-focus-restored {
+  outline: var(--tab-ring);
+  outline-offset: 2px;
+  border-radius: var(--tab-r2);
+}
+
+/* THE WIDE PANE: two columns, 24px apart, the map on the right and the waves across the full width. */
+@container (min-width: 1000px) {
+  #as-initiatives .init-card:not(.is-titlecard) {
+    grid-template-columns: minmax(0, 66ch) minmax(320px, 1fr);
+    column-gap: var(--tab-s5);
+  }
+  #as-initiatives .init-card .init-title {
+    font-size: var(--tab-fs-display);
+  }
+  #as-initiatives .init-card > .init-wavefold {
+    padding-top: var(--tab-s4);
+  }
+}
