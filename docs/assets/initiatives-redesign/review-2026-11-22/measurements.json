@@ -1,0 +1,2842 @@
+{
+ "report": "initiatives-redesign-review-2026-11-22",
+ "reviewed": {
+  "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/the-after-review-round-the-reader-asked-a93b1d",
+  "head": "d0df8ca2b80ccb2cfd9a0395e14f16e04f47d4a7",
+  "product_commit": "da17dce / PR 852",
+  "version": "1.157.3",
+  "probe_at": "2026-11-22T18:39:48.674Z",
+  "fixture": "tools/initiatives-fixture.mjs (4 initiatives, Menu SSO migration with 3 waves)"
+ },
+ "widths": {
+  "1440-dock": {
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "dock": "docked",
+   "pane": {
+    "rect": {
+     "left": 961,
+     "top": 154.7,
+     "right": 1440,
+     "bottom": 900,
+     "w": 479,
+     "h": 745.3
+    },
+    "scrollH": 809,
+    "scrollW": 479,
+    "clientW": 479
+   },
+   "folded": [
+    {
+     "id": "init_kafka",
+     "hasRoute": false,
+     "titleLeft": 977,
+     "descLeft": 977,
+     "chipsLeft": 977,
+     "h": 144.8,
+     "status": "no waves"
+    },
+    {
+     "id": "init_sso",
+     "hasRoute": true,
+     "titleLeft": 1014,
+     "descLeft": 1014,
+     "chipsLeft": 1014,
+     "h": 163.3,
+     "status": "W2 running"
+    },
+    {
+     "id": "init_sweeper",
+     "hasRoute": false,
+     "titleLeft": 977,
+     "descLeft": 977,
+     "chipsLeft": 977,
+     "h": 142,
+     "status": "no waves"
+    },
+    {
+     "id": "init_release",
+     "hasRoute": false,
+     "titleLeft": 977,
+     "descLeft": 977,
+     "chipsLeft": 977,
+     "h": 141,
+     "status": "no waves"
+    }
+   ],
+   "foldedSpread": 37,
+   "openCard": {
+    "id": "init_sso",
+    "h": 1164.4,
+    "titleLeft": 986,
+    "descLeft": 986,
+    "chipsLeft": 986
+   },
+   "openGeometry": {
+    "grid": {
+     "display": "block",
+     "columns": "none",
+     "areas": "none",
+     "rect": {
+      "left": 969,
+      "top": 517.3,
+      "right": 1432,
+      "bottom": 1681.7,
+      "w": 463,
+      "h": 1164.4
+     }
+    },
+    "descMaxWidth": "458.203px",
+    "descRect": {
+     "left": 986,
+     "top": 618.3,
+     "right": 1415,
+     "bottom": 678.3,
+     "w": 429,
+     "h": 60
+    },
+    "sideRect": {
+     "left": 986,
+     "top": 1415.3,
+     "right": 1415,
+     "bottom": 1542.7,
+     "w": 429,
+     "h": 127.4
+    },
+    "sideBorder": "0px"
+   },
+   "fonts": {
+    ".init-title": {
+     "fs": 15.5,
+     "fw": "600",
+     "lh": 19.4,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".init-desc": {
+     "fs": 12.5,
+     "fw": "400",
+     "lh": 20,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    },
+    ".init-chips .chip": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-status": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 15.2,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".init-tier": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-title": {
+     "fs": 13,
+     "fw": "600",
+     "lh": 16.3,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".wave-state": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(63, 185, 80)"
+    },
+    ".wave-gate": {
+     "fs": 10.5,
+     "fw": "500",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".wave-join": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-lane-read": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 16.7,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(230, 233, 239)"
+    },
+    ".wave-member-id": {
+     "fs": 11,
+     "fw": "600",
+     "lh": 16.5,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member-project": {
+     "fs": 10,
+     "fw": "400",
+     "lh": 15,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-proj-name": {
+     "fs": 12,
+     "fw": "500",
+     "lh": 16.8,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    }
+   },
+   "contrastWorst": [
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "Menu",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "div",
+     "cls": "wave-template as-hint",
+     "text": "template sefl-review-loop unresolved - the bundle does not hold this i",
+     "ratio": 4.8,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint wave-no-members",
+     "text": "no task names this wave yet",
+     "ratio": 4.8,
+     "fs": 10.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Hardening the rating pipeline from the consumer inward: retry topics, ",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 worktrees",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 assistants",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint init-meta",
+     "text": "edited 3h ago by assistant-1",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Cap the nightly sweeper's retries so a single bad shipment cannot hold",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "0 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    }
+   ],
+   "controls": {
+    "count": 15,
+    "small": []
+   },
+   "overflow": {
+    "past": [],
+    "clipped": []
+   },
+   "paneScroll": 1830,
+   "document": {
+    "scrollW": 1440,
+    "clientW": 1440
+   },
+   "errors": {
+    "page": [],
+    "console": []
+   }
+  },
+  "1024-dock": {
+   "viewport": {
+    "width": 1024,
+    "height": 900
+   },
+   "dock": "docked",
+   "pane": {
+    "rect": {
+     "left": 545,
+     "top": 154.7,
+     "right": 1024,
+     "bottom": 900,
+     "w": 479,
+     "h": 745.3
+    },
+    "scrollH": 809,
+    "scrollW": 479,
+    "clientW": 479
+   },
+   "folded": [
+    {
+     "id": "init_kafka",
+     "hasRoute": false,
+     "titleLeft": 561,
+     "descLeft": 561,
+     "chipsLeft": 561,
+     "h": 144.8,
+     "status": "no waves"
+    },
+    {
+     "id": "init_sso",
+     "hasRoute": true,
+     "titleLeft": 598,
+     "descLeft": 598,
+     "chipsLeft": 598,
+     "h": 163.3,
+     "status": "W2 running"
+    },
+    {
+     "id": "init_sweeper",
+     "hasRoute": false,
+     "titleLeft": 561,
+     "descLeft": 561,
+     "chipsLeft": 561,
+     "h": 142,
+     "status": "no waves"
+    },
+    {
+     "id": "init_release",
+     "hasRoute": false,
+     "titleLeft": 561,
+     "descLeft": 561,
+     "chipsLeft": 561,
+     "h": 141,
+     "status": "no waves"
+    }
+   ],
+   "foldedSpread": 37,
+   "openCard": {
+    "id": "init_sso",
+    "h": 1164.4,
+    "titleLeft": 570,
+    "descLeft": 570,
+    "chipsLeft": 570
+   },
+   "openGeometry": {
+    "grid": {
+     "display": "block",
+     "columns": "none",
+     "areas": "none",
+     "rect": {
+      "left": 553,
+      "top": 517.3,
+      "right": 1016,
+      "bottom": 1681.7,
+      "w": 463,
+      "h": 1164.4
+     }
+    },
+    "descMaxWidth": "458.203px",
+    "descRect": {
+     "left": 570,
+     "top": 618.3,
+     "right": 999,
+     "bottom": 678.3,
+     "w": 429,
+     "h": 60
+    },
+    "sideRect": {
+     "left": 570,
+     "top": 1415.3,
+     "right": 999,
+     "bottom": 1542.7,
+     "w": 429,
+     "h": 127.4
+    },
+    "sideBorder": "0px"
+   },
+   "fonts": {
+    ".init-title": {
+     "fs": 15.5,
+     "fw": "600",
+     "lh": 19.4,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".init-desc": {
+     "fs": 12.5,
+     "fw": "400",
+     "lh": 20,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    },
+    ".init-chips .chip": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-status": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 15.2,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".init-tier": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-title": {
+     "fs": 13,
+     "fw": "600",
+     "lh": 16.3,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".wave-state": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(63, 185, 80)"
+    },
+    ".wave-gate": {
+     "fs": 10.5,
+     "fw": "500",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".wave-join": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-lane-read": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 16.7,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(230, 233, 239)"
+    },
+    ".wave-member-id": {
+     "fs": 11,
+     "fw": "600",
+     "lh": 16.5,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member-project": {
+     "fs": 10,
+     "fw": "400",
+     "lh": 15,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-proj-name": {
+     "fs": 12,
+     "fw": "500",
+     "lh": 16.8,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    }
+   },
+   "contrastWorst": [
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "Menu",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "div",
+     "cls": "wave-template as-hint",
+     "text": "template sefl-review-loop unresolved - the bundle does not hold this i",
+     "ratio": 4.8,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint wave-no-members",
+     "text": "no task names this wave yet",
+     "ratio": 4.8,
+     "fs": 10.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Hardening the rating pipeline from the consumer inward: retry topics, ",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 worktrees",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 assistants",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint init-meta",
+     "text": "edited 3h ago by assistant-1",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Cap the nightly sweeper's retries so a single bad shipment cannot hold",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "0 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    }
+   ],
+   "controls": {
+    "count": 15,
+    "small": []
+   },
+   "overflow": {
+    "past": [],
+    "clipped": []
+   },
+   "paneScroll": 1830,
+   "document": {
+    "scrollW": 1024,
+    "clientW": 1024
+   },
+   "errors": {
+    "page": [],
+    "console": []
+   }
+  },
+  "768-dock": {
+   "viewport": {
+    "width": 768,
+    "height": 900
+   },
+   "dock": "docked",
+   "pane": {
+    "rect": {
+     "left": 421,
+     "top": 228.7,
+     "right": 768,
+     "bottom": 900,
+     "w": 347,
+     "h": 671.3
+    },
+    "scrollH": 923,
+    "scrollW": 347,
+    "clientW": 347
+   },
+   "folded": [
+    {
+     "id": "init_kafka",
+     "hasRoute": false,
+     "titleLeft": 437,
+     "descLeft": 437,
+     "chipsLeft": 437,
+     "h": 166,
+     "status": "no waves"
+    },
+    {
+     "id": "init_sso",
+     "hasRoute": true,
+     "titleLeft": 474,
+     "descLeft": 474,
+     "chipsLeft": 474,
+     "h": 163.3,
+     "status": "W2 running"
+    },
+    {
+     "id": "init_sweeper",
+     "hasRoute": false,
+     "titleLeft": 437,
+     "descLeft": 437,
+     "chipsLeft": 437,
+     "h": 142,
+     "status": "no waves"
+    },
+    {
+     "id": "init_release",
+     "hasRoute": false,
+     "titleLeft": 437,
+     "descLeft": 437,
+     "chipsLeft": 437,
+     "h": 162.3,
+     "status": "no waves"
+    }
+   ],
+   "foldedSpread": 37,
+   "openCard": {
+    "id": "init_sso",
+    "h": 1429.2,
+    "titleLeft": 446,
+    "descLeft": 446,
+    "chipsLeft": 446
+   },
+   "openGeometry": {
+    "grid": {
+     "display": "block",
+     "columns": "none",
+     "areas": "none",
+     "rect": {
+      "left": 429,
+      "top": 720.2,
+      "right": 760,
+      "bottom": 2149.4,
+      "w": 331,
+      "h": 1429.2
+     }
+    },
+    "descMaxWidth": "458.203px",
+    "descRect": {
+     "left": 446,
+     "top": 821.2,
+     "right": 743,
+     "bottom": 901.2,
+     "w": 297,
+     "h": 80
+    },
+    "sideRect": {
+     "left": 446,
+     "top": 1883,
+     "right": 743,
+     "bottom": 2010.4,
+     "w": 297,
+     "h": 127.4
+    },
+    "sideBorder": "0px"
+   },
+   "fonts": {
+    ".init-title": {
+     "fs": 15.5,
+     "fw": "600",
+     "lh": 19.4,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".init-desc": {
+     "fs": 12.5,
+     "fw": "400",
+     "lh": 20,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    },
+    ".init-chips .chip": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-status": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 15.2,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".init-tier": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-title": {
+     "fs": 13,
+     "fw": "600",
+     "lh": 16.3,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".wave-state": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(63, 185, 80)"
+    },
+    ".wave-gate": {
+     "fs": 10.5,
+     "fw": "500",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".wave-join": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-lane-read": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 16.7,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(230, 233, 239)"
+    },
+    ".wave-member-id": {
+     "fs": 11,
+     "fw": "600",
+     "lh": 16.5,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member-project": {
+     "fs": 10,
+     "fw": "400",
+     "lh": 15,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-proj-name": {
+     "fs": 12,
+     "fw": "500",
+     "lh": 16.8,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    }
+   },
+   "contrastWorst": [
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Hardening the rating pipeline from the consumer inward: retry topics, ",
+     "ratio": 4.5,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 projects",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 worktrees",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 assistants",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint init-meta",
+     "text": "edited 3h ago by assistant-1",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "Menu",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "div",
+     "cls": "wave-template as-hint",
+     "text": "template sefl-review-loop unresolved - the bundle does not hold this i",
+     "ratio": 4.8,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint wave-no-members",
+     "text": "no task names this wave yet",
+     "ratio": 4.8,
+     "fs": 10.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Cap the nightly sweeper's retries so a single bad shipment cannot hold",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "0 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    }
+   ],
+   "controls": {
+    "count": 15,
+    "small": []
+   },
+   "overflow": {
+    "past": [],
+    "clipped": []
+   },
+   "paneScroll": 2209,
+   "document": {
+    "scrollW": 768,
+    "clientW": 768
+   },
+   "errors": {
+    "page": [],
+    "console": []
+   }
+  },
+  "480-dock": {
+   "viewport": {
+    "width": 480,
+    "height": 900
+   },
+   "dock": "docked",
+   "pane": {
+    "rect": {
+     "left": 241,
+     "top": 310.5,
+     "right": 480,
+     "bottom": 900,
+     "w": 239,
+     "h": 589.5
+    },
+    "scrollH": 1041,
+    "scrollW": 239,
+    "clientW": 239
+   },
+   "folded": [
+    {
+     "id": "init_kafka",
+     "hasRoute": false,
+     "titleLeft": 257,
+     "descLeft": 257,
+     "chipsLeft": 257,
+     "h": 187.3,
+     "status": "no waves"
+    },
+    {
+     "id": "init_sso",
+     "hasRoute": true,
+     "titleLeft": 294,
+     "descLeft": 294,
+     "chipsLeft": 294,
+     "h": 184.5,
+     "status": "W2 running"
+    },
+    {
+     "id": "init_sweeper",
+     "hasRoute": false,
+     "titleLeft": 257,
+     "descLeft": 257,
+     "chipsLeft": 257,
+     "h": 166,
+     "status": "no waves"
+    },
+    {
+     "id": "init_release",
+     "hasRoute": false,
+     "titleLeft": 257,
+     "descLeft": 257,
+     "chipsLeft": 257,
+     "h": 165,
+     "status": "no waves"
+    }
+   ],
+   "foldedSpread": 37,
+   "openCard": {
+    "id": "init_sso",
+    "h": 1807.3,
+    "titleLeft": 266,
+    "descLeft": 266,
+    "chipsLeft": 266
+   },
+   "openGeometry": {
+    "grid": {
+     "display": "block",
+     "columns": "none",
+     "areas": "none",
+     "rect": {
+      "left": 249,
+      "top": 872.1,
+      "right": 472,
+      "bottom": 2679.4,
+      "w": 223,
+      "h": 1807.3
+     }
+    },
+    "descMaxWidth": "458.203px",
+    "descRect": {
+     "left": 266,
+     "top": 975.9,
+     "right": 455,
+     "bottom": 1095.9,
+     "w": 189,
+     "h": 120
+    },
+    "sideRect": {
+     "left": 266,
+     "top": 2413,
+     "right": 455,
+     "bottom": 2540.4,
+     "w": 189,
+     "h": 127.4
+    },
+    "sideBorder": "0px"
+   },
+   "fonts": {
+    ".init-title": {
+     "fs": 15.5,
+     "fw": "600",
+     "lh": 19.4,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".init-desc": {
+     "fs": 12.5,
+     "fw": "400",
+     "lh": 20,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    },
+    ".init-chips .chip": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-status": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 15.2,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".init-tier": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-title": {
+     "fs": 13,
+     "fw": "600",
+     "lh": 16.3,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".wave-state": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(63, 185, 80)"
+    },
+    ".wave-gate": {
+     "fs": 10.5,
+     "fw": "500",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".wave-join": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-lane-read": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 16.7,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(230, 233, 239)"
+    },
+    ".wave-member-id": {
+     "fs": 11,
+     "fw": "600",
+     "lh": 16.5,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member-project": {
+     "fs": 10,
+     "fw": "400",
+     "lh": 15,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-proj-name": {
+     "fs": 12,
+     "fw": "500",
+     "lh": 16.8,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    }
+   },
+   "contrastWorst": [
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Hardening the rating pipeline from the consumer inward: retry topics,.",
+     "ratio": 4.5,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 projects",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 worktrees",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 assistants",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint init-meta",
+     "text": "edited 3h ago by assistant-1",
+     "ratio": 4.5,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "Menu",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "div",
+     "cls": "wave-template as-hint",
+     "text": "template sefl-review-loop unresolved - the bundle does not hold this i",
+     "ratio": 4.8,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint wave-no-members",
+     "text": "no task names this wave yet",
+     "ratio": 4.8,
+     "fs": 10.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Cap the nightly sweeper's retries so a single bad shipment cannot hold",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "0 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    }
+   ],
+   "controls": {
+    "count": 15,
+    "small": []
+   },
+   "overflow": {
+    "past": [],
+    "clipped": []
+   },
+   "paneScroll": 2684,
+   "document": {
+    "scrollW": 480,
+    "clientW": 480
+   },
+   "errors": {
+    "page": [],
+    "console": []
+   }
+  },
+  "1440-float": {
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "dock": "floating",
+   "pane": {
+    "rect": {
+     "left": 9,
+     "top": 100.9,
+     "right": 1391,
+     "bottom": 891,
+     "w": 1382,
+     "h": 790.1
+    },
+    "scrollH": 790,
+    "scrollW": 1382,
+    "clientW": 1382
+   },
+   "folded": [
+    {
+     "id": "init_kafka",
+     "hasRoute": false,
+     "titleLeft": 25,
+     "descLeft": 25,
+     "chipsLeft": 25,
+     "h": 142,
+     "status": "no waves"
+    },
+    {
+     "id": "init_sso",
+     "hasRoute": true,
+     "titleLeft": 62,
+     "descLeft": 62,
+     "chipsLeft": 62,
+     "h": 142,
+     "status": "W2 running"
+    },
+    {
+     "id": "init_sweeper",
+     "hasRoute": false,
+     "titleLeft": 25,
+     "descLeft": 25,
+     "chipsLeft": 25,
+     "h": 142,
+     "status": "no waves"
+    },
+    {
+     "id": "init_release",
+     "hasRoute": false,
+     "titleLeft": 25,
+     "descLeft": 25,
+     "chipsLeft": 25,
+     "h": 141,
+     "status": "no waves"
+    }
+   ],
+   "foldedSpread": 37,
+   "openCard": {
+    "id": "init_sso",
+    "h": 865.5,
+    "titleLeft": 34,
+    "descLeft": 34,
+    "chipsLeft": 34
+   },
+   "openGeometry": {
+    "grid": {
+     "display": "grid",
+     "columns": "498.094px 809.906px",
+     "areas": "\"head side\" \"desc side\" \"chips side\" \"waves waves\" \"assist assist\" \"hist hist\"",
+     "rect": {
+      "left": 17,
+      "top": 433.4,
+      "right": 1383,
+      "bottom": 1299,
+      "w": 1366,
+      "h": 865.5
+     }
+    },
+    "descMaxWidth": "458.203px",
+    "descRect": {
+     "left": 34,
+     "top": 534.4,
+     "right": 492.2,
+     "bottom": 594.4,
+     "w": 458.2,
+     "h": 60
+    },
+    "sideRect": {
+     "left": 556.1,
+     "top": 450.4,
+     "right": 1366,
+     "bottom": 577.8,
+     "w": 809.9,
+     "h": 127.4
+    },
+    "sideBorder": "1px"
+   },
+   "fonts": {
+    ".init-title": {
+     "fs": 15.5,
+     "fw": "600",
+     "lh": 19.4,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".init-desc": {
+     "fs": 12.5,
+     "fw": "400",
+     "lh": 20,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    },
+    ".init-chips .chip": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-status": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 15.2,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".init-tier": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-title": {
+     "fs": 13,
+     "fw": "600",
+     "lh": 16.3,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".wave-state": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(63, 185, 80)"
+    },
+    ".wave-gate": {
+     "fs": 10.5,
+     "fw": "500",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".wave-join": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-lane-read": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 16.7,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(230, 233, 239)"
+    },
+    ".wave-member-id": {
+     "fs": 11,
+     "fw": "600",
+     "lh": 16.5,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member-project": {
+     "fs": 10,
+     "fw": "400",
+     "lh": 15,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-proj-name": {
+     "fs": 12,
+     "fw": "500",
+     "lh": 16.8,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    }
+   },
+   "contrastWorst": [
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "Menu",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "div",
+     "cls": "wave-template as-hint",
+     "text": "template sefl-review-loop unresolved - the bundle does not hold this i",
+     "ratio": 4.8,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint wave-no-members",
+     "text": "no task names this wave yet",
+     "ratio": 4.8,
+     "fs": 10.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Hardening the rating pipeline from the consumer inward: retry topics, ",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 worktrees",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 assistants",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint init-meta",
+     "text": "edited 3h ago by assistant-1",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Cap the nightly sweeper's retries so a single bad shipment cannot hold",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "0 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    }
+   ],
+   "controls": {
+    "count": 15,
+    "small": []
+   },
+   "overflow": {
+    "past": [],
+    "clipped": []
+   },
+   "paneScroll": 1501,
+   "document": {
+    "scrollW": 1440,
+    "clientW": 1440
+   },
+   "errors": {
+    "page": [],
+    "console": []
+   }
+  },
+  "1440-dock-kb": {
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "dock": "docked",
+   "pane": {
+    "rect": {
+     "left": 961,
+     "top": 154.7,
+     "right": 1440,
+     "bottom": 900,
+     "w": 479,
+     "h": 745.3
+    },
+    "scrollH": 809,
+    "scrollW": 479,
+    "clientW": 479
+   },
+   "folded": [
+    {
+     "id": "init_kafka",
+     "hasRoute": false,
+     "titleLeft": 977,
+     "descLeft": 977,
+     "chipsLeft": 977,
+     "h": 144.8,
+     "status": "no waves"
+    },
+    {
+     "id": "init_sso",
+     "hasRoute": true,
+     "titleLeft": 1014,
+     "descLeft": 1014,
+     "chipsLeft": 1014,
+     "h": 163.3,
+     "status": "W2 running"
+    },
+    {
+     "id": "init_sweeper",
+     "hasRoute": false,
+     "titleLeft": 977,
+     "descLeft": 977,
+     "chipsLeft": 977,
+     "h": 142,
+     "status": "no waves"
+    },
+    {
+     "id": "init_release",
+     "hasRoute": false,
+     "titleLeft": 977,
+     "descLeft": 977,
+     "chipsLeft": 977,
+     "h": 141,
+     "status": "no waves"
+    }
+   ],
+   "foldedSpread": 37,
+   "openCard": {
+    "id": "init_sso",
+    "h": 1164.4,
+    "titleLeft": 986,
+    "descLeft": 986,
+    "chipsLeft": 986
+   },
+   "openGeometry": {
+    "grid": {
+     "display": "block",
+     "columns": "none",
+     "areas": "none",
+     "rect": {
+      "left": 969,
+      "top": 517.3,
+      "right": 1432,
+      "bottom": 1681.7,
+      "w": 463,
+      "h": 1164.4
+     }
+    },
+    "descMaxWidth": "458.203px",
+    "descRect": {
+     "left": 986,
+     "top": 618.3,
+     "right": 1415,
+     "bottom": 678.3,
+     "w": 429,
+     "h": 60
+    },
+    "sideRect": {
+     "left": 986,
+     "top": 1415.3,
+     "right": 1415,
+     "bottom": 1542.7,
+     "w": 429,
+     "h": 127.4
+    },
+    "sideBorder": "0px"
+   },
+   "fonts": {
+    ".init-title": {
+     "fs": 15.5,
+     "fw": "600",
+     "lh": 19.4,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".init-desc": {
+     "fs": 12.5,
+     "fw": "400",
+     "lh": 20,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    },
+    ".init-chips .chip": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-status": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 15.2,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".init-tier": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-title": {
+     "fs": 13,
+     "fw": "600",
+     "lh": 16.3,
+     "family": "system-ui",
+     "color": "rgb(233, 237, 244)"
+    },
+    ".wave-state": {
+     "fs": 10.5,
+     "fw": "600",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(63, 185, 80)"
+    },
+    ".wave-gate": {
+     "fs": 10.5,
+     "fw": "500",
+     "lh": 14.7,
+     "family": "system-ui",
+     "color": "rgb(86, 211, 100)"
+    },
+    ".wave-join": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-lane-read": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 16.7,
+     "family": "system-ui",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member": {
+     "fs": 11.5,
+     "fw": "400",
+     "lh": 17.3,
+     "family": "system-ui",
+     "color": "rgb(230, 233, 239)"
+    },
+    ".wave-member-id": {
+     "fs": 11,
+     "fw": "600",
+     "lh": 16.5,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".wave-member-project": {
+     "fs": 10,
+     "fw": "400",
+     "lh": 15,
+     "family": "ui-monospace",
+     "color": "rgb(127, 138, 154)"
+    },
+    ".init-proj-name": {
+     "fs": 12,
+     "fw": "500",
+     "lh": 16.8,
+     "family": "system-ui",
+     "color": "rgb(174, 184, 198)"
+    }
+   },
+   "contrastWorst": [
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "oauth2-multi",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "span",
+     "cls": "wave-member-project",
+     "text": "Menu",
+     "ratio": 4.5,
+     "fs": 10,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(28, 35, 48)"
+    },
+    {
+     "tag": "div",
+     "cls": "wave-template as-hint",
+     "text": "template sefl-review-loop unresolved - the bundle does not hold this i",
+     "ratio": 4.8,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint wave-no-members",
+     "text": "no task names this wave yet",
+     "ratio": 4.8,
+     "fs": 10.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 29, 39)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Hardening the rating pipeline from the consumer inward: retry topics, ",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 worktrees",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "2 assistants",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "as-hint init-meta",
+     "text": "edited 3h ago by assistant-1",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "p",
+     "cls": "init-desc is-cut",
+     "text": "Cap the nightly sweeper's retries so a single bad shipment cannot hold",
+     "ratio": 4.9,
+     "fs": 12.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    },
+    {
+     "tag": "span",
+     "cls": "chip",
+     "text": "0 projects",
+     "ratio": 4.9,
+     "fs": 11.5,
+     "color": "rgb(127, 138, 154)",
+     "bg": "rgb(23, 28, 36)"
+    }
+   ],
+   "controls": {
+    "count": 15,
+    "small": []
+   },
+   "overflow": {
+    "past": [],
+    "clipped": []
+   },
+   "paneScroll": 1830,
+   "document": {
+    "scrollW": 1440,
+    "clientW": 1440
+   },
+   "errors": {
+    "page": [],
+    "console": []
+   }
+  }
+ },
+ "keyboard": {
+  "order": [
+   {
+    "text": "Watchdog",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Bridge",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "About",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-about"
+   },
+   {
+    "text": "Compact rows",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": null,
+    "pressed": "false",
+    "data": "data-init-density"
+   },
+   {
+    "text": "New initiative",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": null,
+    "pressed": null,
+    "data": "data-init-new"
+   },
+   {
+    "text": "Refresh",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": null,
+    "pressed": null,
+    "data": "data-init-refresh"
+   },
+   {
+    "text": "Kafka rating pipeline hardening across the con",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-card-toggle"
+   },
+   {
+    "text": "Menu SSO migration ▸",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-card-toggle"
+   },
+   {
+    "text": "Batch sweeper retry budget ▸",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-card-toggle"
+   },
+   {
+    "text": "Quarter-end release readiness ▸",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-card-toggle"
+   },
+   {
+    "text": "Worktree Agent Monitor v1.157.3 · 3 project(s)",
+    "inTab": false,
+    "outline": "3px none rgb(230, 233, 239)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "✧ Assistant",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Hot Agent search (Ctrl+Shift+Q)",
+    "inTab": false,
+    "outline": "1px solid rgb(59, 110, 168)",
+    "offset": "1px",
+    "expanded": "false",
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Clarify",
+    "inTab": false,
+    "outline": "1px solid rgb(163, 113, 247)",
+    "offset": "1px",
+    "expanded": "false",
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "🙋 Human",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "📦 Deliverables",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": "false",
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "▣ Review",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": "false",
+    "data": ""
+   },
+   {
+    "text": "⚙ Settings",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Collapse all",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Menu · 10s oauth2-multi · 10s optym-integratio",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Spawn agent",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "(gateway default)",
+    "inTab": false,
+    "outline": "1px solid rgb(74, 144, 217)",
+    "offset": "1px",
+    "expanded": "false",
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "2px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "2px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Minimize all",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Clear finished",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "",
+    "inTab": false,
+    "outline": "3px none rgb(230, 233, 239)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "All",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "Expand all",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   },
+   {
+    "text": "+",
+    "inTab": false,
+    "outline": "1px auto rgb(16, 16, 16)",
+    "offset": "0px",
+    "expanded": null,
+    "pressed": null,
+    "data": ""
+   }
+  ],
+  "presses": {
+   "aboutFocused": {
+    "tag": "button",
+    "cls": "",
+    "text": "About",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-about"
+   },
+   "aboutAfterRepaint": {
+    "tag": "button",
+    "cls": "init-focus-restored",
+    "text": "About",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-about"
+   },
+   "aboutAfterPress": {
+    "tag": "button",
+    "cls": "init-focus-restored",
+    "text": "About",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "true",
+    "pressed": null,
+    "data": "data-init-about"
+   },
+   "aboutAfterPressRepaint": {
+    "tag": "button",
+    "cls": "init-focus-restored",
+    "text": "About",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "true",
+    "pressed": null,
+    "data": "data-init-about"
+   },
+   "density": {
+    "before": {
+     "tag": "button",
+     "cls": "",
+     "text": "Compact rows",
+     "inTab": true,
+     "outline": "2px solid rgb(121, 184, 255)",
+     "offset": "2px",
+     "expanded": null,
+     "pressed": "false",
+     "data": "data-init-density"
+    },
+    "after": {
+     "tag": "button",
+     "cls": "init-focus-restored",
+     "text": "Compact rows",
+     "inTab": true,
+     "outline": "2px solid rgb(121, 184, 255)",
+     "offset": "2px",
+     "expanded": null,
+     "pressed": "true",
+     "data": "data-init-density"
+    }
+   },
+   "cardOpen": {
+    "tag": "button",
+    "cls": "init-head-btn init-focus-restored",
+    "text": "Menu SSO migration",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "true",
+    "pressed": null,
+    "data": "data-init-card-toggle"
+   },
+   "descFocused": {
+    "tag": "button",
+    "cls": "init-proj init-desc-head",
+    "text": "▾ Description",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "true",
+    "pressed": null,
+    "data": "data-init-desc-fold"
+   },
+   "descAfterPress": {
+    "tag": "button",
+    "cls": "init-proj init-desc-head init-focus-restored",
+    "text": "▸ Description",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-desc-fold"
+   },
+   "descAfterRepaint": {
+    "tag": "button",
+    "cls": "init-proj init-desc-head init-focus-restored",
+    "text": "▸ Description",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-desc-fold"
+   }
+  },
+  "ring": {
+   "firstControl": {
+    "tag": "button",
+    "cls": "",
+    "text": "About",
+    "inTab": true,
+    "outline": "2px solid rgb(121, 184, 255)",
+    "offset": "2px",
+    "expanded": "false",
+    "pressed": null,
+    "data": "data-init-about"
+   }
+  },
+  "errors": {
+   "page": [],
+   "console": []
+  }
+ },
+ "inventory": {
+  "old": {
+   "headerButtons": [
+    "New initiative",
+    "Refresh"
+   ],
+   "headerHelps": [
+    "You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.",
+    "4 initiatives in initiatives.json",
+    "Initiative changes: ask me for everything - every create, edit, attach and detach waits for your answer. Settings, Board tab changes the level."
+   ],
+   "sections": [
+    "WAVES 3",
+    "PROJECTS"
+   ],
+   "counts": [
+    "2 projects",
+    "2 worktrees",
+    "2 assistants"
+   ],
+   "desc": "Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP, and prove a real two-factor login before the login page changes for everyone.",
+   "folds": [
+    "Menu SSO migration ▾",
+    "▾ Description",
+    "▾ Menu 1 tree",
+    "▾ oauth2-multi 1 tree",
+    "▾ Assistants 2",
+    "▾ tasks 3",
+    "▾ tasks 1",
+    "▾ History 5"
+   ],
+   "buttons": [
+    "Menu SSO migration ▾",
+    "Edit",
+    "▾ Description",
+    "▾ Menu 1 tree",
+    "Remove",
+    "▾ oauth2-multi 1 tree",
+    "Remove",
+    "+ Add a worktree",
+    "▾ Assistants 2",
+    "Manager",
+    "▾ tasks 3",
+    "Reviewer",
+    "▾ tasks 1",
+    "▾ History 5"
+   ],
+   "projects": [
+    "▾ Menu 1 tree menu-login-page Remove wtgui/menu-login-page",
+    "▾ oauth2-multi 1 tree menu-sso-state-cookie Remove wtgui/menu-sso-state-cookie-and-okta-callback-retry"
+   ],
+   "trees": [
+    "menu-login-page Remove wtgui/menu-login-page",
+    "menu-sso-state-cookie Remove wtgui/menu-sso-state-cookie-and-okta-callback-retry"
+   ],
+   "treeNames": [
+    "menu-login-page",
+    "menu-sso-state-cookie"
+   ],
+   "branches": [
+    "wtgui/menu-login-page",
+    "wtgui/menu-sso-state-cookie-and-okta-callback-retry"
+   ],
+   "assists": [
+    "Manager ▾ tasks 3 working now 1 queued 1 running 1 completed 0 parked ● #11 running Validate the Okta callback against the VIP wtgui-menu-sso-state-cookie 2s ago ○ #12 queued Retry the state cookie on a node switch wtgui-menu-sso-state-cookie 5m ago ✓ #13 done Land the Menu login page wtgui-menu-login-page 2h ago",
+    "Reviewer ▾ tasks 1 worked 4h ago 0 queued 0 running 1 completed 0 parked ✓ #21 done Second pass over the callback wtgui-menu-sso-state-cookie 4h ago"
+   ],
+   "history": [
+    "assistant-1 edited named the two-factor check in the description 6h ago",
+    "assistant-1 attached menu-sso-state-cookie 1d ago",
+    "you attached menu-login-page 2d ago",
+    "you attached menu-sso-state-cookie 2d ago",
+    "you created this initiative 13d ago"
+   ],
+   "waves": [
+    {
+     "text": "W1 Prove the Okta callback through the VIP done entry clean - met exit clean - met auto on #21 Second pass over the callback oauth2-multi done",
+     "attrs": "data-wave-id=wave-proof data-wave-state=done"
+    },
+    {
+     "text": "W2 Flip the Menu login to SSO behind the toggle running current entry clean - met exit pr-open - cannot tell auto off opened by wave-proof 2 lanes - closing this wave is ONE commit that names them all lane cookie - running runs in 1 tree #11 Validate the Okta callback against the VIP oauth2-multi running lane login - done runs in 1 tree #13 Land the Menu login page Menu done",
+     "attrs": "data-wave-id=wave-flip data-wave-state=running data-wave-current=true"
+    },
+    {
+     "text": "W3 Retire the LDAP fallback and close the migration no members template sefl-review-loop unresolved - the bundle does not hold this id entry no check - no gate exit no check - no gate auto off no task names this wave yet",
+     "attrs": "data-wave-id=wave-retire data-wave-state=empty"
+    }
+   ],
+   "waveHeads": [
+    "WAVES 3"
+   ],
+   "empty": [
+    "no task names this wave yet"
+   ],
+   "chips": [
+    "2 projects",
+    "2 worktrees",
+    "2 assistants",
+    "3",
+    "done",
+    "entry clean - met",
+    "exit clean - met",
+    "auto on",
+    "done",
+    "running",
+    "current",
+    "entry clean - met",
+    "exit pr-open - cannot tell",
+    "auto off",
+    "opened by wave-proof",
+    "lane cookie - running",
+    "running",
+    "lane login - done",
+    "done",
+    "no members",
+    "entry no check - no gate",
+    "exit no check - no gate",
+    "auto off",
+    "1 tree",
+    "wtgui/menu-login-page",
+    "1 tree",
+    "wtgui/menu-sso-state-cookie-and-okta-callback-retry",
+    "2",
+    "3",
+    "1 queued",
+    "1 running",
+    "1 completed",
+    "0 parked",
+    "1",
+    "0 queued",
+    "0 running",
+    "1 completed",
+    "0 parked",
+    "5"
+   ],
+   "links": [
+    {
+     "text": "menu-login-page",
+     "href": "#",
+     "title": "open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes"
+    },
+    {
+     "text": "menu-sso-state-cookie",
+     "href": "#",
+     "title": "open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes"
+    }
+   ]
+  },
+  "new": {
+   "headerButtons": [
+    "About",
+    "Compact rows",
+    "New initiative",
+    "Refresh"
+   ],
+   "headerHelps": [
+    "4 initiatives in initiatives.json",
+    "Initiative changes: ask me for everything - every create, edit, attach and detach waits for your answer. Settings, Board tab changes the level."
+   ],
+   "sections": [
+    "Waves 3 read from the wave store",
+    "Projects"
+   ],
+   "counts": [
+    "2 projects",
+    "2 worktrees",
+    "2 assistants"
+   ],
+   "desc": "Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP, and prove a real two-factor login before the login page changes for everyone.",
+   "folds": [
+    "Menu SSO migration",
+    "▾ Description",
+    "▾ Menu 1 tree",
+    "▾ oauth2-multi 1 tree",
+    "▾ Assistants 2",
+    "▾ tasks 3",
+    "▾ tasks 1",
+    "▾ History 5"
+   ],
+   "buttons": [
+    "Menu SSO migration",
+    "Edit",
+    "▾ Description",
+    "▾ Menu 1 tree",
+    "Remove",
+    "▾ oauth2-multi 1 tree",
+    "Remove",
+    "+ Add a worktree",
+    "▾ Assistants 2",
+    "Manager",
+    "▾ tasks 3",
+    "Reviewer",
+    "▾ tasks 1",
+    "▾ History 5"
+   ],
+   "projects": [
+    "▾ Menu 1 tree menu-login-page Remove wtgui/menu-login-page",
+    "▾ oauth2-multi 1 tree menu-sso-state-cookie Remove wtgui/menu-sso-state-cookie-and-okta-callback-retry"
+   ],
+   "trees": [
+    "menu-login-page Remove wtgui/menu-login-page",
+    "menu-sso-state-cookie Remove wtgui/menu-sso-state-cookie-and-okta-callback-retry"
+   ],
+   "treeNames": [
+    "menu-login-page",
+    "menu-sso-state-cookie"
+   ],
+   "branches": [
+    "wtgui/menu-login-page",
+    "wtgui/menu-sso-state-cookie-and-okta-callback-retry"
+   ],
+   "assists": [
+    "Manager ▾ tasks 3 working now 1 queued 1 running 1 completed 0 parked ● #11 running Validate the Okta callback against the VIP wtgui-menu-sso-state-cookie 2s ago ○ #12 queued Retry the state cookie on a node switch wtgui-menu-sso-state-cookie 5m ago ✓ #13 done Land the Menu login page wtgui-menu-login-page 2h ago",
+    "Reviewer ▾ tasks 1 worked 4h ago 0 queued 0 running 1 completed 0 parked ✓ #21 done Second pass over the callback wtgui-menu-sso-state-cookie 4h ago"
+   ],
+   "history": [
+    "assistant-1 edited named the two-factor check in the description 6h ago",
+    "assistant-1 attached menu-sso-state-cookie 1d ago",
+    "you attached menu-login-page 2d ago",
+    "you attached menu-sso-state-cookie 2d ago",
+    "you created this initiative 13d ago"
+   ],
+   "waves": [
+    {
+     "text": "W1 Prove the Okta callback through the VIP done entry clean - met exit clean - met auto on #21 Second pass over the callback oauth2-multi done",
+     "attrs": "data-wave-id=wave-proof data-wave-state=done"
+    },
+    {
+     "text": "W2 Flip the Menu login to SSO behind the toggle running current entry clean - met exit pr-open - cannot tell auto off opened by wave-proof 2 lanes - closing this wave is ONE commit that names them all lane cookie - running runs in 1 tree #11 Validate the Okta callback against the VIP oauth2-multi running lane login - done runs in 1 tree #13 Land the Menu login page Menu done",
+     "attrs": "data-wave-id=wave-flip data-wave-state=running data-wave-current=true"
+    },
+    {
+     "text": "W3 Retire the LDAP fallback and close the migration no members template sefl-review-loop unresolved - the bundle does not hold this id entry no check - no gate exit no check - no gate auto off no task names this wave yet",
+     "attrs": "data-wave-id=wave-retire data-wave-state=empty"
+    }
+   ],
+   "waveHeads": [
+    "Waves 3 read from the wave store"
+   ],
+   "empty": [
+    "no task names this wave yet"
+   ],
+   "chips": [
+    "2 projects",
+    "2 worktrees",
+    "2 assistants",
+    "3",
+    "done",
+    "entry clean - met",
+    "exit clean - met",
+    "auto on",
+    "done",
+    "running",
+    "current",
+    "entry clean - met",
+    "exit pr-open - cannot tell",
+    "auto off",
+    "opened by wave-proof",
+    "lane cookie - running",
+    "running",
+    "lane login - done",
+    "done",
+    "no members",
+    "entry no check - no gate",
+    "exit no check - no gate",
+    "auto off",
+    "1 tree",
+    "wtgui/menu-login-page",
+    "1 tree",
+    "wtgui/menu-sso-state-cookie-and-okta-callback-retry",
+    "2",
+    "3",
+    "1 queued",
+    "1 running",
+    "1 completed",
+    "0 parked",
+    "1",
+    "0 queued",
+    "0 running",
+    "1 completed",
+    "0 parked",
+    "5"
+   ],
+   "links": [
+    {
+     "text": "menu-login-page",
+     "href": "#",
+     "title": "open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes"
+    },
+    {
+     "text": "menu-sso-state-cookie",
+     "href": "#",
+     "title": "open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes"
+    }
+   ]
+  },
+  "equal": {
+   "counts": true,
+   "desc": true,
+   "projects": true,
+   "trees": true,
+   "treeNames": true,
+   "branches": true,
+   "assists": true,
+   "history": true,
+   "empty": true,
+   "links": true
+  },
+  "waveTextEqual": true,
+  "changes": {
+   "sections": {
+    "old": [
+     "WAVES 3",
+     "PROJECTS"
+    ],
+    "new": [
+     "Waves 3 read from the wave store",
+     "Projects"
+    ]
+   },
+   "headerButtons": {
+    "old": [
+     "New initiative",
+     "Refresh"
+    ],
+    "new": [
+     "About",
+     "Compact rows",
+     "New initiative",
+     "Refresh"
+    ]
+   },
+   "headerHelps": {
+    "old": [
+     "You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.",
+     "4 initiatives in initiatives.json",
+     "Initiative changes: ask me for everything - every create, edit, attach and detach waits for your answer. Settings, Board tab changes the level."
+    ],
+    "new": [
+     "4 initiatives in initiatives.json",
+     "Initiative changes: ask me for everything - every create, edit, attach and detach waits for your answer. Settings, Board tab changes the level."
+    ]
+   },
+   "folds": {
+    "old": [
+     "Menu SSO migration ▾",
+     "▾ Description",
+     "▾ Menu 1 tree",
+     "▾ oauth2-multi 1 tree",
+     "▾ Assistants 2",
+     "▾ tasks 3",
+     "▾ tasks 1",
+     "▾ History 5"
+    ],
+    "new": [
+     "Menu SSO migration",
+     "▾ Description",
+     "▾ Menu 1 tree",
+     "▾ oauth2-multi 1 tree",
+     "▾ Assistants 2",
+     "▾ tasks 3",
+     "▾ tasks 1",
+     "▾ History 5"
+    ]
+   },
+   "buttons": {
+    "old": [
+     "Menu SSO migration ▾",
+     "Edit",
+     "▾ Description",
+     "▾ Menu 1 tree",
+     "Remove",
+     "▾ oauth2-multi 1 tree",
+     "Remove",
+     "+ Add a worktree",
+     "▾ Assistants 2",
+     "Manager",
+     "▾ tasks 3",
+     "Reviewer",
+     "▾ tasks 1",
+     "▾ History 5"
+    ],
+    "new": [
+     "Menu SSO migration",
+     "Edit",
+     "▾ Description",
+     "▾ Menu 1 tree",
+     "Remove",
+     "▾ oauth2-multi 1 tree",
+     "Remove",
+     "+ Add a worktree",
+     "▾ Assistants 2",
+     "Manager",
+     "▾ tasks 3",
+     "Reviewer",
+     "▾ tasks 1",
+     "▾ History 5"
+    ]
+   }
+  }
+ },
+ "gates": {
+  "tab": "89/89",
+  "wavesLane": "40/40",
+  "redesign": "11/11 GREEN; docked 16/16 vs 4/16; wide 15/16",
+  "scroll": "31/33 at d0df8ca; 33/33 at c2692598",
+  "scrollLog": "sandbox: http://127.0.0.1:49233\npanel pid: 35220\n\n== seed ==\nPASS  the store holds the initiatives this gate seeded: 2\nPASS  the store is a file beside the panel's own state: C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-test-Cp9TH8\\logs\\initiatives.json\n\n== the pane on screen, with a list short enough to fit ==\nPASS  the pane is painted from GET /api/initiatives, one card per initiative: 2\nPASS  every card starts folded to its title: 2 of 2 title cards\n      pane: 727px client, 727px content, overflow-y auto, bottom 900 vs body 900\n      body: display flex, overflow-y hidden; chat subpane hidden false; view {\"assistant\":\"initiatives\",\"subTab\":\"chat\"}\nPASS  the short list's content fits the pane: 727 of 727\nPASS  …and the pane grows no scroll bar for it: scrollTop 0, 727/727\n      shot 01-fits.png\n\n== the full list, every initiative expanded ==\nPASS  every initiative is expanded, descriptions whole: {\"heads\":0,\"descs\":0,\"titleCards\":0}\nPASS  all of them are on the pane: 12\n      pane: 727px client, 9339px content, overflow-y auto, bottom 900 vs body 900\n      body: display flex, overflow-y hidden; chat subpane hidden false; view {\"assistant\":\"initiatives\",\"subTab\":\"chat\"}\n      last card: 12th, top 771, bottom 1518, in pane false, below pane true\n      shot 02-expanded.png\n\n== 1. the pane is the float's scroller ==\nPASS  the pane computes overflow-y: auto: auto\nPASS  the pane ends inside the float's body, so it is the float's size and not its content's: pane bottom 900, body bottom 900\nPASS  the pane's content is taller than the pane: 9339 > 727\n\n== 2. there is something below the fold ==\nPASS  the pane is at the top of the list: 0\nPASS  the last card's box sits below the pane's own box: last bottom 9492, pane bottom 900\nPASS  so the last card is not on screen before the scroll: lastInPane false\n\n== 3. a wheel over the pane moves the pane ==\nPASS  the wheel moved the pane's own scrollTop: scrollTop 600\nPASS  the float's body stayed where it was: 0\nPASS  the document did not scroll instead: 0\n      at the foot: scrollTop 8612 of 8612\nPASS  the pane reaches its own maximum: 8612 of 8612\nFAIL  the last card's box is inside the pane's visible box - last 133..880 in 173..900\n      shot 03-scrolled.png\n\n== 4. the tab's own re-read leaves the reader where they were ==\n      after a re-read: scrollTop 8612, last card in pane false\nPASS  the pane is still where the reader left it after the pane re-read the store: 8612 -> 8612\nFAIL  the last card is still in view - last 133..880\n\n== 5. the other panel-level tabs are scrollers, not panes that hang below the float ==\n      role: 727px client, 878px content, overflow-y auto, bottom 900 vs body 900\nPASS  the role tab computes overflow-y: auto: auto\nPASS  the role tab ends inside the body: bottom 900, body 900\n      watchdog: 727px client, 1800px content, overflow-y auto, bottom 900 vs body 900\nPASS  the watchdog tab computes overflow-y: auto: auto\nPASS  the watchdog tab ends inside the body: bottom 900, body 900\n      bridge: 727px client, 1574px content, overflow-y auto, bottom 900 vs body 900\nPASS  the bridge tab computes overflow-y: auto: auto\nPASS  the bridge tab ends inside the body: bottom 900, body 900\n\n== 6. hidden still switches panes ==\nPASS  the initiatives pane carries hidden and paints nothing while Role is on screen: {\"hidden\":true,\"display\":\"none\"}\nPASS  exactly one panel-level pane is on screen: [\"role\"]\nPASS  pressing Initiatives back shows it and hides Role: [\"initiatives\"]\nPASS  the pane is still the scroller when it comes back: overflow-y auto, display block\n\n== 7. health ==\nPASS  no page errors: []\nPASS  no console errors: []\n\nFAILED  31/33 checks passed; shots in C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\3c71fc37\\scroll-shots\n"
+ },
+ "captures": [
+  "01-1440-float-list.jpg",
+  "02-1440-float-open.jpg",
+  "02a-1440-float-open-left.jpg",
+  "03-1440-float-waves.jpg",
+  "04-1440-dock-list.jpg",
+  "04a-1440-dock-folded.jpg",
+  "05-1440-dock-open.jpg",
+  "06-1440-dock-waves.jpg",
+  "07-1024-dock-open.jpg",
+  "08-768-dock-list.jpg",
+  "08a-768-dock-folded.jpg",
+  "09-768-dock-open.jpg",
+  "09a-768-dock-open.jpg",
+  "10-768-dock-waves.jpg",
+  "11-480-dock-list.jpg",
+  "11a-480-dock-folded.jpg",
+  "12-480-dock-open.jpg",
+  "13-480-dock-waves.jpg",
+  "14-state-skipped-sweeper.jpg",
+  "15-state-store-bad.jpg",
+  "16-old-open-1440.jpg",
+  "17-new-open-1440.jpg"
+ ]
+}
