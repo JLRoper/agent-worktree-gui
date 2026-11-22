@@ -1,12 +1,17 @@
 // The waves of work: one READ, and only one, for this slice.
 //
-//   GET /api/waves?initiative=<id>   the waves of one initiative, each folded with its members, its derived state and
-//                                    its gate reads
+//   GET /api/waves?initiative=<id>   the waves of one initiative, each folded with its members, its derived state,
+//                                    its gate reads and its LANES
 //
 // WHY A READ AND NOTHING ELSE. The design (docs/reports/waves-of-work.html, section 6) sizes the first slice so it can be
 // judged before anything acts on it: no write route, no evaluator, no scheduler, no auto start. This module is the
 // wire half of that read, and the same fold is what GET /api/initiatives carries into the Initiatives tab, so the lane
 // and this route cannot disagree about a wave's state.
+//
+// THE LANES RIDE INSIDE EACH WAVE, AND COST THIS MODULE NOTHING. A wave's lanes are derived from its members by the
+// same fold that gives its state (lib/waves.js `waveLanes`), so the payload carries `lanes`, `laneCount`,
+// `laneJoinOwed` and `laneRefused` per wave without a second read, a store field or a cache to keep warm. The join a
+// lane set owes is a CALL (`joinWaveLanes`), not a route: nothing here writes, and no scheduler was added.
 //
 // MEMBERS COME FROM EVERY ASSISTANT'S QUEUE, not from the initiative's tree keys. Membership is the task's own
 // `waveId` (decision 2, 2026-11-21): a wave may span projects, so filtering by tree would silently drop a member whose

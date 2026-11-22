@@ -96,9 +96,9 @@ const queueFile = path.join(sandbox, "logs", "assistants", assistant.id, "queue.
 const queued = readQueueFile(queueFile);
 assert.equal(queued.error, null);
 const stamped = queued.tasks.map((t) => {
-  if (t.id === one.id) return { ...t, waveId: "wave_01" };
-  if (t.id === two.id) return { ...t, waveId: "wave_01", pipelineRun: { pipeline: "own-pipeline", stage: "build", enteredAt: "2026-11-21T00:00:00.000Z" } };
-  if (t.id === three.id) return { ...t, waveId: "wave_01" };
+  if (t.id === one.id) return { ...t, waveId: "wave_01", lane: "left" };
+  if (t.id === two.id) return { ...t, waveId: "wave_01", lane: "right", pipelineRun: { pipeline: "own-pipeline", stage: "build", enteredAt: "2026-11-21T00:00:00.000Z" } };
+  if (t.id === three.id) return { ...t, waveId: "wave_01", lane: "left" };
   return t;
 });
 writeQueueFile(queueFile, stamped, queued.nextId);
@@ -150,6 +150,21 @@ test("a wave reads running while one member runs, from the members alone", async
   assert.equal(first.gates.exit.state, "unknown");
   assert.equal(second.state, "empty");
   assert.equal(doc.currentId, "wave_01", "the running wave is the current one");
+  // THE LANES RIDE ON THE SAME READ. Two lanes, named by the members' own records, in two trees - so a close would be
+  // one join. `one` and `three` are both left, because they share a tree; `two` runs beside them.
+  assert.equal(first.laneCount, 2);
+  assert.equal(first.laneImplicit, false, "two lanes, both named by their members");
+  assert.equal(first.laneJoinOwed, true);
+  assert.equal(first.laneIsolation, "per-stage", "the lanes run under the fan-out's own isolation model");
+  assert.deepEqual(first.lanes.map((lane) => lane.label), ["left", "right"]);
+  assert.deepEqual(first.lanes[0].memberIds.slice().sort((a, b) => a - b), [one.id, three.id].sort((a, b) => a - b));
+  assert.deepEqual(first.lanes[1].memberIds, [two.id]);
+  assert.equal(first.lanes[0].read.ok, true, "a lane whose members name their trees can be pinned");
+  assert.equal(first.lanes[1].read.ok, true);
+  assert.equal(first.laneRefused, null);
+  // The empty wave holds no lane at all, and owes no join.
+  assert.equal(second.laneCount, 0);
+  assert.equal(second.laneJoinOwed, false);
 });
 
 test("membership is explicit: the three tasks that name the wave, and NOT the one that does not", async () => {
