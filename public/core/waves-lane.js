@@ -135,15 +135,23 @@
       ? `<div class="wave-template as-hint" data-wave-template="${esc(template)}" data-template-resolved="${wave.templateResolved === true ? "true" : wave.templateResolved === false ? "false" : "unchecked"}">template <span class="mono">${esc(template)}</span>${unresolved ? " <b class=\"wave-unresolved\">unresolved - the bundle does not hold this id</b>" : wave.templateResolved === true ? " - members that name none inherit it" : ""}</div>`
       : "";
     const laneCount = Array.isArray(wave && wave.lanes) ? wave.lanes.length : 0;
-    const joined = laneCount >= 2 && wave && wave.laneJoinOwed ? `<div class="wave-join as-hint" data-wave-join="${laneCount}">${laneCount} lanes - closing this wave is ONE commit that names them all</div>` : "";
-    // More than one lane draws its members INSIDE their lanes: the lane a member runs in is the fact this read adds,
-    // and a flat list beside it would leave the grouping unreadable.
-    const memberHtmlAll =
+    // A JOIN SENTENCE IS OWED ONLY WHEN THE SET CAN ACTUALLY CLOSE. With a refused lane set `lanesHtml` has already
+    // drawn "The lanes cannot be isolated, so this wave cannot close", and drawing "closing this wave is ONE commit
+    // that names them all" beside it would say the opposite. Two sentences, one truth: the join is conditioned on the
+    // refusal being absent (round B 4.3).
+    const laneRefused = wave && wave.laneRefused;
+    const joined = laneCount >= 2 && wave && wave.laneJoinOwed && !laneRefused ? `<div class="wave-join as-hint" data-wave-join="${laneCount}">${laneCount} lanes - closing this wave is ONE commit that names them all</div>` : "";
+    // THE LANE BLOCK IS NOT A MEMBER. More than one lane draws its members INSIDE their lanes - the lane a member runs
+    // in is the fact this read adds, and a flat list beside it would leave the grouping unreadable. The lane set is
+    // therefore its OWN row, a sibling of the member row, not a flex item of it (round B 4.3, 6.3): nested, it shrank
+    // to its content and two lanes could only stack.
+    const lanesRow = laneCount >= 2 ? lanesHtml(wave, esc) : "";
+    const membersRow =
       laneCount >= 2
-        ? lanesHtml(wave, esc)
-        : members.length
-          ? members.map((m) => memberHtml(m, esc)).join("")
-          : `<span class="as-hint wave-no-members">no task names this wave yet</span>`;
+        ? ""
+        : `<div class="wave-members">${
+            members.length ? members.map((m) => memberHtml(m, esc)).join("") : `<span class="as-hint wave-no-members">no task names this wave yet</span>`
+          }</div>`;
     return `<div class="wave-row" data-wave-id="${esc(wave && wave.id ? wave.id : "")}" data-wave-state="${esc(state)}"${current ? ' data-wave-current="true"' : ""}>
       <div class="wave-head">
         <span class="wave-pos" title="wave ${esc(position || "?")} of this initiative">${esc(position ? `W${position}` : "W?")}</span>
@@ -159,7 +167,8 @@
         ${autoOpenChip}
       </div>
       ${joined}
-      <div class="wave-members">${memberHtmlAll}</div>
+      ${lanesRow}
+      ${membersRow}
     </div>`;
   }
 
@@ -189,7 +198,7 @@
           .join("")}</div>`
       : "";
     return `<div class="init-wavefold" data-init-waves="${esc(init && init.id ? init.id : "")}">
-      <div class="init-sechead">Waves <span class="chip${waves.length ? "" : " is-zero"}">${waves.length}</span></div>
+      <div class="init-sechead">Waves <span class="chip${waves.length ? "" : " is-zero"}">${waves.length}</span><span class="as-hint init-wave-note" title="a wave is a read: its state is folded from its members and its gates on this read, and this tab has no write route - nothing here opens, closes or starts a wave">read from the wave store</span></div>
       <div class="init-waves">${rows}</div>
       ${skippedHtml}
     </div>`;

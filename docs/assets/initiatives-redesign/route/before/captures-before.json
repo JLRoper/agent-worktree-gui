@@ -1,0 +1,595 @@
+{
+  "label": "before",
+  "tree": "a git archive of 86bea38 (1.157.1), unpacked outside the repo",
+  "at": "2026-11-22T18:16:22.174Z",
+  "widths": {
+    "1440-dock": {
+      "pane": {
+        "width": 479,
+        "scroll": 1660
+      },
+      "folded": 166,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        166,
+        133,
+        153
+      ],
+      "openCard": 931,
+      "type": {
+        "title": {
+          "fs": 14,
+          "fw": "600",
+          "lh": 18,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 36,
+          "w": 417
+        },
+        "desc": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 19,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 37,
+          "w": 437
+        },
+        "chip": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 16,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 22,
+          "w": 76
+        },
+        "status": null,
+        "sectionHead": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 21,
+          "w": 437
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 33,
+          "w": 437
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 346
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 15,
+          "color": "rgb(111, 207, 151)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 21,
+          "w": 41
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 15,
+          "color": "rgb(126, 231, 135)",
+          "bg": "rgb(18, 38, 26)",
+          "h": 21,
+          "w": 116
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 23,
+          "w": 312
+        },
+        "memberId": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 19
+        }
+      },
+      "contrast": {
+        "desc": 6.7,
+        "chip": 6.7,
+        "status": null,
+        "gate": 10.4,
+        "auto": 9.7,
+        "memberProject": 3.8,
+        "tier": 6.7,
+        "sectionHead": 6.7
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 13,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "auto",
+          "color": "rgba(0, 0, 0, 0)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 993,
+            "top": 1002,
+            "w": 386,
+            "h": 50
+          },
+          {
+            "name": "login",
+            "left": 993,
+            "top": 1052,
+            "w": 386,
+            "h": 50
+          }
+        ],
+        "laneSet": {
+          "columns": "none",
+          "w": 386
+        },
+        "member": {
+          "display": "flex",
+          "columns": "none",
+          "h": 23
+        }
+      },
+      "docked": "dock"
+    },
+    "768-dock": {
+      "pane": {
+        "width": 347,
+        "scroll": 1946
+      },
+      "folded": 166,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        166,
+        133,
+        153
+      ],
+      "openCard": 1161,
+      "type": {
+        "title": {
+          "fs": 14,
+          "fw": "600",
+          "lh": 18,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 36,
+          "w": 285
+        },
+        "desc": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 19,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 37,
+          "w": 305
+        },
+        "chip": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 16,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 22,
+          "w": 76
+        },
+        "status": null,
+        "sectionHead": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 21,
+          "w": 305
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 50,
+          "w": 305
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 34,
+          "w": 214
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 15,
+          "color": "rgb(111, 207, 151)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 21,
+          "w": 41
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 15,
+          "color": "rgb(126, 231, 135)",
+          "bg": "rgb(18, 38, 26)",
+          "h": 21,
+          "w": 116
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 44,
+          "w": 283
+        },
+        "memberId": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 19
+        }
+      },
+      "contrast": {
+        "desc": 6.7,
+        "chip": 6.7,
+        "status": null,
+        "gate": 10.4,
+        "auto": 9.7,
+        "memberProject": 3.8,
+        "tier": 6.7,
+        "sectionHead": 6.7
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 13,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "auto",
+          "color": "rgba(0, 0, 0, 0)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 453,
+            "top": 1288,
+            "w": 283,
+            "h": 71
+          },
+          {
+            "name": "login",
+            "left": 453,
+            "top": 1359,
+            "w": 283,
+            "h": 50
+          }
+        ],
+        "laneSet": {
+          "columns": "none",
+          "w": 283
+        },
+        "member": {
+          "display": "flex",
+          "columns": "none",
+          "h": 44
+        }
+      },
+      "docked": "dock"
+    },
+    "1440-float": {
+      "pane": {
+        "width": 1382,
+        "scroll": 1483
+      },
+      "folded": 153,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        153,
+        133,
+        153
+      ],
+      "openCard": 767,
+      "type": {
+        "title": {
+          "fs": 15,
+          "fw": "600",
+          "lh": 20,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 1320
+        },
+        "desc": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 19,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 37,
+          "w": 466
+        },
+        "chip": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 16,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 22,
+          "w": 76
+        },
+        "status": null,
+        "sectionHead": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 21,
+          "w": 1207
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(154, 164, 178)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 33,
+          "w": 446
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 1116
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 15,
+          "color": "rgb(111, 207, 151)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 21,
+          "w": 41
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "400",
+          "lh": 15,
+          "color": "rgb(126, 231, 135)",
+          "bg": "rgb(18, 38, 26)",
+          "h": 21,
+          "w": 116
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 23,
+          "w": 312
+        },
+        "memberId": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 19
+        }
+      },
+      "contrast": {
+        "desc": 6.7,
+        "chip": 6.7,
+        "status": null,
+        "gate": 10.4,
+        "auto": 9.7,
+        "memberProject": 3.8,
+        "tier": 6.7,
+        "sectionHead": 6.7
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 13,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "auto",
+          "color": "rgba(0, 0, 0, 0)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 41,
+            "top": 919,
+            "w": 386,
+            "h": 50
+          },
+          {
+            "name": "login",
+            "left": 41,
+            "top": 968,
+            "w": 386,
+            "h": 50
+          }
+        ],
+        "laneSet": {
+          "columns": "none",
+          "w": 386
+        },
+        "member": {
+          "display": "flex",
+          "columns": "none",
+          "h": 23
+        }
+      },
+      "docked": "float"
+    }
+  },
+  "facts": {
+    "doc": [
+      {
+        "id": "init_kafka",
+        "title": "Kafka rating pipeline hardening across the consumer, the retry topic and the DBA-signed verify pack",
+        "trees": 2,
+        "waves": 0
+      },
+      {
+        "id": "init_sso",
+        "title": "Menu SSO migration",
+        "trees": 2,
+        "waves": 3
+      },
+      {
+        "id": "init_sweeper",
+        "title": "Batch sweeper retry budget",
+        "trees": 0,
+        "waves": 0
+      },
+      {
+        "id": "init_release",
+        "title": "Quarter-end release readiness",
+        "trees": 4,
+        "waves": 0
+      }
+    ],
+    "1440-dock": {
+      "checked": 78,
+      "missing": []
+    },
+    "768-dock": {
+      "checked": 78,
+      "missing": []
+    }
+  },
+  "shots": [
+    {
+      "file": "01-1440-list.png",
+      "slug": "01-1440-list",
+      "note": "the folded ledger at 1440, the assistant docked at 480"
+    },
+    {
+      "file": "01b-1440-pane.png",
+      "slug": "01b-1440-pane",
+      "element": "#as-initiatives",
+      "viewport": {
+        "width": 1440,
+        "height": 1042
+      },
+      "note": "the whole tab at 1440 docked"
+    },
+    {
+      "file": "02-1440-open.png",
+      "slug": "02-1440-open",
+      "note": "the plate and its route at 1440 docked"
+    },
+    {
+      "file": "02b-1440-plate.png",
+      "slug": "02b-1440-plate",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"]",
+      "viewport": {
+        "width": 1440,
+        "height": 1820
+      },
+      "note": "the open initiative at 1440 docked"
+    },
+    {
+      "file": "02c-1440-waves.png",
+      "slug": "02c-1440-waves",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"] .init-wavefold",
+      "viewport": {
+        "width": 1440,
+        "height": 1820
+      },
+      "note": "the wave lane at 1440 docked"
+    },
+    {
+      "file": "03-1440-all-folds.png",
+      "slug": "03-1440-all-folds",
+      "note": "every fold open, the fact check's own reading"
+    },
+    {
+      "file": "04-768-list.png",
+      "slug": "04-768-list",
+      "note": "the folded ledger at 768"
+    },
+    {
+      "file": "05-768-open.png",
+      "slug": "05-768-open",
+      "note": "the plate and its route at 768"
+    },
+    {
+      "file": "05b-768-waves.png",
+      "slug": "05b-768-waves",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"] .init-wavefold",
+      "viewport": {
+        "width": 768,
+        "height": 2106
+      },
+      "note": "the wave lane at 768"
+    },
+    {
+      "file": "06-wide-list.png",
+      "slug": "06-wide-list",
+      "note": "the ledger at 1440 with the assistant floated"
+    },
+    {
+      "file": "07-wide-open.png",
+      "slug": "07-wide-open",
+      "note": "the wide plate: words left, cast right, route full width"
+    },
+    {
+      "file": "07b-wide-waves.png",
+      "slug": "07b-wide-waves",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"] .init-wavefold",
+      "viewport": {
+        "width": 1440,
+        "height": 1643
+      },
+      "note": "the lane set side by side on the wide plate"
+    }
+  ]
+}

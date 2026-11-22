@@ -260,5 +260,70 @@
     return { who, what, at: typeof ev.at === "string" ? ev.at : null };
   }
 
-  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, TASK_STATE_INFO, TASK_CARD_BUCKET, TASK_CARD_FIRST, TASK_CARD_MORE, press, cut, countChips, historyLine, taskChip, taskFoldKey, taskCardOrder, taskCardWindow };
+  // ---- the initiative's route mark -----------------------------------------------------------------
+  // A FOLDED INITIATIVE MUST SAY WHERE THE WORK HAS GOT TO. Round A found the folded card spent its pixels on the
+  // title and the description preview and showed nothing about the thing the tab exists for; round B's second
+  // finding was that the tab has no rank. The mark is the smallest honest answer: one dot per wave in the wave's own
+  // derived state, and a label naming the current station - both read straight from the payload, never invented. A
+  // wave with no state is drawn idle, a store that cannot be read says so instead of saying "no waves", and an
+  // initiative with no waves says that.
+  const WAVE_TONES = Object.freeze({
+    running: "is-running",
+    ready: "is-ready",
+    blocked: "is-blocked",
+    unknown: "is-unknown",
+    done: "is-done",
+    abandoned: "is-abandoned",
+    empty: "is-empty",
+    unentered: "is-unentered",
+  });
+
+  /**
+   * The route mark for one initiative: `{ dots, label, tone, title }`.
+   *
+   * `dots` is one entry per wave, in position order as the route returned them, carrying the wave's own `state` and
+   * whether it is the one `waveCurrentId` names. `label` is the status word the folded row shows - "W3 running", or
+   * the honest "no waves" / "waves unreadable". `tone` is the class the pill wears, from the same state vocabulary.
+   */
+  function routeGlyph(init, waveStatus = null) {
+    const unreadable = Boolean(waveStatus && waveStatus.readable === false);
+    if (unreadable) {
+      return {
+        dots: [],
+        label: "waves unreadable",
+        tone: "is-unknown",
+        title: `the wave store cannot be read, so this initiative's position is unknown: ${String(waveStatus.error || "no reason given")}`,
+      };
+    }
+    const waves = Array.isArray(init && init.waves) ? init.waves : [];
+    if (!waves.length) {
+      return { dots: [], label: "no waves", tone: "is-idle", title: "no wave is recorded on this initiative yet - a wave is a named position a task joins by naming its id" };
+    }
+    const currentId = init && init.waveCurrentId ? String(init.waveCurrentId) : "";
+    const dots = waves.map((w) => {
+      const state = String((w && w.state) || "empty");
+      return {
+        id: String((w && w.id) || ""),
+        position: Number(w && w.position) > 0 ? Number(w.position) : null,
+        state,
+        tone: WAVE_TONES[state] || "is-empty",
+        current: Boolean(currentId) && String((w && w.id) || "") === currentId,
+      };
+    });
+    const current = dots.find((d) => d.current) || null;
+    const why = current ? String((waves.find((w) => String(w && w.id) === current.id) || {}).stateWhy || "") : "";
+    const label = current ? `W${current.position || "?"} ${current.state}` : `${dots.length} wave${dots.length === 1 ? "" : "s"}`;
+    const route = dots.map((d) => `W${d.position || "?"} ${d.state}${d.current ? " (current)" : ""}`).join(", ");
+    return {
+      dots,
+      label,
+      tone: current ? current.tone : "is-idle",
+      title: `${route} - the current station is the one the stated order makes current${why ? `: ${why}` : ""}`,
+    };
+  }
+
+  root.wtInitiativeFold = {
+    DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, TASK_STATE_INFO, TASK_CARD_BUCKET, TASK_CARD_FIRST, TASK_CARD_MORE,
+    press, cut, countChips, historyLine, taskChip, taskFoldKey, taskCardOrder, taskCardWindow, routeGlyph,
+  };
 })(globalThis);

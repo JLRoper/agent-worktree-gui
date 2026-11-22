@@ -4853,187 +4853,785 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 .as-group button.as-danger, .as-group button[data-as-delete-go] { border-color: #6b2b2b; background: rgba(255, 90, 90, .10); color: #ff9a9a; }
 .as-group button.as-danger:hover, .as-group button[data-as-delete-go]:hover { background: rgba(255, 90, 90, .18); }
 
-/* ---- the initiatives tab -------------------------------------------------------------------------
-   THE MAP OF THE WORK, IN THE PANEL'S OWN LANGUAGE. This is still `.as-group`'s card (its border, its
-   surface, its line), but the card is the unit a reader scans, so it owns a type scale and a spacing
-   scale rather than inheriting a dozen one-off values. The scale is 4px: 4 between a chip's lines, 8
-   between rows, 12 around a card's content, 16 for the one indent a nested list gets, 24 between the
-   two columns a wide float can afford. Type is 13.5 title / 12 body and rows / 11 meta / 10.5 chips -
-   four sizes with a job each, all at 4.5:1 or better on the card. */
-.init-card { padding: 12px; border-radius: 8px; margin-bottom: 12px; }
-/* The pane is the container the two-column card answers to, not the window: a 480px dock inside a 1400px
-   window must stay one column, and only the float that is actually wide gets the second one. */
-#as-initiatives { container-type: inline-size; }
-#as-initiatives > .as-group:first-child { padding: 12px; }
-#as-initiatives > .as-group:first-child h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13.5px; letter-spacing: 0; text-transform: none; color: var(--text); }
-#as-initiatives .as-help { font-size: 11.5px; line-height: 1.45; color: var(--dim); }
-#as-initiatives > .as-group:first-child .as-help { max-width: 72ch; }
-#as-initiatives .init-tier { margin-top: 8px; }
-.init-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
-/* THE TITLE CARD IS ONE BUTTON, 32px tall, and its title may use two lines: a 110-character initiative
-   name that is cut after 60 characters cannot be read even after the card is opened. Folded it clamps at
-   two lines; opened it is whole. */
-.init-head-btn { flex: 1 1 auto; min-width: 0; min-height: 32px; display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.init-head-btn:hover { background: transparent; }
-.init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--dim); text-underline-offset: 2px; }
-.init-head-btn:active { transform: translateY(1px); }
-.init-title { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 13.5px; font-weight: 600; line-height: 1.35; letter-spacing: 0; color: var(--text); white-space: normal; }
-.init-card:not(.is-titlecard) .init-title { display: block; -webkit-line-clamp: unset; overflow: visible; }
-.init-desc { max-width: 72ch; margin: 0 0 12px; font-size: 12px; line-height: 1.55; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
-.init-desc.is-empty { color: var(--dim); font-style: italic; }
-.init-descfold { margin-bottom: 8px; }
-.init-desc-head { margin-bottom: 4px; }
-.init-dots { color: var(--dim); }
-.init-card.is-titlecard .init-head { margin-bottom: 4px; }
-.init-card.is-titlecard .init-chips { margin-bottom: 0; }
-/* THE COUNTS ARE CHIPS; THE PROVENANCE IS A LINE. Four things on one baseline made the row read as a
-   sentence and squeezed the chips; the edit line gets its own 11px row under them. */
-.init-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 12px; }
-.init-chips .chip { font-size: 10.5px; padding: 2px 8px; line-height: 16px; }
-.init-chips .init-meta { flex: 1 0 100%; font-size: 11px; line-height: 1.45; color: var(--dim); }
-.chip.is-zero { color: var(--dim); border-color: var(--line); background: transparent; }
-.init-sechead { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
-/* A FOLD HANDLE: the row height the queue and the alerts rows use, a caret that turns, the name, a count. */
-.init-proj { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); font-size: 12px; line-height: 1.4; text-align: left; cursor: pointer; }
-.init-proj:hover { background: var(--hover); color: var(--text); }
-.init-proj:active { transform: translateY(1px); }
-.init-caret { flex: 0 0 auto; width: 12px; color: var(--dim); font-size: 10px; line-height: 20px; text-align: center; }
-.init-head-btn .init-caret { width: 12px; padding-top: 2px; line-height: 1.35; }
-.init-proj .init-proj-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
-.init-proj .chip { font-size: 10.5px; padding: 2px 8px; }
-.init-project + .init-project { margin-top: 2px; }
-.init-trees { margin: 4px 0 8px 16px; border-left: 1px solid var(--line); padding-left: 12px; }
-/* ONE WORKTREE IS TWO LINES: the name and Remove, then its branch as a chip that wraps instead of being
-   cut. The branch is the longest text in the tab and the one a reader copies, so it is never ellipsised. */
-.init-tree { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); }
-.init-tree:first-child { border-top: 0; }
-.init-tree-main { display: flex; align-items: center; gap: 8px; min-height: 28px; }
-.init-tree-name { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; color: #7fb2e8; font-size: 12px; text-decoration: none; }
-.init-tree-name:hover { text-decoration: underline; }
-.init-tree-name.is-missing { color: var(--dim); text-decoration: line-through; }
-.init-tree-main .init-mini { margin-left: auto; }
-.init-tree-branch { min-width: 0; }
-.init-branch { display: inline-flex; max-width: 100%; overflow: hidden; font-size: 10.5px; padding: 2px 8px; line-height: 1.35; color: var(--dim); white-space: normal; overflow-wrap: anywhere; }
-a.init-branch-link { color: #7fb2e8; text-decoration: none; }
-a.init-branch-link:hover { text-decoration: underline; }
-.init-mini { min-height: 28px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--dim); font-size: 11.5px; line-height: 18px; cursor: pointer; }
-.init-mini:hover { background: var(--hover); color: var(--text); }
-.init-mini:active { transform: translateY(1px); background: #232a35; color: var(--text); }
-.init-mini[disabled] { opacity: .55; cursor: not-allowed; }
-.init-form { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin: 8px 0 12px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); }
-.init-form input[type="text"], .init-form select { width: 100%; min-height: 32px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: var(--mono); }
-.init-form .as-note-box { width: 100%; }
-.init-form .as-role-caption { margin: 0; color: var(--dim); font-size: 11px; }
-.init-form .as-actions { margin-top: 0; }
-.init-form .primary, .init-form button { min-height: 32px; }
-.init-addrow { margin-top: 8px; }
-.init-assistfold, .init-histfold { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
-.init-assists { margin: 4px 0 0 16px; }
-.init-assist { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 32px; font-size: 12px; }
-.init-assist-btn { display: inline-flex; align-items: center; min-height: 28px; padding: 0 4px; border: 0; border-radius: 4px; background: transparent; color: #7fb2e8; font-size: 12px; text-align: left; cursor: pointer; }
-.init-assist-btn:hover { background: transparent; text-decoration: underline; }
-.init-counts { display: flex; flex-wrap: wrap; gap: 4px; }
-.init-counts .chip { font-size: 10.5px; padding: 2px 8px; }
-.init-assist-when { margin-left: auto; white-space: nowrap; color: var(--dim); font-size: 11px; }
-.init-assist .init-proj.init-assist-fold { width: auto; flex: 0 0 auto; min-height: 28px; padding: 4px 6px; gap: 4px; }
-.init-assist-fold .init-proj-name { flex: 0 0 auto; }
-.init-assist .init-counts { flex: 1 0 100%; }
-.init-tasks { flex: 1 0 100%; margin: 4px 0 4px 16px; border-left: 1px solid var(--line); padding-left: 12px; }
-.init-task-none { padding: 4px 0; }
-.init-history { margin: 4px 0 0 16px; }
-.init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-height: 28px; font-size: 12px; }
-.init-hist-what { min-width: 0; overflow-wrap: anywhere; }
-.init-hist-who { color: var(--text); font-weight: 600; }
-.init-hist-when { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--dim); }
-.init-tier b { color: var(--text); }
-.init-hist-none { padding: 4px 0; }
-.init-none { margin: 4px 0 0; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dim); font-size: 12px; line-height: 1.5; }
-.init-none b { display: block; margin-bottom: 2px; color: var(--text); font-size: 12px; }
-.init-none span { display: block; }
-.init-empty { max-width: 560px; padding: 24px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); color: var(--dim); }
-.init-empty h5 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--text); }
-.init-empty p { max-width: 60ch; margin: 0 0 16px; font-size: 12px; line-height: 1.55; color: var(--dim); }
-.init-empty .as-actions { margin-top: 0; }
-/* ---- the WAVE LANE: waves inside an initiative card -------------------------------------------------
-   A LANE, NOT A TAB: one row per wave inside the card the initiative already draws. Nothing here is fixed-width
-   and every row wraps, because a pane may be 768 wide and a wave title, a member title or a template id can each be
-   a long unbroken token - the lane must never push the pane sideways. The gate chips are the only coloured thing on
-   the row, so "not met", "cannot tell" and "no gate" read apart at a glance. */
-.init-wavefold { margin: 0 0 12px; border-top: 1px solid var(--line); padding-top: 8px; }
-.init-wavefold .init-sechead { display: flex; align-items: center; gap: 8px; }
-.init-wavefold .init-sechead .chip { font-size: 10.5px; padding: 2px 8px; text-transform: none; letter-spacing: 0; }
-.init-waves { display: flex; flex-direction: column; gap: 8px; }
-.wave-row { min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-.wave-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
-.wave-pos { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
-.wave-title { flex: 1 1 160px; min-width: 0; font-size: 12.5px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
-.wave-head .chip { font-size: 10.5px; padding: 2px 8px; }
-.wave-state.is-empty, .wave-state.is-unentered { color: var(--dim); }
-.wave-state.is-ready { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
-.wave-state.is-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
-.wave-state.is-blocked { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
-.wave-state.is-unknown { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
-.wave-state.is-done { color: #6fcf97; border-color: #2a4432; }
-.wave-state.is-abandoned { color: #ff9c94; border-color: #4a2a2a; background: #2a1a1a; }
-.wave-current { color: #ecd9ff; border-color: #55407a; background: #2a2044; }
-.wave-gates { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
-.wave-gate { font-size: 10.5px; padding: 2px 8px; }
-.wave-gate.is-met { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
-.wave-gate.is-unmet { color: var(--dim); }
-.wave-gate.is-unknown { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
-.wave-gate.is-none { color: var(--dimmer); border-style: dashed; }
-.wave-gate.is-abandoned { color: #ff9c94; border-color: #4a2a2a; background: #2a1a1a; }
-.wave-auto { font-size: 10.5px; padding: 2px 8px; }
-.wave-auto.is-on { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
-.wave-auto.is-off { color: var(--dimmer); }
-.wave-members { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; min-width: 0; }
-.wave-member { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; max-width: 100%; min-width: 0; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px; line-height: 1.5; }
-.wave-member-id { flex: 0 0 auto; font-family: var(--mono); font-weight: 600; color: var(--text); }
-.wave-member-title { min-width: 0; overflow-wrap: anywhere; color: var(--dim); }
-.wave-member-project { min-width: 0; overflow-wrap: anywhere; font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
-.wave-member .chip { font-size: 10px; padding: 0 6px; }
-.wave-mstate.is-queued { color: var(--dim); }
-.wave-mstate.is-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
-.wave-mstate.is-parked { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
-.wave-mstate.is-done { color: #6fcf97; border-color: #2a4432; }
-.wave-mstate.is-abandoned { color: #ff9c94; border-color: #4a2a2a; background: #2a1a1a; }
-.wave-template { margin-top: 6px; overflow-wrap: anywhere; }
-.wave-unresolved { color: #ff9c94; font-weight: 600; }
-.wave-skipped { margin-top: 6px; }
-.wave-skip-row { overflow-wrap: anywhere; }
-.wave-none { padding: 2px 0; }
-.wave-store-bad { margin: 0; }
-/* THE WIDE FLOAT IS TWO COLUMNS, not a 217-character measure: the words and the map of projects sit side
-   by side, and the folds that belong to the whole initiative (assistants, history) run beneath both. */
-@container (min-width: 1000px) {
-  .init-card:not(.is-titlecard) {
+/* ---- the initiatives tab: THE ROUTE, on one token layer ------------------------------------------
+   The reader chose round A's direction B, The Route (docs/reports/initiatives-redesign-research-a-2026-11-22.html),
+   and round B's values as the visual system (docs/reports/initiatives-redesign-research-b-2026-11-22.html). This
+   block is that choice in one place.
+
+   THE TOKENS COME FIRST, and they are round B's own numbers, not new ones: five surfaces, two lines, three inks with
+   their measured ratios, six state roles each with a wash and a line, five type steps, six space steps, five radii,
+   three fixed heights, two elevations and one focus ring. They live on the pane rather than :root, so a retune can
+   never leak into the board, the queue or the console, and the reader can change the whole tab here.
+
+   THE ROUTE IS THE STRUCTURE, NOT A SKETCH: a folded initiative is a ledger row on the ground with a four-dot route
+   mark, its title, its measured two-line preview and its counts as a sentence; an opened initiative is a plate, and
+   its waves are a route - one line down the card, a numbered station on it, a state-coloured segment beside each
+   station, lanes branching into parallel blocks and members aligned as a manifest. Every row, field, count, control
+   and link the tab drew before is still drawn; what changed is rank, surface and rhythm. */
+
+/* ---- 1. THE TOKENS ------------------------------------------------------------------------------ */
+#as-initiatives {
+  /* surfaces: five depths, each a real elevation on the dark ground. */
+  --tab-ground: #0f1115;
+  --tab-surface: #141922;
+  --tab-row: #171d27;
+  --tab-raised: #1c2330;
+  --tab-sunken: #10151c;
+  --tab-hover: #1c2330;
+
+  /* lines: one hairline, one emphasis. Nothing heavier. */
+  --tab-line: #232a36;
+  --tab-line-strong: #35404f;
+
+  /* ink: three reading weights. The ratios on --tab-surface are round B's measured ones. */
+  --tab-ink: #e9edf4;      /* 15.0:1 */
+  --tab-ink-2: #aeb8c6;    /*  8.8:1 */
+  --tab-ink-3: #7f8a9a;    /*  5.0:1 */
+  --tab-link: #79b8ff;     /*  8.5:1 */
+  --tab-accent: #3fb950;   /*  6.0:1 */
+
+  /* state roles: a foreground, a wash and a line each, so a pill and a spine read as one thing. */
+  --tab-ready: #9ecbff;
+  --tab-ready-bg: rgba(56, 139, 253, 0.12);
+  --tab-ready-line: rgba(56, 139, 253, 0.38);
+  --tab-run: #56d364;
+  --tab-run-bg: rgba(46, 160, 67, 0.14);
+  --tab-run-line: rgba(46, 160, 67, 0.42);
+  --tab-warn: #e3b341;
+  --tab-warn-bg: rgba(210, 153, 34, 0.12);
+  --tab-warn-line: rgba(210, 153, 34, 0.4);
+  --tab-bad: #ff7b72;
+  --tab-bad-bg: rgba(229, 83, 75, 0.12);
+  --tab-bad-line: rgba(229, 83, 75, 0.4);
+  --tab-idle: #8b95a5;
+  --tab-idle-bg: rgba(139, 149, 165, 0.1);
+  --tab-idle-line: rgba(139, 149, 165, 0.32);
+
+  /* type: five steps with one job each, two line heights, one family pair. */
+  --tab-fs-display: 15.5px;
+  --tab-fs-title: 13px;
+  --tab-fs-body: 12.5px;
+  --tab-fs-meta: 11.5px;
+  --tab-fs-chip: 10.5px;
+  --tab-lh-tight: 1.25;
+  --tab-lh-body: 1.6;
+  --tab-font-ui: var(--ui);
+  --tab-font-mono: var(--mono);
+
+  /* space: the 4px grid, named by step. */
+  --tab-s1: 4px;
+  --tab-s2: 8px;
+  --tab-s3: 12px;
+  --tab-s4: 16px;
+  --tab-s5: 24px;
+  --tab-s6: 32px;
+
+  /* radius: four steps and a pill. */
+  --tab-r1: 4px;
+  --tab-r2: 8px;
+  --tab-r3: 12px;
+  --tab-r4: 16px;
+  --tab-r-pill: 999px;
+
+  /* density: three fixed heights plus the member row, so a row cannot drift between surfaces. */
+  --tab-row-h: 32px;
+  --tab-control: 30px;
+  --tab-chip-h: 20px;
+  --tab-member: 26px;
+
+  /* elevation: light from above - a top hairline and one soft shadow, never a glow. */
+  --tab-e1: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --tab-e2: 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* focus: one ring, two pixels, outside the control. */
+  --tab-ring: 2px solid #79b8ff;
+
+  /* the panel's own variables, remapped inside this tab only. Every existing rule below inherits the new ink,
+     surfaces and lines without a second palette beside the panel's. */
+  --surface: var(--tab-surface);
+  --card: var(--tab-row);
+  --panel: var(--tab-ground);
+  --line: var(--tab-line);
+  --text: var(--tab-ink);
+  --dim: var(--tab-ink-2);
+  --dimmer: var(--tab-ink-3);
+  --hover: var(--tab-hover);
+  --blue: var(--tab-link);
+
+  container-type: inline-size;
+}
+
+/* THE DENSITY IS A READER CHOICE, not a constant (round B 3.4): the same tokens, one step tighter. No colour moves,
+   so the type, the contrast and the state roles are identical in both settings. */
+#as-initiatives[data-density="compact"] {
+  --tab-s3: 8px;
+  --tab-s4: 12px;
+  --tab-s5: 16px;
+  --tab-row-h: 28px;
+  --tab-member: 22px;
+}
+
+/* ---- 2. THE SHELL: a toolbar, one meta line, and About ------------------------------------------- */
+#as-initiatives > .as-group.init-shell {
+  padding: var(--tab-s4);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  box-shadow: var(--tab-e1);
+  margin-bottom: var(--tab-s3);
+}
+#as-initiatives .init-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s2) var(--tab-s3);
+  margin-bottom: var(--tab-s3);
+}
+#as-initiatives .init-toolbar h4 {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--tab-s1) var(--tab-s2);
+  margin: 0;
+  font-size: var(--tab-fs-display);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--tab-ink);
+}
+#as-initiatives .init-toolbar h4 .as-hint {
+  font-size: var(--tab-fs-meta);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--tab-ink-3);
+}
+#as-initiatives .init-actions { flex: 0 1 auto; min-width: 0; margin: 0; flex-wrap: wrap; }
+#as-initiatives .init-shell .as-actions button {
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  cursor: pointer;
+}
+#as-initiatives .init-shell .as-actions button:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
+#as-initiatives .init-shell .as-actions button:active { background: var(--tab-sunken); transform: none; }
+#as-initiatives .init-shell .as-actions button[aria-expanded="true"],
+#as-initiatives .init-shell .as-actions button[aria-pressed="true"] { color: var(--tab-ink); border-color: var(--tab-line-strong); background: var(--tab-sunken); }
+#as-initiatives .init-shell .as-actions button.primary { color: #0f1115; background: var(--tab-accent); border-color: var(--tab-accent); font-weight: 600; }
+#as-initiatives .init-shell .as-actions button.primary:hover { background: #4ad35c; color: #0f1115; }
+#as-initiatives .init-shell .as-actions button[disabled] { opacity: .55; cursor: not-allowed; }
+/* THE META LINE: what the store holds, who may change it, and whether this read is in flight. The tier sentence is
+   NOT folded away and NOT a tooltip: it is the reader's only statement of who may change the map (round B, eight
+   things that must survive). */
+#as-initiatives .init-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+}
+#as-initiatives .init-meta .as-help { margin: 0; max-width: 68ch; font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+#as-initiatives .init-tier {
+  margin: 0;
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+}
+#as-initiatives .init-tier b { color: var(--tab-ink); font-weight: 600; }
+#as-initiatives .init-read { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-about {
+  margin: 0 0 var(--tab-s3);
+  padding: var(--tab-s3) var(--tab-s4);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-line-strong);
+  border-radius: 0 var(--tab-r2) var(--tab-r2) 0;
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-about .as-help { margin: 0; max-width: 68ch; font-size: var(--tab-fs-meta); line-height: 1.55; color: var(--tab-ink-2); }
+#as-initiatives .as-help { font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+
+/* ---- 3. THE LEDGER ROW: a folded initiative ------------------------------------------------------ */
+/* FOLDED IS A ROW ON THE GROUND, NOT A CARD: the list reads as one ledger, the title and its preview carry the
+   identity, and the route mark and status word say where the work has got to before any card is opened. */
+#as-initiatives .init-card.is-titlecard {
+  padding: var(--tab-s3) var(--tab-s2);
+  border: 0;
+  border-bottom: 1px solid var(--tab-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
+}
+#as-initiatives .init-card.is-titlecard:hover { background: var(--tab-hover); }
+#as-initiatives .init-card.is-titlecard:last-child { border-bottom: 0; }
+#as-initiatives .init-card {
+  margin-bottom: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  box-shadow: var(--tab-e1);
+}
+/* THE OPEN INITIATIVE IS THE PLATE. It lifts off the ledger with a surface, one radius and the elevation token. */
+#as-initiatives .init-card:not(.is-titlecard) {
+  padding: var(--tab-s4);
+  margin: var(--tab-s2) 0 var(--tab-s3);
+  background: var(--tab-surface);
+  border-color: var(--tab-line);
+}
+#as-initiatives .init-head { display: flex; align-items: flex-start; gap: var(--tab-s3); margin-bottom: var(--tab-s3); }
+#as-initiatives .init-card.is-titlecard .init-head { margin-bottom: var(--tab-s1); align-items: center; }
+#as-initiatives .init-head-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--tab-s2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives .init-card.is-titlecard .init-head-btn { align-items: center; }
+#as-initiatives .init-head-btn:hover { background: transparent; }
+#as-initiatives .init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--tab-ink-3); text-underline-offset: 2px; }
+#as-initiatives .init-head-btn:active { transform: none; }
+#as-initiatives .init-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: var(--tab-fs-display);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.01em;
+  color: var(--tab-ink);
+  white-space: normal;
+}
+#as-initiatives .init-card:not(.is-titlecard) .init-title { flex: 1 1 auto; display: block; -webkit-line-clamp: unset; overflow: visible; }
+/* THE ROUTE MARK, at rest: one dot per wave, in the wave's own derived state, the current one ringed. It is a second
+   read of the same fact the status word says, so it is never the only answer; decorative, so aria-hidden. */
+/* THE MARK HANGS IN THE ROW'S GUTTER. A folded row that has a route is indented by one slot, and the dots sit in that
+   slot: the title, the preview and the counts then share one left edge inside the row, and a row with no route keeps
+   the full width rather than reserving a gap for a mark it does not have. */
+#as-initiatives .init-card.is-titlecard.has-route { padding-left: 45px; }
+#as-initiatives .init-card.is-titlecard { position: relative; }
+#as-initiatives .init-glyph { flex: 0 0 27px; width: 27px; display: inline-flex; align-items: center; gap: 3px; padding-top: 6px; }
+#as-initiatives .init-card.is-titlecard .init-glyph { position: absolute; left: 10px; top: calc(var(--tab-s3) + 6px); padding-top: 0; }
+#as-initiatives .init-glyph i { width: 7px; height: 7px; border-radius: 50%; background: var(--tab-idle); }
+#as-initiatives .init-glyph i.is-done { background: var(--tab-accent); }
+#as-initiatives .init-glyph i.is-running { background: var(--tab-run); }
+#as-initiatives .init-glyph i.is-ready { background: var(--tab-ready); }
+#as-initiatives .init-glyph i.is-blocked, #as-initiatives .init-glyph i.is-unknown { background: var(--tab-warn); }
+#as-initiatives .init-glyph i.is-abandoned { background: var(--tab-bad); }
+#as-initiatives .init-glyph i.is-empty, #as-initiatives .init-glyph i.is-unentered { background: var(--tab-idle-line); }
+#as-initiatives .init-glyph i.is-current { box-shadow: 0 0 0 2px var(--tab-line-strong); }
+/* THE STATUS WORD: the current wave and its state, or the honest "no waves" / "waves unreadable". A pill, because it
+   is the shortest answer the tab gives, and a word as well as a colour. */
+#as-initiatives .init-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--tab-chip-h);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r-pill);
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  white-space: nowrap;
+}
+#as-initiatives .init-status::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+#as-initiatives .init-status.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .init-status.is-ready { color: var(--tab-ready); border-color: var(--tab-ready-line); background: var(--tab-ready-bg); }
+#as-initiatives .init-status.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); }
+#as-initiatives .init-status.is-blocked, #as-initiatives .init-status.is-unknown { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .init-status.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .init-status.is-idle { color: var(--tab-idle); border-color: var(--tab-idle-line); }
+#as-initiatives .init-caret { flex: 0 0 auto; width: 14px; color: var(--tab-ink-3); font-size: 9px; line-height: 1.4; text-align: center; }
+#as-initiatives .init-head-btn .init-caret { width: 12px; padding-top: 0; line-height: inherit; }
+/* A folded row's chevron is a disclosure column at the row's right edge, not the end of the title's last line: the
+   title box is as wide as the row, so a flowing chevron lands mid-row on a two-line title. */
+#as-initiatives .init-card.is-titlecard .init-head-btn { padding-right: 18px; }
+#as-initiatives .init-card.is-titlecard .init-caret { position: absolute; right: var(--tab-s2); top: calc(var(--tab-s3) + 2px); font-size: 11px; line-height: 1; }
+
+/* THE DESCRIPTION: body at a reading size, 68ch, and its fold re-measures because the line height is unitless. */
+#as-initiatives .init-desc {
+  max-width: 68ch;
+  margin: 0 0 var(--tab-s4);
+  font-size: var(--tab-fs-body);
+  line-height: var(--tab-lh-body);
+  color: var(--tab-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#as-initiatives .init-card.is-titlecard .init-desc { margin: 0 0 var(--tab-s1); color: var(--tab-ink-3); }
+#as-initiatives .init-desc.is-empty { color: var(--tab-ink-3); font-style: italic; }
+#as-initiatives .init-descfold { margin-bottom: var(--tab-s3); }
+#as-initiatives .init-desc-head { margin-bottom: var(--tab-s1); }
+#as-initiatives .init-dots { color: var(--tab-ink-2); }
+#as-initiatives .init-card.is-titlecard .init-chips { margin-bottom: 0; }
+
+/* THE COUNTS ARE A SENTENCE. Three counts, a status word and the provenance line share one 11.5px row with a dot
+   between the numbers: the capsule wall is gone, the numbers and their tooltips are not. */
+#as-initiatives .init-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s1) 0;
+  margin-bottom: 0;
+  padding-top: var(--tab-s3);
+  border-top: 1px solid var(--tab-line);
+  font-variant-numeric: tabular-nums;
+}
+#as-initiatives .init-chips .init-status { margin-left: var(--tab-s2); margin-right: 0; }
+#as-initiatives .init-chips .chip {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+  white-space: normal;
+}
+#as-initiatives .init-chips .chip + .chip::before { content: "\00b7"; margin: 0 7px; color: var(--tab-ink-3); }
+#as-initiatives .init-chips .chip.is-zero { color: var(--tab-ink-3); border: 0; background: transparent; }
+#as-initiatives .init-chips .init-meta { flex: 0 0 auto; margin-left: auto; font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+
+/* SECTION HEADS: sentence case, one weight, a hairline that carries the eye to the count. */
+#as-initiatives .init-sechead {
+  display: flex;
+  align-items: center;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tab-ink);
+}
+#as-initiatives .init-sechead::after { content: ""; order: 2; flex: 1 1 auto; height: 1px; background: var(--tab-line); }
+#as-initiatives .init-sechead .chip {
+  order: 1;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 4. THE CAST: projects, trees, forms and the disclosure rows --------------------------------- */
+#as-initiatives .init-proj {
+  display: flex;
+  align-items: center;
+  gap: var(--tab-s2);
+  width: 100%;
+  min-height: var(--tab-row-h);
+  padding: var(--tab-s1) var(--tab-s2);
+  margin-left: calc(var(--tab-s2) * -1);
+  border: 0;
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives .init-proj:hover { background: var(--tab-raised); color: var(--tab-ink); }
+#as-initiatives .init-proj:active { transform: none; }
+#as-initiatives .init-proj .init-proj-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--tab-font-ui); font-weight: 500; }
+#as-initiatives .init-proj .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; color: var(--tab-ink-3); font-family: var(--tab-font-ui); }
+#as-initiatives .init-project + .init-project { margin-top: 0; }
+#as-initiatives .init-trees { margin: 0 0 var(--tab-s2) 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-tree { display: flex; flex-direction: column; gap: var(--tab-s1); padding: var(--tab-s2) 0; border-top: 1px solid var(--tab-line); font-size: var(--tab-fs-body); }
+#as-initiatives .init-tree:first-child { border-top: 0; padding-top: var(--tab-s1); }
+#as-initiatives .init-tree-main { display: flex; align-items: center; gap: var(--tab-s2); min-height: 28px; }
+#as-initiatives .init-tree-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--tab-r1);
+  color: var(--tab-link);
+  font-size: var(--tab-fs-body);
+  text-decoration: none;
+}
+#as-initiatives .init-tree-name:hover { text-decoration: underline; }
+#as-initiatives .init-tree-name.is-missing { color: var(--tab-ink-3); text-decoration: line-through; }
+#as-initiatives .init-tree-main .init-mini { margin-left: auto; }
+#as-initiatives .init-tree-branch { min-width: 0; }
+#as-initiatives .init-branch {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r1);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-meta);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#as-initiatives a.init-branch-link { color: var(--tab-link); text-decoration: none; }
+#as-initiatives a.init-branch-link:hover { text-decoration: underline; }
+#as-initiatives .init-mini {
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.4;
+  cursor: pointer;
+}
+#as-initiatives .init-mini:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
+#as-initiatives .init-mini:active { transform: none; background: var(--tab-sunken); color: var(--tab-ink); }
+#as-initiatives .init-mini[disabled] { opacity: .55; cursor: not-allowed; }
+#as-initiatives .init-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  padding: var(--tab-s3);
+  margin: var(--tab-s2) 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-form input[type="text"],
+#as-initiatives .init-form select {
+  width: 100%;
+  min-height: var(--tab-row-h);
+  padding: var(--tab-s1) var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font-family: var(--tab-font-mono);
+  font-size: 12px;
+}
+#as-initiatives .init-form .as-note-box {
+  width: 100%;
+  padding: var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font: var(--tab-fs-body)/var(--tab-lh-body) var(--tab-font-ui);
+}
+#as-initiatives .init-form .as-role-caption { margin: 0; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); }
+#as-initiatives .init-form .as-actions { margin-top: 0; }
+#as-initiatives .init-form .primary, #as-initiatives .init-form button { min-height: var(--tab-row-h); }
+#as-initiatives .init-addrow { margin-top: var(--tab-s2); }
+#as-initiatives .init-none {
+  margin: var(--tab-s1) 0 0;
+  padding: var(--tab-s3);
+  border: 1px dashed var(--tab-line);
+  border-radius: var(--tab-r3);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-body);
+  line-height: 1.5;
+}
+#as-initiatives .init-none b { display: block; margin-bottom: var(--tab-s1); color: var(--tab-ink-2); font-size: 12px; }
+#as-initiatives .init-none span { display: block; }
+#as-initiatives .init-empty {
+  max-width: 560px;
+  padding: var(--tab-s6);
+  border: 1px solid var(--tab-line-strong);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  color: var(--tab-ink-3);
+}
+#as-initiatives .init-empty h5 { margin: 0 0 var(--tab-s2); font-size: var(--tab-fs-display); font-weight: 600; letter-spacing: -0.01em; text-transform: none; color: var(--tab-ink); }
+#as-initiatives .init-empty p { max-width: 60ch; margin: 0 0 var(--tab-s4); font-size: var(--tab-fs-body); line-height: var(--tab-lh-body); color: var(--tab-ink-2); }
+#as-initiatives .init-empty .as-actions { margin-top: 0; }
+
+/* ---- 5. THE ROUTE: one line down the card, a station per wave ------------------------------------ */
+#as-initiatives .init-wavefold { margin: 0 0 var(--tab-s3); padding-top: var(--tab-s3); border-top: 1px solid var(--tab-line); }
+#as-initiatives .init-wavefold .init-sechead { display: flex; align-items: center; gap: var(--tab-s2); }
+#as-initiatives .init-wavefold .init-sechead .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; text-transform: none; letter-spacing: 0; }
+#as-initiatives .init-wave-note { order: 3; flex: 0 0 auto; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
+/* THE LINE. It runs behind every station, from the first to the last, in the emphasis hairline; a station paints its
+   own stretch in its state colour, so the route reads before a single word does. */
+#as-initiatives .init-waves { position: relative; display: flex; flex-direction: column; gap: 20px; padding-left: 24px; }
+#as-initiatives .init-waves::before { content: ""; position: absolute; left: 9px; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--tab-line-strong); }
+#as-initiatives .wave-row {
+  position: relative;
+  min-width: 0;
+  padding: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-row);
+}
+/* the station's own stretch of the line: 2px, from the server's data-wave-state, never from a class the painter guesses */
+#as-initiatives .wave-row::before { content: ""; position: absolute; left: -15px; top: -1px; bottom: -1px; width: 2px; background: var(--tab-idle); }
+#as-initiatives .wave-row[data-wave-state="running"]::before { background: var(--tab-run); }
+#as-initiatives .wave-row[data-wave-state="ready"]::before { background: var(--tab-ready); }
+#as-initiatives .wave-row[data-wave-state="done"]::before { background: var(--tab-accent); }
+#as-initiatives .wave-row[data-wave-state="unknown"]::before,
+#as-initiatives .wave-row[data-wave-state="blocked"]::before { background: var(--tab-warn); }
+#as-initiatives .wave-row[data-wave-state="abandoned"]::before { background: var(--tab-bad); }
+#as-initiatives .wave-row[data-wave-state="empty"]::before,
+#as-initiatives .wave-row[data-wave-state="unentered"]::before { background: var(--tab-line-strong); }
+#as-initiatives .wave-row[data-wave-current="true"] { border-color: var(--tab-line-strong); background: linear-gradient(180deg, var(--tab-raised), var(--tab-row)); box-shadow: var(--tab-e1); }
+/* THE STATION MARKER: the wave's position sits ON the line, not at the left of a box. */
+#as-initiatives .wave-pos {
+  position: absolute;
+  left: -25px;
+  top: 13px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tab-line-strong);
+  border-radius: 50%;
+  background: var(--tab-surface);
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+#as-initiatives .wave-row[data-wave-state="running"] .wave-pos { border-color: var(--tab-run-line); color: var(--tab-run); }
+#as-initiatives .wave-row[data-wave-state="done"] .wave-pos { border-color: var(--tab-run-line); color: var(--tab-accent); }
+#as-initiatives .wave-row[data-wave-state="blocked"] .wave-pos,
+#as-initiatives .wave-row[data-wave-state="unknown"] .wave-pos { border-color: var(--tab-warn-line); color: var(--tab-warn); }
+#as-initiatives .wave-row[data-wave-state="abandoned"] .wave-pos { border-color: var(--tab-bad-line); color: var(--tab-bad); }
+#as-initiatives .wave-row[data-wave-current="true"] .wave-pos { border-width: 2px; border-color: var(--tab-run); color: var(--tab-ink); background: var(--tab-run-bg); }
+#as-initiatives .wave-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); min-width: 0; }
+#as-initiatives .wave-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(100%, 760px);
+  font-size: var(--tab-fs-title);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.005em;
+  color: var(--tab-ink);
+  overflow-wrap: anywhere;
+}
+/* the state belongs to the name, not to the far edge of a wide row: it is the next thing after the title */
+#as-initiatives .wave-head .chip { margin-left: 0; }
+#as-initiatives .wave-template { flex: 1 0 100%; margin-top: var(--tab-s1); font-size: var(--tab-fs-meta); color: var(--tab-ink-3); overflow-wrap: anywhere; }
+#as-initiatives .wave-template .mono { color: var(--tab-ink-2); }
+#as-initiatives .wave-unresolved { color: var(--tab-bad); font-weight: 600; }
+#as-initiatives .wave-head .chip {
+  height: var(--tab-chip-h);
+  padding: 0 var(--tab-s2);
+  border-radius: var(--tab-r-pill);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  line-height: 1.4;
+}
+#as-initiatives .wave-state.is-empty, #as-initiatives .wave-state.is-unentered { color: var(--tab-idle); border-color: var(--tab-idle-line); background: transparent; }
+#as-initiatives .wave-state.is-ready { color: var(--tab-ready); border-color: var(--tab-ready-line); background: var(--tab-ready-bg); }
+#as-initiatives .wave-state.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-state.is-blocked { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-state.is-unknown { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-state.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); background: transparent; }
+#as-initiatives .wave-state.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .wave-current { color: #d8c7ff; border-color: #5b4a86; background: rgba(163, 113, 247, 0.14); }
+/* GATE PILLS ARE ANSWERS: a 5px dot in the answer's colour, the check's name, the answer in words. "no check" keeps a
+   dashed edge, so nothing-to-check cannot be mistaken for not-met. */
+#as-initiatives .wave-gates { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: var(--tab-s2); }
+#as-initiatives .wave-gate, #as-initiatives .wave-auto, #as-initiatives .wave-auto-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--tab-chip-h);
+  padding: 0 var(--tab-s2);
+  border-radius: var(--tab-r-pill);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#as-initiatives .wave-gate[data-gate-state]::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+#as-initiatives .wave-gate.is-met { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-gate.is-unmet { color: var(--tab-idle); border-color: var(--tab-idle-line); background: transparent; }
+#as-initiatives .wave-gate.is-unknown { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-gate.is-none { color: var(--tab-idle); border-style: dashed; border-color: var(--tab-line); background: transparent; }
+#as-initiatives .wave-gate.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .wave-auto { border: 1px solid var(--tab-line); background: var(--tab-sunken); color: var(--tab-ink-3); }
+#as-initiatives .wave-auto.is-on { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-auto-open.is-on { color: #d8c7ff; border-color: #5b4a86; background: rgba(163, 113, 247, 0.14); }
+#as-initiatives .wave-auto-open.is-wait { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-join { display: block; margin-top: 6px; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); line-height: 1.5; }
+
+/* ---- 6. THE LANES: parallel blocks, members as a manifest ---------------------------------------- */
+#as-initiatives .wave-lanes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--tab-s2); margin-top: var(--tab-s3); }
+/* Lanes run SIDE BY SIDE wherever the pane can hold two; below 900px of pane they stack, because a squeezed lane is
+   two lanes nobody can read. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-lanes { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+}
+#as-initiatives .wave-lane {
+  min-width: 0;
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-line-strong);
+  border-radius: 0 var(--tab-r2) var(--tab-r2) 0;
+  background: var(--tab-sunken);
+}
+#as-initiatives .wave-lane[data-lane-read="cannot-tell"] { border-left-color: var(--tab-warn); }
+#as-initiatives .wave-lane .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
+#as-initiatives .wave-lane-read { margin-left: var(--tab-s2); font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .wave-lanes-bad { margin-bottom: var(--tab-s2); }
+#as-initiatives .wave-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--tab-s2); min-width: 0; }
+#as-initiatives .wave-lane .wave-members { display: flex; flex-direction: column; gap: var(--tab-s1); margin-top: 6px; }
+#as-initiatives .wave-member {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tab-member);
+  padding: 3px var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-surface);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+}
+#as-initiatives .wave-member-id { flex: 0 0 auto; font-family: var(--tab-font-mono); font-weight: 600; font-size: 11px; color: var(--tab-ink-3); font-variant-numeric: tabular-nums; }
+#as-initiatives .wave-member-title { min-width: 0; overflow-wrap: anywhere; color: var(--tab-ink-2); }
+#as-initiatives .wave-member-project { min-width: 0; overflow-wrap: anywhere; padding: 0 5px; border-radius: var(--tab-r1); background: var(--tab-raised); font-family: var(--tab-font-mono); font-size: 10px; color: var(--tab-ink-3); }
+#as-initiatives .wave-member .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
+#as-initiatives .wave-mstate.is-queued { color: var(--tab-idle); border-color: var(--tab-idle-line); }
+#as-initiatives .wave-mstate.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-mstate.is-parked { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-mstate.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); background: transparent; }
+#as-initiatives .wave-mstate.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+/* THE MANIFEST: at a pane that can hold it, a member is a row - 44px id, the title, a 150px project, an 80px state -
+   so two members compare down a column instead of wrapping into prose. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-member {
     display: grid;
-    grid-template-columns: minmax(0, 72ch) minmax(320px, 640px);
+    grid-template-columns: 44px minmax(0, 1fr) 150px 80px;
+    gap: var(--tab-s2);
+    align-items: center;
+    width: 100%;
+    max-width: 760px;
+  }
+  #as-initiatives .wave-member .chip { justify-self: start; }
+}
+#as-initiatives .wave-skipped { margin-top: var(--tab-s2); }
+#as-initiatives .wave-skip-row { overflow-wrap: anywhere; }
+#as-initiatives .wave-none { padding: var(--tab-s1) 0; }
+#as-initiatives .wave-store-bad { margin: 0; }
+
+/* ---- 7. THE CAST BELOW THE ROUTE: assistants, tasks and history as disclosure rows ---------------- */
+#as-initiatives .init-assistfold, #as-initiatives .init-histfold { margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+#as-initiatives .init-assists { margin: var(--tab-s1) 0 0 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-assist { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); min-height: var(--tab-row-h); font-size: 12px; color: var(--tab-ink-2); }
+#as-initiatives .init-assist-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--tab-s1);
+  border: 0;
+  border-radius: var(--tab-r1);
+  background: transparent;
+  color: var(--tab-link);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives .init-assist-btn:hover { background: transparent; text-decoration: underline; }
+#as-initiatives .init-counts { display: flex; flex-wrap: wrap; gap: var(--tab-s1); font-variant-numeric: tabular-nums; }
+#as-initiatives .init-counts .chip {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  white-space: normal;
+}
+#as-initiatives .init-counts .chip.good { color: var(--tab-run); background: transparent; border: 0; }
+#as-initiatives .init-counts .chip.warn { color: var(--tab-warn); background: transparent; border: 0; }
+#as-initiatives .init-counts .chip + .chip::before { content: "\00b7"; margin-right: 8px; color: var(--tab-ink-3); }
+#as-initiatives .init-assist-when { margin-left: auto; white-space: nowrap; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); }
+#as-initiatives .init-assist .init-proj.init-assist-fold { width: auto; flex: 0 0 auto; min-height: 28px; padding: var(--tab-s1) 6px; gap: var(--tab-s1); }
+#as-initiatives .init-assist-fold .init-proj-name { flex: 0 0 auto; }
+#as-initiatives .init-assist .init-counts { flex: 1 0 100%; }
+#as-initiatives .init-tasks { flex: 1 0 100%; margin: var(--tab-s1) 0 var(--tab-s1) 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-task-none { padding: var(--tab-s1) 0; }
+#as-initiatives .init-history { margin: var(--tab-s1) 0 0 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--tab-s2); min-height: 28px; font-size: 12px; color: var(--tab-ink-2); }
+#as-initiatives .init-hist-what { min-width: 0; overflow-wrap: anywhere; }
+#as-initiatives .init-hist-who { color: var(--tab-ink); font-weight: 600; }
+#as-initiatives .init-hist-when { margin-left: auto; white-space: nowrap; font-family: var(--tab-font-mono); font-size: 11px; color: var(--tab-ink-3); }
+#as-initiatives .init-hist-none { padding: var(--tab-s1) 0; }
+#as-initiatives .init-tier, #as-initiatives .init-hist-row, #as-initiatives .init-assist { font-size: 12px; }
+
+/* ---- 8. WIDE: the plate splits into its words and its cast, the route runs full width -------------- */
+@container (min-width: 1000px) {
+  #as-initiatives .init-card:not(.is-titlecard) {
+    display: grid;
+    grid-template-columns: minmax(0, 66ch) minmax(320px, 1fr);
     grid-template-areas: "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist";
-    column-gap: 24px;
+    column-gap: var(--tab-s5);
     align-items: start;
     justify-content: start;
   }
-  .init-card > .init-head { grid-area: head; }
-  .init-card .init-title { font-size: 15px; }
-  .init-card > .init-descfold, .init-card > .init-desc { grid-area: desc; }
-  .init-card > .init-chips { grid-area: chips; }
-  .init-card > .init-wavefold { grid-area: waves; }
-  .init-card > .init-side { grid-area: side; }
-  .init-card > .init-assistfold { grid-area: assist; }
-  .init-card > .init-histfold { grid-area: hist; }
-  .init-card > .init-form { grid-column: 1 / -1; }
-  .init-card > .init-desc { max-width: 72ch; }
+  #as-initiatives .init-card > .init-head { grid-area: head; }
+  #as-initiatives .init-card > .init-descfold, #as-initiatives .init-card > .init-desc { grid-area: desc; }
+  #as-initiatives .init-card > .init-chips { grid-area: chips; }
+  #as-initiatives .init-card > .init-wavefold { grid-area: waves; padding-top: var(--tab-s4); }
+  #as-initiatives .init-card > .init-side { grid-area: side; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s5); }
+  #as-initiatives .init-card > .init-assistfold { grid-area: assist; }
+  #as-initiatives .init-card > .init-histfold { grid-area: hist; }
+  #as-initiatives .init-card > .init-form { grid-column: 1 / -1; }
+  #as-initiatives .init-card > .init-desc { max-width: 66ch; }
+  #as-initiatives .init-card .init-title { font-size: var(--tab-fs-display); }
 }
-/* A KEYBOARD RING THE READER CAN SEE: 2px at 8:1 on the card, on every control in the tab. */
+
+/* ---- 9. FOCUS: one 2px ring, in the link's blue, on every control in the tab --------------------- */
 #as-initiatives button:focus-visible,
 #as-initiatives a:focus-visible,
 #as-initiatives select:focus-visible,
 #as-initiatives input:focus-visible,
-#as-initiatives textarea:focus-visible { outline: 2px solid #7fb2e8; outline-offset: 2px; border-radius: 6px; }
-/* A focus the pane restored after its own repaint: same ring as :focus-visible, worn only while that control keeps
-   the focus. */
-#as-initiatives .init-focus-restored { outline: 2px solid #7fb2e8; outline-offset: 2px; border-radius: 6px; }
+#as-initiatives textarea:focus-visible,
+#as-initiatives .init-focus-restored { outline: var(--tab-ring); outline-offset: 2px; border-radius: var(--tab-r2); }
 
 
 /* ---- the worktrees sub-tab: one board project card per project ------------------------------------

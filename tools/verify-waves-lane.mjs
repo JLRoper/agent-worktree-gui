@@ -243,11 +243,18 @@ try {
             const over = (el) => (el ? el.scrollWidth - el.clientWidth : 0);
             const rows = [...pane.querySelectorAll(".wave-row")];
             const card = pane.querySelector(".init-wavefold")?.closest(".init-card") || pane.querySelector(".init-card");
+            const paneRight = pane.getBoundingClientRect().right;
             return {
               documentWidth: doc.scrollWidth,
               documentClient: doc.clientWidth,
               paneOverflow: over(pane),
               cardOverflow: over(card),
+              // WHAT STICKS OUT, named: a pane overflow with no element named is a number nobody can act on.
+              past: [...pane.querySelectorAll("*")]
+                .map((el) => ({ el, r: el.getBoundingClientRect() }))
+                .filter(({ r }) => r.right > paneRight + 1)
+                .slice(0, 8)
+                .map(({ el, r }) => `${el.tagName.toLowerCase()}.${String(el.className || "").split(/\s+/).filter(Boolean).join(".")} +${Math.round(r.right - paneRight)}px`),
               rows: rows.map((r) => ({
                 id: r.getAttribute("data-wave-id"),
                 overflow: over(r),
@@ -318,6 +325,7 @@ try {
           await page.waitForSelector('#as-initiatives [data-wave-id="wave_01"] .wave-member', { timeout: 20_000 });
           await sleep(200);
           note(`document ${g.documentWidth}px wide open, ${closedWidth}px folded; pane overflow ${g.paneOverflow}px; card overflow ${g.cardOverflow}px`);
+          if (g.past.length) note(`past the pane's right edge: ${g.past.join(", ")}`);
           for (const r of g.rows) note(`wave ${r.id}: row ${r.overflow}px, head ${r.head}px, gates ${r.gates}px, members ${r.members}px`);
           ok(`at ${width} the document is no wider with the lane open than with it folded`, g.documentWidth <= closedWidth, `${g.documentWidth} vs ${closedWidth}`);
           ok(`at ${width} the pane has no horizontal overflow`, g.paneOverflow <= 0, `${g.paneOverflow}px`);

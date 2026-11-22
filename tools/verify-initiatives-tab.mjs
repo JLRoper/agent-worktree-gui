@@ -31,7 +31,8 @@
 //   8. THE COUNTS, ORDERED: beside each assistant, queued/running/completed/parked for THIS initiative's trees,
 //      newest work first, all four drawn always - a zero is a chip, not an absence - so the strip never shifts.
 //   9. HEALTH: zero page errors and zero console errors, and the tab is drawn in the panel's own chips and type: the
-//      card is an .as-group, the chip is .chip, the fold rows are 24px high at the rail's 11.5px.
+//      card is an .as-group, the chip is .chip, and the type follows the tab's five steps (title 15.5, body 12.5,
+//      meta 11.5, chip 10.5).
 //
 // Sandbox only: two throwaway repos with hand-cut worktrees, its own HERMES_HOME, its own PANEL_CONFIG and port, and
 // an apiServer pointed at a dead port. The live panel and gateway are never touched. Without Playwright the script
@@ -169,6 +170,12 @@ try {
     await waitForRow(base, projectName, treePath, { timeout: 60_000 });
   }
   ok("all four trees behind the initiative are rows on the board", true, "alpha x2, beta x2");
+
+  // THE LEVEL THE FREE-WRITE HALF NEEDS. The panel's default is "all" (every create, edit, attach and detach asks),
+  // so the first write from the tab parks a question and this gate could never reach its own free create. "remove"
+  // asks only a detach, which is the level the deny half below is about; the attach half sets "all" for itself.
+  const bootTier = await POST("/api/settings/initiative-tier", { tier: "remove" });
+  ok("the tier is set to removals only, so creating is free", bootTier.status === 200 && bootTier.body?.initiativeTier === "remove", `HTTP ${bootTier.status} ${bootTier.body?.initiativeTier || ""}`);
 
   // ---- the assistants' counts: two assistants, one queue each, all states on this initiative ------
   const q1 = await GET("/api/assistant/queue?assistantId=assistant-1");
@@ -318,7 +325,21 @@ try {
         check("with no worktrees the card says so and shows no folds", folded, { projects: 0, trees: 0, assists: 0 });
 
         // ---- 3. the question: Add a worktree ------------------------------------------------
+        // THE LEVEL EACH HALF NEEDS. The gate's two claims - a create made at once, and an attach that parks a
+        // question - are not one of the four levels: "all" asks a create too, "remove" asks only a detach. (The
+        // product's default is "all", which is why this gate could no longer reach its free write.) So the gate sets
+        // the level each half needs through the same settings route the reader's select writes: "remove" for the free
+        // create above, "all" for the four attaches here, "remove" again once they have landed.
         console.log("\n== the permission card for a move ==");
+        const askAll = await POST("/api/settings/initiative-tier", { tier: "all" });
+        ok("the tier is set to ask about every change", askAll.status === 200, `HTTP ${askAll.status} ${askAll.body?.initiativeTier || ""}`);
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForSelector("section.project", { timeout: 60_000 });
+        await expand();
+        await openTab();
+        await page.waitForSelector(`[data-init-card="${initId}"]`, { timeout: 20_000 });
+        await page.locator(`[data-init-card="${initId}"] .init-head-btn`).click();
+        await page.waitForSelector(`[data-init-card="${initId}"] [data-init-add]`, { timeout: 20_000 });
         const before = readFileSync(created.file, "utf8");
         await page.locator(`[data-init-card="${initId}"] [data-init-add]`).click();
         await page.selectOption(`[data-init-card="${initId}"] [data-init-field="addTree"]`, { label: "sso-one" });
@@ -361,6 +382,10 @@ try {
         check("one initiative now spans two projects and four worktrees", [four.initiatives[0].projectCount, four.initiatives[0].treeCount], [2, 4]);
         const overlay = await rowOf(trees.menuTwo);
         check("the snapshot's row carries the initiative, so the chart is fed by the store", (overlay?.initiatives || []).map((i) => i.title), ["SSO migration"]);
+        // Back to "remove": a detach still asks (the deny half below), while the second create and the edit further
+        // down are made at once, which is what those checks are about.
+        const askRemovals = await POST("/api/settings/initiative-tier", { tier: "remove" });
+        ok("the tier is set back to removals only", askRemovals.status === 200, `HTTP ${askRemovals.status} ${askRemovals.body?.initiativeTier || ""}`);
 
         // ---- 5. the folds --------------------------------------------------------------------------
         // TWO FOLDS, TWO STATES. The card starts as its title card (title, preview, counts) and a press anywhere on
@@ -417,7 +442,7 @@ try {
         const storeDesc = (await store()).initiatives[0].description;
         const titleCard = await cardState();
         ok("a card starts as its title card", /(^|\s)is-titlecard(\s|$)/.test(titleCard.group), titleCard.group);
-        ok("…whose title is the fold's own button, saying it is folded", titleCard.headTag === "BUTTON" && titleCard.open === false && /^[▸▾]\s*SSO migration/.test(titleCard.headText), `${titleCard.headTag} aria-expanded=${titleCard.open} ${titleCard.headText}`);
+        ok("…whose title is the fold's own button, saying it is folded", titleCard.headTag === "BUTTON" && titleCard.open === false && titleCard.headText.startsWith("SSO migration") && titleCard.headText.endsWith("▸"), `${titleCard.headTag} aria-expanded=${titleCard.open} ${titleCard.headText}`);
         check("…with the body behind the fold: no project folds, no worktree rows, no Edit", { projects: titleCard.projects, trees: titleCard.trees, edit: titleCard.edit }, { projects: 0, trees: 0, edit: 0 });
         check("the collapsed card shows the description's first two lines", titleCard.lines, 2);
         check("…and no header to fold: a title card has nothing inside it to fold", titleCard.hasDescHeader, false);
@@ -428,7 +453,7 @@ try {
           storeDesc.startsWith(previewText) && /^\s/.test(storeDesc.slice(previewText.length)),
           JSON.stringify(storeDesc.slice(Math.max(0, previewText.length - 14), previewText.length + 14)),
         );
-        ok("the preview is the rail's own prose, pre-wrapped so its breaks survive", titleCard.font === "11.5px" && titleCard.white === "pre-wrap", `${titleCard.font} ${titleCard.white}`);
+        ok("the preview is the rail's own prose at the body step, pre-wrapped so its breaks survive", titleCard.font === "12.5px" && titleCard.white === "pre-wrap", `${titleCard.font} ${titleCard.white}`);
         await shot("title-card-preview");
         await paneShot("title-card-preview-pane");
 
@@ -436,7 +461,7 @@ try {
         await page.locator(`[data-init-card="${initId}"] .init-title`).click();
         await page.waitForSelector(`[data-init-card="${initId}"] .init-project`, { timeout: 15_000 });
         const opened = await cardState();
-        ok("a press on the title card unfolds it", opened.open === true && /^▾/.test(opened.headText), `aria-expanded=${opened.open} ${opened.headText}`);
+        ok("a press on the title card unfolds it", opened.open === true && !/▸$/.test(opened.headText), `aria-expanded=${opened.open} ${opened.headText}`);
         check("…its body is drawn: two project folds, no worktree rows yet, Edit present", { projects: opened.projects, trees: opened.trees, edit: opened.edit }, { projects: 2, trees: 0, edit: 1 });
         ok("…and the description is whole, its own header saying so", opened.descOpen === true && opened.hasDescHeader && opened.descHeadTag === "BUTTON" && opened.dots === "", `desc aria-expanded=${opened.descOpen}`);
         check("expanded, the description is the store's description, breaks and all", opened.text, storeDesc);
@@ -521,7 +546,7 @@ try {
         const expectedTrees = unfoldedDoc.initiatives[0].projects.flatMap((p) => p.trees.map((t) => [t.name, t.branch || null]));
         check("unfolded, both projects show all four worktrees, each as a link on its branch", open.trees.map((t) => [t.name, t.branch || null]), expectedTrees);
         ok("…and every one of them is a link", open.trees.every((t) => t.link === "A"), open.trees.map((t) => t.link || "?").join(","));
-        ok("the worktree rows are the rail's own 11.5px", open.fontSizes.every((f) => f === "11.5px"), [...new Set(open.fontSizes)].join(","));
+        ok("the worktree rows are at the body step, 12.5px", open.fontSizes.every((f) => f === "12.5px"), [...new Set(open.fontSizes)].join(","));
         ok("the unfolded card is taller than the title card", open.height > titleCard.height, `${titleCard.height}px -> ${open.height}px`);
         await paneShot("unfolded-pane");
 

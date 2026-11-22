@@ -266,3 +266,51 @@ test("the abandoned gate answer is a chip of its own, not drawn as met or as can
   assert.match(html, /#2 was abandoned: the feed was retired/);
   assert.doesNotMatch(html, /data-gate-state="met"/);
 });
+
+test("the lane set is the wave's own row, not a flex item of the member strip", () => {
+  const twoLanes = lane.waveHtml(
+    wave({
+      lanes: [
+        { name: "cookie", state: "running", read: { ok: true }, trees: [{}], members: [{ id: 11, title: "the cookie lane", state: "running" }] },
+        { name: "login", state: "queued", read: { ok: true }, trees: [{}], members: [{ id: 13, title: "the login lane", state: "queued" }] },
+      ],
+      laneJoinOwed: true,
+    }),
+    null,
+  );
+  // Two lanes are a block of their own inside the wave row...
+  assert.match(twoLanes, /<div class="wave-lanes" data-wave-lanes="2">/);
+  // ...and NOT nested in the member strip: nested, the block was a flex item and shrank to its content, so the two
+  // lanes could only ever stack, however wide the pane was.
+  assert.doesNotMatch(twoLanes, /<div class="wave-members">\s*<div class="wave-lanes"/);
+  // The flat member row is not drawn beside the lanes either: one member list per wave, or the grouping reads twice.
+  assert.equal((twoLanes.match(/<div class="wave-members">/g) || []).length, 2, "one member list per lane, none beside them");
+  // A wave with no lanes keeps exactly the member strip it always drew.
+  const flat = lane.waveHtml(wave(), null);
+  assert.match(flat, /<div class="wave-members">/);
+  assert.doesNotMatch(flat, /wave-lanes/);
+});
+
+test("a lane set that cannot be isolated does not also promise a one-commit close", () => {
+  const lanes = [
+    { name: "a", state: "running", read: { ok: true }, trees: [{}], members: [] },
+    { name: "b", state: "queued", read: { ok: false, why: "both lanes hold the same tree" }, trees: [], members: [] },
+  ];
+  const refused = lane.waveHtml(wave({ lanes, laneJoinOwed: true, laneRefused: "cookie and login both hold tree x" }), null);
+  assert.match(refused, /The lanes cannot be isolated, so this wave cannot close/);
+  assert.match(refused, /cookie and login both hold tree x/);
+  // The join sentence would contradict the refusal, so it is not owed while the set is refused.
+  assert.doesNotMatch(refused, /data-wave-join/);
+  assert.doesNotMatch(refused, /ONE commit/);
+  const joined = lane.waveHtml(wave({ lanes, laneJoinOwed: true }), null);
+  assert.match(joined, /data-wave-join="2"/);
+  assert.match(joined, /ONE commit that names them all/);
+});
+
+test("the wave section head says the lane is a read, and keeps its count where it was", () => {
+  const html = lane.laneHtml({ id: "init_a", waves: [wave()] }, { readable: true, found: true });
+  // The count is the same chip a test already pinned; the sentence beside it is the tab's own statement that no
+  // press here writes a wave (round B 6.3).
+  assert.match(html, /Waves <span class="chip">1<\/span>/);
+  assert.match(html, /read from the wave store/);
+});
