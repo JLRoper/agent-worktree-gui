@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Waves, step 2: the exit gate reads evidence</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 24px 64px; background: #14161a; color: #d7dbe0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: #f2f5f8; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f2f5f8; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  .sub { color: #8b949e; margin: 0 0 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 6px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #242a31; vertical-align: top; }
+  th { color: #9aa4af; font-weight: 600; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { color: #9ecbff; }
+  pre { background: #1b1f25; border: 1px solid #262c34; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #cfd6dd; }
+  .met { color: #7ee787; } .unmet { color: #ff9c94; } .unknown { color: #f0c674; } .abandoned { color: #ff9c94; }
+  .cite { color: #7d8791; font-size: 12.5px; }
+  .box { background: #1b1f25; border: 1px solid #262c34; border-left: 3px solid #4d7ea8; border-radius: 4px; padding: 12px 14px; margin: 12px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Waves, step 2: the exit gate reads evidence</h1>
+  <p class="sub">1.153.0 - the four ways a member closes, the two facts behind them, and what each unreadable read answers.</p>
+
+  <div class="box">
+    The exit gate no longer believes a status word. It reads the pull request through the host's API and the member's
+    content on <code>origin/main</code>, and it answers <span class="met">met</span>, <span class="unmet">not met</span>,
+    <span class="abandoned">abandoned</span> or <span class="unknown">cannot tell</span>. <b>Cannot tell blocks.</b>
+  </div>
+
+  <h2>What a member has to show</h2>
+  <table>
+    <tr><th>Fact</th><th>Where it is read</th><th>What counts</th><th>What cannot</th></tr>
+    <tr>
+      <td>Its pull request reads MERGED</td>
+      <td><code>readWavePrForEvidence</code> <span class="cite">server.js:1873</span>, through the same PR index the board's PR cell reads</td>
+      <td>the API's <code>state</code> word, and the PR's <code>headRefOid</code> as the sha to judge</td>
+      <td>the row's stored <code>pr.state</code>, a row that says <code>done</code>, an index that does not hold the number</td>
+    </tr>
+    <tr>
+      <td>Its content is on main</td>
+      <td><code>readLanding</code> <span class="cite">lib/wave-evidence.js:92</span>: merge base, the files the change touched, then a diff of those files between the recorded sha and <code>origin/main</code></td>
+      <td>equal content in every touched file</td>
+      <td>ancestry, an "ahead by N" count, a commit that is merely reachable</td>
+    </tr>
+    <tr>
+      <td>Or a person abandoned it for a named reason</td>
+      <td><code>normAbandoned</code> <span class="cite">lib/assistant/queue.js:496</span>, folded by <code>namedAbandon</code> <span class="cite">lib/waves.js:356</span></td>
+      <td>a non-empty sentence, with who and when when given</td>
+      <td>a bare <code>true</code>, a blank reason, an empty object: a status word</td>
+    </tr>
+  </table>
+
+  <h2>Why content, and not ancestry</h2>
+  <p>
+    This repo lands by squash, which rewrites the sha. A landed member's commit is <b>not an ancestor</b> of main and
+    never will be, so <code>merge-base --is-ancestor</code> would refuse exactly the members that did land. The landing
+    read resolves the recorded sha and the main ref, takes the merge base, lists the files the change touched, and
+    diffs <i>only those files</i> between the sha and main. Equal content is the landing. Ancestry is recorded on the
+    answer (<code>ancestor: false</code> for a squash) and is never the verdict
+    <span class="cite">lib/wave-evidence.js:132-163</span>.
+  </p>
+  <p>The proof is a real repository, built by the test, not a stub:</p>
+  <pre>test("a squash-merged member still closes: the sha is not an ancestor, and the gate judged CONTENT")
+  git merge-base --is-ancestor &lt;member&gt; &lt;main&gt;   -> exits 1   (the squash rewrote the sha)
+  readLanding({ sha: &lt;member&gt;, mainRef: "origin/main" })
+  -> state "landed", ancestor false, mainSha &lt;the squash commit&gt;, paths ["lib/a.js"]</pre>
+  <p class="cite">test/wave-evidence.test.js - 13 tests, real git in a temp repository with a bare origin.</p>
+
+  <h2>What each answer does to the wave</h2>
+  <table>
+    <tr><th>Exit gate read</th><th>Wave</th><th>Why</th></tr>
+    <tr><td class="met">met</td><td>done</td><td>every member's PR is MERGED and its content is on main</td></tr>
+    <tr><td class="unknown">cannot tell</td><td>never done</td><td>an API that is down, a member with no PR, a sha the clone does not hold, a throwing read</td></tr>
+    <tr><td class="unmet">not met</td><td>never done</td><td>a PR reads OPEN, or a PR reads MERGED but its content is not on main</td></tr>
+    <tr><td class="abandoned">abandoned</td><td>abandoned</td><td>every live member is closed and at least one was abandoned for a named reason; the sentence names the member and the reason</td></tr>
+    <tr><td class="unknown">a running member</td><td>running</td><td>running is settled before any gate is read; an abandoned member that is still running still holds the wave</td></tr>
+  </table>
+  <p class="cite">deriveWaveState: lib/waves.js:505-532. judgeAnswers: lib/waves.js:374-388. readWaveGate: lib/waves.js:391-501.</p>
+
+  <h2>The closed vocabulary was not extended</h2>
+  <p>
+    Both checks this row needed already exist in the pipeline's 14 names: <code>pr-merged</code> and
+    <code>main-moved</code> <span class="cite">lib/pipelines.js:43-58</span>, with their parameters
+    (<code>main-moved: {remote, main}</code>) at <span class="cite">lib/pipelines.js:63-81</span>. No fifteenth name
+    was added. Of the 14, five now have an evaluator in this slice - <code>clean</code>, <code>commits</code>,
+    <code>pr-open</code>, <code>pr-merged</code> and <code>main-moved</code>, with the abandonment rule sitting above
+    every check - and the other nine still read <b>cannot tell</b> with the sentence that says no evaluator reads
+    them yet <span class="cite">lib/waves.js:494</span>.
+  </p>
+  <p>
+    A gate names <code>remote</code>/<code>main</code> params it does not use? Then the evidence is read against the
+    project's own main, and if the two refs differ the gate answers cannot tell instead of comparing two different
+    branches <span class="cite">lib/waves.js:477-492</span>.
+  </p>
+
+  <h2>Fail-closed, everywhere</h2>
+  <table>
+    <tr><th>Unreadable thing</th><th>Answer</th></tr>
+    <tr><td>the project's host has no PR endpoint, or the list cannot be read</td><td>cannot tell, with the host's sentence</td></tr>
+    <tr><td>the PR number is not in the list (an unread list looks the same)</td><td>cannot tell</td></tr>
+    <tr><td>the member records no PR</td><td>cannot tell - a row that says done says nothing about a PR</td></tr>
+    <tr><td>no sha, or a sha the clone does not hold</td><td>cannot tell</td></tr>
+    <tr><td><code>origin/main</code> does not resolve</td><td>cannot tell</td></tr>
+    <tr><td>git throws, exits non-zero, or answers nothing</td><td>cannot tell - the gate never becomes met because a reader failed</td></tr>
+    <tr><td>the evidence reader itself throws or answers no map</td><td>cannot tell for every member in the answer</td></tr>
+  </table>
+  <p>All of these are asserted, not just described: <span class="cite">test/wave-evidence.test.js</span>, and the throwing-reader case in <span class="cite">test/waves-derive.test.js</span>.</p>
+
+  <h2>The state is still derived on every read</h2>
+  <p>
+    No <code>state</code>, <code>doneAt</code>, <code>abandonedAt</code> or percentage is written to
+    <code>waves.json</code>. The fold runs on every <code>GET /api/waves</code> and on every
+    <code>GET /api/initiatives</code>, from the same members and the same evidence map, so the lane and the route cannot
+    disagree <span class="cite">routes/waves.js:117-138, routes/initiatives.js view()</span>. The only memo is a 30 s
+    cache of EVIDENCE per member, keyed by PR number and recorded sha, never of a state word
+    <span class="cite">server.js:1855-1920</span>. A task whose number or sha changes misses the memo at once.
+  </p>
+
+  <h2>The abandonment is a sentence, not a fifth state</h2>
+  <p>
+    The queue's four states stay the queue's <span class="cite">lib/assistant/queue.js TASK_STATES</span>. A person
+    abandons a member with a reason, recorded through the edit door (<code>editTask</code>,
+    <span class="cite">lib/assistant/queue.js:951</span>); the wave fold draws the member as
+    <span class="abandoned">abandoned</span> in place of the stale state word and closes the gate as abandoned, naming
+    the member and the reason <span class="cite">lib/waves.js:547-560, public/core/waves-lane.js memberHtml</span>.
+    An unnamed abandonment is refused: it cannot close a gate, and it cannot dodge a running member.
+  </p>
+
+  <h2>What the tests answered</h2>
+  <table>
+    <tr><th>File</th><th>Tests</th><th>What it pins</th></tr>
+    <tr><td>test/wave-evidence.test.js</td><td>13</td><td>squash landing by content, unlanded content, every unreadable read, the API head over a run's sha, the route's fail-closed answers</td></tr>
+    <tr><td>test/waves-derive.test.js</td><td>see the landing note</td><td>a running member holds the wave, a MERGED word without a live read is cannot tell, named vs unnamed abandonment, main-moved by content, a throwing read</td></tr>
+    <tr><td>test/waves-lane.test.js</td><td>17</td><td>the abandoned member chip and the abandoned gate chip</td></tr>
+    <tr><td>test/queue-wave-id.test.js</td><td>8</td><td>the abandonment round-trips, a bare flag normalises to none, the edit door sets and clears it</td></tr>
+  </table>
+</main>
+</body>
+</html>

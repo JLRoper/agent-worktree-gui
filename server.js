@@ -108,8 +108,12 @@ import { Initiatives, normTreePath } from "./lib/initiatives.js";
 import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.js";
 // The waves of work: an ordered, gated group of tasks inside one initiative (lib/waves.js), in their own store
 // keyed by initiative id. This slice is a READ: the lane in the Initiatives tab, and one GET beside it.
-import { Waves } from "./lib/waves.js";
+import { Waves, waveMemberKey } from "./lib/waves.js";
 import { WAVES_PATH, createWavesRoutes, waveTemplateLookup } from "./routes/waves.js";
+// The evidence a wave gate reads (lib/wave-evidence.js): the PR through the host's API, and the landing judged by
+// CONTENT on origin/main. The composition root owns the host mapping and the project registry, so the reader is
+// built here and handed to both routes that fold waves.
+import { prByNumber, readMemberEvidence, recordedShaOf } from "./lib/wave-evidence.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
 import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
@@ -1838,6 +1842,93 @@ const stateRoutes = createStateRoutes({ snapshot, sendJson });
 // The collisions handler is built further down, with the book it reads (the store is created beside the review lane).
 // A `const` here would be in its temporal dead zone at this point in the file, so the row resolves it per request.
 let collisionsHandle = null;
+
+// ---- the wave gate's live evidence ---------------------------------------------------------------------------------
+// A wave member closes on two facts, both read on the request that asks: its pull request's state through the host's
+// API (the same index the board's PR cell reads, with its 60 s TTL) and its content on the project's main branch,
+// judged BY CONTENT because this repo lands by squash - a landed sha is never an ancestor, so ancestry and "ahead by
+// N" are not evidence here.
+//
+// The read is memoised for 30 s per member because the Initiatives tab reloads every 4 s, and six local git calls per
+// member per repaint would make the tab the busiest thing on the box. The memo caches EVIDENCE, never a wave's state:
+// the fold still runs on every read, and a task whose PR number or recorded sha changes misses the memo at once.
+const WAVE_EVIDENCE_TTL_MS = 30_000;
+const WAVE_EVIDENCE_CACHE_MAX = 500;
+const waveEvidenceCache = new Map();
+
+function waveProjectNamed(name) {
+  const wanted = String(name || "").trim();
+  if (!wanted) return null;
+  return scheduler.getProjects().find((p) => p.name === wanted) || null;
+}
+
+function waveEvidenceFingerprint(task) {
+  const pr = task?.row?.pr && typeof task.row.pr === "object" ? task.row.pr : null;
+  return `${Number(pr?.number) || 0}|${recordedShaOf(task) || ""}|${String(task?.project || "")}|${String(task?.worktree || "")}`;
+}
+
+// The PR's state and its merged head, through the host. A number the list does not carry, an unmapped host and an
+// unread list all answer `ok: false` with a sentence: prIndex turns a down host into an empty list, so "not in the
+// list" is the honest answer for both, and the gate reads cannot tell either way.
+async function readWavePrForEvidence({ number, project }) {
+  const rec = project && typeof project === "object" ? project : waveProjectNamed(project);
+  if (!rec) return { ok: false, why: `pull request #${number} cannot be read: the member names no project this panel scans` };
+  const listing = prListing(docOf(hosts), rec);
+  if (!listing.url) return { ok: false, why: `pull request #${number} cannot be read: ${listing.why || `host "${rec.host || "?"}" has no pull-request endpoint`}` };
+  let index = null;
+  try {
+    index = await prIndex(rec, 60, hosts);
+  } catch (error) {
+    return { ok: false, why: `the pull-request list for ${rec.name} could not be read (${String((error && error.message) || error)})` };
+  }
+  const pr = prByNumber(index, number);
+  if (!pr) {
+    return { ok: false, why: `pull request #${number} was not in the list ${rec.name}'s host answered - an unread list and a missing pull request read the same, so this cannot be told` };
+  }
+  return {
+    ok: true,
+    pr: { number: pr.number, state: pr.state || null, mergedAt: pr.mergedAt || null, headRefOid: pr.headRefOid || null, headRefName: pr.headRefName || null },
+  };
+}
+
+// Every wave member's evidence for one read, keyed by the same `waveMemberKey` the fold buckets members by. A task in
+// no wave is skipped: it has no gate to feed.
+async function readWaveEvidence({ tasks = [], rowFor = () => null } = {}) {
+  const out = new Map();
+  const at = Date.now();
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    if (!task || typeof task !== "object" || !String(task.waveId || "").trim()) continue;
+    const key = waveMemberKey(task);
+    const print = waveEvidenceFingerprint(task);
+    const hit = waveEvidenceCache.get(key);
+    if (hit && hit.print === print && at - hit.at < WAVE_EVIDENCE_TTL_MS) {
+      out.set(key, hit.evidence);
+      continue;
+    }
+    const row = task.worktree ? rowFor(String(task.project || ""), task.worktree) : null;
+    const project = waveProjectNamed(task.project || row?.project);
+    const evidence = await readMemberEvidence({
+      task,
+      row,
+      project,
+      readPr: readWavePrForEvidence,
+      git: gitIn,
+      // The member's own tree while it exists (its object store has the PR head even after a delete, until it is
+      // pruned), else the project's checkout, whose store usually still holds the landed commits.
+      cwdFor: ({ task: t }) => {
+        const tree = String(t?.worktree || "").trim();
+        if (tree && existsSync(tree)) return tree;
+        return project?.path || null;
+      },
+      mainRef: `origin/${String(project?.mainBranch || "main")}`,
+    });
+    if (waveEvidenceCache.size >= WAVE_EVIDENCE_CACHE_MAX) waveEvidenceCache.clear();
+    waveEvidenceCache.set(key, { at, print, evidence });
+    out.set(key, evidence);
+  }
+  return out;
+}
+
 const PREFIX_MOUNTS = [
   // The per-assistant task queue (routes/assistant-queue.js). The factory takes the Assistant, which owns each queue's
   // file and its read-modify-write, and the transport helpers this file already imports.
@@ -1908,6 +1999,7 @@ const PREFIX_MOUNTS = [
       // that route cannot tell a reader two different states about one wave.
       waves,
       templateExists: waveTemplateExists,
+      waveEvidence: readWaveEvidence,
       log,
     }),
   },
@@ -1915,7 +2007,7 @@ const PREFIX_MOUNTS = [
   // record, the membership and the derived state can be judged before anything acts on them.
   {
     prefix: WAVES_PATH,
-    handles: createWavesRoutes({ waves, assistant, store, sendJson, templateExists: waveTemplateExists, log }),
+    handles: createWavesRoutes({ waves, assistant, store, sendJson, templateExists: waveTemplateExists, waveEvidence: readWaveEvidence, log }),
   },
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.

@@ -4936,6 +4936,7 @@ a.init-branch-link:hover { text-decoration: underline; }
 .wave-state.is-blocked { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .wave-state.is-unknown { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 .wave-state.is-done { color: #6fcf97; border-color: #2a4432; }
+.wave-state.is-abandoned { color: #ff9c94; border-color: #4a2a2a; background: #2a1a1a; }
 .wave-current { color: #ecd9ff; border-color: #55407a; background: #2a2044; }
 .wave-gates { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
 .wave-gate { font-size: 10.5px; padding: 2px 8px; }
@@ -4943,6 +4944,7 @@ a.init-branch-link:hover { text-decoration: underline; }
 .wave-gate.is-unmet { color: var(--dim); }
 .wave-gate.is-unknown { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .wave-gate.is-none { color: var(--dimmer); border-style: dashed; }
+.wave-gate.is-abandoned { color: #ff9c94; border-color: #4a2a2a; background: #2a1a1a; }
 .wave-auto { font-size: 10.5px; padding: 2px 8px; }
 .wave-auto.is-on { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .wave-auto.is-off { color: var(--dimmer); }
@@ -4956,6 +4958,7 @@ a.init-branch-link:hover { text-decoration: underline; }
 .wave-mstate.is-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .wave-mstate.is-parked { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .wave-mstate.is-done { color: #6fcf97; border-color: #2a4432; }
+.wave-mstate.is-abandoned { color: #ff9c94; border-color: #4a2a2a; background: #2a1a1a; }
 .wave-template { margin-top: 6px; overflow-wrap: anywhere; }
 .wave-unresolved { color: #ff9c94; font-weight: 600; }
 .wave-skipped { margin-top: 6px; }

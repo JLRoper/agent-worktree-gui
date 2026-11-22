@@ -18,9 +18,13 @@
 (function (root) {
   "use strict";
 
-  const GATE_WORDS = Object.freeze({ met: "met", unmet: "not met", unknown: "cannot tell", none: "no gate" });
+  const GATE_WORDS = Object.freeze({ met: "met", unmet: "not met", unknown: "cannot tell", none: "no gate", abandoned: "abandoned" });
   const MEMBER_STATES = Object.freeze(["queued", "running", "parked", "done"]);
-  const GATE_TONES = Object.freeze({ met: "is-met", unmet: "is-unmet", unknown: "is-unknown", none: "is-none" });
+  // What a member row may be DRAWN as. The four queue states are lib/assistant/queue.js's; `abandoned` is not a fifth
+  // state - it is a person's named decision recorded beside the row (lib/waves.js `waveMember`), and the lane draws it
+  // in place of the state word because a row that happens to say `queued` no longer describes work nobody will do.
+  const MEMBER_WORDS = Object.freeze([...MEMBER_STATES, "abandoned"]);
+  const GATE_TONES = Object.freeze({ met: "is-met", unmet: "is-unmet", unknown: "is-unknown", none: "is-none", abandoned: "is-abandoned" });
 
   function defaultEsc(value) {
     return String(value ?? "")
@@ -43,9 +47,10 @@
     return `<span class="chip wave-gate ${GATE_TONES[state]}" data-wave-gate="${esc(kind)}" data-gate-state="${esc(state)}" title="${esc(`${label}: ${gateWord(gate)}${why ? ` - ${why}` : ""}`)}">${esc(label)} - ${esc(gateWord(gate))}</span>`;
   }
 
-  /** One member: its id, its title, its project when it has one, and the task's own state. */
+  /** One member: its id, its title, its project when it has one, and the task's own state - or its named abandonment. */
   function memberHtml(member, esc = defaultEsc) {
-    const state = MEMBER_STATES.includes(member && member.state) ? member.state : "queued";
+    const abandoned = member && member.abandoned && String(member.abandoned.reason || "").trim() ? String(member.abandoned.reason).trim() : "";
+    const state = abandoned ? "abandoned" : MEMBER_STATES.includes(member && member.state) ? member.state : "queued";
     const id = member && member.id != null ? `#${member.id}` : "#";
     const project = member && member.project ? String(member.project) : "";
     const pipeline = member && member.pipeline ? String(member.pipeline) : "";
@@ -53,10 +58,11 @@
       member && member.title ? String(member.title) : "",
       project ? `project ${project}` : "",
       pipeline ? `pipeline ${pipeline}${member.pipelineFrom === "wave" ? " (the wave's template)" : ""}` : "",
+      abandoned ? `abandoned: ${abandoned}` : "",
     ]
       .filter(Boolean)
       .join(" - ");
-    return `<span class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}" title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b><span class="wave-member-title">${esc(member && member.title ? member.title : "")}</span>${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}<span class="chip wave-mstate ${MEMBER_STATES.includes(member && member.state) ? `is-${state}` : ""}">${esc(state)}</span></span>`;
+    return `<span class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b><span class="wave-member-title">${esc(member && member.title ? member.title : "")}</span>${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span></span>`;
   }
 
   /** One wave: position, title, the derived state word, the current mark, both gates, its template and its members. */
@@ -129,6 +135,7 @@
     GATE_WORDS,
     GATE_TONES,
     MEMBER_STATES,
+    MEMBER_WORDS,
     gateWord,
     gateChipHtml,
     memberHtml,
