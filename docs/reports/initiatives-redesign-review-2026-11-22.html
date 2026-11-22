@@ -532,14 +532,15 @@
 <p class="small">All five widths: 0 elements past the pane, 0 clipped controls, 15 controls in the open card, 8 in the folded shell; no control below the 28px target. The open card is 1164.4px at 479, 1429.2 at 347 and 1807.3 at 239; the 1440 float open card is 865.5. The last expanded card in the scroll fixture is 747px in a 727px pane.</p>
 
 <h3>Commands, as run</h3>
-<pre><span class="c"># the tree and the archived parent (no new worktree)</span>
+<pre><span class="c"># $SCRATCH is the per-run scratch dir; the probes are named in the method</span>
+<span class="c"># the tree and the archived parent (no new worktree)</span>
 git log --oneline -3
-git archive c2692598 | tar -x -C C:/Users/roper/AppData/Local/Temp/wag/3c71fc37/old
+git archive c2692598 | tar -x -C "$SCRATCH/old"
 
 <span class="c"># the panel, the fixture and the probes (scratch homes, free ports)</span>
-node C:/Users/roper/AppData/Local/Temp/wag/3c71fc37/probe-measure.mjs
-node C:/Users/roper/AppData/Local/Temp/wag/3c71fc37/probe-keyboard.mjs
-node C:/Users/roper/AppData/Local/Temp/wag/3c71fc37/probe-inventory.mjs
+node "$SCRATCH/probe-measure.mjs"
+node "$SCRATCH/probe-keyboard.mjs"
+node "$SCRATCH/probe-inventory.mjs"
 
 <span class="c"># the gates</span>
 node tools/verify-initiatives-tab.mjs
