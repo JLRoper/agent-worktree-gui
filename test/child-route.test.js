@@ -61,9 +61,15 @@ test("the child route cuts from the row's branch, records the cut, and hands the
   const noRow = await post(panel.base, "/api/worktree/child", { body: { project: "proj", path: path.join(base, "elsewhere") } });
   assert.equal(noRow.status, 404, "a path no row holds is a 404, not a cut somewhere else");
 
-  // The press. The name is the reader's; the tag is the server's.
+  // The parent branch names neither kind (it is a feature branch), so the route asks rather than guessing.
+  const ask = await post(panel.base, "/api/worktree/child", { body: { project: "proj", path: parentRow.path } });
+  assert.equal(ask.status, 409, `a parent that names neither kind asks first: ${ask.text.slice(0, 200)}`);
+  assert.equal(ask.json?.cut, false);
+  assert.equal(ask.json?.clarify?.choices?.length, 2, "the card offers exactly the two kinds");
+
+  // The press. The name is the reader's; the tag is the server's; the kind is the reader's answer to that card.
   const cut = await post(panel.base, "/api/worktree/child", {
-    body: { project: "proj", path: parentRow.path, name: "child of feat/parent" },
+    body: { project: "proj", path: parentRow.path, name: "child of feat/parent", kind: "turnover" },
   });
   assert.equal(cut.status, 200, `the cut must answer 200: ${cut.text.slice(0, 400)}`);
   const made = cut.json;
@@ -102,7 +108,7 @@ test("the child route cuts from the row's branch, records the cut, and hands the
   assert.equal(preview.json?.branch, made.branch);
 
   // A second press is a SECOND child of the same branch: the tag is what makes the name unique, so both stand.
-  const second = await post(panel.base, "/api/worktree/child", { body: { project: "proj", path: parentRow.path } });
+  const second = await post(panel.base, "/api/worktree/child", { body: { project: "proj", path: parentRow.path, kind: "turnover" } });
   assert.equal(second.status, 200, second.text.slice(0, 300));
   assert.notEqual(second.json.path, made.path);
   assert.notEqual(second.json.branch, made.branch);

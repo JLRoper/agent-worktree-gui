@@ -181,7 +181,7 @@ test("the keyboard step scrolls the popover, not the transcript", () => {
   assert.ok(revealBody, "revealSearchHit exists in public/assistant.js");
   assert.match(revealBody, /if \(keepList\) keepSearchRowVisible\(\)/, "a keyboard step keeps the current row in the list");
   assert.doesNotMatch(revealBody, /if \(keepList\)[^\n]*scrollIntoView/, "the removed defect: a keyboard step scrolling the transcript");
-  assert.match(revealBody, /if \(!keepList\) \{/, "the card reveal is guarded to Enter and a click");
+  assert.match(revealBody, /if \(pop && !keepList\) \{/, "the card reveal is guarded to Enter and a click");
   const movement = revealBody.slice(
     revealBody.indexOf("const pageY = window.scrollY;"),
     revealBody.indexOf("if (keepList) keepSearchRowVisible"),
@@ -191,7 +191,7 @@ test("the keyboard step scrolls the popover, not the transcript", () => {
     2,
     "two reveals, both inside the !keepList block: the turn and the mark",
   );
-  assert.ok(movement.indexOf("if (!keepList) {") < movement.indexOf("scrollIntoView("), "and no reveal outside that block");
+  assert.ok(movement.indexOf("if (pop && !keepList) {") < movement.indexOf("scrollIntoView("), "and no reveal outside that block");
   assert.ok(movement.includes("window.scrollTo({ top: pageY })"), "the window is still put back where the reader had it");
   assert.ok(keepBody, "keepSearchRowVisible exists in public/assistant.js");
   // The arithmetic MOVED into the shared popover module (public/core/search-popover.js), which both the turn search
