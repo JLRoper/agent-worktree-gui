@@ -128,6 +128,28 @@ test("the pool runs a meta job in a worker thread and hands back meta + trees", 
   }
 });
 
+test("the pool asks the queue to reserve the meta's and locals' slots", async () => {
+  const pool = new Pool(1);
+  try {
+    let seen = null;
+    // A refusing queue is the seam: it records what the pool asked for without needing a worker to run.
+    pool.scanQueue.enqueue = (args) => {
+      seen = args;
+      return { ok: false, reason: "queue-full" };
+    };
+    await assert.rejects(pool.meta(project), /deferred/);
+    assert.equal(seen.reserved, true, "the meta is admitted over the per-project row cap");
+    assert.equal(seen.priority, 0);
+    await assert.rejects(pool.locals(project, 0), /deferred/);
+    assert.equal(seen.reserved, true, "the locals read reserves its slot too");
+    // A row scan is NOT reserved: the cap still governs the scans it exists for.
+    await assert.rejects(pool.run({ wtPath: repo, project: project.name, depth: "fast" }), /deferred/);
+    assert.equal(seen.reserved, false);
+  } finally {
+    pool.close();
+  }
+});
+
 test("without a pool the pass still reads its own meta (a probe, a test, a bare Scheduler)", async () => {
   const patched = {};
   const config = { tierDays: 7, tierBuckets: 60, tierCheckSeconds: 60, slowSeconds: 300, threads: 1, scanMode: "all" };
