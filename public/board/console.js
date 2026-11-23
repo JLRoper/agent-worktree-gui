@@ -2473,7 +2473,8 @@ function reconcileThinking(prev, fresh) {
   if (!fresh.length) return prev;        // nothing authoritative yet: keep the growing preview
   const complete = fresh.map((b) => String(b.text ?? "")).join("\n\n");
   const kept = prev.filter((b) => !b || !b.live);
-  kept.push({ ...live[live.length - 1], text: complete, live: true });
+  // The complete text starts at the thought's first word, so the block's own offset goes back to 0 with it.
+  kept.push({ ...live[live.length - 1], text: complete, base: 0, live: true });
   kept.sort((a, b) => Number(a.at) - Number(b.at));
   return kept;
 }
@@ -3804,19 +3805,37 @@ function appendJobLine(evt) {
   // whole text from word 0 (see reconcileThinking / loadThinking). A finished
   // reasoning.available is the same reasoning under a different at — ignore it once a live
   // block exists, or the reader sees two copies of one thought.
+  //
+  // THE LIVE PREVIEW ARRIVES AS APPENDS. lib/jobs.js `flushReasoning` sends only the words since the last frame and
+  // names their offset in `thinkFrom`; the block is the same `at` throughout, so a contiguous chunk is spliced onto
+  // the copy this tab already holds and the pacer keeps typing where it was. A frame with no `thinkFrom` (or 0) is a
+  // whole block and still replaces - the finished line, and any sender that predates the offset.
   if (line.think) {
     const turn = state.jobs.get(evt.id);
     if (turn) {
       const at = Number(line.at) || Date.now();
       const entry = state.thinkCache.get(turn.id) || { blocks: [], at: 0 };
       const hasLive = entry.blocks.some((b) => b && b.live);
-      if (line.thinkOnly || !hasLive) {
+      const chunk = String(line.think);
+      const from = Number(line.thinkFrom) || 0;
+      const held = from > 0 ? entry.blocks.find((b) => b && b.live && Number(b.at) === at) : null;
+      // Where the block's own text starts inside the thought. 0 for a block that was streamed from its first word;
+      // the offset a tab joined at, for one that was picked up mid-block.
+      const base = held ? Number(held.base) || 0 : 0;
+      if (held && base + held.text.length === from) {
+        // Contiguous: this is the block this tab is already showing, grown by the words just sent.
+        held.text += chunk;
+        state.thinkCache.set(turn.id, { blocks: entry.blocks, at: Date.now() });
+        paintThink(turn, "");
+      } else if (line.thinkOnly || !hasLive) {
         // A live-streamed chunk drops stale store/available blocks: the pane shows exactly ONE
-        // growing block, never the finished copy alongside the streaming one.
+        // growing block, never the finished copy alongside the streaming one. A tab that joined mid-block (or whose
+        // stream dropped) holds nothing to splice onto, so its block starts at the offset the frame names: the pane
+        // shows the thought from where this tab attached, and the store read at settle paints all of it.
         const blocks = line.thinkOnly
           ? entry.blocks.filter((b) => b && b.live && Number(b.at) !== at)
           : entry.blocks.filter((b) => Number(b.at) !== at);
-        blocks.push({ at, text: String(line.think), ...(line.thinkOnly ? { live: true } : {}) });
+        blocks.push({ at, text: chunk, ...(line.thinkOnly ? { live: true, base: from } : {}) });
         blocks.sort((a, b) => Number(a.at) - Number(b.at));
         state.thinkCache.set(turn.id, { blocks, at: Date.now() });
         paintThink(turn, "");
@@ -3824,8 +3843,8 @@ function appendJobLine(evt) {
     }
   }
   // A streamed reasoning chunk (`line.thinkOnly`) is a PUSHED PREVIEW of one growing block, not a
-  // console line: lib/jobs.js emits it coalesced, keyed by a stable `at`, with the cumulative text so
-  // far. The `line.think` branch above just painted the 🧠 pane from it; returning here keeps it out
+  // console line: lib/jobs.js emits it coalesced, keyed by a stable `at`, as the words since the last frame. The
+  // `line.think` branch above just painted the 🧠 pane from it; returning here keeps it out
   // of the line-by-line hold, recordJobLine() and drawJobLine(). One frame per token would otherwise
   // flood the transcript and repaint the console. The marked `live` block stays authoritative while
   // the turn runs; the store poll adopts the finished text only once the turn settles (see loadThinking).

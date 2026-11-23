@@ -60,6 +60,41 @@ test("a stable at keeps one growing block across coalesced thinkOnly frames", ()
   assert.equal(entry.blocks[0].text, "abcdef", "the pane shows the cumulative text");
 });
 
+// The shipped shape: lib/jobs.js sends only the words since the last frame plus the offset they start at.
+test("a chunked live frame is appended onto the block this tab holds", () => {
+  const { append, state, turn, calls } = loadAppend();
+  append({ id: "turn-1", line: { think: "Let me ", thinkFrom: 0, at: 111, thinkOnly: true } });
+  append({ id: "turn-1", line: { think: "think.", thinkFrom: 7, at: 111, thinkOnly: true } });
+  const entry = state.thinkCache.get(turn.id);
+  assert.equal(entry.blocks.length, 1, "one growing block, not one per chunk");
+  assert.equal(entry.blocks[0].text, "Let me think.", "the pieces reassemble the block");
+  assert.equal(entry.blocks[0].at, 111, "the pacer lid never moves");
+  assert.equal(calls.paintThink, 2, "each chunk repaints the pane");
+});
+
+test("a chunk that does not continue what this tab holds starts the block at its offset", () => {
+  const { append, state, turn } = loadAppend();
+  // A tab that attached mid-block has no prefix to splice onto: the frame's chunk is what it can show, and the pane
+  // must not glue it onto an unrelated offset (that would silently splice out the words in between).
+  append({ id: "turn-1", line: { think: "later words", thinkFrom: 400, at: 111, thinkOnly: true } });
+  const entry = state.thinkCache.get(turn.id);
+  assert.equal(entry.blocks.length, 1);
+  assert.equal(entry.blocks[0].text, "later words", "the block starts where this tab attached");
+  assert.equal(entry.blocks[0].base, 400, "the offset it started at is recorded");
+  // The next chunk of the same block continues from there.
+  append({ id: "turn-1", line: { think: " and more", thinkFrom: 411, at: 111, thinkOnly: true } });
+  assert.equal(state.thinkCache.get(turn.id).blocks[0].text, "later words and more");
+});
+
+test("a gap in the offsets replaces the block rather than corrupting it", () => {
+  const { append, state, turn } = loadAppend();
+  append({ id: "turn-1", line: { think: "abc", thinkFrom: 0, at: 111, thinkOnly: true } });
+  append({ id: "turn-1", line: { think: "ghij", thinkFrom: 6, at: 111, thinkOnly: true } });
+  const entry = state.thinkCache.get(turn.id);
+  assert.equal(entry.blocks.length, 1);
+  assert.equal(entry.blocks[0].text, "ghij", "the words this tab never received are not invented");
+});
+
 test("a thinkOnly frame marks the block live so the store poll cannot re-key it", () => {
   const { append, state, turn } = loadAppend();
   append({ id: "turn-1", line: { think: "abc", at: 111, thinkOnly: true } });
