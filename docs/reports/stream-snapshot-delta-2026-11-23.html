@@ -36,7 +36,7 @@
 <body>
 <main>
 <h1>The stream pushed the whole board after every write</h1>
-<p class="sub">agent-worktree-gui 1.161.8. Row 256: what <code>/api/stream</code> costs a reader, what puts a full snapshot on it, the cut, and the same measurement after it. Every number below is from a run on this machine, and the file points are this branch's files.</p>
+<p class="sub">agent-worktree-gui 1.162.1. Row 256: what <code>/api/stream</code> costs a reader, what puts a full snapshot on it, the cut, and the same measurement after it. Every number below is from a run on this machine, and the file points are this branch's files.</p>
 
 <dl class="facts">
   <dt>base</dt><dd>origin/main <code>abde8ed6</code> (1.161.6); row 256 was written against 1.161.0, this branch was rebased onto 1.161.6</dd>
@@ -45,7 +45,7 @@
   <dt>the cut</dt><dd>lib/snapshot-delta.js:74 snapshotDelta; server.js:989 useDelta, server.js:1030 the push; public/settings.js:553 applySnapshotDelta; public/core/sse.js:63 <code>?shape=delta</code></dd>
   <dt>the instrument</dt><dd>tools/measure-stream-bytes.mjs (bytes by frame type, frame rate, full-state frames, one write, the console's own lines); tools/verify-stream-delta.mjs (a real page applying a real delta)</dd>
   <dt>the board measured</dt><dd>185 projects, 396 rows, 75 job cards, 190 rows carrying todos - the reader's own state, copied; state 3.30 MB, board frame 2.04 MB</dd>
-  <dt>raw numbers</dt><dd>stream-before-final.json, stream-after-final.json, live-before.json under <code>C:/Users/roper/AppData/Local/Temp/wag/8cd66866/</code></dd>
+  <dt>raw numbers</dt><dd>the run wrote stream-before-final.json, stream-after-final.json and live-before.json into its own scratch folder; <code>node tools/measure-stream-bytes.mjs --label &lt;name&gt;</code> writes a new pair wherever <code>--out</code> points</dd>
   <dt>verdict</dt><dd>a first load is 37% smaller, one write is 20x smaller, and a live console received the same 59 lines in the same 30 s</dd>
 </dl>
 
