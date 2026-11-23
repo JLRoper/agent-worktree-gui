@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.162.7 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.162.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-710 releases from v0.1.0 (2026-10-20) to v1.162.7 (2026-11-23), 2512 commits between the tags. Every release is anchored by an
+711 releases from v0.1.0 (2026-10-20) to v1.162.8 (2026-11-23), 2519 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.162.8 — 2026-11-23 · 7 commits
+
+[`73f7558`](https://github.com/JLRoper/agent-worktree-gui/commit/73f7558d6e26b07f6db7f3c0d69e5a04f5096e0b) · [compare v1.162.7...v1.162.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.7...v1.162.8)
+
+### Docs & tests
+
+- docs(reports): the pane's card count and the first-load timing, as the run measured them ([`c523714`](https://github.com/JLRoper/agent-worktree-gui/commit/c523714df80452ee82f32bba60b5c5850c7194e6))
+- docs(reports): the final-tip numbers after the rebase onto the read cache ([`9441065`](https://github.com/JLRoper/agent-worktree-gui/commit/9441065012c3be68af55bf588a916e566d06ddf6))
+- docs: render the changelog - 710 releases ([`2fb45c0`](https://github.com/JLRoper/agent-worktree-gui/commit/2fb45c082df342e02b5c1fba9e46a7a40b87e061))
+
+### Other
+
+- Measure one console-heavy turn's stream, frame by frame ([`5a28c34`](https://github.com/JLRoper/agent-worktree-gui/commit/5a28c34f0aa588b5dba5a4f96b20baa95a531908))
+- Send only the new words of the reasoning preview, not the whole block ([`b2d6f7a`](https://github.com/JLRoper/agent-worktree-gui/commit/b2d6f7ae942c37f63193a68f60177a70055ddef4))
+- Record what the reasoning preview cost before and after the fix ([`12d5e32`](https://github.com/JLRoper/agent-worktree-gui/commit/12d5e32109700110a2565c30c83239f0c9ca55d3))
+- chore: 1.162.8 - the version this landing carries ([`73f7558`](https://github.com/JLRoper/agent-worktree-gui/commit/73f7558d6e26b07f6db7f3c0d69e5a04f5096e0b))
 
 ## v1.162.7 — 2026-11-23 · 4 commits
 
