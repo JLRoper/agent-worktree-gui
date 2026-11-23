@@ -128,7 +128,10 @@ test("a dropped stream resumes at the last seq, one line per paragraph, and the 
   stub.send(words.map((w) => ({ event: "message.delta", delta: `${w} ` })));
   const live = () => jobs.jobs.get(job.id);
   await waitFor(() => live().eventCount === 40, { what: "40 deltas consumed" });
-  await waitFor(() => seen.sets > 0, { what: "the first throttled flush" });
+  // The flush of the PARAGRAPH, not just any set-frame: lib/jobs.js also rewrites the gateway wait line the moment the
+  // first event lands (mode: "set", kind "dim"), so "some set arrived" would be satisfied before a single fragment had
+  // been coalesced and the live-numbers check below would read that first frame's count.
+  await waitFor(() => seen.lines.some((l) => l.mode === "set" && l.kind === "text"), { what: "the first throttled flush of the paragraph" });
 
   const textLines = () => live().lines.filter((l) => l.kind === "text");
   assert.equal(textLines().length, 1, "40 deltas are ONE console line, not forty");

@@ -71,9 +71,33 @@ function isBookkeeping(l) {
   return Boolean(l && BOOKKEEPING_LINES.has(l.kind));
 }
 
-// A run of tool calls with nothing said in between is one burst. The console draws it as one row per tool with a
-// tally and the input of the last call - what the agent is doing, not every instance of it - while the full lines
-// stay one click away. Text ends the burst: the next tool call starts a fresh tally at that point in the transcript.
+// ---- gateway wait line
+// A run's stream can be empty for a minute while the gateway starts it - measured on run_1ab0c80b: POST at 15:09:01,
+// the first event of ANY kind at 15:10:24, and in between the card's head said "no events yet · 56s" while its BODY
+// said nothing at all. That is why a live run read as a dead panel. lib/jobs.js pushes one dim line into the body at
+// subscribe, marked `wait: "gateway"`; this draws it with an age that ticks IN PLACE (the card's one-second
+// `tickLiveClocks`, public/app.js), and past PULSE_SILENT_SECONDS it states the silence plainly. The claim is the
+// GATEWAY's - this panel holds the run's stream and has taken no event off it - and never what the model is doing.
+// The row stops waiting when the same line comes back as a `set` from lib/jobs.js (noteFirstEvent / noteNoEventAtSettle),
+// so there is never a second row about one wait.
+const GW_WAIT_STARTED = "run started - the gateway has sent nothing yet · ";
+const GW_WAIT_SILENT = "the run is still live - the gateway has sent nothing for ";
+
+function waitAgeSecs(at) {
+  return Math.max(0, (Date.now() - (Number(at) || Date.now())) / 1000);
+}
+
+// The sentence the row says now, with the age at its END so the ticker rewrites one slot and the words stay put.
+function waitLineWords(secs) {
+  return secs >= PULSE_SILENT_SECONDS ? GW_WAIT_SILENT : GW_WAIT_STARTED;
+}
+
+function waitLineHtml(l) {
+  const secs = waitAgeSecs(l.at);
+  return `<span data-gwait-label>${esc(waitLineWords(secs))}</span><span data-gwait-age>${esc(fmtSeconds(secs))}</span>`;
+}
+// ---- end gateway wait line
+
 // One console line. data-ltext/data-lkind carry the line itself rather than what it renders to, because a
 // burst rebuild reads the lines back out of the DOM (groupLines): a link, a running clock or a diff window's
 // markup must not change what the next render believes the line said.
@@ -87,10 +111,14 @@ function lineHtml(l, live = "", cls = "") {
   // The agent's own words are the one kind drawn as markdown (core/console-markdown.js): the markers it writes
   // are meant to be shapes. A tool line, a panel note and the run protocol keep the plain escaped line they have
   // always had — a diff's "+ added" is not a list item. Both paths escape first; neither ever injects HTML.
-  const body = consoleMdIsProse(kind) ? consoleMdInline(text) : linkifyText(text);
-  return `<div class="jl jl-${esc(kind)}${cls ? ` ${cls}` : ""}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${body}${live}</div>`;
+  const waiting = l.wait === "gateway";
+  const body = waiting ? waitLineHtml(l) : consoleMdIsProse(kind) ? consoleMdInline(text) : linkifyText(text);
+  return `<div class="jl jl-${esc(kind)}${waiting ? " jl-gwait" : ""}${cls ? ` ${cls}` : ""}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}"${waiting ? ` data-gwait="${Number(l.at) || Date.now()}"` : ""}>${body}${live}</div>`;
 }
 
+// A run of tool calls with nothing said in between is one burst. The console draws it as one row per tool with a
+// tally and the input of the last call - what the agent is doing, not every instance of it - while the full lines
+// stay one click away. Text ends the burst: the next tool call starts a fresh tally at that point in the transcript.
 function burstGroups(lines) {
   const out = [];
   let burst = null;
@@ -3996,14 +4024,21 @@ function drawJobLine(evt) {
         // One rule for both writers: append what the row is missing when it can, reparse it only when it must.
         drawRowText(existing, shownText);
         existing.dataset.ltext = String(line.text ?? "");
+        // The wait is over (lib/jobs.js annotated the same row): the sentence that replaced it is the record now, so
+        // the age stops ticking and no clock keeps writing over the annotation.
+        if (existing.dataset.gwait) {
+          delete existing.dataset.gwait;
+          existing.classList.remove("jl-gwait", "is-silent");
+        }
       } else if (consoleMdIsProse(line.kind)) {
         // The agent's own words join the block already open (a paragraph, a list, a fence) or start the next one.
         // Appending one row is the whole cost of a streamed line: nothing above it is repainted.
         indexSubtree(out, appendProseLine(out, line, streaming, shownText));
       } else {
         out._md = null;
+        const waiting = line.wait === "gateway";
         const div = document.createElement("div");
-        div.className = `jl jl-${line.kind || "raw"}`;
+        div.className = `jl jl-${line.kind || "raw"}${waiting ? " jl-gwait" : ""}`;
         // A chunk of normal output is a piece of the stream too: the same blank line above it, unless it is the
         // console's first piece. Only the 🌊 console draws that — this is the layout the condensed one already had.
         if (streaming && out.lastElementChild) div.classList.add("jl-sep");
@@ -4012,7 +4047,12 @@ function drawJobLine(evt) {
         // back out of the DOM, and this one must read as what was said rather than as what was drawn.
         div.dataset.ltext = String(line.text ?? "");
         div.dataset.lkind = String(line.kind || "raw");
-        drawRowText(div, shownText);
+        if (waiting) {
+          // The console's statement that a live run's stream has said nothing yet, with the age the card's clock
+          // ticks from this stamp. Drawn the same shape a repaint draws (public/board/console.js waitLineHtml).
+          div.dataset.gwait = String(Number(line.at) || Date.now());
+          div.innerHTML = waitLineHtml(line);
+        } else drawRowText(div, shownText);
         out.appendChild(div);
         indexSubtree(out, div);
       }

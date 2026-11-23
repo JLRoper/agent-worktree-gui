@@ -1846,6 +1846,20 @@ function tickLiveClocks() {
     // Past a minute it is the only moving part on the card, so it stops being quiet.
     target.classList.toggle("is-long", secs >= 60);
   }
+  // The gateway wait line (public/board/console.js waitLineHtml): a live run whose stream has sent nothing yet says
+  // so in the console BODY with an age, and the age is the only part that moves. Two slots, not one string: the words
+  // change ONCE at PULSE_SILENT_SECONDS and the age is rewritten every second, so the sentence never reflows for a
+  // digit. The row is not repainted: the same nodes are written, which is what keeps a scrolled console still.
+  for (const el of document.querySelectorAll("[data-gwait]")) {
+    const at = Number(el.dataset.gwait) || 0;
+    if (!at) continue;
+    const secs = Math.max(0, (Date.now() - at) / 1000);
+    el.classList.toggle("is-silent", secs >= PULSE_SILENT_SECONDS);
+    const label = el.querySelector("[data-gwait-label]");
+    if (label) label.textContent = waitLineWords(secs);
+    const age = el.querySelector("[data-gwait-age]");
+    if (age) age.textContent = fmtSeconds(secs);
+  }
 }
 
 setInterval(tickLiveClocks, 1000);
