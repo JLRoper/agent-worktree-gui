@@ -34,7 +34,7 @@ export const AUDIT_PATH = "/api/audit";
 // full snapshot carries. It is what the stream sends first and what the page can paint while the rest is built.
 export const BOARD_PATH = "/api/board";
 
-export function createStateRoutes({ snapshotText, boardText, sendJsonText } = {}) {
+export function createStateRoutes({ snapshotText, boardText, sendJsonText, fullReady = null } = {}) {
   if (typeof snapshotText !== "function") {
     throw new Error("createStateRoutes needs snapshotText from the composition root");
   }
@@ -55,7 +55,13 @@ export function createStateRoutes({ snapshotText, boardText, sendJsonText } = {}
     // be `return sendJson(...)` is `sendJson(...); return true` because `true` is the mount table's contract: this
     // row answered, so the chain stops here. The bytes on the wire are the same either way - the string itself now
     // comes from the snapshot cache, so a poll of an unchanged board reuses the one built for the last reader.
-    sendJsonText(res, 200, snapshotText());
+    //
+    // While the boot pass is still walking the fleet the answer is the BOARD frame, not the full snapshot: the boot
+    // suppresses every row frame until it finishes (see the store's gate), so a reader mid-boot can use the board
+    // and nothing else, and building the panes here cost 1.2-2.5s per poll on this loop. The boot's own
+    // broadcastSnapshot() delivers the full read to every client the moment it finishes.
+    const ready = typeof fullReady === "function" ? fullReady() : true;
+    sendJsonText(res, 200, ready ? snapshotText() : boardText());
     return true;
   };
 }

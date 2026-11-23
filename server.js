@@ -895,8 +895,15 @@ const SLOW_REQUESTS_KEPT = 20;
 const snapshotCache = createSnapshotCache({
   build: () => syncTiming.measure("snapshot construction", snapshotBody),
 });
+// The board frame's own cache, on the same invalidation. `/api/board` and the stream's first frame used to rebuild
+// and stringify 1.8 MB per request: 78ms with the loop free, 4.9s measured while a scan held it. `invalidateSnapshot`
+// bumps both generations, so the compact frame can never describe a state the full snapshot has already left.
+const boardCache = createSnapshotCache({
+  build: () => syncTiming.measure("board construction", boardSnapshot),
+});
 function invalidateSnapshot() {
   snapshotCache.invalidate();
+  boardCache.invalidate();
 }
 
 // The snapshot as TEXT, memoised by the cache's generation: /api/state and the stream's full frame read this instead
@@ -921,7 +928,7 @@ function boardSnapshot() {
 }
 
 function boardText() {
-  return syncTiming.measure("board serialization", () => JSON.stringify(boardSnapshot()));
+  return syncTiming.measure("board serialization", () => boardCache.text());
 }
 
 // A full-snapshot push after a write: invalidate FIRST so the frame carries current state,
@@ -1882,7 +1889,7 @@ if (config.dockMode != null) {
 //
 // The state read's handler is built once, above the table: `snapshot` is a function declaration further down this file
 // (hoisted, so this call is safe), and both of the state rows below are handed this one instance.
-const stateRoutes = createStateRoutes({ snapshotText, boardText, sendJsonText });
+const stateRoutes = createStateRoutes({ snapshotText, boardText, sendJsonText, fullReady: () => bootPassFinishedAt > 0 });
 // The collisions handler is built further down, with the book it reads (the store is created beside the review lane).
 // A `const` here would be in its temporal dead zone at this point in the file, so the row resolves it per request.
 let collisionsHandle = null;
@@ -4625,6 +4632,7 @@ const server = createServer(async (req, res) => {
         syncPhases: syncTiming.stats(),
         scanQueue: pool.stats(),
         snapshot: snapshotCache.stats(),
+        board: boardCache.stats(),
         slowRequests: { thresholdMs: config.logging.slowRequestMs, kept: slowRequests.length, recent: slowRequests.slice(-10) },
         stream: { clients: clients.size, ...streamMetrics },
         memoryMB: Math.round(process.memoryUsage().rss / 1048576),
@@ -6068,6 +6076,7 @@ const server = createServer(async (req, res) => {
         pool: { size: pool.size, inFlight: pool.inFlight, queued: pool.queued, completed: pool.completed },
         scanQueue: pool.stats(),
         snapshot: snapshotCache.stats(),
+        board: boardCache.stats(),
         store: store.stats,
         jobs: { total: jobs.jobs.size, running: jobs.list().filter((j) => j.status === "running").length },
         clients: clients.size,
@@ -7844,7 +7853,7 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (route === "/api/stream") return handleStream(req, res, { clients, boardText, snapshotText, metrics: streamMetrics });
+    if (route === "/api/stream") return handleStream(req, res, { clients, boardText, snapshotText, metrics: streamMetrics, fullReady: () => bootPassFinishedAt > 0 });
 
     return serveStatic(req, res, staticRoute, build);
   } catch (e) {
