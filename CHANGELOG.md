@@ -17,7 +17,7 @@ has no tag.
 
 ## v1.162.8 — 2026-11-23 · 7 commits
 
-[`73f7558`](https://github.com/JLRoper/agent-worktree-gui/commit/73f7558d6e26b07f6db7f3c0d69e5a04f5096e0b) · [compare v1.162.7...v1.162.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.7...v1.162.8)
+[`f2f33ad`](https://github.com/JLRoper/agent-worktree-gui/commit/f2f33adae501ab7a31595cf700054a1735d814b3) · [compare v1.162.7...v1.162.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.7...v1.162.8)
 
 ### Docs & tests
 
@@ -27,10 +27,10 @@ has no tag.
 
 ### Other
 
-- Measure one console-heavy turn's stream, frame by frame ([`5a28c34`](https://github.com/JLRoper/agent-worktree-gui/commit/5a28c34f0aa588b5dba5a4f96b20baa95a531908))
-- Send only the new words of the reasoning preview, not the whole block ([`b2d6f7a`](https://github.com/JLRoper/agent-worktree-gui/commit/b2d6f7ae942c37f63193a68f60177a70055ddef4))
-- Record what the reasoning preview cost before and after the fix ([`12d5e32`](https://github.com/JLRoper/agent-worktree-gui/commit/12d5e32109700110a2565c30c83239f0c9ca55d3))
-- chore: 1.162.8 - the version this landing carries ([`73f7558`](https://github.com/JLRoper/agent-worktree-gui/commit/73f7558d6e26b07f6db7f3c0d69e5a04f5096e0b))
+- Measure one console-heavy turn's stream, frame by frame ([`bfd7fd2`](https://github.com/JLRoper/agent-worktree-gui/commit/bfd7fd29122ebfdbf2fefc6483e9ccd51f215b67))
+- Send only the new words of the reasoning preview, not the whole block ([`f478e66`](https://github.com/JLRoper/agent-worktree-gui/commit/f478e66e867aedafb7b71f0efd92fd6f315e64c8))
+- Record what the reasoning preview cost before and after the fix ([`9eb1a5e`](https://github.com/JLRoper/agent-worktree-gui/commit/9eb1a5e94806c1bcb14c615347e9bb1181e27b93))
+- chore: 1.162.8 - the version this landing carries ([`f2f33ad`](https://github.com/JLRoper/agent-worktree-gui/commit/f2f33adae501ab7a31595cf700054a1735d814b3))
 
 ## v1.162.7 — 2026-11-23 · 4 commits
 
