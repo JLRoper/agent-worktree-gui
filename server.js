@@ -122,6 +122,8 @@ import { REPORTS_PATH, createReportsRoutes } from "./routes/reports.js";
 // CONTENT on origin/main. The composition root owns the host mapping and the project registry, so the reader is
 // built here and handed to both routes that fold waves.
 import { artefactPaths, prByNumber, readMemberEvidence, recordedShaOf } from "./lib/wave-evidence.js";
+// The read's phase clock (lib/read-profile.js); a route opens one only when it is asked with `?profile=1`.
+import { countOperation, noteFact, timeAsync } from "./lib/read-profile.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
 import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
@@ -2030,6 +2032,11 @@ let collisionsHandle = null;
 // the fold still runs on every read, and a task whose PR number or recorded sha changes misses the memo at once.
 const WAVE_EVIDENCE_TTL_MS = 30_000;
 const WAVE_EVIDENCE_CACHE_MAX = 500;
+// How many members one evidence read may have in flight. The read used to be strictly sequential - a hundred git
+// children at once is what it was avoiding - but a sequential read pays the sum of every member's host call and git
+// spawn, which is the shape that made a cold tab read minutes long. Four is enough to overlap the waits and small
+// enough that a repaint never becomes the busiest thing on the box.
+const WAVE_EVIDENCE_CONCURRENCY = 4;
 const waveEvidenceCache = new Map();
 
 function waveProjectNamed(name) {
@@ -2038,11 +2045,14 @@ function waveProjectNamed(name) {
   return scheduler.getProjects().find((p) => p.name === wanted) || null;
 }
 
-function waveEvidenceFingerprint(task, paths = []) {
+function waveEvidenceFingerprint(task, paths = [], checks = null) {
   const pr = task?.row?.pr && typeof task.row.pr === "object" ? task.row.pr : null;
   // The artefact paths are part of the key: the same member read for a different gate path is a different read, and a
-  // memo hit that answered for one path must never be handed to a gate asking about another.
-  return `${Number(pr?.number) || 0}|${recordedShaOf(task) || ""}|${String(task?.project || "")}|${String(task?.worktree || "")}|${artefactPaths(paths).join(",")}`;
+  // memo hit that answered for one path must never be handed to a gate asking about another. So is the CHECKS set: a
+  // member read for `file-exists` alone carries no pull request and no landing, and handing that answer to a
+  // `pr-merged` gate would read a field this entry never measured. `*` is the read-everything key.
+  const gateKey = checks === null || checks === undefined ? "*" : (Array.isArray(checks) ? [...checks].sort() : [checks]).join(",");
+  return `${Number(pr?.number) || 0}|${recordedShaOf(task) || ""}|${String(task?.project || "")}|${String(task?.worktree || "")}|${artefactPaths(paths).join(",")}|${gateKey}`;
 }
 
 // The PR's state and its merged head, through the host. A number the list does not carry, an unmapped host and an
@@ -2053,6 +2063,10 @@ async function readWavePrForEvidence({ number, project }) {
   if (!rec) return { ok: false, why: `pull request #${number} cannot be read: the member names no project this panel scans` };
   const listing = prListing(docOf(hosts), rec);
   if (!listing.url) return { ok: false, why: `pull request #${number} cannot be read: ${listing.why || `host "${rec.host || "?"}" has no pull-request endpoint`}` };
+  // The host that is actually asked, kept on the read's profile: a seam that reaches the network must name its host
+  // and how often, never just its milliseconds.
+  noteFact("pr.hosts", listing.id || rec.host || "unmapped");
+  countOperation("pr.host.calls");
   let index = null;
   try {
     index = await prIndex(rec, 60, hosts);
@@ -2074,42 +2088,61 @@ async function readWavePrForEvidence({ number, project }) {
 // wave driver, which reads right after a settle and would otherwise judge the merge that just happened with an answer
 // up to 30 s old. The tab's reads keep the memo; the driver's read is one per settle, not one per repaint. `paths`
 // are the artefact paths the requesting lane's `file-exists` gates name (routes pass `waveFileExistsPaths`), and they
-// ride into the read and into the memo key.
-async function readWaveEvidence({ tasks = [], rowFor = () => null, fresh = false, paths = [] } = {}) {
+// ride into the read and into the memo key. `checks` is the gate vocabulary the requesting answer contains, so a lane
+// whose gates read only an artefact does not pay for nineteen members' pull-request and landing reads.
+async function readWaveEvidence({ tasks = [], rowFor = () => null, fresh = false, paths = [], checks = null } = {}) {
   const out = new Map();
   const at = Date.now();
   const artefacts = artefactPaths(paths);
-  for (const task of Array.isArray(tasks) ? tasks : []) {
-    if (!task || typeof task !== "object" || !String(task.waveId || "").trim()) continue;
-    const key = waveMemberKey(task);
-    const print = waveEvidenceFingerprint(task, artefacts);
-    const hit = waveEvidenceCache.get(key);
-    if (!fresh && hit && hit.print === print && at - hit.at < WAVE_EVIDENCE_TTL_MS) {
-      out.set(key, hit.evidence);
-      continue;
+  const wanted = (Array.isArray(tasks) ? tasks : []).filter((task) => task && typeof task === "object" && String(task.waveId || "").trim());
+  // One artefact read per (tree, clone, ref, path) for this request: every member of a gated wave asks about the same
+  // artefact, and the read is the same read.
+  const pathCache = new Map();
+  // ONE MEMBER AT A TIME WAS THE OLD RULE, and it made the read the sum of every member's wait. The pool is bounded
+  // (`WAVE_EVIDENCE_CONCURRENCY`) so the panel still asks the box for a few children, never a hundred, and the memo
+  // below is consulted inside the worker so a warm member costs nothing.
+  let cursor = 0;
+  const worker = async () => {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= wanted.length) return;
+      const task = wanted[index];
+      const key = waveMemberKey(task);
+      const print = waveEvidenceFingerprint(task, artefacts, checks);
+      const hit = waveEvidenceCache.get(key);
+      if (!fresh && hit && hit.print === print && at - hit.at < WAVE_EVIDENCE_TTL_MS) {
+        out.set(key, hit.evidence);
+        continue;
+      }
+      const row = task.worktree ? rowFor(String(task.project || ""), task.worktree) : null;
+      const project = waveProjectNamed(task.project || row?.project);
+      const evidence = await timeAsync("evidence.member", () => readMemberEvidence({
+        task,
+        row,
+        project,
+        readPr: readWavePrForEvidence,
+        git: gitIn,
+        // The member's own tree while it exists (its object store has the PR head even after a delete, until it is
+        // pruned), else the project's checkout, whose store usually still holds the landed commits.
+        cwdFor: ({ task: t }) => {
+          const tree = String(t?.worktree || "").trim();
+          if (tree && existsSync(tree)) return tree;
+          return project?.path || null;
+        },
+        mainRef: `origin/${String(project?.mainBranch || "main")}`,
+        paths: artefacts,
+        checks,
+        pathCache,
+      }));
+      countOperation("evidence.members");
+      if (waveEvidenceCache.size >= WAVE_EVIDENCE_CACHE_MAX) waveEvidenceCache.clear();
+      waveEvidenceCache.set(key, { at, print, evidence });
+      out.set(key, evidence);
     }
-    const row = task.worktree ? rowFor(String(task.project || ""), task.worktree) : null;
-    const project = waveProjectNamed(task.project || row?.project);
-    const evidence = await readMemberEvidence({
-      task,
-      row,
-      project,
-      readPr: readWavePrForEvidence,
-      git: gitIn,
-      // The member's own tree while it exists (its object store has the PR head even after a delete, until it is
-      // pruned), else the project's checkout, whose store usually still holds the landed commits.
-      cwdFor: ({ task: t }) => {
-        const tree = String(t?.worktree || "").trim();
-        if (tree && existsSync(tree)) return tree;
-        return project?.path || null;
-      },
-      mainRef: `origin/${String(project?.mainBranch || "main")}`,
-      paths: artefacts,
-    });
-    if (waveEvidenceCache.size >= WAVE_EVIDENCE_CACHE_MAX) waveEvidenceCache.clear();
-    waveEvidenceCache.set(key, { at, print, evidence });
-    out.set(key, evidence);
-  }
+  };
+  const pool = Math.min(WAVE_EVIDENCE_CONCURRENCY, wanted.length);
+  await Promise.all(Array.from({ length: pool }, () => worker()));
   return out;
 }
 

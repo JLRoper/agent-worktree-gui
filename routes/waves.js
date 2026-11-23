@@ -36,12 +36,15 @@ import { statSync } from "node:fs";
 import { normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo } from "../lib/initiative-permissions.js";
 import { readBundle } from "../lib/pipeline-bundle.js";
+// The read's phase clock (lib/read-profile.js), off unless `?profile=1`.
+import { profileReport, timeAsync, timeSync, withProfile } from "../lib/read-profile.js";
 import {
   WAVE_GATE_CHOICES,
   WAVE_MEMBERS_MAX,
   WAVE_TITLE_MAX,
   WAVES_MAX,
   WAVES_VERSION,
+  waveEvidenceNeeds,
   waveFileExistsPaths,
   waveLane,
 } from "../lib/waves.js";
@@ -152,31 +155,40 @@ export function createWavesRoutes({
   // has already 409'd by the time this runs, and GET draws the 409 in its own shape.
   const laneView = async (initiativeId) => {
     const status = waves.statusOf();
-    const tasks = queueRows(assistant);
-    // The artefact paths THIS lane's gates will read. The evidence read is handed them, so a `file-exists` gate is
-    // judged on a path read on this request rather than on one nobody asked about.
-    const paths = waveFileExistsPaths(waves.wavesFor(initiativeId));
+    const tasks = timeSync("queues", () => queueRows(assistant));
+    // The wave records THIS answer folds. Their gates decide both halves of the read: the artefact paths a
+    // `file-exists` gate names, and which members owe an evidence read at all.
+    const records = timeSync("gate-paths", () => waves.wavesFor(initiativeId));
+    const needs = timeSync("gate-paths", () => waveEvidenceNeeds(records));
+    const paths = timeSync("gate-paths", () => waveFileExistsPaths(records));
+    // Only the members a gate here can read: a task in no wave, or in a wave whose gates judge its board row, has no
+    // field this answer draws from an evidence read. The fold below still gets every task, so the lane is unchanged.
+    const wanted = new Set(needs.waveIds);
+    const members = wanted.size ? tasks.filter((task) => wanted.has(String(task?.waveId ?? ""))) : [];
     // ONE evidence read per request, consulted by the entry and exit gate of every wave in the answer. A collector
     // that answers no map, throws, or never reached a member leaves `evidenceOf` answering null for it, and the gate
-    // reads cannot tell - the read is fail-closed by construction, never fail-open.
+    // reads cannot tell - the read is fail-closed by construction, never fail-open. `checks` narrows the halves the
+    // read asks the host and git for to the ones a gate in THIS answer consumes.
     let evidence = null;
     if (typeof waveEvidence === "function") {
       try {
-        const map = await waveEvidence({ tasks, rowFor, paths });
+        const map = await timeAsync("evidence", () => waveEvidence({ tasks: members, rowFor, paths, checks: needs.checks }));
         evidence = map instanceof Map ? map : null;
         if (!evidence) log("waves: the evidence reader answered no map, so every gate reads cannot tell");
       } catch (error) {
         log(`waves: the evidence read failed, so every gate reads cannot tell: ${String((error && error.message) || error)}`);
       }
     }
-    const lane = waveLane({
-      waves,
-      initiativeId,
-      tasks,
-      rowFor,
-      templateExists,
-      evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
-    });
+    const lane = timeSync("lane", () =>
+      waveLane({
+        waves,
+        initiativeId,
+        tasks,
+        rowFor,
+        templateExists,
+        evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
+      }),
+    );
     log(`waves: read ${lane.waves.length} wave${lane.waves.length === 1 ? "" : "s"} for ${initiativeId}`);
     return {
       at: new Date().toISOString(),
@@ -258,7 +270,17 @@ export function createWavesRoutes({
         });
         return true;
       }
-      sendJson(res, 200, await laneView(initiativeId));
+      // `?profile=1` asks the read for its own phases (lib/read-profile.js); the tab never sends it.
+      const wanted = String(params.get("profile") || "") === "1";
+      sendJson(
+        res,
+        200,
+        await withProfile(wanted, async () => {
+          const document = await laneView(initiativeId);
+          if (wanted) document.profile = profileReport();
+          return document;
+        }),
+      );
       return true;
     }
 
