@@ -4,16 +4,39 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.162.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.162.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-704 releases from v0.1.0 (2026-10-20) to v1.162.0 (2026-11-23), 2486 commits between the tags. Every release is anchored by an
+705 releases from v0.1.0 (2026-10-20) to v1.162.1 (2026-11-23), 2493 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.162.1 — 2026-11-23 · 7 commits
+
+[`69375f5`](https://github.com/JLRoper/agent-worktree-gui/commit/69375f58e5b095ef0b3c998dcc382b70f8ebf579) · [compare v1.162.0...v1.162.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.0...v1.162.1)
+
+### Fixed
+
+- fix(stream): a push with no tab attached still decorates the rows ([`a8569ca`](https://github.com/JLRoper/agent-worktree-gui/commit/a8569ca03c713e4e721b5441954585a92a398402))
+
+### Performance
+
+- perf(stream): a push carries what changed, not the whole board ([`76c49ab`](https://github.com/JLRoper/agent-worktree-gui/commit/76c49ab22ff7b755a49ec4c397d7fa8c5454a6fc))
+
+### Docs & tests
+
+- docs: render the changelog - 704 releases ([`1334d43`](https://github.com/JLRoper/agent-worktree-gui/commit/1334d430291ec9563bf0aa91c9e6fde5827d0b52))
+- test: the stream harness declares itself and is runnable by name ([`e7d6695`](https://github.com/JLRoper/agent-worktree-gui/commit/e7d6695873dfaa3c66cf74d668270cd02649fe95))
+- docs: the stream measurement, the cut, and the same numbers after it ([`ea68911`](https://github.com/JLRoper/agent-worktree-gui/commit/ea68911e917ededa515ad08315aaa07eb7fdc0ae))
+- docs: the suite's own findings in the report ([`5aee49a`](https://github.com/JLRoper/agent-worktree-gui/commit/5aee49ae0213b5b72b0585caab95e8b5330dbca1))
+
+### Other
+
+- chore: 1.162.1 - the version this landing carries ([`69375f5`](https://github.com/JLRoper/agent-worktree-gui/commit/69375f58e5b095ef0b3c998dcc382b70f8ebf579))
 
 ## v1.162.0 — 2026-11-23 · 3 commits
 
