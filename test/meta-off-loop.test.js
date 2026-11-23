@@ -48,7 +48,7 @@ test("projectMeta answers the same fields from one ref listing", async () => {
   assert.equal(meta.mainAhead, 0);
 });
 
-test("projectMeta starts three git processes, not six", () => {
+test("projectMeta starts two git processes: the remote probe and one ref listing", () => {
   const counter = path.join(repoRoot, "tools", "git-spawn-counter.cjs");
   const logFile = path.join(root, "spawn.log");
   const mod = pathToFileURL(path.join(repoRoot, "lib", "project.js")).href;
@@ -60,8 +60,11 @@ test("projectMeta starts three git processes, not six", () => {
   });
   assert.equal(child.status, 0, child.stderr || child.stdout);
   const lines = readFileSync(logFile, "utf8").split("\n").filter(Boolean);
-  assert.equal(lines.length, 3, `one remote probe + for-each-ref + rev-list, got:\n${lines.join("\n")}`);
+  assert.equal(lines.length, 2, `one remote probe + one for-each-ref, got:\n${lines.join("\n")}`);
   assert.match(lines.join("\n"), /for-each-ref/, "the ref listing is what replaced three of the five reads");
+  // The counter's log line is truncated, so the placeholder itself is proved by behaviour in
+  // test/boot-spawns.test.js (mainAhead/mainBehind from this one listing); here the absence is the claim.
+  assert.doesNotMatch(lines.join("\n"), /rev-list/, "the separate count process is gone");
 });
 
 test("a full pass takes the meta and the tree list from the pool, and reads nothing on its own thread", async () => {
