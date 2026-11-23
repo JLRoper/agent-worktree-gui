@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.159.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.159.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-697 releases from v0.1.0 (2026-10-20) to v1.159.0 (2026-11-23), 2461 commits between the tags. Every release is anchored by an
+698 releases from v0.1.0 (2026-10-20) to v1.159.1 (2026-11-23), 2466 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.159.1 — 2026-11-23 · 5 commits
+
+[`27f020e`](https://github.com/JLRoper/agent-worktree-gui/commit/27f020eaea576d44620fc87d4fc68cc5f9a25a25) · [compare v1.159.0...v1.159.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.159.0...v1.159.1)
+
+### Fixed
+
+- fix(initiatives): keep the reader's place when the pane repaints from its poll ([`6ddf740`](https://github.com/JLRoper/agent-worktree-gui/commit/6ddf7409e191fafd57e88fca00ac64bcd7661299))
+
+### Docs & tests
+
+- docs: render the changelog - 697 releases ([`35bd36a`](https://github.com/JLRoper/agent-worktree-gui/commit/35bd36ae9d006d30dc43103787d6de05d43d047e))
+- docs(reports): the pane's creep measured at 250 ms, the mechanism, the gate ([`c40e571`](https://github.com/JLRoper/agent-worktree-gui/commit/c40e5714280ff40256d88c0bae20077300fb82df))
+- docs(reports): the creep tables re-measured on the rebased tree ([`0cfef0b`](https://github.com/JLRoper/agent-worktree-gui/commit/0cfef0b761feee867017229ef6c32238b7f077cb))
+
+### Other
+
+- chore: 1.159.1 - the version this landing carries ([`27f020e`](https://github.com/JLRoper/agent-worktree-gui/commit/27f020eaea576d44620fc87d4fc68cc5f9a25a25))
 
 ## v1.159.0 — 2026-11-23 · 2 commits
 
