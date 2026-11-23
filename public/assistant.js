@@ -3424,6 +3424,10 @@
   let initEditId = ""; // the initiative whose words are in the edit form
   let initAddId = ""; // the initiative whose "add a worktree" picker is open
   let initDraft = { newTitle: "", newDesc: "", editTitle: "", editDesc: "", addTree: "" };
+  // THE WAVE DRAFT, one at a time: the open Add/Edit form on one initiative, kept here rather than in the DOM because
+  // every snapshot repaints the card under the caret. `base` is the record's own gates when editing, so a gate that
+  // carries parameters (a branch, an argv) is sent back UNCHANGED when the reader did not pick a different check.
+  let waveForm = null;
   // A read is not worth repeating on every 2 s snapshot, but it must not be stale either: four seconds is shorter
   // than the time it takes to open the tab, read a card and press Edit.
   const INIT_READ_GAP_MS = 4000;
@@ -3893,8 +3897,15 @@
       ${/* THE WAVE LANE (public/core/waves-lane.js). A lane inside this card, not a tab of its own: position, members and
            gate state, drawn from the same GET /api/initiatives read the rest of the card comes from. Every word is the
            server's fold - the state, the gate reads and which wave the stated order makes current - so a repaint cannot
-           disagree with the route, and nothing here writes a wave. */ ""}
-      ${wtWavesLane.laneHtml(init, initDoc?.waveStatus || null, esc)}
+           disagree with the route. The lane also AUTHORS a wave (Add, Edit, Up, Down, Delete); it still opens nothing,
+           closes nothing and starts nothing, and every write answers the server's own fold. */ ""}
+      ${wtWavesLane.laneHtml(init, initDoc?.waveStatus || null, esc, {
+        // A writer exists in this panel, so the section is drawn even on a card with no waves - that empty case is the
+        // only way to author the first one. The store's own unreadable state still wins inside the lane.
+        canWrite: !blocked,
+        form: waveForm && waveForm.initiativeId === init.id ? waveForm : null,
+        checks: Array.isArray(initDoc?.waveStatus?.gateChoices) ? initDoc.waveStatus.gateChoices : null,
+      })}
       <div class="init-side">
         <div class="init-sechead">Projects</div>
         <div class="init-projects">${projectsHtml}</div>
@@ -4058,7 +4069,7 @@
         ${initAboutOpen ? `<div class="init-about" data-init-about-body><p class="as-help">You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.</p></div>` : ""}
         <div class="init-meta">
           ${storeLine}
-          <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
+          <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative and wave changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
           <span class="as-hint init-read">${initLoading ? "reading…" : initErr ? `read failed: ${esc(initErr)}` : ""}</span>
         </div>
         ${newForm}
@@ -4211,6 +4222,132 @@
     renderAssistantInitiatives(true);
   }
 
+  // ---- the wave writer --------------------------------------------------------------------------------------------
+  // ONE FORM AT A TIME, ONE WRITE AT A TIME. A wave is authored as the seven fields its record has: the title, both
+  // gates, the template and the switch (create adds the position, move names one). Nothing here sends a state, a lane
+  // or a member - the server refuses those by name, and the answer's lane is the server's own fold, so the tab cannot
+  // paint a wave the store does not hold.
+  //
+  // A GATE'S PARAMETERS ARE KEPT UNLESS THE READER CHANGES THE CHECK. The one-line form can pick a parameter-free
+  // check, but an existing gate may carry a branch or an argv this form cannot draw. Its own check comes back as
+  // `undefined` (unchanged, so the parameters survive); a cleared gate comes back as `null`; a different check comes
+  // back as `{ check }` and the door validates it.
+  function waveGatePost(chosen, base) {
+    const want = String(chosen || "").trim();
+    const cur = base && typeof base === "object" ? base : null;
+    const was = cur && cur.check ? String(cur.check) : "";
+    if (!want) return null;
+    if (want !== was) return { check: want };
+    const params = cur ? Object.keys(cur).filter((key) => key !== "check") : [];
+    return params.length ? undefined : { check: was };
+  }
+
+  function openWaveForm(initiativeId, mode, wave) {
+    waveForm = {
+      initiativeId: String(initiativeId || ""),
+      mode: mode === "edit" ? "edit" : "add",
+      id: wave && wave.id ? String(wave.id) : "",
+      title: wave && wave.title ? String(wave.title) : "",
+      entry: wave && wave.entryGate && wave.entryGate.check ? String(wave.entryGate.check) : "",
+      exit: wave && wave.exitGate && wave.exitGate.check ? String(wave.exitGate.check) : "",
+      template: wave && wave.template ? String(wave.template) : "",
+      auto: Boolean(wave && wave.auto),
+      base: { entry: (wave && wave.entryGate) || null, exit: (wave && wave.exitGate) || null },
+      error: "",
+    };
+    renderAssistantInitiatives(true);
+    as$("as-initiatives")?.querySelector(`[data-wave-form="${CSS.escape(String(initiativeId))}"] [data-wave-field="title"]`)?.focus();
+  }
+
+  async function waveSave(initiativeId) {
+    const f = waveForm;
+    if (!f || f.initiativeId !== initiativeId) return;
+    const title = String(f.title || "").trim();
+    if (!title) {
+      f.error = "a wave needs a title - one line saying what this wave is";
+      renderAssistantInitiatives(true);
+      return;
+    }
+    const body = {
+      initiativeId,
+      title,
+      auto: f.auto === true,
+      template: String(f.template || "").trim() || null,
+    };
+    const entryGate = waveGatePost(f.entry, f.base?.entry);
+    const exitGate = waveGatePost(f.exit, f.base?.exit);
+    // `undefined` means "unchanged" and is omitted from the JSON, so a gate with parameters the form cannot draw is
+    // left exactly as the record holds it.
+    if (entryGate !== undefined) body.entryGate = entryGate;
+    if (exitGate !== undefined) body.exitGate = exitGate;
+    const editing = f.mode === "edit";
+    if (editing) body.id = f.id;
+    try {
+      const d = await initPost(editing ? "/api/waves/update" : "/api/waves", body);
+      if (d.asked) {
+        // Nothing was written: the dock holds the question, and the draft stays exactly as typed so answering it
+        // creates or edits the wave the reader was writing.
+        setInitNote(initiativeId, `${d.note || "asked - answer in the dock, bottom right"} (${editing ? "edit" : "create"} wave "${title}")`, false, d.id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      waveForm = null;
+      initReadAt = 0;
+      setInitNote(
+        initiativeId,
+        d.changed === false
+          ? `nothing changed - wave "${d.wave?.title || title}" already reads that way`
+          : `${editing ? "saved" : "created"} wave "${d.wave?.title || title}" at W${d.wave?.position ?? "?"} - its state is folded from its members, not stored`,
+        false,
+      );
+      await loadInitiatives();
+    } catch (err) {
+      f.error = String((err && err.message) || err);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  async function waveMove(initiativeId, id, to) {
+    try {
+      const d = await initPost("/api/waves/move", { initiativeId, id, to });
+      if (d.asked) {
+        setInitNote(initiativeId, `${d.note || "asked - answer in the dock, bottom right"} (move wave)`, false, d.id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      initReadAt = 0;
+      const order = (Array.isArray(d.order) ? d.order : []).map((w) => `W${w.position} ${w.id}`).join(", ");
+      setInitNote(initiativeId, d.changed === false ? "the order is already that one" : `reordered - ${order}`, false);
+      await loadInitiatives();
+    } catch (err) {
+      setInitNote(initiativeId, String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  async function waveRemove(initiativeId, id) {
+    try {
+      const d = await initPost("/api/waves/remove", { initiativeId, id });
+      if (d.asked) {
+        setInitNote(initiativeId, `${d.note || "asked - answer in the dock, bottom right"} (delete wave)`, false, d.id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      waveForm = null;
+      initReadAt = 0;
+      const n = Number(d.members) || 0;
+      setInitNote(
+        initiativeId,
+        `deleted wave "${d.wave?.title || id}"${n ? ` - ${n} task row${n === 1 ? "" : "s"} still name it and now belong to no wave` : " - no task row named it"}`,
+        false,
+      );
+      await loadInitiatives();
+    } catch (err) {
+      setInitNote(initiativeId, String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
   // One listener set for the life of the page, on the pane's own host: the cards inside it are rebuilt constantly, and
   // a listener per card would be a listener per snapshot.
   function wireInitiativesPane() {
@@ -4243,8 +4380,47 @@
         return;
       }
       if (kind !== "self") return;
-      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh], [data-init-about], [data-init-density]");
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh], [data-init-about], [data-init-density], [data-wave-add], [data-wave-edit], [data-wave-save], [data-wave-cancel], [data-wave-up], [data-wave-down], [data-wave-del]");
       if (!el) return;
+      // THE WAVE'S OWN CONTROLS (public/core/waves-lane.js). Each one posts a record's fields and repaints from the
+      // answer's lane, so the words on the card are always the server's fold. Add opens a form; it never creates a
+      // default-titled wave (decision 4), and Edit opens the same form with the record's own words.
+      if (el.dataset.waveAdd) {
+        e.preventDefault();
+        openWaveForm(String(el.dataset.waveAdd), "add", null);
+        return;
+      }
+      if (el.dataset.waveCancel) {
+        e.preventDefault();
+        waveForm = null;
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.waveSave) {
+        e.preventDefault();
+        void waveSave(String(el.dataset.waveSave));
+        return;
+      }
+      if (el.dataset.waveEdit || el.dataset.waveUp || el.dataset.waveDown || el.dataset.waveDel) {
+        e.preventDefault();
+        const attr = el.dataset.waveEdit ? "waveEdit" : el.dataset.waveUp ? "waveUp" : el.dataset.waveDown ? "waveDown" : "waveDel";
+        const [initiativeId, ...rest] = String(el.dataset[attr] || "").split("|");
+        const id = rest.join("|");
+        const init = (Array.isArray(initDoc?.initiatives) ? initDoc.initiatives : []).find((row) => String(row.id) === initiativeId) || null;
+        const waves = Array.isArray(init?.waves) ? init.waves : [];
+        const wave = waves.find((row) => String(row.id) === id) || null;
+        if (!wave) {
+          setInitNote(initiativeId, "that wave is no longer in this read - refreshing the tab", true);
+          initReadAt = 0;
+          void loadInitiatives().then(() => renderAssistantInitiatives(true));
+          return;
+        }
+        if (el.dataset.waveEdit) openWaveForm(initiativeId, "edit", wave);
+        else if (el.dataset.waveUp) void waveMove(initiativeId, id, Number(wave.position) - 1);
+        else if (el.dataset.waveDown) void waveMove(initiativeId, id, Number(wave.position) + 1);
+        else void waveRemove(initiativeId, id);
+        return;
+      }
       // THE TWO SHELL CONTROLS. About shows the one paragraph the card used to open with, word for word; density
       // rewrites ONE attribute on the pane, and the token layer's second block does the rest. Neither touches a store,
       // so both repaint from the document already held rather than asking the server a question.
@@ -4401,13 +4577,31 @@
     });
     // The words are kept outside the DOM: a snapshot repaints the card under the caret, and a draft the painter cannot
     // read back would erase what the reader had typed.
+    // THE OPEN WAVE FORM'S DRAFT. Typing in it must survive the snapshot repaint, so the value goes into `waveForm`
+    // and the repaint draws from there; nothing is sent until Create or Save. A checkbox answers through `change` on
+    // some browsers and `input` on others, so both listeners write it and the write is idempotent.
+    const readWaveField = (field) => {
+      if (!waveForm || !field) return false;
+      const which = String(field.dataset.waveField || "");
+      if (which === "title" || which === "entry" || which === "exit" || which === "template") {
+        waveForm[which] = String(field.value ?? "");
+        return true;
+      }
+      if (which === "auto") {
+        waveForm.auto = Boolean(field.checked);
+        return true;
+      }
+      return false;
+    };
     host.addEventListener("input", (e) => {
+      if (readWaveField(e.target.closest("[data-wave-field]"))) return;
       const field = e.target.closest("[data-init-field]");
       if (!field) return;
       const which = String(field.dataset.initField || "");
       if (which === "newTitle" || which === "newDesc" || which === "editTitle" || which === "editDesc") initDraft[which] = String(field.value ?? "");
     });
     host.addEventListener("change", (e) => {
+      if (readWaveField(e.target.closest("[data-wave-field]"))) return;
       const field = e.target.closest("[data-init-field]");
       if (field && field.dataset.initField === "addTree") initDraft.addTree = String(field.value ?? "");
     });
@@ -4427,7 +4621,8 @@
     // The dock's answer to a move question: the store has moved (or not), so the tab re-reads. The detail carries the
     // question's kind, which is how a push's answer does not cause a read this pane does not need.
     window.addEventListener("wtgui:remote-write-answered", (e) => {
-      if (String(e?.detail?.kind || "") !== "initiative") return;
+      const kind = String(e?.detail?.kind || "");
+      if (kind !== "initiative" && kind !== "wave") return;
       initReadAt = 0;
       if (state.assistantView.assistant === "initiatives") void loadInitiatives();
     });
