@@ -291,6 +291,23 @@ test("the lane set is the wave's own row, not a flex item of the member strip", 
   assert.doesNotMatch(flat, /wave-lanes/);
 });
 
+test("the closing note is a note: the count leads, and the lanes and the note are one block", () => {
+  const lanes = [
+    { name: "cookie", state: "running", read: { ok: true }, trees: [{}], members: [{ id: 11, title: "the cookie lane", state: "running" }] },
+    { name: "login", state: "queued", read: { ok: true }, trees: [{}], members: [{ id: 13, title: "the login lane", state: "queued" }] },
+  ];
+  const html = lane.waveHtml(wave({ lanes, laneJoinOwed: true }), null);
+  // One block holds the lanes and the note, so a wide pane can stand the note beside them (the sketch's callout).
+  assert.match(html, /<div class="wave-close"><div class="wave-lanes" data-wave-lanes="2">/);
+  // The count is a lead line of its own, not a prefix inside the sentence: the sketch draws "2 lanes" bold above it.
+  assert.match(html, /<div class="wave-join" data-wave-join="2"><b>2 lanes<\/b> <span>closing this wave is ONE commit that names them all<\/span><\/div>/);
+  // A refused set keeps its lanes and draws no note at all - the two sentences would contradict each other.
+  const refused = lane.waveHtml(wave({ lanes, laneJoinOwed: true, laneRefused: "both lanes hold tree x" }), null);
+  assert.match(refused, /wave-lanes" data-wave-lanes="2"/);
+  assert.doesNotMatch(refused, /wave-close/);
+  assert.doesNotMatch(refused, /data-wave-join/);
+});
+
 test("a lane set that cannot be isolated does not also promise a one-commit close", () => {
   const lanes = [
     { name: "a", state: "running", read: { ok: true }, trees: [{}], members: [] },

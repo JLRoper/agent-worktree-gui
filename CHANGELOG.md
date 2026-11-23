@@ -4,16 +4,57 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.157.9 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.157.11 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-691 releases from v0.1.0 (2026-10-20) to v1.157.9 (2026-11-22), 2438 commits between the tags. Every release is anchored by an
+693 releases from v0.1.0 (2026-10-20) to v1.157.11 (2026-11-23), 2450 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.157.11 — 2026-11-23 · 8 commits
+
+[`8427a71`](https://github.com/JLRoper/agent-worktree-gui/commit/8427a717679eed024c8935b0a3eb575330e73e37) · [compare v1.157.10...v1.157.11](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.10...v1.157.11)
+
+### Fixed
+
+- fix(docs): a report page can no longer be left behind unnoticed ([`d140cd8`](https://github.com/JLRoper/agent-worktree-gui/commit/d140cd8b6fa9505fff620590de828909ed732289))
+
+### Performance
+
+- perf: the boot spends two fewer git spawns per project and none on the board ([`f55d56a`](https://github.com/JLRoper/agent-worktree-gui/commit/f55d56aba9f50c2b64caccfa6e2051af2760205e))
+
+### Docs & tests
+
+- docs(reports): the proof home's own script, so the reproduce steps start where the run did ([`b5131a6`](https://github.com/JLRoper/agent-worktree-gui/commit/b5131a6fbc6829fce6600e00c2c7661460e0a19b))
+- docs(design): the wave write route, designed against the slice that reads waves and writes none ([`8fb30a6`](https://github.com/JLRoper/agent-worktree-gui/commit/8fb30a6983def9cc30069513cd1f31c6a6a420a7))
+- docs(reports): what happened to the original implementation - the code intact, one page lost ([`f44791c`](https://github.com/JLRoper/agent-worktree-gui/commit/f44791c6dfd9b805b629d4cc98ada6642ade7622))
+- docs: render the changelog - 692 releases ([`100deeb`](https://github.com/JLRoper/agent-worktree-gui/commit/100deeb092bf611396af44c7dda5cc6b59255ca0))
+
+### Other
+
+- chore: the gates and the focused set re-run on the rebased tree ([`1eb4a5a`](https://github.com/JLRoper/agent-worktree-gui/commit/1eb4a5ad84860d621c3f0e04bed02a6cae3c2271))
+- chore: 1.157.11 - the version this landing carries ([`8427a71`](https://github.com/JLRoper/agent-worktree-gui/commit/8427a717679eed024c8935b0a3eb575330e73e37))
+
+## v1.157.10 — 2026-11-22 · 4 commits
+
+[`cac4fd4`](https://github.com/JLRoper/agent-worktree-gui/commit/cac4fd482ba161ded486bfb827f83cc71f9297aa) · [compare v1.157.9...v1.157.10](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.9...v1.157.10)
+
+### Fixed
+
+- fix(initiatives): the closing note is a note, and at a wide pane it stands beside the lanes ([`30aa8bd`](https://github.com/JLRoper/agent-worktree-gui/commit/30aa8bd1d51eeffa2db04dd2b8636eddbce9c602))
+
+### Docs & tests
+
+- docs: render the changelog - 691 releases ([`cf72e29`](https://github.com/JLRoper/agent-worktree-gui/commit/cf72e299f86f7701bb066dc574707dc027c62b32))
+- docs(reports): the Route proved against THE SKETCH on an initiative with waves ([`cf4b506`](https://github.com/JLRoper/agent-worktree-gui/commit/cf4b506c9e9bd5bfd244e7d2936e0129a93c6718))
+
+### Other
+
+- chore: 1.157.10 - the landing note, the gate list, and no folder on this machine in the tree ([`cac4fd4`](https://github.com/JLRoper/agent-worktree-gui/commit/cac4fd482ba161ded486bfb827f83cc71f9297aa))
 
 ## v1.157.9 — 2026-11-22 · 3 commits
 

@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Route against THE SKETCH: proved on an initiative with waves, one gap closed</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #181d26; --sunk: #13181f; --line: #262c37; --hair: #3c424d;
+    --text: #e6e9ef; --dim: #9aa4b2; --meta: #7c8798;
+    --ok: #7ee787; --done: #6fcf97; --wait: #f0c674; --bad: #ff9c94; --info: #9ecbff; --violet: #c8a6ff; --link: #7fb2e8;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 48px 28px 120px; }
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 34px; }
+  .eyebrow { font: 600 11.5px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--meta); }
+  h1 { font-size: 33px; line-height: 1.18; letter-spacing: -.015em; margin: 14px 0 12px; font-weight: 650; }
+  .lede { font-size: 17px; line-height: 1.55; color: var(--dim); max-width: 80ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .meta b { color: var(--dim); font-weight: 600; }
+  h2 { font-size: 24px; line-height: 1.3; letter-spacing: -.01em; margin: 58px 0 6px; font-weight: 650; }
+  h2 .n { color: var(--meta); font: 600 13px/1 var(--mono); margin-right: 10px; vertical-align: 4px; }
+  h3 { font-size: 17px; line-height: 1.4; margin: 34px 0 8px; font-weight: 620; }
+  p { margin: 10px 0; max-width: 86ch; }
+  .kicker { color: var(--dim); max-width: 82ch; margin: 0 0 18px; }
+  ul, ol { max-width: 86ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 12.5px/1.5 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e2; }
+  pre { font: 12.5px/1.6 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #cfd6e2; }
+  pre code { background: none; border: 0; padding: 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(127,178,232,.3); }
+  a:hover { border-bottom-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); border-bottom-color: var(--hair); }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  tbody tr:hover td { background: rgba(255,255,255,.015); }
+  figure { margin: 20px 0 26px; }
+  figure img { display: block; width: auto; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--sunk); }
+  figcaption { font: 12px/1.55 var(--mono); color: var(--meta); margin-top: 9px; }
+  figcaption b { color: var(--dim); font-weight: 600; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; margin: 20px 0 30px; }
+  .duo figure { margin: 0; }
+  .duo .tag { font: 600 10.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--meta); margin-bottom: 6px; display: block; }
+  @media (max-width: 900px) { .duo { grid-template-columns: 1fr; } }
+  .note { border: 1px solid var(--hair); border-left: 3px solid var(--wait); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 26px 0 10px; }
+  .note h4 { margin: 0 0 8px; font-size: 13px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--wait); }
+  .note p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .b { display: inline-block; font: 600 9.5px/1.55 var(--mono); letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 1px 8px; border: 1px solid; vertical-align: 1px; white-space: nowrap; }
+  .b.m { color: var(--ok); border-color: rgba(126,231,135,.4); background: rgba(126,231,135,.08); }
+  .b.f { color: var(--wait); border-color: rgba(240,198,116,.4); background: rgba(240,198,116,.08); }
+  .b.d { color: var(--info); border-color: rgba(158,203,255,.4); background: rgba(158,203,255,.08); }
+  .b.bad { color: var(--bad); border-color: rgba(255,156,148,.4); background: rgba(255,156,148,.08); }
+  .sw { display: inline-block; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(255,255,255,.18); vertical-align: -2px; margin-right: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 14px 0 4px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .ok { color: var(--ok); } .warn { color: var(--wait); } .dead { color: var(--meta); }
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 16px 0; background: var(--sunk); }
+  summary { cursor: pointer; font: 600 12px/1.5 var(--mono); color: var(--dim); }
+  footer { margin-top: 70px; border-top: 1px solid var(--line); padding-top: 18px; font: 12px/1.6 var(--mono); color: var(--meta); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">agent-worktree-gui - Initiatives tab - round B, proof against the sketch</div>
+  <h1>The Route against THE SKETCH: proved on an initiative that has waves, one gap closed</h1>
+  <p class="lede">The tab was proved on an initiative with three ordered waves, six gate answers, an auto switch that
+  opened a wave, two lanes and four task cards. The spine, the stations, the gates, the lanes, the members and the
+  closing note all draw from that read. One sketch element was under-drawn - the closing note - and it is now a box
+  that stands beside the lanes. The other differences are named with the reason they were kept. The throwaway was
+  deleted, and the seven real initiatives still hold zero waves.</p>
+  <div class="meta">
+    <span><b>Cut from</b> <code>origin/main</code> <code>0ffebed</code> (1.157.6)</span>
+    <span><b>Landing carries</b> 1.157.7</span>
+    <span><b>Product files changed</b> <code>public/core/waves-lane.js</code>, <code>public/style.css</code>, one test</span>
+    <span><b>Measured</b> 2026-11-23, on a copy of the panel's state at 127.0.0.1:7332</span>
+    <span><b>The reader's panel</b> 127.0.0.1:7331, read only</span>
+  </div>
+</header>
+
+<h2 id="cause"><span class="n">1</span>The measured cause, reproduced</h2>
+<p class="kicker">Before any wave exists, the tab is not broken: it is empty. This is the state the brief named, read back
+with counts rather than described.</p>
+
+<p>On the reader's panel (<code>127.0.0.1:7331</code>, 1.157.6) every initiative read zero waves, so
+<code>lib/waves.js</code> folded no station, no gate and no lane, and the renderer drew exactly what it is allowed to
+draw when a card has none: the toolbar, the folded title card, the status word and the glyph slot.</p>
+
+<table>
+  <thead><tr><th>What the read answered</th><th>Count</th><th>Where it comes from</th></tr></thead>
+  <tbody>
+    <tr><td>initiatives in the store</td><td class="num">7</td><td><code>GET /api/initiatives</code> -&gt; <code>initiatives[]</code></td></tr>
+    <tr><td>folded title cards (<code>.init-card.is-titlecard</code>)</td><td class="num">7</td><td>all seven</td></tr>
+    <tr><td><code>.init-status</code> reading "no waves"</td><td class="num">7</td><td><code>public/core/initiative-fold.js:288</code> <code>routeGlyph</code></td></tr>
+    <tr><td>route dots (<code>.init-glyph i</code>)</td><td class="num">0</td><td>one dot per wave, so none</td></tr>
+    <tr><td>rows with <code>has-route</code></td><td class="num">0</td><td>class only when there is a dot</td></tr>
+    <tr><td><code>.wave-row</code> stations</td><td class="num">0</td><td><code>public/assistant.js:3896</code> calls <code>wtWavesLane.laneHtml</code></td></tr>
+    <tr><td><code>.wave-lanes</code> blocks</td><td class="num">0</td><td><code>public/core/waves-lane.js:184-205</code></td></tr>
+    <tr><td><code>waveStatus.found</code></td><td class="num">false</td><td>file <code>&lt;home&gt;\.wag\state\waves.json</code> does not exist</td></tr>
+  </tbody>
+</table>
+
+<figure>
+  <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/01-live-panel-1440.png" alt="The reader's Initiatives tab at 1440: seven folded rows, every status word no waves, no route dots" width="479">
+  <figcaption><b>The reader's panel, 1440 x 900, pane 479.</b> Seven folded rows; every status word "no waves"; no route
+  dots; no station, gate or lane anywhere. The same pixels are returned again in section 10 after the throwaway was
+  deleted (md5 <code>68eac45f</code>), which is the cleanup proof.</figcaption>
+</figure>
+
+<p>Why no wave can appear: a wave is not stored on the initiative. <code>lib/waves.js:323</code> <code>wavesFor</code>
+buckets the queue's tasks by <code>waveId</code> and folds each bundle through <code>deriveWaveState</code>
+(<code>lib/waves.js:885</code>); the lane set is derived from the members' <code>lane</code> field
+(<code>lib/waves.js:691</code>). With no task naming a wave, there is nothing to fold. And no route can create one:</p>
+
+<pre><code>routes/waves.js:110
+  sendJson(res, 405, { error: `${req.method} is not allowed on ${route} - this slice reads waves and writes none` });</code></pre>
+
+<p>So the tab's empty state is not a rendering defect. It is the store's state, and the tab says so in words on every
+row. The brief's measured cause is reproduced, and the rest of this page is what happens when the store has something
+in it.</p>
+
+<h2 id="seed"><span class="n">2</span>The throwaway, built through the panel's own routes</h2>
+<p class="kicker">One initiative, three ordered waves, both gates on every wave, one auto switch, two lanes on the third,
+four task cards naming two real worktrees. Everything the panel can create was created through its own POSTs.</p>
+
+<p>The proof ran on a copy of the reader's state, served at <code>127.0.0.1:7332</code> with
+<code>WAG_HOME</code> under the scratch directory, so no write could reach the panel the reader is using. The copy was
+seeded in this order:</p>
+
+<table>
+  <thead><tr><th>Step</th><th>Route</th><th>What it created</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td><code>POST /api/initiatives</code></td><td>the initiative "Sketch proof: Menu SSO migration", 8th in the list, id <code>init_mwsqvhzu_2ynjd8</code></td></tr>
+    <tr><td class="num">2</td><td><code>POST /api/initiatives/move</code> x2</td><td>two real worktrees attached: <code>oauth2-multi/.worktrees/pictureviewer-sso-option-a-implement-the-839d5a</code> and <code>Menu/.worktrees/modernize-the-menu-login-e4affd</code></td></tr>
+    <tr><td class="num">3</td><td><code>POST /api/assistant/queue</code> <code>action:"add"</code> x4</td><td>four task cards, each naming a <code>waveId</code>; the two on the third wave also name a <code>lane</code></td></tr>
+    <tr><td class="num">4</td><td><code>POST /api/assistant/queue</code> <code>action:"state"</code> x4</td><td>two moved to <code>done</code>, two to <code>running</code></td></tr>
+    <tr><td class="num">5</td><td>no route exists</td><td>the three wave records, written to the copy's <code>state/waves.json</code></td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <h4>The brief said "then the wave routes". There are none.</h4>
+  <p>The only writer of <code>waves.json</code> in the panel is a person with an editor: <code>routes/waves.js</code>
+  answers 405 to every method but GET (line 110, quoted above), and <code>lib/waves.js</code> exposes readers
+  (<code>wavesFor</code>, <code>deriveWaveState</code>, <code>waveLanes</code>, <code>waveAutoOpens</code>) and no
+  writer. The three wave records were therefore authored into the copy's store file by the seed script, and everything
+  else - the initiative, its two trees, its four tasks and their states - went through the panel's own routes. No DOM
+  was written by hand at any point: the render below is the shipped painter reading the store.</p>
+  <p>This is also the structural finding of this page: a reader cannot make a wave in the panel, so a real initiative
+  can never leave "no waves" without hand-editing a file. Section 8 says what must change for that, and section 2's
+  table is the shape that route would need to accept.</p>
+</div>
+
+<h3>What the read folded for the three waves</h3>
+<p>Every word below is the read's, not the seed's: the state word, the gate answers, the switch sentences and the lane
+reads all come back from <code>GET /api/initiatives</code> after the write.</p>
+
+<table>
+  <thead><tr><th>Station</th><th>Title</th><th>State</th><th>Gates</th><th>Auto</th><th>What opened it</th></tr></thead>
+  <tbody>
+    <tr><td class="num">W1 @1</td><td>Prove the Okta callback on the VIP</td><td><span class="ok">done</span></td><td>entry met, exit met</td><td>auto on</td><td>a person: it is first in the sequence</td></tr>
+    <tr><td class="num">W2 @2</td><td>One real two-factor login</td><td><span class="ok">done</span></td><td>entry met, exit met</td><td>auto off</td><td><b>opened by w.callback</b>: its auto is on and its exit gate reads met</td></tr>
+    <tr><td class="num">W3 @3</td><td>Cut the login page over behind the switch</td><td><span class="warn">running</span></td><td>entry met, exit met</td><td>auto off</td><td>a person: W2's switch is off, so it never opens W3</td></tr>
+  </tbody>
+</table>
+
+<p>W3 holds two lanes: <code>callback</code> (1 tree: the oauth2-multi worktree) and <code>login</code> (1 tree: the
+Menu worktree), both read <code>ok</code>, and the set answers <code>laneJoinOwed: true</code>, which is the sentence
+the closing note carries. The derivation reproduces the sketch's own example exactly: the sketch's 1.2 says "opened by
+w.callback", its 1.3 says "auto off" with no opener, and this read says the same two things about its own W2 and W3.</p>
+
+<h2 id="table"><span class="n">3</span>THE SKETCH, element by element</h2>
+<p class="kicker">Left column: what the sketch draws. Middle: the element that draws it here, with its selector. Right:
+the verdict and the reason. Numbers are measured on the wide pane (1382px) unless a width is named.</p>
+
+<div class="legend">
+  <span><span class="b m">matches</span> the element is there and says the same thing</span>
+  <span><span class="b f">fixed</span> it was under-drawn and the code moved</span>
+  <span><span class="b d">different</span> kept on purpose, with the reason</span>
+</div>
+
+<table>
+  <thead><tr><th style="width:27%">The sketch</th><th style="width:33%">The live element</th><th style="width:11%">Verdict</th><th style="width:29%">Why</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Toolbar: "Initiatives 4" with the count in the title, "4 in initiatives.json" under it, "ask me for everything" at the right, two buttons.</td>
+      <td><code>#as-initiatives .as-head</code> title and one-line description; a hint line "8 initiatives in initiatives.json"; the tier box "Initiative changes: ask me only to remove trees I attached myself"; four actions (New initiative, Refresh, About, Compact rows).</td>
+      <td><span class="b d">different</span></td>
+      <td>The count moved to the line the buttons left, and the hint states the tier in force (here <code>own</code>, not the sketch's "everything"): four actions do not fit beside a title at the 479px docked pane, and the tier sentence is the tab's own security statement (<code>routes/initiatives.js</code> tier read per request).</td>
+    </tr>
+    <tr>
+      <td>Folded row: a route dot per wave at the left, current one ringed.</td>
+      <td><code>.init-glyph i</code> in a reserved 27px slot, one dot per wave, tone from the wave's folded state, <code>is-current</code> ringed; <code>aria-hidden</code> with the status word carrying the fact. Measured: 3 dots, <code>is-done, is-done, is-running is-current</code>.</td>
+      <td><span class="b m">matches</span></td>
+      <td>The slot is reserved on every row (<code>public/style.css:5155-5167</code>), so titles keep one left edge across a ledger where only some rows have a route.</td>
+    </tr>
+    <tr>
+      <td>Folded row: the status word at the far right, with the chevron beside it ("W3 running v").</td>
+      <td><code>.init-status</code> "W3 running" at the end of the counts run; <code>.init-caret</code> absolutely at the row's right edge (8px in).</td>
+      <td><span class="b d">different</span></td>
+      <td>The counts are one sentence by decision (<code>public/style.css:5219-5232</code>: "Three counts, a status word and the provenance line share one 11.5px row"), and the right edge belongs to the provenance and the chevron. At the 239px pane a right-aligned status would leave the title about 100px. Ranked as change 2 in section 7 if the ledger grows.</td>
+    </tr>
+    <tr>
+      <td>Folded row: a one-line preview cut with three dots.</td>
+      <td><code>.init-desc.is-cut</code>, cut on a canvas and backed to a whole word (<code>public/core/initiative-fold.js:87</code> <code>cut</code>), re-cut on rail resize; two lines at every width here.</td>
+      <td><span class="b m">matches</span></td>
+      <td>Two lines is the live allowance; the cut never lands mid-word, which the sketch's dots do not promise either way.</td>
+    </tr>
+    <tr>
+      <td>Folded row: counts, then "edited 6h ago by assistant-1".</td>
+      <td>chips "2 projects . 2 worktrees . 1 assistant" plus <code>.init-meta</code> "edited 15m ago by assistant-3", pushed right by <code>margin-left:auto</code>.</td>
+      <td><span class="b m">matches</span></td>
+      <td>The attribution comes from the store's <code>updatedAt</code>/<code>updatedBy</code>; at narrow panes it wraps to its own line, which the sketch has no narrow case for.</td>
+    </tr>
+    <tr>
+      <td>Open card: description on the left, a PROJECTS column at the right with per-tree counts and "+ Add a worktree".</td>
+      <td><code>.init-side</code> with the section head "Projects", <code>.init-project</code> rows "Menu 1 tree" and "oauth2-multi 1 tree", <code>.init-add</code> "+ Add a worktree". Measured at 1382: the column is 785px wide beside a 543px description.</td>
+      <td><span class="b m">matches</span></td>
+      <td>Below a 900px container the block moves under the description instead of squeezing; the sketch has no narrow case.</td>
+    </tr>
+    <tr>
+      <td>Open card meta: counts, edit attribution, Edit at the end of the line.</td>
+      <td><code>.init-chips</code> with the same three counts, the status word, the attribution; <code>.init-mini</code> "Edit" in the title row, right-aligned.</td>
+      <td><span class="b m">matches</span></td>
+      <td>The control moved to the head so it sits beside the title it edits; the facts on the line are the sketch's.</td>
+    </tr>
+    <tr>
+      <td>The spine: one line down the block with a station per wave.</td>
+      <td><code>.init-waves::before</code> at <code>left:9px</code>, 2px; each <code>.wave-row::before</code> paints its own stretch in its state colour from <code>data-wave-state</code> (<code>public/style.css:5424-5466</code>).</td>
+      <td><span class="b m">matches</span></td>
+      <td>The colour is the server's attribute, so a stretch can never disagree with the chip beside it. This is closer to the sketch's picture than round B's own token sheet, which drew a spine per row.</td>
+    </tr>
+    <tr>
+      <td>A coloured dot at each station on the spine.</td>
+      <td><code>.wave-pos</code>: a 22x22 circle on the line, mono 10.5px, border and text in the station's state colour; the current station gets a 2px border and a run-tinted fill.</td>
+      <td><span class="b m">matches</span></td>
+      <td>The mark carries the number, so the number needs no second label; the state colour is the same colour the spine stretch and the chip use.</td>
+    </tr>
+    <tr>
+      <td>Station numbering "1.1 / 1.2 / 1.3".</td>
+      <td>"W1 / W2 / W3" (<code>.wave-pos</code>, from the wave's <code>position</code>).</td>
+      <td><span class="b d">different</span></td>
+      <td>The leading number in the sketch is the card's ordinal in a list that reorders by edit time (<code>updatedAt</code>), so the same wave would change its number under the reader. W&lt;position&gt; is the store's own order and does not move when the card does.</td>
+    </tr>
+    <tr>
+      <td>Station title, then the state word at the far right in small caps ("DONE", "RUNNING").</td>
+      <td><code>.wave-title</code> plus a <code>.wave-state</code> pill beside it ("done", "running"), 10.5px, with a state dot; a "current" chip follows on the current station. Measured: the chip starts 209px into a 1282px head.</td>
+      <td><span class="b d">different</span></td>
+      <td>Round B's own token sheet settles it: <code>docs/assets/initiatives-redesign/b/tokens.css:400</code> - "The state belongs to the title, not to the far edge of a 1380px row: pack it beside the name and let the template take a line of its own". The live comment at <code>public/style.css:5481</code> repeats it, and the word stays the store's lowercase state rather than a painted cap.</td>
+    </tr>
+    <tr>
+      <td>Gate chips: "entry clean met", "exit clean met", "auto on".</td>
+      <td><code>.wave-gate.is-met</code> "entry clean - met", "exit clean - met" with a 5px answer dot; <code>.wave-auto.is-on</code> "auto on" in warn, <code>.is-off</code> in idle; W2 adds the violet "opened by w.callback" (<code>public/core/waves-lane.js:51-57</code>, the opened-by chip at <code>127</code>).</td>
+      <td><span class="b m">matches</span></td>
+      <td>Each chip names the check and the read's answer; the dash before the answer is the live wording, and the colour is never the only signal.</td>
+    </tr>
+    <tr>
+      <td>A "current" chip on the station the order makes current.</td>
+      <td><code>.wave-current</code> (violet) on W3, from <code>waveCurrentId</code>.</td>
+      <td><span class="b m">matches</span></td>
+      <td>The read names the current station (running first, then ready, then not entered); the chip says which.</td>
+    </tr>
+    <tr>
+      <td>Template line: "template 'turnover' unreviewed - the bundle does not hold this id".</td>
+      <td><code>.wave-template</code> "template sefl-review-loop - members that name none inherit it"; an unresolved id draws "unresolved - the bundle does not hold this id" in <code>--tab-bad</code>.</td>
+      <td><span class="b m">matches</span></td>
+      <td>The same sentence in both shapes: the id, and whether the bundle holds it. This run's template resolved, so the resolved wording is the one drawn.</td>
+    </tr>
+    <tr>
+      <td>A nested task card per station: id, title, a second line naming the project/tree, the state at the right.</td>
+      <td><code>.wave-member</code>: <code>#483</code>, the title, a mono project tag (<code>oauth2-multi</code>), a state chip (<code>done</code>). At a 900px+ container it is a 4-column manifest (44px id / title / 150px project / 80px state) capped at 760px (<code>public/style.css:5592-5607</code>).</td>
+      <td><span class="b m">matches</span></td>
+      <td>The sketch stacks the project under the title; the manifest is the documented choice so two members compare down a column. The member's state is the task's own, never the wave's.</td>
+    </tr>
+    <tr>
+      <td>Two lane cards side by side, each "auth/callback - running" and "runs in 1 tree", with its own task card.</td>
+      <td><code>.wave-lanes</code> grid, <code>.wave-lane</code> x2 with the chip "lane callback - running" and "runs in 1 tree"; members inside their lane. Side by side at a 900px+ container (535px each after the fix), stacked below it.</td>
+      <td><span class="b m">matches</span></td>
+      <td>A lane block is drawn only when the wave holds more than one lane (<code>public/core/waves-lane.js:98-105</code>), which is the same condition the close depends on.</td>
+    </tr>
+    <tr>
+      <td><b>The closing note</b>: a box at the right of the lanes, "2 lanes" bold above "closing this wave is ONE commit that names them all".</td>
+      <td>Before: a full-width 11.5px ink-3 line above the lanes ("2 lanes - closing this wave is ONE commit that names them all"). After: <code>.wave-close</code> holding the lanes and a boxed <code>.wave-join</code> whose count is a bold lead; beside the lanes at 900px+, above them below.</td>
+      <td><span class="b f">fixed</span></td>
+      <td>The one element the renderer under-drew. Section 4 has the measurements. <code>public/core/waves-lane.js:146-157</code>, <code>public/style.css:5530-5544</code>, and a new test at <code>test/waves-lane.test.js:294</code>.</td>
+    </tr>
+    <tr>
+      <td>Assistants and History as two open columns at the card's foot.</td>
+      <td>Two disclosure rows (<code>.init-assistfold</code> "Assistants 1", <code>.init-histfold</code> "History 3") that open to the same rows, stacked.</td>
+      <td><span class="b d">different</span></td>
+      <td>Folded is the documented choice - the card stays a map, and the counts are on the closed row. They stack at every width because each is an independent section of the card, not a paired column; the folds already save the vertical space the sketch's pair was saving.</td>
+    </tr>
+    <tr>
+      <td>No section head above the stations.</td>
+      <td><code>.init-sechead</code> "Waves 3" with the note "read from the wave store" (<code>public/core/waves-lane.js:207</code>).</td>
+      <td><span class="b d">different</span></td>
+      <td>The line states where every word below it comes from and that nothing there writes a wave - the tab's read-only boundary, which the sketch does not draw because the sketch assumes waves can be made.</td>
+    </tr>
+    <tr>
+      <td>No border around a station; the nested cards carry the border.</td>
+      <td><code>.wave-row</code> is a bordered plate on <code>--tab-row</code>; the current station is raised with <code>--tab-e1</code>.</td>
+      <td><span class="b d">different</span></td>
+      <td>The plate groups a station's gates, lanes and note into one block, and gives the current station an edge to differ by; measured at 1308px wide, the unboxed row leaves the gate chips floating between stations with nothing holding them.</td>
+    </tr>
+    <tr>
+      <td>A wave-less card: the row shape, with "no waves" at the right.</td>
+      <td><code>.init-status</code> "no waves" with the idle tone, 0 dots, no <code>has-route</code>, and no wave section at all (<code>laneHtml</code> returns "").</td>
+      <td><span class="b m">matches</span></td>
+      <td>An empty section on every card is a box a reader learns to skip; the row shape and the words are the sketch's.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><b>21 rows: 13 match, 1 fixed, 7 deliberately different.</b> The seven differences are not omissions: each is a
+decision the code states in a comment or the token sheet states in a line, and each keeps a fact the sketch's picture
+does not have to carry. The one element that was genuinely under-drawn is the closing note.</p>
+
+<h2 id="fix"><span class="n">4</span>The one fix: the closing note</h2>
+<p class="kicker">The sentence that says what closing costs was the least-read sentence in the wave. It is now a note,
+and at a wide pane it stands where the sketch puts it: beside the lanes it is about.</p>
+
+<div class="duo">
+  <figure>
+    <span class="tag">Before - the line above the lanes</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/02-wide-before.png" alt="Wide pane before the fix: the closing sentence is a thin line above two 637px lanes">
+    <figcaption><b>Pane 1382.</b> The join is a 1282 x 17 line of 11.5px ink-3 at (71, 497); the lanes are 637px each and
+    carry the full width. Contrast of that sentence on the row fill: <b>4.84:1</b> (recomputed here from the token
+    values).</figcaption>
+  </figure>
+  <figure>
+    <span class="tag">After - the note beside them</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/03-wide-after.png" alt="Wide pane after the fix: the closing note is a boxed callout at the right of two 535px lanes">
+    <figcaption><b>Pane 1382.</b> <code>.wave-close</code> is one row: two 535px lanes and a 196 x 87 note at x=1157 on
+    <code>--tab-sunken</code> with a 2px <code>--tab-line-strong</code> lead edge. "2 lanes" is the lead in
+    <code>--tab-ink</code>; the sentence is <code>--tab-ink-2</code>, <b>9.14:1</b> on that fill.</figcaption>
+  </figure>
+</div>
+
+<p>What changed, in three files:</p>
+
+<ul>
+  <li><code>public/core/waves-lane.js:146</code> - the join keeps its <code>data-wave-join="2"</code> attribute and its
+  words, and gains a lead: <code>&lt;b&gt;2 lanes&lt;/b&gt; &lt;span&gt;closing this wave is ONE commit that names them
+  all&lt;/span&gt;</code>.</li>
+  <li><code>public/core/waves-lane.js:155-157</code> - the lanes and the note are wrapped in one <code>.wave-close</code>
+  block when both are owed, so the note can stand beside them. A refused lane set keeps its lanes and draws no note:
+  the two sentences would contradict each other, and the existing test for that still passes.</li>
+  <li><code>public/style.css:5530-5544</code> - the note's box (border, 2px lead edge, sunken fill, 8px radius) and the
+  container query at 900px that turns the block from a column into a row with a 196px note.</li>
+  <li><code>test/waves-lane.test.js:294</code> - one test: the block wraps, the count leads, and a refused set draws
+  neither the block nor the note.</li>
+</ul>
+
+<h3>The cost, measured</h3>
+<table>
+  <thead><tr><th>Pane</th><th>Before</th><th>After</th><th>What it costs</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1382 (float)</td><td>note 1282x17 line at y=497; lanes 637x70 and 637x70</td><td>note 196x87 at x=1157; lanes 535x87 and 535x87</td><td>each lane gives up 102px. One member row wraps to two lines ("Validate the Okta callback against the VIP"), so the lane row grows 70 -&gt; 87 (+17px). The note and the lanes are the same height, so nothing below moves by more than that 17px.</td></tr>
+    <tr><td class="num">479 (1440 docked)</td><td>note 379x17 at y=618, above the lanes</td><td>close block 379x231, note 379x53 below the lanes at y=802</td><td>none: the lanes keep 379px and the note is full width under them.</td></tr>
+    <tr><td class="num">347 (768)</td><td>line above, 247 wide</td><td>379 -&gt; note 247 wide, three lines under the lanes</td><td>none; the whole block fits a 900px viewport (891px of wave block).</td></tr>
+    <tr><td class="num">239 (480)</td><td>line above, 139 wide</td><td>note 139 wide, three lines, under the lanes</td><td>none; the block is 1289px tall and scrolls, as it did before.</td></tr>
+  </tbody>
+</table>
+
+<p>The full block at the docked and narrow widths:</p>
+
+<div class="duo">
+  <figure>
+    <span class="tag">479 pane - after</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/05-docked-479-after.png" alt="The wave block at the 479px docked pane after the fix: three stations, two stacked lanes, the note below them">
+    <figcaption><b>1440 window, docked, pane 479.</b> Three stations on the spine, six met gate chips, "auto on" on W1,
+    "opened by w.callback" on W2, two lanes stacked, the note full width under them.</figcaption>
+  </figure>
+  <figure>
+    <span class="tag">479 pane - before</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/04-docked-479-before.png" alt="The same block before the fix: the closing sentence is a thin line between the gates and the lanes">
+    <figcaption><b>The same pane, before the fix.</b> The sentence sits between the gates and the lanes as a 17px line,
+    which is why it read as a caption for the lanes rather than as the note about closing them.</figcaption>
+  </figure>
+</div>
+
+<div class="duo">
+  <figure>
+    <span class="tag">347 pane - after</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/06-pane-347-after.png" alt="The whole wave block at a 347px pane after the fix">
+    <figcaption><b>768 window, pane 347.</b> The whole block in one view: stations, gates, two stacked lanes and the
+    note. Nothing overflows; the note is the last thing in the station.</figcaption>
+  </figure>
+  <figure>
+    <span class="tag">239 pane - after</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/08-pane-239-after-note.png" alt="The bottom of the wave block at a 239px pane: the note under the lanes">
+    <figcaption><b>480 window, pane 239, scrolled to the note.</b> Two lanes 139px wide, then the note: "2 lanes" on its
+    own line, the sentence over three lines. The top of the same block is
+    <a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/07-pane-239-after-top.png">07</a>.</figcaption>
+  </figure>
+</div>
+
+<h2 id="tokens"><span class="n">5</span>The visual system as tokens, with values, on a real capture</h2>
+<p class="kicker">The tab's look is a token layer: 30 named values under <code>#as-initiatives</code>. The table is the
+layer; the capture above it is the layer applied to a real read. Contrast is recomputed here with the WCAG 2.1 formula,
+not quoted.</p>
+
+<table>
+  <thead><tr><th>Token</th><th>Value</th><th>Where it lands in the capture</th></tr></thead>
+  <tbody>
+    <tr><td><code>--tab-ground</code></td><td><span class="sw" style="background:#0f1115"></span>#0f1115</td><td>the app ground behind the pane</td></tr>
+    <tr><td><code>--tab-surface</code></td><td><span class="sw" style="background:#141922"></span>#141922</td><td>member pills, the station marker's fill</td></tr>
+    <tr><td><code>--tab-row</code></td><td><span class="sw" style="background:#171d27"></span>#171d27</td><td>every station plate</td></tr>
+    <tr><td><code>--tab-raised</code></td><td><span class="sw" style="background:#1c2330"></span>#1c2330</td><td>the current station's gradient top, the project tag's fill</td></tr>
+    <tr><td><code>--tab-sunken</code></td><td><span class="sw" style="background:#10151c"></span>#10151c</td><td>lane blocks and, after the fix, the closing note's fill</td></tr>
+    <tr><td><code>--tab-line</code></td><td><span class="sw" style="background:#232a36"></span>#232a36</td><td>plate, chip and note borders</td></tr>
+    <tr><td><code>--tab-line-strong</code></td><td><span class="sw" style="background:#35404f"></span>#35404f</td><td>the spine's unreached stretch, the lane and note 2px lead edges</td></tr>
+    <tr><td><code>--tab-ink</code></td><td><span class="sw" style="background:#e9edf4"></span>#e9edf4</td><td>station titles, the note's count - 14.41:1 on <code>--tab-row</code></td></tr>
+    <tr><td><code>--tab-ink-2</code></td><td><span class="sw" style="background:#aeb8c6"></span>#aeb8c6</td><td>member titles, the note's sentence - 8.43:1 on row, 9.14:1 on sunken</td></tr>
+    <tr><td><code>--tab-ink-3</code></td><td><span class="sw" style="background:#7f8a9a"></span>#7f8a9a</td><td>gate names, counts, template line - 4.84:1 on row, 5.04:1 on surface</td></tr>
+    <tr><td><code>--tab-accent</code></td><td><span class="sw" style="background:#3fb950"></span>#3fb950</td><td>a done station's marker text and spine stretch - 6.66:1</td></tr>
+    <tr><td><code>--tab-run</code> + <code>-bg</code> + <code>-line</code></td><td><span class="sw" style="background:#56d364"></span>#56d364 / rgba(46,160,67,.14) / .42</td><td>the running station: marker border, chip, spine stretch - 8.78:1</td></tr>
+    <tr><td><code>--tab-warn</code> + bg + line</td><td><span class="sw" style="background:#e3b341"></span>#e3b341</td><td>"auto on", the current station's 2px marker border - 8.69:1</td></tr>
+    <tr><td><code>--tab-idle</code> + line</td><td><span class="sw" style="background:#8b95a5"></span>#8b95a5</td><td>"auto off", "auto wait", "no waves" - 5.59:1</td></tr>
+    <tr><td><code>--tab-bad</code> + bg + line</td><td><span class="sw" style="background:#ff7b72"></span>#ff7b72</td><td>an abandoned station, an unresolved template id</td></tr>
+    <tr><td><code>--tab-fs-title</code> / <code>--tab-fs-meta</code> / <code>--tab-fs-chip</code></td><td>13px / 11.5px / 10.5px</td><td>station titles (measured 13px, 600), the template line and lane read, every chip including the station number</td></tr>
+    <tr><td><code>--tab-lh-tight</code> / <code>--tab-lh-body</code></td><td>1.25 / 1.6</td><td>station titles / member rows</td></tr>
+    <tr><td><code>--tab-s1</code> .. <code>--tab-s6</code></td><td>4 / 8 / 12 / 16 / 24 / 32px</td><td>the 12px plate padding, the 8px gaps, the 16px section gap</td></tr>
+    <tr><td><code>--tab-r1</code> .. <code>--tab-r4</code>, <code>--tab-r-pill</code></td><td>4 / 8 / 12 / 16px, 999px</td><td>project tag, member and note radius, station plate, every chip</td></tr>
+    <tr><td><code>--tab-chip-h</code> / <code>--tab-member</code> / <code>--tab-row-h</code></td><td>20px / 26px / 32px</td><td>chip height (measured 20px), a member's minimum (26px), a row's minimum</td></tr>
+    <tr><td><code>--tab-font-mono</code></td><td>the UI's mono stack</td><td>the station number, the member id, the project tag</td></tr>
+    <tr><td><code>--tab-ring</code></td><td>2px solid #79b8ff</td><td>focus on every control in the tab</td></tr>
+  </tbody>
+</table>
+
+<p>Two of these values moved in this landing: the note's fill (<code>--tab-sunken</code>) and its lead edge
+(<code>--tab-line-strong</code>) are new applications, not new tokens. No token value was added, changed or renamed, so
+the token layer the tab shipped with is the token layer the sketch's values describe.</p>
+
+<h2 id="keep"><span class="n">6</span>What the tab gets right, and what a restyle must not take</h2>
+<p class="kicker">These are the claims the lane makes in its own header (<code>public/core/waves-lane.js:1-26</code>) and
+in the CSS comments beside each rule. Each one has a wrong answer that still looks right in a screenshot.</p>
+
+<ul>
+  <li><b>The state word is the read's, not the record's.</b> A wave has no stored state; the lane draws
+  <code>wave.state</code>, folded on that read by <code>deriveWaveState</code> (<code>lib/waves.js:885</code>). A painter
+  that defaulted a missing state to "ready" would draw a wave the server never called ready.</li>
+  <li><b>A gate chip is an answer, not a label.</b> "met", "not met", "cannot tell", "no gate" and "abandoned" are five
+  answers (<code>public/core/waves-lane.js:30</code>), because "the work is not there" and "the panel cannot see it" are
+  different facts. The chip's title carries the sentence behind the answer.</li>
+  <li><b>A lane block appears only when the wave holds more than one lane</b> (<code>waves-lane.js:98-105</code>). A wave
+  with no lane of its own holds one implicit lane and is drawn as it was before lanes existed.</li>
+  <li><b>The join sentence is owed only when the set can close.</b> With a refused lane set the lane draws "The lanes
+  cannot be isolated, so this wave cannot close" and no join at all (<code>waves-lane.js:138-143</code>), because the two
+  sentences would contradict each other.</li>
+  <li><b>The auto switch is drawn as the read answered it.</b> <code>auto</code> is the wave's record; <code>autoOpen</code>
+  is derived from the wave before it (<code>lib/waves.js:973</code>), and a switch that opened a wave says which wave and
+  that nothing was started. This run's W2 is the sketch's own case: "opened by w.callback".</li>
+  <li><b>A member's state is the task's own.</b> queued, running, parked and done are drawn verbatim, and a named
+  abandonment replaces the word rather than being folded into it (<code>waves-lane.js:60-75</code>).</li>
+  <li><b>An initiative with no waves draws no lane.</b> <code>laneHtml</code> returns the empty string
+  (<code>waves-lane.js:192</code>), so the seven cards that have no waves stay title cards rather than gaining a box a
+  reader learns to skip.</li>
+  <li><b>A store that cannot be read is said, and repaired by nobody.</b> An unreadable <code>waves.json</code> draws an
+  alert with the error and a sentence saying the file is left exactly as it is (<code>waves-lane.js:199</code>).</li>
+  <li><b>The route dots are decorative and the status word carries the fact.</b> <code>aria-hidden</code> on the glyph,
+  the same state in words in <code>.init-status</code> with a title naming every station - so the tab never carries a
+  state in colour alone.</li>
+  <li><b>The 27px glyph slot is reserved on every folded row</b> (<code>public/style.css:5155-5167</code>), so a route row
+  and a wave-less row share one left edge down the ledger.</li>
+  <li><b>The preview is measured, not clipped by characters.</b> <code>cut</code> walks back to a whole word, and the cut
+  is redone on rail resize (<code>public/core/initiative-fold.js:87</code>).</li>
+</ul>
+
+<h2 id="smallest"><span class="n">7</span>Three smallest changes, ranked by what they buy per file touched</h2>
+<p class="kicker">"Bought" here means: the element of the sketch that stops being different, or the fact that stops
+being hard to read. Lines are the product diff, not the test or the report.</p>
+
+<table>
+  <thead><tr><th>#</th><th>Change</th><th>Files / lines</th><th>What it buys</th><th>Cost or risk</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td><b>The closing note as a box with the count as a lead</b> <span class="b f">done here</span></td><td>2 product files, +18/-3</td><td>The one sketch element that was under-drawn; the sentence's contrast goes 4.84:1 -&gt; 9.14:1, and at 900px+ the note takes the empty right of the lane row, as the sketch draws it</td><td>Lanes lose 102px each at 1382 and one member row wraps (+17px to the lane row). No token, no route, no data</td></tr>
+    <tr><td class="num">2</td><td><b>Right-align the folded row's status at 900px+</b></td><td>2 product files, ~10 lines (template + one container query)</td><td>The sketch's scanning column: every row's state on one edge instead of at the end of a variable-width counts run</td><td>The counts sentence loses its last fact at wide only, and the row gains a second place the state can be. Worth it only if the ledger routinely runs past about ten rows</td></tr>
+    <tr><td class="num">3</td><td><b>Assistants and History as two columns at 900px+</b></td><td>2 product files, ~12 lines (a wrapper and a grid)</td><td>The sketch's foot map, one screen instead of two folds</td><td>Both folds are closed by default, so most readers never see the pair; the folds already save the height the pair was saving. Lowest value of the three</td></tr>
+  </tbody>
+</table>
+
+<p>Change 1 was taken because the table in section 3 finds exactly one element that is under-drawn rather than decided
+differently. Changes 2 and 3 are named and not taken: both re-open documented decisions, and neither is needed for the
+sketch's facts to be true.</p>
+
+<h2 id="risk"><span class="n">8</span>What breaks if only the look changes, and what must change anyway</h2>
+<p class="kicker">The shortest honest answer: the look is not the blocker. A prettier lane on a store nobody can write
+is a preview of a feature the panel does not have.</p>
+
+<h3>If only the look changes</h3>
+<ul>
+  <li><b>Every real initiative still reads "no waves".</b> Nothing in the panel writes <code>waves.json</code>
+  (<code>routes/waves.js:110</code> is 405 for every write), so the seven cards stay title cards and the Route is visible
+  only to a reader who hand-edits a file. The proof in this page needed exactly that.</li>
+  <li><b>The Route's promise is a sentence about a close the tab cannot perform.</b> "closing this wave is ONE commit
+  that names them all" is drawn by the tab; the close itself is <code>lib/waves.js</code> join work driven from outside.
+  A restyle that made the note louder without a route would make a promise more legible, not more keepable.</li>
+  <li><b>The lane's claims are data claims, and a look pass can silently break them.</b> If a restyle moved a state into
+  a class or a stored field, or let a missing gate default to "met", the tab would still look right in a screenshot and
+  be wrong on the next read. The tests that pin those claims are the ones to run
+  (<code>test/waves-lane.test.js</code>, <code>test/waves-derive.test.js</code>, <code>test/waves-auto.test.js</code>,
+  <code>test/waves-lanes-join.test.js</code>).</li>
+  <li><b>The description fold re-measures on a font change.</b> The preview cut is canvas-measured
+  (<code>public/core/initiative-fold.js:87</code>), so a new size or family re-cuts every preview on the next paint; a
+  look pass that changes either should say so and re-measure, not assume the cut survives.</li>
+</ul>
+
+<h3>What must change anyway</h3>
+<ol>
+  <li><b>A wave write route, or a named author.</b> The smallest version that makes the sketch's flow real: create a
+  wave (id, position, title, gates, auto), reorder, and delete - the shape <code>lib/waves.js</code> already reads.
+  Without it the store is an artefact a person maintains by hand, and the tab is a viewer for that person's file.</li>
+  <li><b>A lane author on the task.</b> A lane is the member's own <code>lane</code> field today
+  (<code>lib/waves.js:691</code>); the queue's add and edit actions accept it, so this half exists - but nothing in the
+  UI sets it, so two lanes can only appear if the tasks were filed with one.</li>
+  <li><b>The close itself, or a link to it.</b> The note names the close; the tab should say where it happens, or the
+  sentence is documentation inside a UI.</li>
+</ol>
+
+<h2 id="captures"><span class="n">9</span>The captures: 1440, 768 and 480, with a wave open, a lane open and a folded row visible</h2>
+<p class="kicker">Every capture is a real render of the proof panel at <code>127.0.0.1:7332</code> with the throwaway
+open. The pane is the docked rail at each width, plus the float at 1440 for the wide read the sketch was drawn at.</p>
+
+<figure>
+  <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/09-ledger-1440-after.png" alt="The ledger at 1440 with eight rows, the throwaway first with three green route dots">
+  <figcaption><b>1440 x 900, pane 479, the ledger.</b> Eight initiatives: the throwaway is the first row, with three
+  route dots (done, done, running-current), the status "W3 running", a two-line preview and "edited 17m ago by
+  assistant-3". The seven below it keep "no waves" and an empty glyph slot.</figcaption>
+</figure>
+
+<div class="duo">
+  <figure>
+    <span class="tag">The folded route row, 1440</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/10-route-row-folded.png" alt="The throwaway's folded row: three dots, the title, the preview, the counts and the status chip">
+    <figcaption><b>The row on its own.</b> 3 dots, "Sketch proof: Menu SSO migration", the cut preview, "2 projects . 2
+    worktrees . 1 assistant", the status "W3 running", "edited 17m ago by assistant-3".</figcaption>
+  </figure>
+  <figure>
+    <span class="tag">The same row, 480</span>
+    <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/11-route-row-folded-480.png" alt="The same folded row at a 239px pane, the status chip wrapping to its own line">
+    <figcaption><b>239px pane.</b> The same facts at the narrow width: the preview shortens, the attribution takes its
+    own line, and the status chip stays on the counts line.</figcaption>
+  </figure>
+</div>
+
+<p>The wave block at each width is in section 4: <a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/05-docked-479-after.png">479</a>,
+<a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/06-pane-347-after.png">347</a>,
+<a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/07-pane-239-after-top.png">239 top</a> and
+<a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/08-pane-239-after-note.png">239 note</a>, plus the wide pair
+<a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/02-wide-before.png">before</a> and
+<a href="../assets/initiatives-redesign/sketch-proof-2026-11-23/03-wide-after.png">after</a>.</p>
+
+<h2 id="cleanup"><span class="n">10</span>The throwaway is gone, and the seven still hold zero waves</h2>
+<p class="kicker">Deleting it took three writers, because the panel has routes for two of the three things the seed made
+and none for the third.</p>
+
+<table>
+  <thead><tr><th>What</th><th>How it was removed</th><th>Proof</th></tr></thead>
+  <tbody>
+    <tr><td>4 queue tasks (#483-#486)</td><td><code>POST /api/assistant/queue</code> <code>action:"delete"</code> x4, all 200</td><td><code>tasks left on any wave: 0</code> on the re-read</td></tr>
+    <tr><td>3 wave records</td><td>the file this seed created is removed whole</td><td><code>waveStatus.found: false</code>; every initiative reads 0 waves</td></tr>
+    <tr><td>the initiative and its 2 tree rows</td><td>no delete route exists (<code>lib/initiatives.js</code> has create, update, move), so the copy's store is edited and the panel re-reads it</td><td>8 -&gt; 7 records; the id is absent from the next <code>GET</code></td></tr>
+  </tbody>
+</table>
+
+<pre><code>copy before: 8 initiatives; throwaway [('init_mwsqvhzu_2ynjd8', 'Sketch proof: Menu SSO migration', 3)]
+task deleted: 200 #483  #484  #485  #486
+waves.json removed: .../73596cb0/home/state/waves.json
+record removed: 1
+store records: 8 -> 7
+copy after: 7 initiatives
+  - Initiatives tab redesign waves 0
+  - Waves of work waves 0
+  - Optym CBA cert example on optym-transmission-multi waves 0
+  - sales-territory-POC bugs: an organized concurrent fix plan waves 0
+  - Optym CBA Kubernetes setup waves 0
+  - Converting fleet to Chart.yaml - in-house fleet replacement waves 0
+  - fleet-kafka: Rating auto que JDBC (OJDBC) Strimzi connectors waves 0
+waveStatus: {'found': False, 'readable': True, 'error': None}
+throwaway present: False
+tasks left on any wave: 0
+live panel: 7 initiatives, waves per initiative: [0, 0, 0, 0, 0, 0, 0] waveStatus.found: False</code></pre>
+
+<figure>
+  <img src="../assets/initiatives-redesign/sketch-proof-2026-11-23/12-cleanup-1440.png" alt="The copy's Initiatives tab after cleanup: seven folded rows, all reading no waves">
+  <figcaption><b>The copy after cleanup, 1440 x 900, pane 479.</b> Seven folded rows, every status "no waves", no dots,
+  no stations, no lanes. Byte-identical to the reader's panel capture in section 1
+  (md5 <code>68eac45f46d0eec68e242abd95daec9f</code>): the throwaway left no trace in the ledger, and no capture of it
+  survives in the panel's state.</figcaption>
+</figure>
+
+<p>The reader's own panel was never written to: it was read twice, once at the start and once after the cleanup, and
+answered the same seven initiatives and seven zero wave counts both times.</p>
+
+<h2 id="reproduce"><span class="n">11</span>Reproduce it</h2>
+<p class="kicker">The seven scripts that produced every number here are in this folder. They take <code>BASE</code>,
+<code>OUT</code>, <code>WAG_PROOF_HOME</code>, <code>WAG_PROOF_OUT</code>, <code>TREE_A</code> and <code>TREE_B</code> from
+the environment and name no folder on this machine; <code>OUT</code> defaults to <code>shots</code> in the current
+directory.</p>
+
+# 1. a copy of the panel's state, on its own port, so nothing can reach 127.0.0.1:7331
+python docs/reports/initiatives-route-sketch-proof/setup-home.py     # copies ~/.wag/state, picks a free port, no assistant
+node   server.js                                                  # from this worktree, with WAG_HOME set to the home it printed
+python docs/reports/initiatives-route-sketch-proof/seed.py            # POST /api/initiatives, move x2, queue add/state x4, waves.json
+node   docs/reports/initiatives-route-sketch-proof/capture-live.mjs   # the measured cause (read only)
+node   docs/reports/initiatives-route-sketch-proof/capture-widths.mjs # 1440/768/480 + the wide float, DOM facts per width
+node   docs/reports/initiatives-route-sketch-proof/capture-ledger.mjs # the ledger and the folded route row
+node   docs/reports/initiatives-route-sketch-proof/capture-pair.mjs   # the before/after pair, one panel, product files switched
+python docs/reports/initiatives-route-sketch-proof/cleanup.py         # the three writers, then the re-read
+
+# 2. the lane's own gates on this tree, in one sitting after the rebase
+node --test test/waves-lane.test.js test/waves-lanes-join.test.js     # 34 tests, 34 pass
+npm run test:changed                     # 47 files, 576 tests, 576 pass
+npm test                                 # 3,595 tests, 3,587 pass, 8 fail
+
+# 3. the panel's own browser gate for this surface (its own sandbox, its own port)
+node tools/verify-waves-lane.mjs --shots &lt;scratch&gt;/lane</code></pre>
+
+<h3>What was run, and what it answered</h3>
+<table>
+  <thead><tr><th>Run</th><th>Answer</th></tr></thead>
+  <tbody>
+    <tr><td><code>node --test test/waves-lane.test.js test/waves-lanes-join.test.js</code></td><td>34 tests, 34 pass, 0 fail (42.6s)</td></tr>
+    <tr><td><code>npm run test:changed</code></td><td>47 files, 576 tests, 576 pass, 0 fail (51.7s)</td></tr>
+    <tr><td><code>node tools/verify-initiatives-tab.mjs</code></td><td>102/102 checks</td></tr>
+    <tr><td><code>node tools/verify-waves-lane.mjs</code></td><td>40/40 checks</td></tr>
+    <tr><td><code>node tools/verify-initiatives-redesign.mjs</code></td><td>11/11 claims; docked 18/18, wide 17/18 (the documented second-column alignment)</td></tr>
+    <tr><td><code>node tools/verify-initiatives-scroll.mjs</code></td><td>35/35 checks</td></tr>
+    <tr><td><code>npm test</code> (once, the final sweep)</td><td>3,595 tests, 3,587 pass, 8 fail. Seven fail on a clean <code>git archive origin/main</code> extract too (the set the 1.157.6 landing recorded, plus <code>child-tree</code> and <code>scan-roots</code>), and the eighth was <code>absolute-paths</code>, raised by this page's own scripts and fixed - it answers 17/17 after the fix.</td></tr>
+  </tbody>
+</table>
+
+<details>
+  <summary>What the seed wrote into waves.json, verbatim</summary>
+<pre><code>{"id":"w.callback","position":1,"title":"Prove the Okta callback on the VIP",
+ "entryGate":{"check":"clean"},"exitGate":{"check":"clean"},"template":null,"auto":true}
+{"id":"w.second","position":2,"title":"One real two-factor login",
+ "entryGate":{"check":"clean"},"exitGate":{"check":"clean"},"template":null,"auto":false}
+{"id":"w.flip","position":3,"title":"Cut the login page over behind the switch",
+ "entryGate":{"check":"clean"},"exitGate":{"check":"clean"},"template":"sefl-review-loop","auto":false}</code></pre>
+<p>The two lanes on <code>w.flip</code> are not in the wave records: they are the members' own <code>lane</code> field
+(<code>callback</code> on #485, <code>login</code> on #486), and <code>lib/waves.js:691</code> derives the lane set from
+them on every read. That is why the seed could not have written a lane even if there had been a route: the lane is a
+property of the task.</p>
+</details>
+
+<footer>
+  Written in the worktree <code>research-round-b-for-the-initiatives-tab-1d1d2c</code>, cut from
+  <code>origin/main</code> <code>0ffebed</code> (1.157.6). Product files changed: <code>public/core/waves-lane.js</code>,
+  <code>public/style.css</code>; test: <code>test/waves-lane.test.js</code>. Every capture is a PNG in
+  <code>docs/reports/initiatives-route-sketch-proof/</code>, and every number in this page was produced by the scripts
+  in the same folder.
+</footer>
+
+</div>
+</body>
+</html>
