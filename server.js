@@ -110,6 +110,7 @@ import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.
 // The waves of work: an ordered, gated group of tasks inside one initiative (lib/waves.js), in their own store
 // keyed by initiative id. This slice is a READ: the lane in the Initiatives tab, and one GET beside it.
 import { Waves, waveMemberKey } from "./lib/waves.js";
+import { createWaveDriver } from "./lib/waves-driver.js";
 import { WAVES_PATH, createWavesRoutes, queueRows, waveTemplateLookup } from "./routes/waves.js";
 // The reports a task left behind (routes/reports.js): the chip a wave member row draws, the list behind it, and the one
 // file it opens in a new tab. A read from the deliverables store joined with a git scan of the task's own tree.
@@ -1845,6 +1846,29 @@ assistant = new Assistant({
   onEvent: broadcast,
   onLog: log,
 });
+// THE WAVE DRIVER (lib/waves-driver.js): one advance per settle, no clock of its own. The job store's own settle is the
+// only door (`jobs.onTurnSettled`, set below), and the driver reads the queues, folds the wave, starts at most one
+// member and writes its decision on the card it read - so a replayed settle, a restart or a second pass starts nothing
+// twice. The row lookup is the same one the wave routes use, so a member's board row and its lane row are one read.
+const waveRowFor = (project, treePath) => {
+  const key = normTreePath(treePath);
+  if (!key) return null;
+  const rows = typeof store?.rowsFor === "function" ? store.rowsFor(project) || [] : [];
+  return rows.find((r) => normTreePath(r.path) === key) || null;
+};
+const waveDriver = createWaveDriver({
+  waves,
+  assistant,
+  jobs,
+  rowFor: waveRowFor,
+  templateExists: waveTemplateExists,
+  // The one evidence reader the tab and the routes use, asked FRESH: a settle is the read where the 30 s memo could
+  // hide the merge that just happened, and a missed close is the reader's complaint this driver exists to answer.
+  waveEvidence: (request) => readWaveEvidence({ ...request, fresh: true }),
+  log,
+});
+jobs.onTurnSettled = (settle) => waveDriver.advanceSettle(settle);
+
 // WHERE A QUESTION'S NAMES COME FROM. The header's Clarify history names the assistant that asked on every row, and
 // has to keep naming it after a rename: the roster is the authority, resolved at ask time for the record and again at
 // read time by the route. A thread an assistant owns is that assistant's question even when the job predates the
@@ -1943,8 +1967,10 @@ async function readWavePrForEvidence({ number, project }) {
 }
 
 // Every wave member's evidence for one read, keyed by the same `waveMemberKey` the fold buckets members by. A task in
-// no wave is skipped: it has no gate to feed.
-async function readWaveEvidence({ tasks = [], rowFor = () => null } = {}) {
+// no wave is skipped: it has no gate to feed. `fresh` skips the memo for the one caller that cannot wait for it - the
+// wave driver, which reads right after a settle and would otherwise judge the merge that just happened with an answer
+// up to 30 s old. The tab's reads keep the memo; the driver's read is one per settle, not one per repaint.
+async function readWaveEvidence({ tasks = [], rowFor = () => null, fresh = false } = {}) {
   const out = new Map();
   const at = Date.now();
   for (const task of Array.isArray(tasks) ? tasks : []) {
@@ -1952,7 +1978,7 @@ async function readWaveEvidence({ tasks = [], rowFor = () => null } = {}) {
     const key = waveMemberKey(task);
     const print = waveEvidenceFingerprint(task);
     const hit = waveEvidenceCache.get(key);
-    if (hit && hit.print === print && at - hit.at < WAVE_EVIDENCE_TTL_MS) {
+    if (!fresh && hit && hit.print === print && at - hit.at < WAVE_EVIDENCE_TTL_MS) {
       out.set(key, hit.evidence);
       continue;
     }

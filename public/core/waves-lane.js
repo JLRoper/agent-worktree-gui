@@ -17,9 +17,11 @@
 //     that is the fact the close depends on - and a lane whose read answered cannot tell says so, never "no trees".
 //   * THE AUTO SWITCH IS DRAWN AS THE READ ANSWERED IT. `auto` is the wave's own record; `autoOpen` is what the read
 //     derived from the wave BEFORE it (lib/waves.js `waveAutoOpens`). A wave whose predecessor has the switch off
-//     draws exactly the markup it drew before this row - nothing extra - and a wave a switch opened says which wave
-//     opened it, in a sentence that also says nothing was started. A switch that is on and did not open says why,
-//     with the gate's own word: a cannot-tell predecessor is drawn "cannot tell", never as a wait that looks healthy.
+//     draws exactly the markup it drew before this row plus, once that predecessor is done, the one sentence a person
+//     acts on (`surface`: "W1 done, W2 ready - press to open"): off starts nothing, so the lane owes the reader the
+//     press. A wave a switch opened says which wave opened it, and that the panel's settle driver started its first
+//     queued card. A switch that is on and did not open says why, with the gate's own word: a cannot-tell predecessor
+//     is drawn "cannot tell", never as a wait that looks healthy.
 //   * THE CONTROLS AUTHOR A RECORD AND NOTHING ELSE. With a writer in the panel the lane gains one "Add a wave" on
 //     the section head and Edit / Up / Down / Delete on a station. They post the seven fields a record has (plus the
 //     position a move names), and the answer is the server's own fold, so a control can never paint a state, a lane
@@ -328,13 +330,21 @@
     const autoWaiting = Boolean(autoOpen && autoOpen.open !== true && autoOpen.switchOn === true && autoFrom);
     const autoOn = Boolean(wave && wave.auto);
     const autoTitle = autoOn
-      ? "on: the next wave opens by itself once the exit gate of this wave reads met on a live read - on the next read, never in the background, and nothing is started"
+      ? "on: when this wave closes, the next wave opens and its first queued card is started by the settle that closed this one - never in the background"
       : "off: this wave never opens the next one, however its exit gate reads - a person opens it";
     const autoOpenChip = autoOpened
       ? `<span class="chip wave-auto-open is-on" data-wave-auto-open="true" data-auto-from="${esc(autoFrom)}" title="${esc(String(autoOpen.why || ""))}">opened by ${esc(autoFrom)}</span>`
       : autoWaiting
         ? `<span class="chip wave-auto-open is-wait" data-wave-auto-wait="true" data-auto-from="${esc(autoFrom)}" data-auto-gate="${esc((autoOpen.gate && autoOpen.gate.state) || "none")}" title="${esc(String(autoOpen.why || ""))}">auto wait - ${esc(autoOpen.gate && autoOpen.gate.met === true ? "not closed" : gateWord(autoOpen.gate))}</span>`
         : "";
+    // WHAT A PERSON IS OWED when no switch will open this wave (lib/waves.js `autoOpen.surface`): "W1 done, W2 ready -
+    // press to open", or a next wave with no cards named plainly. The fold owns the sentence and the lane only draws
+    // it, so the chip and the state beside it cannot disagree. No surface means no chip, and the markup is exactly the
+    // one this lane drew before the switch existed.
+    const surface = autoOpen && autoOpen.surface ? String(autoOpen.surface) : "";
+    const surfaceChip = surface
+      ? `<span class="chip wave-next is-wait" data-wave-next="${esc(surface)}" title="${esc(String(autoOpen.why || ""))}">${esc(surface)}</span>`
+      : "";
     const current = Boolean(wave && wave.id && currentId && wave.id === currentId);
     const template = wave && wave.template ? String(wave.template) : "";
     const unresolved = Boolean(template) && wave && wave.templateResolved === false;
@@ -379,7 +389,7 @@
         ${gateChipHtml("entry", gates.entry, esc)}
         ${gateChipHtml("exit", gates.exit, esc)}
         <span class="chip wave-auto ${autoOn ? "is-on" : "is-off"}" title="${esc(autoTitle)}">auto ${autoOn ? "on" : "off"}</span>
-        ${autoOpenChip}
+        ${autoOpenChip}${surfaceChip}
       </div>
       ${closeBlock}
       ${membersRow}
