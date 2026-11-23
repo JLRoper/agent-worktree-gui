@@ -975,13 +975,19 @@ function rebaseRowPrints(snapshotValue) {
 function broadcastSnapshot() {
   // Invalidate BEFORE building: this frame follows a write, and snapshot() must reflect it.
   invalidateSnapshot();
+  // The object is built even when no tab is attached, and that is load-bearing: the decorators (todos, collisions,
+  // initiatives, descriptions, the live agents) write onto the store's own row objects, and the BOARD frame - the
+  // fast first paint, built from those same rows - is where the page first reads them. Skipping the build here left a
+  // board frame with no todo lines and no initiative chips until the full snapshot landed behind it (measured by
+  // test/initiatives-route.test.js, which reads a board answer on purpose). Only the stringify is skipped: that was
+  // always the megabytes, and it is what the guard below avoids.
+  const snap = snapshot();
   if (!clients.size) return;
   const text = snapshotText();
   // The state is byte-identical to the one every client already holds: there is nothing to say, and saying it would
   // cost a megabyte. (A write that changed nothing the board draws is common - a save of the same settings, a sweep
   // that found no change.)
   if (lastPushedText === text) return;
-  const snap = snapshot();
   const delta = snapshotDelta(lastPushedText ? JSON.parse(lastPushedText) : null, snap, { printOf: clientRowPrints });
   const leanFrame = delta ? `event: snapshot\ndata: ${JSON.stringify({ type: "snapshot", delta: true, data: delta })}\n\n` : null;
   // A delta is only worth sending when it is smaller than the frame it replaces (an old baseline can make it larger);
