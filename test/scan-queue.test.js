@@ -34,6 +34,23 @@ test("per-project coalescing keeps at most maxPerProject pending from any one pr
   assert.equal(q.stats().refusedCoalesced, 1);
 });
 
+test("a reserved job (a project's meta) keeps its own slot when the rows have filled the cap", () => {
+  const q = new ScanQueue({ maxSize: 10, maxPerProject: 2 });
+  assert.equal(q.enqueue(job("r1", "alpha")).ok, true);
+  assert.equal(q.enqueue(job("r2", "alpha")).ok, true);
+  const meta = { key: "meta::alpha", project: "alpha", priority: 0, reserved: true, task: {}, resolve: () => {}, reject: () => {} };
+  assert.equal(q.enqueue(meta).ok, true, "the meta is admitted over the row cap");
+  assert.equal(q.size, 3);
+  assert.equal(q.enqueue(job("r3", "alpha")).ok, false, "a third ROW is still coalesced");
+  assert.equal(q.stats().refusedCoalesced, 1);
+
+  // The global bound is not lifted by the exemption: a full queue still defers, reserved or not.
+  const full = new ScanQueue({ maxSize: 2 });
+  assert.equal(full.enqueue(job("a", "p1")).ok, true);
+  assert.equal(full.enqueue(job("b", "p2")).ok, true);
+  assert.equal(full.enqueue({ ...meta, key: "meta::beta", project: "beta" }).reason, QUEUE_FULL);
+});
+
 test("visible projects (priority 0) dispatch before hidden ones", () => {
   let t = 0;
   const q = new ScanQueue({ maxSize: 10, maxPerProject: 10, now: () => t });
