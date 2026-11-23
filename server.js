@@ -118,7 +118,7 @@ import { REPORTS_PATH, createReportsRoutes } from "./routes/reports.js";
 // The evidence a wave gate reads (lib/wave-evidence.js): the PR through the host's API, and the landing judged by
 // CONTENT on origin/main. The composition root owns the host mapping and the project registry, so the reader is
 // built here and handed to both routes that fold waves.
-import { prByNumber, readMemberEvidence, recordedShaOf } from "./lib/wave-evidence.js";
+import { artefactPaths, prByNumber, readMemberEvidence, recordedShaOf } from "./lib/wave-evidence.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
 import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
@@ -1937,9 +1937,11 @@ function waveProjectNamed(name) {
   return scheduler.getProjects().find((p) => p.name === wanted) || null;
 }
 
-function waveEvidenceFingerprint(task) {
+function waveEvidenceFingerprint(task, paths = []) {
   const pr = task?.row?.pr && typeof task.row.pr === "object" ? task.row.pr : null;
-  return `${Number(pr?.number) || 0}|${recordedShaOf(task) || ""}|${String(task?.project || "")}|${String(task?.worktree || "")}`;
+  // The artefact paths are part of the key: the same member read for a different gate path is a different read, and a
+  // memo hit that answered for one path must never be handed to a gate asking about another.
+  return `${Number(pr?.number) || 0}|${recordedShaOf(task) || ""}|${String(task?.project || "")}|${String(task?.worktree || "")}|${artefactPaths(paths).join(",")}`;
 }
 
 // The PR's state and its merged head, through the host. A number the list does not carry, an unmapped host and an
@@ -1969,14 +1971,17 @@ async function readWavePrForEvidence({ number, project }) {
 // Every wave member's evidence for one read, keyed by the same `waveMemberKey` the fold buckets members by. A task in
 // no wave is skipped: it has no gate to feed. `fresh` skips the memo for the one caller that cannot wait for it - the
 // wave driver, which reads right after a settle and would otherwise judge the merge that just happened with an answer
-// up to 30 s old. The tab's reads keep the memo; the driver's read is one per settle, not one per repaint.
-async function readWaveEvidence({ tasks = [], rowFor = () => null, fresh = false } = {}) {
+// up to 30 s old. The tab's reads keep the memo; the driver's read is one per settle, not one per repaint. `paths`
+// are the artefact paths the requesting lane's `file-exists` gates name (routes pass `waveFileExistsPaths`), and they
+// ride into the read and into the memo key.
+async function readWaveEvidence({ tasks = [], rowFor = () => null, fresh = false, paths = [] } = {}) {
   const out = new Map();
   const at = Date.now();
+  const artefacts = artefactPaths(paths);
   for (const task of Array.isArray(tasks) ? tasks : []) {
     if (!task || typeof task !== "object" || !String(task.waveId || "").trim()) continue;
     const key = waveMemberKey(task);
-    const print = waveEvidenceFingerprint(task);
+    const print = waveEvidenceFingerprint(task, artefacts);
     const hit = waveEvidenceCache.get(key);
     if (!fresh && hit && hit.print === print && at - hit.at < WAVE_EVIDENCE_TTL_MS) {
       out.set(key, hit.evidence);
@@ -1998,6 +2003,7 @@ async function readWaveEvidence({ tasks = [], rowFor = () => null, fresh = false
         return project?.path || null;
       },
       mainRef: `origin/${String(project?.mainBranch || "main")}`,
+      paths: artefacts,
     });
     if (waveEvidenceCache.size >= WAVE_EVIDENCE_CACHE_MAX) waveEvidenceCache.clear();
     waveEvidenceCache.set(key, { at, print, evidence });

@@ -145,8 +145,9 @@ test("entry gate: met is ready, not met is unentered, unreadable is unknown", ()
 
 test("a check the panel validates but does not evaluate reads unknown, never met", () => {
   // Every name in the 14 that this slice did not give an evidence read. `main-moved` is read now (by content), so it
-  // is asserted in its own tests below, not here.
-  for (const check of ["file-exists", "command", "branch-exists", "pushed", "pr-head", "pr-approved", "pr-comments", "reviewers-exact", "branch-name"]) {
+  // is asserted in its own tests below, not here; `file-exists` is read from the tree or the landing commit, and its
+  // read is proved in test/wave-file-exists.test.js.
+  for (const check of ["command", "branch-exists", "pushed", "pr-head", "pr-approved", "pr-comments", "reviewers-exact", "branch-name"]) {
     const gate = { check };
     const read = readWaveGate(gate, [member(1, "queued")]);
     assert.equal(read.state, "unknown", `${check} has no evaluator yet`);

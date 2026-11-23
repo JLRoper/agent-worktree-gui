@@ -42,6 +42,7 @@ import {
   WAVE_TITLE_MAX,
   WAVES_MAX,
   WAVES_VERSION,
+  waveFileExistsPaths,
   waveLane,
 } from "../lib/waves.js";
 
@@ -106,8 +107,9 @@ export function createWavesRoutes({
   sendJson,
   templateExists = () => null,
   // The evidence read behind a gate (lib/wave-evidence.js), supplied by the composition root because only it holds
-  // the host mapping and the project registry. `waveEvidence({tasks, rowFor})` answers a Map keyed by
-  // `waveMemberKey(task)`; absent, thrown or missing a member, the gate reads cannot tell and blocks.
+  // the host mapping and the project registry. `waveEvidence({tasks, rowFor, paths})` answers a Map keyed by
+  // `waveMemberKey(task)`, and `paths` are the artefact paths this lane's `file-exists` gates read; absent, thrown or
+  // missing a member, the gate reads cannot tell and blocks.
   waveEvidence = null,
   // The write half's dependencies, all supplied by the composition root. They are optional so a fixture that only
   // reads waves still composes the route (test/wave-evidence.test.js does); a POST without them is a 500 with the
@@ -151,13 +153,16 @@ export function createWavesRoutes({
   const laneView = async (initiativeId) => {
     const status = waves.statusOf();
     const tasks = queueRows(assistant);
+    // The artefact paths THIS lane's gates will read. The evidence read is handed them, so a `file-exists` gate is
+    // judged on a path read on this request rather than on one nobody asked about.
+    const paths = waveFileExistsPaths(waves.wavesFor(initiativeId));
     // ONE evidence read per request, consulted by the entry and exit gate of every wave in the answer. A collector
     // that answers no map, throws, or never reached a member leaves `evidenceOf` answering null for it, and the gate
     // reads cannot tell - the read is fail-closed by construction, never fail-open.
     let evidence = null;
     if (typeof waveEvidence === "function") {
       try {
-        const map = await waveEvidence({ tasks, rowFor });
+        const map = await waveEvidence({ tasks, rowFor, paths });
         evidence = map instanceof Map ? map : null;
         if (!evidence) log("waves: the evidence reader answered no map, so every gate reads cannot tell");
       } catch (error) {
