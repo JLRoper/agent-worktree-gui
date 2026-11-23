@@ -37,6 +37,14 @@ test("the real panel serves a decodable compressed state snapshot", async (t) =>
 test("a real SSE subscriber receives the board frame first, then the full snapshot", async (t) => {
   const panel = await startPanel();
   t.after(() => panel.stop());
+  // Health answers while the boot pass is still walking, and nothing goes on the wire during it: the full read is
+  // deferred to the boot's own broadcast (routes/state.js answers the board frame until then). Wait for the full read
+  // the way the page waits for it, then attach.
+  for (let i = 0; i < 100; i += 1) {
+    const body = await (await fetch(`${panel.base}/api/state`)).json();
+    if ("jobs" in body) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
   const controller = new AbortController();
   t.after(() => controller.abort());
   const timeout = setTimeout(() => controller.abort(), 5000);
