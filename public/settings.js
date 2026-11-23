@@ -356,10 +356,11 @@ function applyJobSnapshot(jobs) {
   }
 }
 
-function applySnapshot(data) {
-  // Captured before anything is mutated: if the set of projects is the same afterwards, the
-  // sections on screen are still valid and a full re-render would be pure cost.
-  const beforeSig = [...state.projects.keys()].sort().join("|");
+// EVERY PANE a snapshot carries except the project rows: the tree list, settings, the two folders, hosts, the spawn
+// transport, the job cards, approvals, remote writes and the assistant. Extracted so the full frame and the delta
+// frame cannot drift apart - both hand their own `data` to this one body, and a key a delta did not carry is simply
+// not applied, because every block below is `if (data.x)`.
+function applySnapshotPanes(data) {
   // The tree list's own state FIRST: the rows below are the ones it describes, and the page's row rule
   // (isHomelessConv) and order hold both read it. It is the same object /api/state answers with.
   if (data.treeList) applyTreeList(data.treeList);
@@ -443,6 +444,18 @@ function applySnapshot(data) {
   // The reset control's select is drawn from that same roster, so a snapshot is when a newly created assistant
   // becomes a choice here. It keeps the reader's current pick; with one assistant the select stays hidden.
   if (typeof paintResetRow === "function") paintResetRow();
+}
+
+// THE FULL FRAME: a first load, a reconnect, or /api/state's anti-entropy answer. The project list is authoritative
+// about which projects and rows exist, so anything not in it is gone (this is what a delta must never do).
+function applySnapshot(data) {
+  // The stream's push after a first load is a delta (see applySnapshotDelta below): route it before any of the full
+  // frame's authority rules can run, because a delta's project list is partial by design.
+  if (data && data.delta) return applySnapshotDelta(data);
+  // Captured before anything is mutated: if the set of projects is the same afterwards, the
+  // sections on screen are still valid and a full re-render would be pure cost.
+  const beforeSig = [...state.projects.keys()].sort().join("|");
+  applySnapshotPanes(data);
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
   // event retires a worktree, so a snapshot arriving mid-scan can never blank the table.
   const incomingProjects = data.projects || [];
@@ -507,6 +520,93 @@ function applySnapshot(data) {
   // could be read.
   const b = $("banner");
   if (b && b.classList.contains("ok")) hideBanner();
+}
+
+// THE DELTA's job pane: the cards that moved, merged the way a `job` frame merges one (`updateJob`), never the
+// wholesale replacement applyJobSnapshot does - a delta's list is partial by design, and reading it as "these are
+// all the jobs there are" would empty every other card on the board.
+function applyJobDelta(jobs, dropped) {
+  for (const job of jobs) if (job && job.id) updateJob(job);
+  for (const id of dropped) {
+    const prev = state.jobs.get(id);
+    state.jobs.delete(id);
+    // A turn that was live when the record left is kept: a record that has not arrived yet is not the same fact as
+    // one that is gone (the same rule applyJobSnapshot applies).
+    if (prev && turnLive(prev)) continue;
+    state.jobLines.delete(id);
+  }
+  if (dropped.length) scheduleRenderJobs();
+  repaintAgentState();
+  invalidatePanelMap();
+}
+
+// THE DELTA FRAME. The stream's push after a first load is not a snapshot: it is the panes that moved, the rows that
+// moved and the rows/projects that left (lib/snapshot-delta.js, server.js broadcastSnapshot). It is applied here
+// through the SAME pane body the full frame uses and the SAME per-row painter a `row` frame uses (`queueRow` ->
+// placeRow), so a todo edit patches one row instead of clearing and rebuilding 185 sections - which is what the
+// board did on every write, and what made the 4.29 MB pushes cost a re-render on top of the parse.
+//
+// It must never behave like a full frame: no project is authoritative, no row is dropped for being absent, and an
+// empty project list is not "there are no projects" (that is the boot's first discovery, and a delta has nothing to
+// say about it). A project this page has never seen arrives with `added: true` and its rows, and the answer is a
+// structural rebuild; everything else lands in place.
+function applySnapshotDelta(data) {
+  const beforeSig = [...state.projects.keys()].sort().join("|");
+  // The job pane travels as the cards that moved (lib/snapshot-delta.js), so it is merged through the same
+  // `updateJob` a `job` frame uses - never through applyJobSnapshot, which reads its list as "every card there is".
+  const panes = { ...data };
+  if (Array.isArray(data.jobs)) {
+    applyJobDelta(data.jobs, data.droppedJobs || []);
+    delete panes.jobs;
+  }
+  delete panes.droppedJobs;
+  applySnapshotPanes(panes);
+  let structure = false;
+  const touched = new Set();
+  for (const entry of data.projects || []) {
+    if (!entry || !entry.name) continue;
+    const fields = { ...entry };
+    delete fields.added;
+    const cur = state.projects.get(entry.name);
+    if (cur) state.projects.set(entry.name, { ...cur, ...fields });
+    else {
+      state.projects.set(entry.name, { ...fields, worktrees: [] });
+      structure = true;
+    }
+    touched.add(entry.name);
+  }
+  for (const entry of data.rows || []) {
+    if (!entry || !entry.project || !entry.row) continue;
+    // A row for a project this page was never told about would draw into no section. The next full read carries it.
+    if (!state.projects.has(entry.project)) continue;
+    queueRow(entry.project, { ...entry.row, project: entry.project }, { flash: false });
+    touched.add(entry.project);
+  }
+  for (const entry of data.droppedRows || []) {
+    if (entry && entry.project && entry.path) removeRow(entry.project, entry.path);
+  }
+  for (const name of data.droppedProjects || []) {
+    if (!state.projects.has(name)) continue;
+    state.projects.delete(name);
+    for (const [k, r] of [...state.rows]) {
+      if (r.project !== name) continue;
+      state.rows.delete(k);
+      state.rowEls.delete(k);
+      state.detailEls.delete(k);
+    }
+    structure = true;
+  }
+  const afterSig = [...state.projects.keys()].sort().join("|");
+  if (structure || beforeSig !== afterSig) renderAll();
+  else {
+    for (const name of touched) refreshChips(name);
+    reorderProjects();
+  }
+  if (typeof paintReviewChip === "function") {
+    if (typeof reviewModeOn === "function" && reviewModeOn()) paintReviewTable();
+    else paintReviewChip();
+  }
+  $("health").className = "dot ok";
 }
 
 function applyZoom(pct, { save = true } = {}) {

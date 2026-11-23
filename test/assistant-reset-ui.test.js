@@ -336,7 +336,14 @@ test("the page binds the press and the select, and repaints the roster on a snap
   const snapshotAt = settings.indexOf("function applySnapshot(data)");
   assert.ok(snapshotAt > 0, "applySnapshot is in public/settings.js");
   const snapshot = settings.slice(snapshotAt, settings.indexOf("\nfunction ", snapshotAt + 10));
-  assert.match(snapshot, /if \(typeof paintResetRow === "function"\) paintResetRow\(\);/, "a new assistant becomes a choice on the next snapshot");
+  // The panes (the roster among them) are applied by ONE body that both frame shapes call - the full snapshot and the
+  // stream's delta - so the paint is looked for there, and the call to that body is looked for here. That is what
+  // keeps "a new assistant becomes a choice on the next snapshot" true of a delta push as well.
+  assert.match(snapshot, /applySnapshotPanes\(data\)/, "a snapshot applies the panes through the one body");
+  const panesAt = settings.indexOf("function applySnapshotPanes(data)");
+  assert.ok(panesAt > 0, "applySnapshotPanes is in public/settings.js");
+  const panes = settings.slice(panesAt, settings.indexOf("\nfunction ", panesAt + 10));
+  assert.match(panes, /if \(typeof paintResetRow === "function"\) paintResetRow\(\);/, "a new assistant becomes a choice on the next snapshot");
   const open = src.slice(src.indexOf("function toggleSettings(open = null)"), src.indexOf("function toggleSettings(open = null)") + 3000);
   assert.match(open, /paintResetRow\(\);/, "opening Settings reads the roster again");
 });

@@ -17,6 +17,9 @@ import { createLoopLag, withActivity, markActivity, currentActivity, realMonoton
 import { PerformanceObserver } from "node:perf_hooks";
 import { Pool } from "./lib/pool.js";
 import { createSnapshotCache } from "./lib/snapshot-cache.js";
+// What a stream PUSH has to say once the reader already has the board: the panes and rows that moved, nothing else
+// (lib/snapshot-delta.js). The first frame of a connection is unchanged - board, then the full snapshot.
+import { snapshotDelta, snapshotRowPrints, rowFingerprint } from "./lib/snapshot-delta.js";
 // Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
 // scope (a job that settled, a scan, the panel on the way out). See lib/child-tree.js for the leak it ends.
 import { panelChildren } from "./lib/child-tree.js";
@@ -932,13 +935,100 @@ function boardText() {
   return syncTiming.measure("board serialization", () => boardCache.text());
 }
 
-// A full-snapshot push after a write: invalidate FIRST so the frame carries current state,
-// then broadcast. Invalidation is idempotent (a generation bump), so `broadcast` doing it too
+// A full-snapshot push after a write: invalidate FIRST so the frame carries current state, then broadcast. Invalidation is idempotent (a generation bump), so `broadcast` doing it too
 // is harmless. Every one of the full-snapshot push sites calls this instead of building inline.
+//
+// A PUSH IS NOT A FIRST LOAD. Every one of the ~25 write sites calls this, and until row 256 each of them built and
+// stringified the whole board for every open tab: 4.29 MB measured on 185 projects, of which the project rows (1.95
+// MB) and the job transcripts (2.03 MB) were identical to what the tab already had. Now the frame is a DELTA against
+// the state the last push left every client in (lib/snapshot-delta.js): a `todo` edit sends its one row and nothing
+// else. The shape is per client - a tab that did not ask for `?shape=delta` still receives the full frame, exactly
+// as before - and a delta that would be bigger than the full frame falls back to it.
+//
+// `lastPushedText` is the baseline, kept as TEXT on purpose: the snapshot's rows are the store's own row objects and
+// the decorators (withTodos, withReview, withLiveAgents) write onto them, so an old snapshot OBJECT has already
+// changed by the next build. A string is the only stable record of what a client was actually sent.
+let lastPushedText = null;
+
+// WHAT THE CLIENTS ALREADY HOLD, per row, keyed "project::path" (lib/snapshot-delta.js's own key). A row reaches a
+// tab by three routes - its own `row` frame, a drop, and a snapshot or delta frame - and every one of them records
+// here what the tab was told. A push then skips a row whose print has not moved, so a board being scanned does not
+// re-send the few hundred rows a scan has already delivered as `row` frames. It must never run AHEAD of the oldest
+// tab: it advances on a push (which every tab receives) and on an attach only when that tab is the only one.
+const clientRowPrints = new Map();
+function rememberRowPrint(project, row) {
+  if (!project || !row || !row.path) return;
+  clientRowPrints.set(`${project}::${row.path}`, rowFingerprint(row));
+}
+function forgetRowPrint(project, rowPath) {
+  if (!project || !rowPath) return;
+  clientRowPrints.delete(`${project}::${rowPath}`);
+}
+function rebaseRowPrints(snapshotValue) {
+  // Wholesale, not merged: the frame this follows reached every tab, and a row the snapshot no longer has is a row no
+  // tab should be told about again.
+  const now = snapshotRowPrints(snapshotValue);
+  clientRowPrints.clear();
+  for (const [key, print] of now) clientRowPrints.set(key, print);
+}
+
 function broadcastSnapshot() {
   // Invalidate BEFORE building: this frame follows a write, and snapshot() must reflect it.
   invalidateSnapshot();
-  broadcast({ type: "snapshot", data: snapshot() });
+  if (!clients.size) return;
+  const text = snapshotText();
+  // The state is byte-identical to the one every client already holds: there is nothing to say, and saying it would
+  // cost a megabyte. (A write that changed nothing the board draws is common - a save of the same settings, a sweep
+  // that found no change.)
+  if (lastPushedText === text) return;
+  const snap = snapshot();
+  const delta = snapshotDelta(lastPushedText ? JSON.parse(lastPushedText) : null, snap, { printOf: clientRowPrints });
+  const leanFrame = delta ? `event: snapshot\ndata: ${JSON.stringify({ type: "snapshot", delta: true, data: delta })}\n\n` : null;
+  // A delta is only worth sending when it is smaller than the frame it replaces (an old baseline can make it larger);
+  // past that the full frame is the cheaper answer for everyone, and it re-bases the next delta.
+  const useDelta = Boolean(leanFrame) && leanFrame.length < text.length;
+  let fullFrame = null;
+  for (const res of clients) {
+    try {
+      if (useDelta && res.wagShape === "delta" && !res.wagNeedsFull) {
+        res.write(leanFrame);
+        continue;
+      }
+      if (!fullFrame) fullFrame = `event: snapshot\ndata: ${text}\n\n`;
+      res.write(fullFrame);
+      res.wagNeedsFull = false;
+    } catch {
+      streamMetrics.writeErrors += 1;
+      clients.delete(res);
+    }
+  }
+  lastPushedText = text;
+  rebaseRowPrints(snap);
+}
+
+// The lean reader's second frame: the board text it just received is the state it holds, so the frame is the
+// difference between that and the snapshot now. Built here because this file owns the snapshot; lib/http/transport.js
+// only writes what it is handed.
+function streamSnapshotFrameFor({ boardBody }) {
+  let board = null;
+  try {
+    board = JSON.parse(boardBody);
+  } catch {
+    board = null; // an unreadable board frame means "nothing applied" - the delta below then carries everything
+  }
+  const snap = snapshot();
+  const delta = snapshotDelta(board, snap) || { delta: true, generatedAt: snap.generatedAt };
+  const frame = `event: snapshot\ndata: ${JSON.stringify({ type: "snapshot", delta: true, data: delta })}\n\n`;
+  // The baseline the NEXT push is measured against: the state this frame leaves the client in, kept as the text a
+  // full frame would have sent. It costs the same stringify a classic attach has always paid (the board bytes are
+  // already on the socket by now), and it is what keeps the first write after a page load from being answered with
+  // "everything changed since the last push, which was hours ago".
+  lastPushedText = snapshotText();
+  // The tab that just attached holds this state; when it is the only tab, the ledger can follow it - which is what
+  // keeps the first write after a page load to the one row it touched. With another tab open the ledger stays where
+  // the last push left it, because a delta must never run ahead of the tab that is behind.
+  if (clients.size <= 1) rebaseRowPrints(snap);
+  return frame;
 }
 
 // The moment the last cached row is read. One frame, once per process: the header chip is the page's own statement that
@@ -984,6 +1074,11 @@ function broadcast(evt) {
   // is read through the optional global so source-extraction tests (broadcast-idle.test.js)
   // can run this body with a minimal scope; in the running panel the function exists.
   if (evt && evt.type !== "snapshot" && typeof invalidateSnapshot === "function") invalidateSnapshot();
+  // What the tabs are told about a row, recorded where it is told: a later push can then skip a row the scan has
+  // already delivered (the `printOf` ledger, see broadcastSnapshot). Read through the optional global for the same
+  // reason `invalidateSnapshot` above is: broadcast-idle.test.js runs this body with a minimal scope.
+  if (evt && evt.type === "row" && typeof rememberRowPrint === "function") rememberRowPrint(evt.project, evt.row);
+  else if (evt && evt.type === "drop" && typeof forgetRowPrint === "function") forgetRowPrint(evt.project, evt.path);
   // No subscriber can use the frame when the board is closed. In particular, a whole-board
   // snapshot may be megabytes, so do not stringify it on every event with nobody listening.
   if (!clients.size) return;
@@ -7885,7 +7980,7 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (route === "/api/stream") return handleStream(req, res, { clients, boardText, snapshotText, metrics: streamMetrics, fullReady: () => bootPassFinishedAt > 0 });
+    if (route === "/api/stream") return handleStream(req, res, { clients, boardText, snapshotText, snapshotFrame: streamSnapshotFrameFor, metrics: streamMetrics, fullReady: () => bootPassFinishedAt > 0 });
 
     return serveStatic(req, res, staticRoute, build);
   } catch (e) {
