@@ -34,7 +34,7 @@ test("the real panel serves a decodable compressed state snapshot", async (t) =>
   assert.ok(JSON.parse(gunzipSync(response.body)).projects);
 });
 
-test("a real SSE subscriber receives the initial snapshot", async (t) => {
+test("a real SSE subscriber receives the board frame first, then the full snapshot", async (t) => {
   const panel = await startPanel();
   t.after(() => panel.stop());
   const controller = new AbortController();
@@ -45,15 +45,32 @@ test("a real SSE subscriber receives the initial snapshot", async (t) => {
   assert.equal(response.status, 200);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let frame = "";
-  while (!frame.includes("\n\n")) {
-    const part = await reader.read();
-    assert.equal(part.done, false, "stream ended before initial snapshot");
-    frame += decoder.decode(part.value, { stream: true });
-    assert.ok(frame.length < 5 * 1024 * 1024, "unexpectedly large sandbox snapshot");
-  }
-  assert.match(frame, /^event: snapshot\ndata: /);
-  const first = frame.slice(0, frame.indexOf("\n\n"));
-  assert.ok(JSON.parse(first.slice(first.indexOf("data: ") + 6)).projects);
+  const readFrame = async (buf) => {
+    while (!buf.includes("\n\n")) {
+      const part = await reader.read();
+      assert.equal(part.done, false, "stream ended before the frame arrived");
+      buf += decoder.decode(part.value, { stream: true });
+      assert.ok(buf.length < 5 * 1024 * 1024, "unexpectedly large sandbox frame");
+    }
+    return buf;
+  };
+  const payloadOf = (frame) => JSON.parse(frame.slice(frame.indexOf("data: ") + 6, frame.indexOf("\n\n")));
+
+  // The board frame is what makes the page drawable before the full snapshot is built: it must come first, and it
+  // must carry the projects and rows the page paints.
+  let buf = await readFrame("");
+  assert.match(buf, /^event: board\ndata: /);
+  const board = payloadOf(buf);
+  assert.ok(Array.isArray(board.projects), "the board frame carries the project list");
+  assert.ok("settings" in board && "treeList" in board, "…and the settings and tree list the page draws with");
+  assert.ok(!("jobs" in board), "the board frame leaves the job pane to the full snapshot");
+  buf = buf.slice(buf.indexOf("\n\n") + 2);
+
+  // …and the full snapshot still follows on the same connection, with the panes the board frame leaves out.
+  buf = await readFrame(buf);
+  assert.match(buf, /^event: snapshot\ndata: /);
+  const full = payloadOf(buf);
+  assert.ok(Array.isArray(full.projects));
+  assert.ok("jobs" in full || "assistant" in full, "the full snapshot carries the panes the board frame omits");
   controller.abort();
 });

@@ -60,3 +60,19 @@ test("reconnect reads the current generation (anti-entropy recovery is preserved
   cache.invalidate();
   assert.equal(cache.get(), "v3");
 });
+
+test("text() stringifies once per generation and hands the same string to every reader", () => {
+  let builds = 0;
+  const cache = createSnapshotCache({ build: () => ({ n: ++builds }) });
+  const first = cache.text();
+  const second = cache.text();
+  assert.equal(first, second, "the same string is reused");
+  assert.equal(builds, 1, "one build for the generation");
+  assert.equal(first, JSON.stringify({ n: 1 }));
+  cache.invalidate();
+  const third = cache.text();
+  assert.equal(third, JSON.stringify({ n: 2 }), "a changed board rebuilds the string once");
+  const s = cache.stats();
+  assert.equal(s.textMisses, 2);
+  assert.equal(s.textHits, 1);
+});
