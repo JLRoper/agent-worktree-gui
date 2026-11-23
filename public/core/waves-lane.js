@@ -140,12 +140,19 @@
     // that names them all" beside it would say the opposite. Two sentences, one truth: the join is conditioned on the
     // refusal being absent (round B 4.3).
     const laneRefused = wave && wave.laneRefused;
-    const joined = laneCount >= 2 && wave && wave.laneJoinOwed && !laneRefused ? `<div class="wave-join as-hint" data-wave-join="${laneCount}">${laneCount} lanes - closing this wave is ONE commit that names them all</div>` : "";
+    // THE CLOSING NOTE IS A NOTE (the sketch's callout), not a hint line: the count leads, the rule follows, and at a
+    // pane that can hold it the note sits beside the lanes it is about. `data-wave-join` keeps the count a machine
+    // can read; the words stay the same sentence a reader has always had.
+    const joined = laneCount >= 2 && wave && wave.laneJoinOwed && !laneRefused ? `<div class="wave-join" data-wave-join="${laneCount}"><b>${laneCount} lanes</b> <span>closing this wave is ONE commit that names them all</span></div>` : "";
     // THE LANE BLOCK IS NOT A MEMBER. More than one lane draws its members INSIDE their lanes - the lane a member runs
     // in is the fact this read adds, and a flat list beside it would leave the grouping unreadable. The lane set is
     // therefore its OWN row, a sibling of the member row, not a flex item of it (round B 4.3, 6.3): nested, it shrank
     // to its content and two lanes could only stack.
     const lanesRow = laneCount >= 2 ? lanesHtml(wave, esc) : "";
+    // THE LANES AND THE NOTE THEY CARRY are one block, so the note can stand beside them where the pane is wide
+    // enough for both. A wave with lanes but no owed join (a refused set) keeps the lanes alone: the refusal is
+    // already a sentence, and the join would contradict it.
+    const closeBlock = lanesRow && joined ? `<div class="wave-close">${lanesRow}${joined}</div>` : `${joined}${lanesRow}`;
     const membersRow =
       laneCount >= 2
         ? ""
@@ -166,8 +173,7 @@
         <span class="chip wave-auto ${autoOn ? "is-on" : "is-off"}" title="${esc(autoTitle)}">auto ${autoOn ? "on" : "off"}</span>
         ${autoOpenChip}
       </div>
-      ${joined}
-      ${lanesRow}
+      ${closeBlock}
       ${membersRow}
     </div>`;
   }
