@@ -1,10 +1,10 @@
 // Capture the proof panel's Initiatives tab at three widths, with the throwaway card open.
 // Reads the DOM it shoots, so the comparison table cites selectors and text, not a memory of the picture.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { withBrowser, openPage } from "file:///C:/ProjectDevelopment/agent-worktree-gui/.worktrees/research-round-b-for-the-initiatives-tab-1d1d2c/tools/browser.mjs";
+import { withBrowser, openPage } from "../../../tools/browser.mjs";
 
 const BASE = process.env.BASE || "http://127.0.0.1:7332";
-const OUT = process.env.OUT || "C:/Users/roper/AppData/Local/Temp/wag/73596cb0/shots";
+const OUT = process.env.OUT || "shots";
 const TAG = process.env.TAG || "before";
 mkdirSync(OUT, { recursive: true });
 
