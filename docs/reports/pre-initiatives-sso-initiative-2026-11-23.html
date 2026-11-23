@@ -28,13 +28,13 @@ code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1
 </style></head><body>
 <div class="wrap">
 <h1>Pre-initiatives SSO - the initiative, its waves and the items behind them</h1>
-<p class="sub">The DMR-39015 OAuth2/Okta SSO program across oauth2-multi, Menu and PictureViewer, recorded after the fact on 2026-11-23 because the work predates the initiatives board. Every branch, PR number and sha below was read from git or Bitbucket at write time (W1-W3 at 16:13Z, the next wave and the fresh PR reads at 17:06Z); none is inferred.</p>
+<p class="sub">The DMR-39015 OAuth2/Okta SSO program across oauth2-multi, Menu and PictureViewer, recorded after the fact on 2026-11-23 because the work predates the initiatives board. Every branch, PR number and sha below was read from git or Bitbucket at write time (W1-W3 at 16:13Z, the next wave and the fresh PR reads at 17:06Z), and the wave membership was re-read at 17:45Z; none is inferred.</p>
 
 <div class="card">
 <strong>Verdict, in one line each.</strong>
 <ul>
 <li><strong>The initiative exists and covers three projects by tree:</strong> <code>init_mwtglvya_dq4bat</code>, with Menu, oauth2-multi and pictureviewer attached through the three delivery worktrees.</li>
-<li><strong>Seven items remain in the queue across the three landed waves, and the next wave holds three more.</strong> W1 holds 297, W2 holds 295, 301, 302 and 307, W3 holds 309 and 329; W4 holds 498, 499 and 500 (the three review PRs). Each carries the branch it lands from, the PR number read from Bitbucket, and, where it has landed, the sha read from the landing line. Rows 293 and 294 were written and then evicted by the panel's own 200-row cap (293 when an automatic collision ruling added row 496 at 16:17:33; 294 after this report was first written). Their evidence stays in this report, but they are no longer wave members.</li>
+<li><strong>The initiative's membership is a rolling snapshot, and the cap is still eating it.</strong> At 17:06Z W1 held 297, W2 held 295, 301, 302 and 307, W3 held 309 and 329, and W4 held 498, 499 and 500 (the three review PRs). At 17:28:49 and 17:29:48 the panel added rows 501 and 502, its own collision rulings for this tree, and the 200-row cap dropped the first done row each time: 295, then 297. At 17:45Z W1 therefore reads empty, W2 reads 301, 302 and 307, and W3 and W4 are unchanged. Rows 293 and 294 went the same way earlier. Each item's evidence stays in this report even when its row is gone.</li>
 <li><strong>No SSO pull request is merged.</strong> Menu #9, PictureViewer #7 and oauth2-multi #4 are all OPEN, each with POORE at NEEDS_WORK on its current head. No SSO commit is on any of the three masters.</li>
 <li><strong>Two push gaps are named.</strong> oauth2-multi's local turnover tip 2235ac7 is 12 commits (five of them merges) ahead of origin e20f1f6; Menu's local feature/menu-oauth2-gateway af3fa88 is 29 commits (ten merges) ahead of origin e05db4c.</li>
 <li><strong>The next wave holds the three review PRs.</strong> Items 498 (Menu #9), 499 (PictureViewer #7) and 500 (oauth2-multi #4) were filed with the branch, PR number and master head each read at 17:06Z. Its landing order and the two push questions are on a clarify card, not decided here.</li>
@@ -49,7 +49,7 @@ code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1
 <tr><td>Title</td><td>Pre-initiatives SSO: oauth2-multi, Menu and PictureViewer (DMR-39015)</td></tr>
 <tr><td>Projects</td><td>Menu, oauth2-multi, pictureviewer (derived from the three attached trees)</td></tr>
 <tr><td>Trees attached</td><td class="mono small">Menu/.worktrees/20261020_1624_DMR-39015_menuOAuth2Gateway<br>oauth2-multi/.worktrees/DMR-39015-turnover<br>pictureviewer/.worktrees/pr7-carry-the-spec</td></tr>
-<tr><td>Waves</td><td>4: W1 <span class="mono">wave-menu-sso-landed</span> (done, 1 member), W2 <span class="mono">wave-pictureviewer-sso-landed</span> (done, 4), W3 <span class="mono">wave-oauth2-multi-pkce-landed</span> (done, 2), W4 <span class="mono">wave-land-the-three-review-prs</span> (ready, 3 members: 498, 499, 500)</td></tr>
+<tr><td>Waves</td><td>4: W1 <span class="mono">wave-menu-sso-landed</span> (was done on 1 member, 297; the cap emptied it at 17:28), W2 <span class="mono">wave-pictureviewer-sso-landed</span> (done, 3 after the cap took 295), W3 <span class="mono">wave-oauth2-multi-pkce-landed</span> (done, 2), W4 <span class="mono">wave-land-the-three-review-prs</span> (ready, 3 members: 498, 499, 500)</td></tr>
 <tr><td>History</td><td>create and three attaches, each recorded as <span class="mono">assistant-1</span></td></tr>
 </table>
 </div>
@@ -65,9 +65,9 @@ code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1
 <p class="small">PR reads are Bitbucket REST GETs against <code>git.sefl.com/rest/api/1.0/projects/IT/repos/&lt;repo&gt;/pull-requests/&lt;id&gt;</code> at 2026-11-23T16:13Z. Master heads read the same minute: Menu 0aee00d, PictureViewer 360aa04, oauth2-multi 2f42127. None of those contains an SSO commit.</p>
 </div>
 
-<h2>W1. <span class="mono">wave-menu-sso-landed</span> - done</h2>
+<h2>W1. <span class="mono">wave-menu-sso-landed</span> - was done; the cap has since emptied it</h2>
 <p class="sub">Menu: SSO and the dash sweep landed; PR #9 open at f42dc98</p>
-<p class="note">The lane now holds one member (297). Row 293 was a member when its note was written and was dropped at 16:17:33 when row 496, an automatic collision ruling, was added to the same full queue; row 294 was a member when this report was first written and was evicted by the same cap afterwards, before the 17:06Z read. Their records are kept in the table below, marked evicted.</p>
+<p class="note">The lane held one member (297) at the 17:06Z read. At 17:28:49 the panel added row 501, a collision ruling for this tree, and the 200-row cap dropped 297 to make room, so at 17:45Z the lane is empty. Rows 293 (dropped at 16:17:33 when row 496 arrived) and 294 (dropped later) went the same way. Their records stay in the table below, marked evicted.</p>
 <table>
 <tr><th>Item</th><th>What landed</th><th>Branch</th><th>PR (read at write)</th><th>Landed as (read at write)</th><th>Evidence command</th></tr>
 <tr>
@@ -94,7 +94,7 @@ code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1
 <td class="mono small">af3fa881ec21b43d2b772b359844d97fa9c3eed4<div class="ev">on feature/menu-oauth2-gateway</div><div class="ev">local only; line af3fa88, origin e05db4c</div></td>
 <td class="mono tiny">git -C Menu log -1 af3fa88; git -C Menu rev-parse feature/menu-oauth2-gateway</td>
 </tr>
-</table><h2>W2. <span class="mono">wave-pictureviewer-sso-landed</span> - done</h2>
+</table><h2>W2. <span class="mono">wave-pictureviewer-sso-landed</span> - done, 3 members after the cap took 295</h2>
 <p class="sub">PictureViewer: SSO landed and walked on dev; PR #7 open at 1af2685</p>
 
 <table>
@@ -193,7 +193,7 @@ code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1
 <li><span class="mono">298</span> - On email-multi PR #9, read the three open comments from the 2026-11-05 review and reply to each (done).</li>
 <li><span class="mono">299</span> - Author a poc-breaking PDL pipeline and make it selectable in the panel (done).</li>
 </ul>
-<p>The adds then took ids 498, 499 and 500, and the queue stayed at 200 rows: no wave member was evicted this time. The three removed rows are closed work in other repos, not SSO items; their text is not reproduced here. The automatic cap will keep doing this to the oldest done rows on every future add, which is the one structural weakness this record cannot fix from a report.</p>
+<p>The three removed rows are closed work in other repos, not SSO items; their text is not reproduced here. The adds then took ids 498, 499 and 500, and the queue stayed at 200 rows: no wave member was evicted by these writes. The panel's own rows 501 and 502, added at 17:28:49 and 17:29:48, then evicted 295 and 297; at 17:45Z W2 reads 301, 302 and 307 and W1 reads empty. The automatic cap will keep doing this to the oldest done rows on every add, which is the one structural weakness this record cannot fix from a report.</p>
 </div>
 
 <h2>The two push gaps, measured</h2>
@@ -211,7 +211,7 @@ code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1
 <div class="card">
 <ul>
 <li><strong>Initiative and waves went through the panel's HTTP routes:</strong> <code>POST /api/initiatives</code> (201, id above), three <code>POST /api/initiatives/move</code> (200, changed true each), four <code>POST /api/waves</code> (200 each).</li>
-<li><strong>The next wave's membership went through the queue route.</strong> Three <code>POST /api/assistant/queue</code> adds carried <code>waveId</code> in the payload (200 each: ids 498, 499 and 500), and three deletes made room under the cap first (200 each: ids 296, 298 and 299). The read-back is <code>GET /api/waves?initiative=init_mwtglvya_dq4bat</code>: W4 lists 498, 499 and 500, W1 still lists 297, W2 still lists 295, 301, 302 and 307.</li>
+<li><strong>The next wave's membership went through the queue route.</strong> Three <code>POST /api/assistant/queue</code> adds carried <code>waveId</code> in the payload (200 each: ids 498, 499 and 500), and three deletes made room under the cap first (200 each: ids 296, 298 and 299). The read-back at 17:07Z, <code>GET /api/waves?initiative=init_mwtglvya_dq4bat</code>, listed W4 as 498, 499 and 500, W1 as 297 and W2 as 295, 301, 302 and 307. By 17:45Z rows 501 and 502 had evicted 295 and 297, so the same read lists W4 as 498, 499 and 500, W1 as empty and W2 as 301, 302 and 307.</li>
 <li><strong>The evidence went onto the existing rows</strong> with the queue route's <code>note</code> action, one note per item, so no run history was rewritten and no new row was filed. All nine note writes answered 200; row 293 was evicted later by the cap, not by this step.</li>
 <li><strong>The three landed waves' membership did not go through the queue route.</strong> The running panel (PID 24216, started 2026-11-23 06:17) predates <code>80252ec2</code> "the edit patch takes wave", which landed at 10:18 the same day: its <code>edit</code> action silently ignores a <code>wave</code> field, so the rows answered 200 with <code>waveId: null</code>. The other door at the time, <code>add</code> with a wave id, would have pushed the oldest done rows out of the queue's 200-row cap - the SSO rows this initiative records. Membership was therefore written with the panel's own queue store functions (<code>readQueueFor</code>, <code>editTask</code>, <code>writeQueueFor</code> from <code>lib/assistant/queue.js</code>), which is the same writer the route calls; the queue stayed at 200 rows and nothing was evicted by that write. The next wave's membership, filed after this report, did go through the route's <code>add</code> with a wave id.</li>
 <li><strong>Nothing was restarted, no other assistant's queue was touched, and no tree with a live run was written to.</strong></li>
