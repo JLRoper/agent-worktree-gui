@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What happened to the original implementation of the Initiatives tab rewrite</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #181d26; --sunk: #13181f; --line: #262c37; --hair: #3c424d;
+    --text: #e6e9ef; --dim: #9aa4b2; --meta: #7c8798;
+    --ok: #7ee787; --wait: #f0c674; --bad: #ff9c94; --info: #9ecbff; --link: #7fb2e8;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 28px 120px; }
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 34px; }
+  .eyebrow { font: 600 11.5px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--meta); }
+  h1 { font-size: 33px; line-height: 1.18; letter-spacing: -.015em; margin: 14px 0 12px; font-weight: 650; }
+  .lede { font-size: 17px; line-height: 1.55; color: var(--dim); max-width: 80ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .meta b { color: var(--dim); font-weight: 600; }
+  h2 { font-size: 23px; line-height: 1.3; letter-spacing: -.01em; margin: 54px 0 6px; font-weight: 650; }
+  h2 .n { color: var(--meta); font: 600 13px/1 var(--mono); margin-right: 10px; vertical-align: 4px; }
+  h3 { font-size: 16.5px; line-height: 1.4; margin: 30px 0 6px; font-weight: 620; }
+  p { margin: 10px 0; max-width: 86ch; }
+  .kicker { color: var(--dim); max-width: 82ch; margin: 0 0 18px; }
+  ul, ol { max-width: 86ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 12.5px/1.5 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e2; }
+  pre { font: 12.5px/1.6 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #cfd6e2; }
+  pre code { background: none; border: 0; padding: 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(127,178,232,.3); }
+  a:hover { border-bottom-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); border-bottom-color: var(--hair); }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  code.hash { white-space: nowrap; }
+  tbody tr:hover td { background: rgba(255,255,255,.015); }
+  .note { border: 1px solid var(--hair); border-left: 3px solid var(--wait); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 24px 0 10px; }
+  .note h4 { margin: 0 0 8px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--wait); }
+  .note p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .verdict { border: 1px solid var(--hair); border-left: 3px solid var(--ok); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 24px 0 10px; }
+  .verdict h4 { margin: 0 0 8px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ok); }
+  .verdict p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .b { display: inline-block; font: 600 9.5px/1.55 var(--mono); letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 1px 8px; border: 1px solid; vertical-align: 1px; white-space: nowrap; }
+  .b.ok { color: var(--ok); border-color: rgba(126,231,135,.4); background: rgba(126,231,135,.08); }
+  .b.warn { color: var(--wait); border-color: rgba(240,198,116,.4); background: rgba(240,198,116,.08); }
+  .b.bad { color: var(--bad); border-color: rgba(255,156,148,.4); background: rgba(255,156,148,.08); }
+  .b.info { color: var(--info); border-color: rgba(158,203,255,.4); background: rgba(158,203,255,.08); }
+  footer { margin-top: 70px; border-top: 1px solid var(--line); padding-top: 18px; font: 12px/1.6 var(--mono); color: var(--meta); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Forensics - the Initiatives tab's rewrite</div>
+  <h1>What happened to the original implementation</h1>
+  <p class="lede">The code was never lost. The page that documented it was, and it was destroyed by two rules that are
+  both still in force today: an untracked file in a worktree, and a shared <code>info/exclude</code> that hides every
+  <code>docs/reports/*.html</code> from <code>git status</code>.</p>
+  <div class="meta">
+    <span><b>Written</b> 2026-11-23</span>
+    <span><b>Measured at</b> origin/main <code>cf72e299</code> (1.157.9) plus this branch</span>
+    <span><b>Method</b> git refs and tree hashes, the landed PRs, one reproduced probe</span>
+    <span><b>Verdict</b> code intact, report destroyed and rebuilt</span>
+  </div>
+</header>
+
+<h2><span class="n">01</span>The answer</h2>
+<p class="kicker">Four different things can be called "the original implementation of the Initiatives tab rewrite". Three
+of them are intact, one is gone, and the gone one is not code.</p>
+
+<ol>
+  <li><b>The tab itself</b>, created in 1.119.0 (PR 791, merged 2026-11-19T16:19Z) as "a tab beside Role, and an
+  Initiative column on the chart". All twenty files it added are still in the tree: <code>lib/chart-columns.js</code>,
+  <code>public/charts.js</code>, <code>public/chart.css</code>, <code>public/render-projects.js</code>. The chart's
+  Initiative column still draws (<code>public/charts.js</code> names the initiative four times).</li>
+  <li><b>The redesign's first implementation</b>, 1.144.0 (PR 818, merged 2026-11-21T07:50Z): 8 files, +1,942/-95,
+  the rubric at 4 of 16 before and 16 of 16 after. It was not replaced by a rival branch; The Route (PR 852) evolved
+  it in place. Its two-column grid is still the grid the wide card uses, its empty states are still drawn, and its
+  gate tool is still the gate. Its 4px spacing scale and four-step type scale are the part that did not survive.</li>
+  <li><b>The Route's first cut</b>, <code>0773a88a</code> on <code>wtgui/build-the-reader-s-chosen-initiatives-b58037</code>:
+  landed byte for byte as <code>01c22b3f</code> (identical tree <code>81d41afd</code>), then amended by the three
+  after-review commits in 1.157.6. Nothing about it was dropped in the rebase, and its branch is still on origin.</li>
+  <li><b>The implementation report</b>, the page that measured the rewrite: <span class="b bad">destroyed</span>. It
+  was written as an untracked file in a worktree that was then deleted, and <code>git status</code> never showed it
+  because <code>.git/info/exclude</code> line 13 ignores <code>docs/reports/*.html</code> in every worktree. PR 854
+  rebuilt it and force-added it, and its own opening sentence says so: "This page is a rebuild. The first one was
+  lost."</li>
+</ol>
+
+<div class="verdict">
+  <h4>The short answer</h4>
+  <p>If "the original implementation" means the code, nothing happened to it: it landed, and each later round changed
+  it in place, so every version is reachable by hash and most of it is still in the tree. If it means the page that
+  recorded the implementation, it was destroyed by the untracked-file-plus-exclude pair, and what exists now is a
+  rebuild that re-measured rather than recovered.</p>
+</div>
+
+<h2><span class="n">02</span>The lineage, in the order it landed</h2>
+<p class="kicker">Every row is a merged PR, read from the API, with the version its own commit declared.</p>
+
+<table>
+  <thead><tr><th>Version</th><th>PR</th><th>Merged</th><th>What it did</th><th>Its product files</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="num">1.119.0</td><td class="num">791</td><td class="num">11-19 16:19Z</td>
+      <td>The tab beside Role, and an Initiative column on the worktree chart. The first implementation of the
+      Initiatives tab.</td>
+      <td><code>lib/initiatives.js</code>, <code>routes/initiatives.js</code>, <code>lib/chart-columns.js</code>,
+      <code>public/charts.js</code>, <code>public/chart.css</code>, <code>public/assistant.js</code>,
+      <code>public/style.css</code></td>
+    </tr>
+    <tr>
+      <td class="num">1.144.0</td><td class="num">818</td><td class="num">11-21 07:50Z</td>
+      <td>The redesign's first implementation. A 4px spacing scale, a four-step type scale, real empty states, AA
+      hover, active and focus, focus that survives the tab's four-second repaint, two columns above 1000px. Rubric
+      4/16 before, 16/16 after; its gate 11/11 claims.</td>
+      <td><code>public/assistant.js</code> (+80), <code>public/style.css</code> (193 lines touched), plus four tools
+      totalling 1,656 lines and a 106-line baseline</td>
+    </tr>
+    <tr>
+      <td class="num">1.152.0<br>1.153.0<br>1.154.0<br>1.155.0</td><td class="num">829<br>830<br>...</td>
+      <td class="num">11-21/22</td>
+      <td>The wave layer the Route later draws: the first slice, the exit gate's evidence read, the two-lane block,
+      the auto switch.</td>
+      <td><code>lib/waves.js</code>, <code>routes/waves.js</code>, <code>public/core/waves-lane.js</code></td>
+    </tr>
+    <tr>
+      <td class="num">1.157.3</td><td class="num">852</td><td class="num">11-22 18:32Z</td>
+      <td><b>The Route</b>, on round B's token layer. One token layer declared on <code>#as-initiatives</code>,
+      carrying the sketch's values; the folded ledger row, the opened plate and its numbered stations.</td>
+      <td><code>public/style.css</code> (940 lines touched), <code>public/assistant.js</code> (+85),
+      <code>public/core/initiative-fold.js</code> (+67), <code>public/core/waves-lane.js</code> (+29); +923/-198
+      overall</td>
+    </tr>
+    <tr>
+      <td class="num">1.157.4</td><td class="num">854</td><td class="num">11-22 19:39Z</td>
+      <td>The implementation report, rebuilt after the original was lost, and committed with <code>git add -f</code>.
+      Docs only.</td>
+      <td><code>docs/reports/initiatives-redesign-route-2026-11-22.html</code></td>
+    </tr>
+    <tr>
+      <td class="num">1.157.6</td><td class="num">855</td><td class="num">11-22 19:57Z</td>
+      <td>The after-review round: the scroll gate repaired to ask for the reachable bottom, ink-2 restored on the
+      folded preview, one folded edge, four actions on one row.</td>
+      <td>The same three files plus <code>tools/verify-initiatives-scroll.mjs</code></td>
+    </tr>
+    <tr>
+      <td class="num">1.157.10</td><td class="num">857</td><td class="num">open</td>
+      <td>The closing note as a callout beside the lanes, the proof of the Route against the sketch, the design for the
+      wave write route, and this page.</td>
+      <td><code>public/core/waves-lane.js</code>, <code>public/style.css</code>,
+      <code>test/waves-lane.test.js</code>, docs</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2><span class="n">03</span>Nine commits that look unlanded, and the twins that prove they are not</h2>
+<p class="kicker">A commit that is not an ancestor of main reads like lost work. Nine commits touching the tab's own
+module and its routes are in that state, and every one of them has a twin on main with an identical tree, because each
+landing branch was rebased onto main rather than merged.</p>
+
+<p>Read the other way round: the landed copy is the one on <code>main</code>, and the branch keeps the pre-rebase
+original. Same content, different hash, which is exactly what a rebase leaves behind.</p>
+
+<table>
+  <thead><tr><th>Pre-rebase copy (branch)</th><th>Landed copy (main)</th><th>Tree</th><th>Subject</th></tr></thead>
+  <tbody>
+    <tr><td class="num"><code class="hash">0773a88a</code></td><td class="num"><code class="hash">01c22b3f</code></td><td class="num">81d41afd <span class="b ok">identical</span></td><td>the tab as The Route, on round B's token layer</td></tr>
+    <tr><td class="num"><code class="hash">a65168cd</code></td><td class="num"><code class="hash">d3fcf095</code></td><td class="num">7264c42c <span class="b ok">identical</span></td><td>the auto switch opens the next wave on a read, and defaults off</td></tr>
+    <tr><td class="num"><code class="hash">e05b365a</code></td><td class="num"><code class="hash">1676ba49</code></td><td class="num">a4828e57 <span class="b ok">identical</span></td><td>a wave gate reads evidence: the PR through the API, the landing by content, an abandonment by its reason</td></tr>
+    <tr><td class="num"><code class="hash">7f2e7267</code></td><td class="num"><code class="hash">4b35d8f6</code></td><td class="num">c332849b <span class="b ok">identical</span></td><td>a wave of tasks has no record and no state a reader can see, so the tab cannot draw one</td></tr>
+    <tr><td class="num"><code class="hash">74dea554</code></td><td class="num"><code class="hash">9c232359</code></td><td class="num">8101379a <span class="b ok">identical</span></td><td>draw the assistant's tasks with the queue's own card</td></tr>
+    <tr><td class="num"><code class="hash">04689861</code></td><td class="num"><code class="hash">e41b056f</code></td><td class="num">2030703e <span class="b ok">identical</span></td><td>a permission tier in settings, and the actor on every change</td></tr>
+    <tr><td class="num"><code class="hash">2db830da</code></td><td class="num"><code class="hash">5fafc57c</code></td><td class="num">52bc70d6 <span class="b ok">identical</span></td><td>the branch name links to its repo in the Initiatives tab, from the chart's own renderer</td></tr>
+    <tr><td class="num"><code class="hash">707a6f0c</code></td><td class="num"><code class="hash">b9ba1c97</code></td><td class="num">a4e00752 <span class="b ok">identical</span></td><td>fold the initiative description and the title card, and count queued</td></tr>
+    <tr><td class="num"><code class="hash">b9ceea66</code></td><td class="num"><code class="hash">89eff845</code></td><td class="num">208c89ad <span class="b ok">identical</span></td><td>the initiatives store, its endpoints and the question a move asks</td></tr>
+  </tbody>
+</table>
+
+<p>The after-review branch carries three more product commits in the same state, proven the same way:
+<code>e070257d</code> to <code>9cc5d2db</code> (tree <code>d8508045</code>), <code>b227e110</code> to
+<code>0a9a5bf1</code> (tree <code>26c9ee0c</code>) and <code>1ae914e4</code> to <code>74357f2e</code> (tree
+<code>73a179de</code>).</p>
+
+<p>The branches that hold the pre-rebase copies are still on origin: <code>wtgui/build-the-reader-s-chosen-initiatives-b58037</code>
+(tip <code>ddea5f49</code>, 2026-11-22 13:30) and <code>wtgui/fix-after-review-findings</code>. Their worktrees are
+gone from disk, which is why the work looks like it vanished: the local directories were deleted, the branches were
+not, and the content is on main either way.</p>
+
+<h2><span class="n">04</span>The one thing that was lost, and the two rules that lost it</h2>
+<p class="kicker">PR 854 explains it in its own body, and both causes are still in force today.</p>
+
+<p>The page was written by row 205's worker as an <b>untracked</b> file in its worktree. Untracked and then a deleted
+worktree means gone: there is no object to recover, because no object was ever created. The second half of the cause
+is the one that made the loss silent, and it is worth quoting exactly:</p>
+
+<div class="note">
+  <h4>PR 854, why there is a rebuild</h4>
+  <p>"The original page was written by row 205's worker as an <b>untracked</b> file in its worktree, so it died with
+  the tree: <code>git diff c2692598 ddea5f49 -- docs/reports</code> on the landed commits prints nothing. The second
+  half of the cause is the one that made the loss silent: this clone's <code>.git/info/exclude</code> carries
+  <code>docs/reports/*.html</code> under "Generated reports are local artefacts", and <code>info/exclude</code> is
+  shared by every worktree, so <code>git status</code> never showed the file at all."</p>
+</div>
+
+<p>I re-ran the check the quote makes, on this tree: <code>git diff --stat c2692598 ddea5f49 -- docs/reports</code>
+prints zero lines, so the Route's landed commits carried no report at all. And the exclude rule is still there, at
+<code>.git/info/exclude</code> lines 12 and 13:</p>
+
+<pre><code>12: # Generated reports are local artefacts
+13: docs/reports/*.html</code></pre>
+
+<p>Which means the trap is still armed. Writing an untracked report into <code>docs/reports/</code> and asking
+<code>git status</code> about it produces no output at all, and the ignore is inherited by every worktree because
+<code>info/exclude</code> lives in the shared git directory:</p>
+
+<pre><code>$ : &gt; docs/reports/zz-probe.html
+$ git status --short docs/reports/zz-probe.html
+$ git check-ignore -v --no-index docs/reports/zz-probe.html
+&lt;repo&gt;/.git/info/exclude:13:docs/reports/*.html&#9;docs/reports/zz-probe.html</code></pre>
+
+<p>The first command produced a file, the second printed nothing, the third names the rule. A worker that checks its
+own work with <code>git status</code> sees a clean tree while the only copy of a page sits untracked on disk. PR 854's
+own sentence for it: every <code>.html</code> report on main got there with <code>git add -f</code>, and this page did
+too.</p>
+
+<p>This page had to be added the same way. It is the one detail of this report that is also a demonstration of its own
+subject.</p>
+
+<h3>What the rebuild did and did not recover</h3>
+<p>The rebuilt page re-measured the implementation at 1.157.4 rather than recovering the lost numbers: its "before"
+column is a <code>git archive</code> of <code>86bea38</code> (1.157.1) served by the same harness, which is the right
+call and a different thing from the original's own run. So: the code's history is intact, the original page's own
+measurements are gone, and what a reader can open today is a re-measurement of the same question.</p>
+
+<h2><span class="n">05</span>What survives of the original implementation, and what does not</h2>
+
+<h3>Survives, unchanged in intent</h3>
+<ul>
+  <li><b>The wide card's two-column grid.</b> At 1.144.0 it is <code>public/style.css:4825</code>, a
+  <code>@container (min-width: 1000px)</code> with areas head, desc, chips, side, assist, hist. Today it is
+  <code>public/style.css:5658</code>, the same container query and the same areas, restyled in round B's tokens and
+  with one row added: <code>"waves waves"</code>. The Route built on the grid, it did not replace it.</li>
+  <li><b>The empty states.</b> <code>.init-empty</code> is still styled four times in <code>public/style.css</code> and
+  drawn twice in <code>public/assistant.js</code>.</li>
+  <li><b>The gate and its harness.</b> <code>tools/verify-initiatives-redesign.mjs</code>, the fixture, the measure
+  tool and the 1.144.0 baseline are all still in the tree, and the gate answered 11/11 claims and 16/16 docked when
+  it was written; it now answers 11/11 claims, 18/18 docked and 17/18 wide, because the Route added claims to it.</li>
+  <li><b>The 1.144.0 page itself</b>, <code>docs/reports/initiatives-redesign.html</code> ("Initiatives tab: measured
+  before, redesigned after"), still tracked on main and still openable.</li>
+  <li><b>The store and the routes</b> created in 1.119.0: <code>lib/initiatives.js</code> and
+  <code>routes/initiatives.js</code> are the same two files the tab reads and writes through now.</li>
+</ul>
+
+<h3>Does not survive</h3>
+<ul>
+  <li><b>The 4px spacing scale and the four-step type scale.</b> None of their token names are left: <code>--init-space</code>
+  and <code>--space-1</code> each answer 0 in <code>public/style.css</code>, where the Route's
+  <code>--tab-s1</code> to <code>--tab-s6</code> now carry 26 uses between them.</li>
+  <li><b>The column widths.</b> 1.144.0 asked for <code>minmax(0, 72ch) minmax(320px, 640px)</code>; today the grid is
+  <code>minmax(0, 66ch) minmax(320px, 1fr)</code>, so the side column can take the width the pane has instead of
+  stopping at 640px.</li>
+  <li><b>The original page's measurements</b>, as above: replaced by a re-measurement, not recovered.</li>
+</ul>
+
+<h2><span class="n">06</span>What can be recovered, and how</h2>
+<p class="kicker">Everything that was committed is one command away. What was never committed is not recoverable by any
+command, which is the whole lesson.</p>
+
+<table>
+  <thead><tr><th>You want</th><th>The command</th></tr></thead>
+  <tbody>
+    <tr><td>The Route's first cut, byte for byte</td><td><code>git show 0773a88a</code> or <code>git show 01c22b3f</code></td></tr>
+    <tr><td>The tab as 1.144.0 drew it</td><td><code>git show 3d3241fd:public/assistant.js</code>, <code>git show 3d3241fd:public/style.css</code></td></tr>
+    <tr><td>The tab as it was before the redesign</td><td><code>git show v1.119.0:public/assistant.js</code></td></tr>
+    <tr><td>Any version's whole tree</td><td><code>git archive v1.157.3 | tar -x -C &lt;dir&gt;</code> (tags exist for v1.157.3 through v1.157.9)</td></tr>
+    <tr><td>The pre-rebase copies</td><td><code>git log --oneline origin/wtgui/build-the-reader-s-chosen-initiatives-b58037</code></td></tr>
+    <tr><td>Was this commit's content landed?</td><td><code>git rev-parse &lt;commit&gt;^{tree}</code> and compare with the subject's twin on main</td></tr>
+    <tr><td>Was this file ever committed?</td><td><code>git log --all --oneline -- &lt;path&gt;</code>: zero lines means never, and never is unrecoverable</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="n">07</span>How to check this report</h2>
+<pre><code>cd &lt;the worktree&gt;
+git log --all --oneline -- public/core/initiative-fold.js routes/initiatives.js | wc -l
+git branch -a --contains 0773a88a
+git show -s --format="%T %s" 0773a88a 01c22b3f
+git diff --stat c2692598 ddea5f49 -- docs/reports
+git check-ignore -v --no-index docs/reports/anything.html
+gh pr view 854 --json body -q .body | head -12
+gh pr view 818 --json body -q .body</code></pre>
+
+<h2><span class="n">08</span>Verdict</h2>
+<table>
+  <thead><tr><th>"The original implementation" means</th><th>What happened to it</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr><td>The tab as first created (1.119.0, PR 791)</td><td><span class="b ok">intact</span> in the tree, in its store and routes, and on the chart's Initiative column</td><td>the four chart files present; <code>public/charts.js</code> still names the initiative</td></tr>
+    <tr><td>The redesign's first implementation (1.144.0, PR 818)</td><td><span class="b ok">intact</span> and evolved in place by The Route: the grid, the empty states and the gate survive; the spacing and type scales were replaced</td><td>style.css 4825 against 5658; the gate's 11/11 at 16 then 18 docked claims</td></tr>
+    <tr><td>The Route's first cut (<code>0773a88a</code>)</td><td><span class="b ok">landed</span> byte for byte as <code>01c22b3f</code>, then amended by three commits</td><td>identical tree <code>81d41afd</code></td></tr>
+    <tr><td>The page that measured the rewrite</td><td><span class="b bad">destroyed</span>, then rebuilt and force-added in 1.157.4; the original's own numbers are gone</td><td>PR 854's body, <code>info/exclude:13</code>, the probe above, <code>git diff --stat</code> answering zero</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  Written 2026-11-23 against origin/main <code>cf72e299</code> (1.157.9) and this branch's five commits. Every hash,
+  tree hash, file:line and count above was read in this session; the two PR bodies quoted are quoted, not paraphrased.
+  Committed with <code>git add -f</code>, because that is the only way a page in <code>docs/reports/</code> is ever
+  committed here.
+</footer>
+
+</div>
+</body>
+</html>
