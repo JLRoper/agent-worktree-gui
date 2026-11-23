@@ -67,7 +67,14 @@
     return `<span class="chip wave-gate ${GATE_TONES[state]}" data-wave-gate="${esc(kind)}" data-gate-state="${esc(state)}"${tone ? ' data-gate-tone="nothing-to-check"' : ""} title="${esc(`${label}: ${word}${why ? ` - ${why}` : ""}`)}">${esc(label)} - ${esc(word)}</span>`;
   }
 
-  /** One member: its id, its title, its project when it has one, and the task's own state - or its named abandonment. */
+  /**
+   * One member: its id, its title, its project when it has one, the task's own state - or its named abandonment - and
+   * the reports chip, with the list behind it when the reader has unfolded it.
+   *
+   * A `<div>`, not the `<span>` this row used to be: the list the chip unfolds is a block (one row per report), and a
+   * block inside a span is markup a browser tolerates and a screen reader narrates wrong. Every rule that gives the row
+   * its look is the class (public/style.css `#as-initiatives .wave-member`), so the tag is the only thing that changed.
+   */
   function memberHtml(member, esc = defaultEsc) {
     const abandoned = member && member.abandoned && String(member.abandoned.reason || "").trim() ? String(member.abandoned.reason).trim() : "";
     const state = abandoned ? "abandoned" : MEMBER_STATES.includes(member && member.state) ? member.state : "queued";
@@ -82,8 +89,140 @@
     ]
       .filter(Boolean)
       .join(" - ");
-    return `<span class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b><span class="wave-member-title">${esc(member && member.title ? member.title : "")}</span>${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span></span>`;
+    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b><span class="wave-member-title">${esc(member && member.title ? member.title : "")}</span>${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
   }
+
+  // ---- the reports chip: a task's .html reports, listed under its member row ----------------------------------------
+  // THE LIST IS DRAWN FROM MODULE STATE, NOT FROM THE DOM. The Initiatives tab repaints on every snapshot, so a list kept
+  // only in the page would shut under the reader between two reads; `REPORT_OPEN` is whether a task's list is unfolded
+  // and `REPORT_STATE` is the session cache the chip was asked for: one fetch per task, and the same rows after a
+  // repaint. Both are per-page state (this script is loaded once), never a store, a cookie or a write.
+  //
+  // EVERY ANSWER IS DRAWN, INCLUDING THE ONE THAT HAS NOTHING TO OPEN. A task with no report, a read that failed and a
+  // declared report whose file is gone each say so in words - a control that can be pressed is never a silent no-op, and
+  // a row with no file is never handed a link that would land on a 404.
+  const REPORT_STATE = new Map();
+  const REPORT_OPEN = new Set();
+  const REPORT_STYLE_ID = "wt-waves-report-css";
+  const REPORT_LABEL = "reports";
+
+  /** The key both the cache and the open set use: the thread plus the task id, which is what the route is keyed by. */
+  const reportKey = (member) => {
+    const thread = String((member && member.thread) || "").trim();
+    const id = member && member.id != null ? String(member.id) : "";
+    return thread && id ? `${thread}|${id}` : "";
+  };
+
+  /** "2h ago" for a report's own timestamp, and nothing when it carries none. */
+  function agoText(iso) {
+    const at = Date.parse(String(iso || ""));
+    if (!Number.isFinite(at)) return "";
+    const sec = Math.max(0, Math.round((Date.now() - at) / 1000));
+    if (sec < 60) return "just now";
+    if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+    return `${Math.round(sec / 86400)}d ago`;
+  }
+
+  /** What the chip says for one member: the label, the tone and the sentence, from the cache and the open state. */
+  function reportsChipState(member) {
+    const key = reportKey(member);
+    const thread = member && member.thread ? String(member.thread) : "";
+    const state = key ? REPORT_STATE.get(key) : null;
+    const open = Boolean(key && REPORT_OPEN.has(key));
+    const known = state && state.status === "ok" && Array.isArray(state.reports) ? state.reports : null;
+    const label = !key ? REPORT_LABEL : known ? (known.length ? `${REPORT_LABEL} ${known.length}` : "no reports") : REPORT_LABEL;
+    const tone = known && !known.length ? " is-none" : "";
+    const title = !thread
+      ? "this task names no thread, so its reports cannot be located - an id alone is per-assistant and would name the wrong row"
+      : open
+        ? "fold the list back up - Escape closes it too, and every link in it opened in a new tab"
+        : "list this task's .html reports: the ones its thread declared at settle, and the ones its tree added under docs/reports - each opens in a new tab";
+    return { key, open, known, label, tone, title };
+  }
+
+  /** The chip: one per member row, and its label carries what the read answered rather than a count it made up. */
+  function reportsChipHtml(member, esc = defaultEsc) {
+    const chip = reportsChipState(member);
+    const task = member && member.id != null ? String(member.id) : "";
+    const thread = member && member.thread ? String(member.thread) : "";
+    const project = member && member.project ? String(member.project) : "";
+    return `<button type="button" class="chip wave-reports${chip.tone}" data-wave-reports="${esc(chip.key)}" data-task="${esc(task)}" data-thread="${esc(thread)}" data-project="${esc(project)}" aria-expanded="${chip.open ? "true" : "false"}"${chip.key ? "" : " disabled"} title="${esc(chip.title)}">${esc(chip.label)}</button>`;
+  }
+
+  /** One report: the title as a link into the view route, and its age, path and source as the meta line. */
+  function reportRowHtml(row, esc = defaultEsc) {
+    const title = row && (row.title || row.name) ? String(row.title || row.name) : "a report";
+    const href = row && row.url ? String(row.url) : "";
+    // The meta names the file by the path the reader can recognise - the tree-relative one the view route takes - and
+    // falls back to the absolute path only when there is no relative one (a delivery from outside the tree). The whole
+    // path is on the link's title either way.
+    const where = row && row.rel ? String(row.rel) : row && row.path ? String(row.path) : "";
+    const meta = [agoText(row && row.at), where, row && row.source ? `from ${row.source}` : ""].filter(Boolean).join(" - ");
+    const link = href
+      ? `<a class="wave-report-link" href="${esc(href)}" target="_blank" rel="noopener" title="open ${esc(row.path || title)} in a new tab">${esc(title)}</a>`
+      : `<span class="wave-report-link is-dead" title="${esc(row && row.why ? row.why : "this report names no file to open")}">${esc(title)}</span>`;
+    const why = !href && row && row.why ? `<div class="as-hint wave-report-why">${esc(row.why)}</div>` : "";
+    return `<div class="wave-report-row" data-report-source="${esc(row && row.source ? row.source : "")}">${link}<span class="as-hint wave-report-meta">${esc(meta)}</span>${why}</div>`;
+  }
+
+  /** The list under the member row: only while it is unfolded, and always an answer - rows, or the sentence for none. */
+  function reportsListHtml(member, esc = defaultEsc) {
+    const key = reportKey(member);
+    if (!key || !REPORT_OPEN.has(key)) return "";
+    const box = (inner) => `<div class="wave-reports-list" data-wave-report-list="${esc(key)}" role="group" aria-label="the .html reports this task left">${inner}</div>`;
+    const state = REPORT_STATE.get(key);
+    if (!state) return box(`<div class="as-hint wave-report-note">reading this task's reports...</div>`);
+    if (state.status === "error") {
+      return box(`<div class="as-ask is-bad wave-report-bad" role="alert">the reports read failed: ${esc(state.error || "no answer given")}</div>`);
+    }
+    const rows = Array.isArray(state.reports) ? state.reports : [];
+    if (!rows.length) return box(`<div class="as-hint wave-report-none">no .html report recorded for this task</div>`);
+    const missing = state.skipped && state.skipped.length
+      ? `<div class="as-hint wave-report-skipped">${esc(state.skipped.map((s) => `${s.source}: ${s.why}`).join(" - "))}</div>`
+      : "";
+    return box(`${rows.map((row) => reportRowHtml(row, esc)).join("")}${missing}`);
+  }
+
+  // ---- the session state, as functions (the click handler and the tests both come through here) ----------------------
+  /** Record what the route answered for one task. The chip and the list read this; nothing else writes it. */
+  function setReports(key, state) {
+    const id = String(key || "");
+    if (!id) return null;
+    const next = state && typeof state === "object" ? state : { status: "ok", reports: [] };
+    REPORT_STATE.set(id, next);
+    return next;
+  }
+
+  /** Unfold or fold one task's list. `open` defaults to flipping the current state, which is what a press means. */
+  function openReports(key) {
+    const id = String(key || "");
+    if (!id) return false;
+    REPORT_OPEN.add(id);
+    return true;
+  }
+
+  function closeReports(key) {
+    const id = String(key || "");
+    if (!id) return false;
+    REPORT_OPEN.delete(id);
+    return true;
+  }
+
+  function reportsOpenFor(key) {
+    return REPORT_OPEN.has(String(key || ""));
+  }
+
+  function reportsFor(key) {
+    return REPORT_STATE.get(String(key || "")) || null;
+  }
+
+  /** Forget everything this page cached: the next press reads the route again. */
+  function resetReports() {
+    REPORT_STATE.clear();
+    REPORT_OPEN.clear();
+  }
+
 
   /** One lane: the name it runs under, the state its members fold to, and the read saying what it can be pinned to. */
   function laneRowHtml(lane, esc = defaultEsc) {
@@ -300,6 +439,167 @@
     </div>`;
   }
 
+  // ---- the page half: the stylesheet the list needs, one fetch per task, and the two keys --------------------------
+  // THE ONLY RULES THIS CHANGE ADDS, and why they are here rather than in public/style.css: a second live run holds that
+  // sheet, so this row could not touch it. The list is a block under a row that is a four-column grid at a wide pane, so
+  // it has to span the grid and the row has to gain a fifth column for the chip - two declarations nothing in the shared
+  // sheet could give without a second owner. Everything else is the existing `.chip`, `.as-hint`, `.as-ask` and `.mono`.
+  const REPORTS_CSS = [
+    "#as-initiatives .wave-reports { cursor: pointer; }",
+    "#as-initiatives .wave-reports.is-none { color: var(--tab-ink-3); border-style: dashed; }",
+    '#as-initiatives .wave-reports[aria-expanded="true"] { border-color: var(--tab-accent); color: var(--tab-accent); }',
+    "#as-initiatives .wave-reports-list { display: block; flex-basis: 100%; width: 100%; min-width: 0; margin-top: 2px; padding-top: 4px; border-top: 1px dashed var(--tab-line); }",
+    "#as-initiatives .wave-report-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }",
+    "#as-initiatives .wave-report-link { font-family: var(--tab-font-ui); overflow-wrap: anywhere; }",
+    "#as-initiatives .wave-report-link.is-dead { color: var(--tab-ink-3); text-decoration: line-through; }",
+    "#as-initiatives .wave-report-meta, #as-initiatives .wave-report-why, #as-initiatives .wave-report-skipped { overflow-wrap: anywhere; }",
+    "@container (min-width: 900px) {",
+    "  #as-initiatives .wave-member { grid-template-columns: 44px minmax(0, 1fr) 150px 80px auto; }",
+    "  #as-initiatives .wave-reports-list { grid-column: 1 / -1; }",
+    "}",
+  ].join("\n");
+
+  /** One member's chip as the DOM reads it back: the three fields the route is keyed by. */
+  const memberFromChip = (chip) => {
+    const read = (name) => (chip && typeof chip.getAttribute === "function" ? chip.getAttribute(name) || "" : "");
+    return { id: read("data-task"), thread: read("data-thread"), project: read("data-project") };
+  };
+
+  /**
+   * One fetch per task, cached for the session. An error is cached too and is RETRIED on the next press: a read that
+   * failed once must not leave a chip that refuses to try again, and the unfolded list says what went wrong until it does.
+   */
+  async function readReports(member) {
+    const key = reportKey(member);
+    if (!key) return null;
+    const current = REPORT_STATE.get(key);
+    if (current && current.status !== "error") return current;
+    REPORT_STATE.set(key, { status: "loading", reports: [] });
+    try {
+      const query = new URLSearchParams({ thread: String(member.thread), task: String(member.id) });
+      if (member.project) query.set("project", String(member.project));
+      const answer = await root.fetch(`/api/reports?${query.toString()}`, { cache: "no-store", headers: { accept: "application/json" } });
+      const body = await answer.json().catch(() => null);
+      if (!answer.ok) throw new Error((body && body.error) || `the reports read answered HTTP ${answer.status}`);
+      const next = {
+        status: "ok",
+        reports: Array.isArray(body && body.reports) ? body.reports : [],
+        skipped: Array.isArray(body && body.skipped) ? body.skipped : [],
+        at: body && body.at ? String(body.at) : null,
+      };
+      REPORT_STATE.set(key, next);
+      return next;
+    } catch (err) {
+      const next = { status: "error", reports: [], error: String((err && err.message) || err) };
+      REPORT_STATE.set(key, next);
+      return next;
+    }
+  }
+
+  /**
+   * Repaint one chip and its list IN PLACE. The chip element is kept (its text, tone and aria-expanded are updated) so the
+   * reader's focus survives the press; only the list under it is replaced. A later lane repaint draws the same state from
+   * the same module, which is what keeps an open list from shutting under the reader.
+   */
+  function paintMember(chip) {
+    if (!chip || !chip.parentNode) return;
+    const host = chip.closest ? chip.closest(".wave-member") : null;
+    if (!host) return;
+    const member = memberFromChip(chip);
+    const state = reportsChipState(member);
+    chip.textContent = state.label;
+    chip.classList.toggle("is-none", Boolean(state.known && !state.known.length));
+    chip.setAttribute("aria-expanded", state.open ? "true" : "false");
+    chip.setAttribute("title", state.title);
+    for (const old of host.querySelectorAll("[data-wave-report-list]")) old.remove();
+    const html = reportsListHtml(member);
+    if (html) chip.insertAdjacentHTML("afterend", html);
+  }
+
+  /** A press: fold an open list back up, or unfold it and read once. */
+  async function pressReports(chip) {
+    const member = memberFromChip(chip);
+    const key = reportKey(member);
+    if (!key) return;
+    if (REPORT_OPEN.has(key)) {
+      REPORT_OPEN.delete(key);
+      paintMember(chip);
+      return;
+    }
+    REPORT_OPEN.add(key);
+    paintMember(chip); // the unfolded list says "reading..." before the answer lands
+    const cached = REPORT_STATE.get(key);
+    if (cached && cached.status !== "error") return;
+    await readReports(member);
+    for (const other of root.document.querySelectorAll("[data-wave-reports]")) {
+      if (other.getAttribute("data-wave-reports") === key) paintMember(other);
+    }
+  }
+
+  function onReportsClick(event) {
+    const chip = event.target && event.target.closest ? event.target.closest("[data-wave-reports]") : null;
+    if (!chip || chip.disabled) return;
+    event.preventDefault();
+    void pressReports(chip);
+  }
+
+  /** Escape closes what a press opened and hands focus back to the chip that opened it. */
+  function onReportsKey(event) {
+    if (!event || event.key !== "Escape") return;
+    const doc = root.document;
+    if (!doc || !doc.querySelectorAll) return;
+    const open = [...doc.querySelectorAll('[data-wave-reports][aria-expanded="true"]')];
+    if (!open.length) return;
+    const host = event.target && event.target.closest ? event.target.closest(".wave-member") : null;
+    const here = host ? host.querySelector("[data-wave-reports]") : null;
+    for (const chip of open) {
+      const key = reportKey(memberFromChip(chip));
+      if (key) REPORT_OPEN.delete(key);
+      paintMember(chip);
+    }
+    if (here && typeof here.focus === "function") here.focus();
+    event.preventDefault();
+    // THE PRESS IS CONSUMED. The rail's own Escape handler closes the whole assistant panel when the caret is inside it
+    // (public/assistant.js, "Esc closes the rail only when the caret is in it"), so without this line folding a list
+    // would also shut the panel the list was in - the same reason the pipeline window's Escape stops propagation. This
+    // listener is registered at load, before assistant.js's, so stopImmediatePropagation reaches it first.
+    event.stopImmediatePropagation?.();
+    event.stopPropagation?.();
+  }
+
+  let reportsBound = false;
+
+  /**
+   * Install the report stylesheet and the two listeners, once per document, idempotently. This is the only function here
+   * that touches the DOM; in node (where test/waves-lane.test.js imports this file) there is no document and it is never
+   * called. It installs itself at load: the lane is painted by public/assistant.js, and a chip that waited for that
+   * painter to wire it would be a button that does nothing.
+   */
+  function installReports(options = {}) {
+    const doc = options.document || root.document;
+    if (!doc || !doc.head || typeof doc.addEventListener !== "function") return false;
+    if (!doc.getElementById(REPORT_STYLE_ID)) {
+      const style = doc.createElement("style");
+      style.id = REPORT_STYLE_ID;
+      style.textContent = REPORTS_CSS;
+      doc.head.appendChild(style);
+    }
+    if (reportsBound) return true;
+    reportsBound = true;
+    doc.addEventListener("click", onReportsClick);
+    doc.addEventListener("keydown", onReportsKey);
+    return true;
+  }
+
+  try {
+    if (root.document) {
+      if (root.document.readyState === "loading") root.document.addEventListener("DOMContentLoaded", () => installReports(), { once: true });
+      else installReports();
+    }
+  } catch {
+    /* a page that cannot take the installer still gets the markup: the chip is drawn either way */
+  }
+
   root.wtWavesLane = {
     GATE_WORDS,
     GATE_TONES,
@@ -308,6 +608,22 @@
     gateWord,
     gateChipHtml,
     memberHtml,
+    // The reports chip: its markup, its session state and the installer a page uses. The state functions are public so a
+    // test can put a task's answer in the cache and prove what the lane draws from it without a browser or a fetch.
+    reportKey,
+    agoText,
+    reportsChipState,
+    reportsChipHtml,
+    reportRowHtml,
+    reportsListHtml,
+    setReports,
+    openReports,
+    closeReports,
+    reportsOpenFor,
+    reportsFor,
+    resetReports,
+    installReports,
+    REPORTS_CSS,
     laneRowHtml,
     lanesHtml,
     waveActionsHtml,

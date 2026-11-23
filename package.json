@@ -1,6 +1,6 @@
 {
   "name": "agent-worktree-gui",
-  "version": "1.158.2",
+  "version": "1.159.0",
   "private": true,
   "type": "module",
   "description": "Local GUI panel that monitors git worktrees across one or more projects (branches, merge status vs remote main, PR state, dirty work, live activity).",
@@ -150,6 +150,7 @@
     "verify:to-card": "node tools/verify-to-card.mjs",
     "verify:no-thread-log": "node tools/verify-no-thread-log.mjs",
     "verify:waves-lane": "node tools/verify-waves-lane.mjs",
+    "verify:wave-reports": "node tools/verify-wave-reports.mjs",
     "verify:waves-write": "node tools/verify-waves-write.mjs",
     "seed:pipeline-bundle": "node tools/seed-pipeline-bundle.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js",

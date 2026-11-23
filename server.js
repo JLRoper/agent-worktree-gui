@@ -110,7 +110,10 @@ import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.
 // The waves of work: an ordered, gated group of tasks inside one initiative (lib/waves.js), in their own store
 // keyed by initiative id. This slice is a READ: the lane in the Initiatives tab, and one GET beside it.
 import { Waves, waveMemberKey } from "./lib/waves.js";
-import { WAVES_PATH, createWavesRoutes, waveTemplateLookup } from "./routes/waves.js";
+import { WAVES_PATH, createWavesRoutes, queueRows, waveTemplateLookup } from "./routes/waves.js";
+// The reports a task left behind (routes/reports.js): the chip a wave member row draws, the list behind it, and the one
+// file it opens in a new tab. A read from the deliverables store joined with a git scan of the task's own tree.
+import { REPORTS_PATH, createReportsRoutes } from "./routes/reports.js";
 // The evidence a wave gate reads (lib/wave-evidence.js): the PR through the host's API, and the landing judged by
 // CONTENT on origin/main. The composition root owns the host mapping and the project registry, so the reader is
 // built here and handed to both routes that fold waves.
@@ -2069,6 +2072,23 @@ const PREFIX_MOUNTS = [
       readBody,
       authorised,
       remoteWrites,
+      log,
+    }),
+  },
+  // The reports a task left behind (routes/reports.js): GET /api/reports lists the .html reports its thread declared or
+  // its tree carries, and /api/reports/view serves one sandboxed. The queue is read through the waves module's own
+  // flattening because a task id is per-assistant and the THREAD is the key the chip's row can name. The deliverables
+  // store is a getter: this table is built before the store exists in this file, and the read is per request anyway.
+  {
+    prefix: REPORTS_PATH,
+    handles: createReportsRoutes({
+      taskRows: () => queueRows(assistant),
+      deliverables: { list: () => deliverables.list() },
+      projectRoot: (name) => {
+        const project = (registry.projects || []).find((p) => p && p.name === name);
+        return project && project.path ? project.path : null;
+      },
+      sendJson,
       log,
     }),
   },
