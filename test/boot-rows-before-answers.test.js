@@ -16,11 +16,15 @@ import { buildPrIndex } from "../lib/project.js";
 import { Scheduler } from "../lib/scheduler.js";
 import { Store } from "../lib/store.js";
 
-const TREE = "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/a-probe-row-abc123";
+// Paths are built at run time, never written as drive-letter literals: tools/absolute-paths.mjs refuses a path that
+// exists on exactly one machine, and this file is part of the repository's own tree (the gate caught the literals
+// this file first shipped with).
+const ROOT = mkdtempSync(path.join(tmpdir(), "wag-boot-rows-")).replace(/\\/g, "/");
+const TREE = `${ROOT}/a-probe-row-abc123`;
 const BRANCH = "wtgui/a-probe-row-abc123";
 const PROJECT = {
   name: "agent-worktree-gui",
-  path: "C:/ProjectDevelopment/agent-worktree-gui",
+  path: ROOT,
   remote: "origin",
   mainBranch: "main",
   tier: "recent",
