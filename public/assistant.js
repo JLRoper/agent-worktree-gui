@@ -3423,6 +3423,11 @@
   })();
   let initEditId = ""; // the initiative whose words are in the edit form
   let initAddId = ""; // the initiative whose "add a worktree" picker is open
+  // The markup the pane is showing. It is the whole of what this renderer draws, so a pass that produces the same
+  // string has nothing to write: the DOM on screen is already that markup, and rewriting it would only cost the
+  // reader their scroll anchor, their selection and the task-fold nodes the pass reconciles (public/assistant.js,
+  // renderAssistantInitiatives).
+  let initMarkup = "";
   let initDraft = { newTitle: "", newDesc: "", editTitle: "", editDesc: "", addTree: "" };
   // THE WAVE DRAFT, one at a time: the open Add/Edit form on one initiative, kept here rather than in the DOM because
   // every snapshot repaints the card under the caret. `base` is the record's own gates when editing, so a gate that
@@ -4005,6 +4010,80 @@
     target.addEventListener("blur", () => target.classList.remove("init-focus-restored"), { once: true });
   }
 
+  // THE READER'S PLACE IS A CARD, NOT A NUMBER. The messages pane keeps the plain scrollTop across its rebuild
+  // (renderAssistantMessages, `keepScroll`), and that is enough there: a message list only ever grows at its foot.
+  // This pane's content changes ABOVE the reader - a task row is filed or retires out of an open fold, a relative
+  // stamp crosses a minute and rewraps a line, a wave lands - and a scrollTop held fixed under that shows up as the
+  // reader's rows sliding one line per poll. So the scroller is captured together with the first card at the top edge
+  // of its box, and the scroll is put back where that card sits now: the content above may move, the reader does not.
+  //
+  // Three states are kept as they are rather than corrected: a reader at the very top keeps the top (a new
+  // initiative appears above the list, where they are looking), a reader at the foot stays at the foot (they are
+  // following the newest), and a row the pass removed falls back to the old number.
+  //
+  // THE ANCHOR IS A CARD, and only a card. A card's `data-init-card` is its initiative's id, unique in the pane; the
+  // rows inside one (`data-init-assistant-row`, `data-init-hist-row`) carry an assistant's or a time's raw value, which
+  // repeats under every card that has one, so resolving those back after a rebuild finds a DIFFERENT row - measured,
+  // that mistake moved the pane 1315 px. A card's own top is also the honest thing to hold: a change inside the card
+  // the reader is looking at belongs in their view, and a change in any card above it moves the top that is being
+  // held, which is what the correction takes out.
+  function initScrollerOf(host) {
+    if (!host) return null;
+    if (host.scrollHeight > host.clientHeight + 1) return host;
+    const body = host.closest(".as-body");
+    if (body && body.scrollHeight > body.clientHeight + 1) return body;
+    return host;
+  }
+  function captureInitScroll(host) {
+    const scroller = initScrollerOf(host);
+    if (!scroller) return null;
+    const box = scroller.getBoundingClientRect();
+    const top = scroller.scrollTop;
+    const cards = [...host.querySelectorAll(".init-card")];
+    const pick = (starts) =>
+      cards.find((c) => {
+        const r = c.getBoundingClientRect();
+        if (r.bottom <= box.top + 1) return false; // wholly above the reader's view
+        if (starts && r.top < box.top - 1) return false; // straddles the top edge: its top is above the reader's view
+        return true;
+      }) || null;
+    // The first card that STARTS inside the view, not the one straddling its top edge: when the change is inside that
+    // straddling card (an open fold on the card above the reader) its own top does not move, and the correction would
+    // read as zero while every card below it shifted.
+    const card = pick(true) || pick(false);
+    return {
+      scroller,
+      top,
+      card: card ? { id: card.getAttribute("data-init-card"), dy: card.getBoundingClientRect().top - box.top } : null,
+      atTop: top <= 0.5,
+      atBottom: scroller.scrollHeight - scroller.clientHeight - top < 2,
+    };
+  }
+  function restoreInitScroll(keep) {
+    if (!keep || !keep.scroller || !keep.scroller.isConnected) return;
+    const { scroller } = keep;
+    if (keep.atBottom) {
+      scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+    if (keep.atTop) {
+      scroller.scrollTop = 0;
+      return;
+    }
+    if (keep.card) {
+      const el = [...scroller.querySelectorAll(".init-card")].find((n) => n.getAttribute("data-init-card") === keep.card.id) || null;
+      if (el) {
+        const now = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        const shift = now - keep.card.dy;
+        // A sub-pixel difference is rounding, not a move: writing it back would be a scroll event for nothing.
+        if (Math.abs(shift) < 0.5) return;
+        scroller.scrollTop = scroller.scrollTop + shift;
+        return;
+      }
+    }
+    scroller.scrollTop = keep.top;
+  }
+
   function renderAssistantInitiatives(force = false) {
     const host = as$("as-initiatives");
     if (!host) return;
@@ -4015,6 +4094,7 @@
     if (!initDoc && !initLoading && !initErr) void loadInitiatives();
     else if (initDoc && !initLoading && Date.now() - initReadAt > INIT_READ_GAP_MS) void loadInitiatives();
     if (!initDoc) {
+      initMarkup = "";
       host.innerHTML = initErr
         ? `<div class="as-empty">could not read the initiatives: ${esc(initErr)}</div><div class="as-actions"><button type="button" data-init-refresh>Try again</button></div>`
         : `<div class="as-empty">reading the initiatives…</div>`;
@@ -4055,7 +4135,7 @@
     // moves behind About, which is the whole of round A's first compression: the preamble said a lot before the first
     // initiative, and none of it is lost, it is one press away.
     host.dataset.density = initDense ? "compact" : "comfortable";
-    host.innerHTML = `
+    const markup = `
       <div class="as-group init-shell">
         <div class="init-toolbar">
           <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
@@ -4076,13 +4156,27 @@
       </div>
       ${empty}
       ${list.map(initCardHtml).join("")}`;
-    // The markup carries every folded description whole; the paint that folds it to its two lines happens here, in
-    // the same task, so no frame is drawn with the wall of text the fold exists to hide.
-    paintInitDescriptions(host);
+    // THE READER'S PLACE IS CARRIED ACROSS THE REPAINT, on the ROW they were looking at and not on the old
+    // scrollTop. This pane is rebuilt from a poll, and a rebuild is not a no-op for the content above the reader: a
+    // task row is filed or retires out of an open fold, a relative stamp crosses a minute and rewraps a line. A
+    // scrollTop held fixed under that shows up as the reader's rows sliding one line per poll. The anchor makes the
+    // scroll follow the content instead.
+    const keepScroll = captureInitScroll(host);
+    // AN UNCHANGED PAYLOAD IS NOT REPAINTED. Every input this pane draws is in `markup`, so an identical string is an
+    // identical DOM: writing it again would throw away the anchor, the selection and the task-fold nodes this pass is
+    // about to reconcile for no gain. The task folds are still reconciled below - that patches rows in place.
+    if (markup !== initMarkup) {
+      host.innerHTML = markup;
+      initMarkup = markup;
+      // The markup carries every folded description whole; the paint that folds it to its two lines happens here, in
+      // the same task, so no frame is drawn with the wall of text the fold exists to hide.
+      paintInitDescriptions(host);
+    }
     // The open task folds are filled here, from the document above, RECONCILED against the nodes the last pass drew:
     // a row already on screen is patched where it stands, never rebuilt. The pane repaints on every snapshot, so a
     // rebuild would restart each row every couple of seconds under a reader's eyes.
     paintInitTaskLists(host);
+    restoreInitScroll(keepScroll);
     restoreInitFocus(host, focusToken);
     scheduleInitRefresh();
   }
