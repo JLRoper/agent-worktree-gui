@@ -20,6 +20,13 @@
 //     draws exactly the markup it drew before this row - nothing extra - and a wave a switch opened says which wave
 //     opened it, in a sentence that also says nothing was started. A switch that is on and did not open says why,
 //     with the gate's own word: a cannot-tell predecessor is drawn "cannot tell", never as a wait that looks healthy.
+//   * THE CONTROLS AUTHOR A RECORD AND NOTHING ELSE. With a writer in the panel the lane gains one "Add a wave" on
+//     the section head and Edit / Up / Down / Delete on a station. They post the seven fields a record has (plus the
+//     position a move names), and the answer is the server's own fold, so a control can never paint a state, a lane
+//     or a member list into the store. The lane still opens nothing, closes nothing, joins nothing and starts
+//     nothing: a wave is authored here, and every word about its state is still computed on the read. The controls
+//     are drawn only when the caller says a writer exists (`opts.canWrite`), so the default answer is exactly the
+//     read this module drew before them.
 //
 // Published on globalThis as `wtWavesLane`, loaded as a classic script by public/index.html before assistant.js, and
 // imported by test/waves-lane.test.js - the same load contract public/core/initiative-fold.js has. Nothing here
@@ -51,9 +58,13 @@
   function gateChipHtml(kind, gate, esc = defaultEsc) {
     const state = gate && GATE_TONES[gate.state] ? gate.state : "none";
     const check = gate && gate.check ? String(gate.check) : "no check";
+    // A GATE WITH NOTHING TO READ IT AGAINST is not "no gate": a wave authored a moment ago names its checks and has no
+    // member yet, and the chip must say that rather than claim the check was never set.
+    const tone = state === "none" && gate && gate.check ? "nothing to check" : null;
     const why = gate && gate.why ? String(gate.why) : "";
     const label = `${kind} ${check}`;
-    return `<span class="chip wave-gate ${GATE_TONES[state]}" data-wave-gate="${esc(kind)}" data-gate-state="${esc(state)}" title="${esc(`${label}: ${gateWord(gate)}${why ? ` - ${why}` : ""}`)}">${esc(label)} - ${esc(gateWord(gate))}</span>`;
+    const word = tone || gateWord(gate);
+    return `<span class="chip wave-gate ${GATE_TONES[state]}" data-wave-gate="${esc(kind)}" data-gate-state="${esc(state)}"${tone ? ' data-gate-tone="nothing-to-check"' : ""} title="${esc(`${label}: ${word}${why ? ` - ${why}` : ""}`)}">${esc(label)} - ${esc(word)}</span>`;
   }
 
   /** One member: its id, its title, its project when it has one, and the task's own state - or its named abandonment. */
@@ -104,8 +115,65 @@
     return `${bad}<div class="wave-lanes" data-wave-lanes="${lanes.length}"${isolation}>${lanes.map((lane) => laneRowHtml(lane, esc)).join("")}</div>`;
   }
 
+  /**
+   * The station's own controls: edit the record, move it one place, delete it. The same mini-button language the
+   * tree rows use, drawn inline rather than behind a `<details>` menu because every repaint of the tab rebuilds this
+   * markup and a menu would shut under the reader every couple of seconds. `index`/`count` are the station's place in
+   * the order this read returned, which is what makes Up and Down disable at the ends instead of posting a no-op.
+   */
+  function waveActionsHtml(wave, initiativeId, index, count, esc = defaultEsc) {
+    const key = `${initiativeId}|${wave && wave.id ? wave.id : ""}`;
+    const title = wave && wave.title ? String(wave.title) : "this wave";
+    const first = index <= 0;
+    const last = index >= count - 1;
+    return `<div class="wave-actions">
+        <button type="button" class="init-mini" data-wave-edit="${esc(key)}" aria-label="edit ${esc(title)}" title="edit this wave's title, its gates, its template and its switch - the record only, never its state">Edit</button>
+        <button type="button" class="init-mini" data-wave-up="${esc(key)}"${first ? " disabled" : ""} aria-label="move ${esc(title)} one place earlier" title="${first ? "this is already the first wave" : "move this wave one place earlier - the list is renumbered 1..n in one write"}">Up</button>
+        <button type="button" class="init-mini" data-wave-down="${esc(key)}"${last ? " disabled" : ""} aria-label="move ${esc(title)} one place later" title="${last ? "this is already the last wave" : "move this wave one place later - the list is renumbered 1..n in one write"}">Down</button>
+        <button type="button" class="init-mini wave-del" data-wave-del="${esc(key)}" aria-label="delete ${esc(title)}" title="delete this wave record - its task rows keep their wave id and read as members of no wave, and your tier decides whether this asks">Delete</button>
+      </div>`;
+  }
+
+  /** One gate's picker: the closed vocabulary's parameter-free names, or a text box when the caller has no list. */
+  function gateFieldHtml(kind, value, baseGate, checks, esc = defaultEsc) {
+    const current = String(value || "");
+    const label = kind === "entry" ? "Entry gate" : "Exit gate";
+    if (!Array.isArray(checks)) {
+      return `<label class="wave-field"><span>${esc(label)}</span><input type="text" data-wave-field="${esc(kind)}" value="${esc(current)}" spellcheck="false" maxlength="120" placeholder="no gate"></label>`;
+    }
+    const list = checks.map((check) => String(check));
+    const extra = current && !list.includes(current) ? current : "";
+    const params = baseGate && typeof baseGate === "object" ? Object.keys(baseGate).some((key) => key !== "check") : false;
+    const options = [`<option value="">no gate</option>`]
+      .concat(list.map((check) => `<option value="${esc(check)}"${check === current ? " selected" : ""}>${esc(check)}</option>`))
+      .concat(extra ? [`<option value="${esc(extra)}" selected>${esc(extra)}${params ? " (keeps its parameters)" : ""}</option>`] : []);
+    return `<label class="wave-field"><span>${esc(label)}</span><select data-wave-field="${esc(kind)}">${options.join("")}</select></label>`;
+  }
+
+  /**
+   * The one-line form the Add control opens (decision 4: a title typed by the reader, never a made-up "Wave 4"), and
+   * the same form Edit opens with the record's own words. `form` is `{ mode, id, title, entry, exit, template, auto,
+   * base, error }` - the caller's draft, kept in module state so the tab's repaint cannot erase what is being typed.
+   */
+  function waveFormHtml(initiativeId, form, checks, esc = defaultEsc) {
+    const draft = form && typeof form === "object" ? form : {};
+    const editing = draft.mode === "edit";
+    const base = draft.base && typeof draft.base === "object" ? draft.base : {};
+    const error = draft.error ? `<div class="as-ask is-bad wave-form-error" role="alert">${esc(draft.error)}</div>` : "";
+    return `<div class="wave-form" data-wave-form="${esc(initiativeId)}" data-wave-form-mode="${editing ? "edit" : "add"}" data-wave-form-id="${esc(draft.id || "")}">
+        <label class="wave-field wave-field-title"><span>Title</span><input type="text" data-wave-field="title" value="${esc(draft.title || "")}" spellcheck="false" maxlength="120" placeholder="one line saying what this wave is"></label>
+        ${gateFieldHtml("entry", draft.entry, base.entry, checks, esc)}
+        ${gateFieldHtml("exit", draft.exit, base.exit, checks, esc)}
+        <label class="wave-field wave-field-template"><span>Template</span><input type="text" data-wave-field="template" value="${esc(draft.template || "")}" spellcheck="false" maxlength="120" placeholder="a bundle pipeline id, or none"></label>
+        <label class="wave-switch"><input type="checkbox" data-wave-field="auto"${draft.auto ? " checked" : ""}> auto</label>
+        <button type="button" class="primary" data-wave-save="${esc(initiativeId)}">${editing ? "Save wave" : "Create wave"}</button>
+        <button type="button" class="init-mini" data-wave-cancel="${esc(initiativeId)}">Cancel</button>
+        ${error}
+      </div>`;
+  }
+
   /** One wave: position, title, the derived state word, the current mark, both gates, its template and its members. */
-  function waveHtml(wave, currentId = null, esc = defaultEsc) {
+  function waveHtml(wave, currentId = null, esc = defaultEsc, opts = {}) {
     const position = Number(wave && wave.position) > 0 ? Number(wave.position) : null;
     const state = wave && wave.state ? String(wave.state) : "empty";
     const word = wave && wave.stateWord ? String(wave.stateWord) : state;
@@ -146,6 +214,7 @@
     // therefore its OWN row, a sibling of the member row, not a flex item of it (round B 4.3, 6.3): nested, it shrank
     // to its content and two lanes could only stack.
     const lanesRow = laneCount >= 2 ? lanesHtml(wave, esc) : "";
+    const actions = opts.canWrite ? waveActionsHtml(wave, opts.initiativeId, Number(opts.index) || 0, Number(opts.count) || 0, esc) : "";
     const membersRow =
       laneCount >= 2
         ? ""
@@ -169,6 +238,7 @@
       ${joined}
       ${lanesRow}
       ${membersRow}
+      ${actions}
     </div>`;
   }
 
@@ -176,29 +246,49 @@
    * The lane for one initiative, as the card draws it. `waveStatus` is the store's own status (`readable`, `found`,
    * `error`): an unreadable store is SAID rather than drawn as "no waves", because those are different answers.
    *
-   * AN INITIATIVE WITH NO WAVES DRAWS NO LANE. The section is the surface for waves, so an initiative that has none
-   * leaves the card as it was: "Waves 0 / nothing here yet" on every card would be a box a reader learns to skip, and
-   * this slice has no write route to put anything in it. A store that cannot be read, or a record the loader refused,
-   * IS drawn, because those are facts a reader has to see.
+   * AN INITIATIVE WITH NO WAVES DRAWS NO LANE UNTIL A WRITER EXISTS. The section is the surface for waves, so an
+   * initiative that has none leaves the card as it was - "Waves 0 / nothing here yet" on every card would be a box a
+   * reader learns to skip. With a writer (`opts.canWrite`) that one case stops being invisible: the section is drawn
+   * with its Add control and nothing else, which is the only way to author the first wave. A store that cannot be
+   * read, or a record the loader refused, IS drawn, because those are facts a reader has to see.
+   *
+   * `opts.form` is the open Add/Edit draft for this initiative (`{ mode, id, title, entry, exit, template, auto,
+   * base, error }`), `opts.checks` the gate names the server answered, and both are the caller's module state so a
+   * repaint cannot erase a half-typed title.
    */
-  function laneHtml(init, waveStatus = null, esc = defaultEsc) {
+  function laneHtml(init, waveStatus = null, esc = defaultEsc, opts = {}) {
     const waves = Array.isArray(init && init.waves) ? init.waves : [];
     const skipped = Array.isArray(init && init.waveSkipped) ? init.waveSkipped : [];
     const currentId = init && init.waveCurrentId ? String(init.waveCurrentId) : null;
     const unreadable = Boolean(waveStatus && waveStatus.readable === false);
-    if (!waves.length && !skipped.length && !unreadable) return "";
+    const canWrite = Boolean(opts && opts.canWrite) && !unreadable;
+    const form = canWrite && opts.form && typeof opts.form === "object" ? opts.form : null;
+    if (!waves.length && !skipped.length && !unreadable && !canWrite) return "";
     const rows = waves.length
-      ? waves.map((w) => waveHtml(w, currentId, esc)).join("")
+      ? waves
+          .map((w, index) => waveHtml(w, currentId, esc, { canWrite, initiativeId: init.id, index, count: waves.length }))
+          .join("")
       : unreadable
         ? `<div class="as-ask is-bad wave-store-bad" role="alert"><b>The wave store cannot be read, so no wave can be drawn.</b> ${esc(waveStatus.error || "")} The file is left exactly as it is: fix or move it, then refresh.</div>`
-        : `<div class="as-hint wave-none" data-wave-none>no waves recorded on this initiative yet - the store is a list a reader authors, and a task joins a wave only by naming its id</div>`;
+        : `<div class="as-hint wave-none" data-wave-none>no waves recorded on this initiative yet - ${
+            canWrite ? "Add a wave puts the first one here, and a task joins it only by naming its id" : "the store is a list a reader authors, and a task joins a wave only by naming its id"
+          }</div>`;
     const skippedHtml = skipped.length
       ? `<div class="wave-skipped as-hint">${skipped
           .map((row) => `<div class="wave-skip-row" data-wave-skip="${esc(row.initiativeId || "")}">${esc(row.id || "a record")}: ${esc(row.error || "")}</div>`)
           .join("")}</div>`
       : "";
-    return `<div class="init-wavefold" data-init-waves="${esc(init && init.id ? init.id : "")}">
-      <div class="init-sechead">Waves <span class="chip${waves.length ? "" : " is-zero"}">${waves.length}</span><span class="as-hint init-wave-note" title="a wave is a read: its state is folded from its members and its gates on this read, and this tab has no write route - nothing here opens, closes or starts a wave">read from the wave store</span></div>
+    // One Add control on the section head, and only while its own form is shut: two ways to open one form would be a
+    // control that appears to do nothing.
+    const adding = Boolean(form && form.mode === "add");
+    const addButton =
+      canWrite && !adding
+        ? `<button type="button" class="init-mini wave-add" data-wave-add="${esc(init.id)}" title="author a wave on this initiative - a title, both gates, a template and the switch; nothing is opened, closed or started by this, and your tier decides whether it asks">+ Add a wave</button>`
+        : "";
+    const formHtml = form ? waveFormHtml(init.id, form, opts.checks, esc) : "";
+    return `<div class="init-wavefold" data-init-waves="${esc(init && init.id ? init.id : "")}"${canWrite ? ' data-wave-writable="true"' : ""}>
+      <div class="init-sechead">Waves <span class="chip${waves.length ? "" : " is-zero"}">${waves.length}</span>${addButton}<span class="as-hint init-wave-note" title="a wave is a read: its state is folded from its members and its gates on this read. This tab AUTHORS waves - and still opens nothing, closes nothing and starts nothing">read from the wave store</span></div>
+      ${formHtml}
       <div class="init-waves">${rows}</div>
       ${skippedHtml}
     </div>`;
@@ -214,6 +304,9 @@
     memberHtml,
     laneRowHtml,
     lanesHtml,
+    waveActionsHtml,
+    gateFieldHtml,
+    waveFormHtml,
     waveHtml,
     laneHtml,
   };

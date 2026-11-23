@@ -2023,11 +2023,25 @@ const PREFIX_MOUNTS = [
       log,
     }),
   },
-  // The waves of work: one READ, the lane's own query. No write route in this slice - the design sizes it so the
-  // record, the membership and the derived state can be judged before anything acts on them.
+  // The waves of work: the lane's own read and the four writes that author one (routes/waves.js). The store, the
+  // initiative store (the 404 on an unknown initiative), the tier's config and the permission box are this file's, so
+  // they travel in beside the transport helpers; the module owns the paths, the wire shape and the question's wording.
   {
     prefix: WAVES_PATH,
-    handles: createWavesRoutes({ waves, assistant, store, sendJson, templateExists: waveTemplateExists, waveEvidence: readWaveEvidence, log }),
+    handles: createWavesRoutes({
+      waves,
+      assistant,
+      store,
+      sendJson,
+      templateExists: waveTemplateExists,
+      waveEvidence: readWaveEvidence,
+      initiatives,
+      getConfig: () => config,
+      readBody,
+      authorised,
+      remoteWrites,
+      log,
+    }),
   },
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.
