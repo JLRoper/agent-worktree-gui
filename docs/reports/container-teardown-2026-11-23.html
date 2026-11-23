@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Container cleanup as a panel behaviour: the labels, the settle, the action and the close gate</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --card: #151a22; --line: #262c37;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482; --blue: #7fb2e8;
+    --good: #7ec699; --bad: #e08a8a; --warn: #d8b06a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { margin: 0 0 6px; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
+  h2 { margin: 44px 0 12px; font-size: 21px; line-height: 1.25; }
+  h3 { margin: 26px 0 8px; font-size: 16px; }
+  p { max-width: 78ch; color: #c6cdd8; }
+  .sub { margin: 0 0 26px; color: var(--dim); font-size: 13px; }
+  .verdict { margin: 24px 0; padding: 18px 20px; border: 1px solid var(--line); border-left: 4px solid var(--good); border-radius: 8px; background: var(--panel); }
+  .verdict strong { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 8px; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; color: #c9d6e8; background: #11161d; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  pre { margin: 12px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: #11161d; color: #c9d6e8; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--dim); font-size: 13px; }
+  ul { max-width: 80ch; color: #c6cdd8; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font-size: 10.5px; color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Container cleanup as a panel behaviour</h1>
+<p class="sub">agent-worktree-gui, 2026-11-23, assistant-3, row #269. Proved on Docker 29.5.2 (Docker Desktop) against a real daemon.</p>
+
+<div class="verdict">
+  <strong>Container cleanup is now the panel's, not the worker's habit.</strong> A worker is told the two labels and
+  <code>--rm</code>; a settle stops and removes every container carrying the ending tree's <code>wag.worktree</code>
+  label; a new panel action does the same on demand for a named tree; and a queue row cannot be closed while its tree
+  still runs a labelled container, unless the close reason names it and says why it is kept. Seven checks ran against
+  the daemon and all seven passed: <span class="good">PASS all 7 steps</span>.
+</div>
+
+<h2>The convention, and why it is labels</h2>
+<p>The panel already has a docker convention and this does not replace it: <code>lib/merge-prompt.js:222</code> asks a
+merge run for <code>docker compose -p wtgui-merge-&lt;stamp&gt;</code> and tears that project down with
+<code>docker compose down</code> (<code>lib/merge-prompt.js:230</code>). A name is for the reader. What the panel can
+read BACK is a label, so the labels are what the teardown keys on, and a container is findable whatever it was named
+and whoever created it:</p>
+<table>
+  <tr><th>label</th><th>value</th><th>used for</th></tr>
+  <tr><td><code>wag.worktree</code></td><td>the tree's absolute path, forward slashes, no trailing slash</td><td>the teardown key, matched exactly</td></tr>
+  <tr><td><code>wag.row</code></td><td>the queue row's id, digits only</td><td>the refusal sentence, so a person sees whose container it is</td></tr>
+</table>
+<p>The tree match uses the panel's one tree spelling (<code>lib/push-guard.js:59</code> <code>normTree</code>), which
+folds backslashes, a trailing slash and the MSYS <code>/c/x</code> form onto one key, so a label written from git bash
+and a label written from the panel's own path are the same tree.</p>
+
+<h3>The paragraph a worker now receives</h3>
+<p>Built by <code>containerBriefFor</code> (<code>lib/container-teardown.js:199</code>) and appended to the tree run's
+brief at <code>lib/jobs.js:4145</code>, with THIS run's tree written into the label value:</p>
+<pre>CONTAINERS - a container you start outlives your turn, so it has to be findable without you: every container you start carries the panel's two labels, and every `docker run` starts it with `--rm`.
+  docker run -d --rm --label wag.worktree=&lt;this run's tree&gt; --label wag.row=&lt;the queue row this brief names, digits only&gt; ...
+`wag.worktree` is the teardown key: this run's tree, absolute, forward slashes, no trailing slash. `wag.row` is the queue row you are working for (digits; leave it off a run with no row). A `docker compose` service carries the same two labels in its `labels:` block - the panel reads labels, not names or compose project names, so a name alone is invisible to it.
+The panel stops and removes every container carrying your tree's label when this run settles, and it refuses to close your row while one is still running unless the close reason names it and says why it is kept. `--rm` is the habit; the label is the contract.</pre>
+
+<h2>The four pieces</h2>
+<table>
+  <tr><th>piece</th><th>where</th><th>what it does</th></tr>
+  <tr><td>the brief</td><td><code>lib/container-teardown.js:199</code>, <code>lib/jobs.js:4145</code></td><td>the tree value is written out literally, so no worker spells <code>wag.worktree</code> from <code>pwd</code> and hands the panel a different key</td></tr>
+  <tr><td>the settle</td><td><code>lib/jobs.js:4955</code> into <code>lib/container-teardown.js:334</code></td><td>one call at the settle tail; every container carrying the ending tree's label is stopped and removed. A tree with a live sibling run is not ending, so its containers stay</td></tr>
+  <tr><td>the action</td><td><code>routes/containers.js:22</code>, mounted at <code>server.js:2314</code></td><td><code>GET /api/containers?tree=...</code> lists what is there; <code>POST /api/containers/teardown {tree}</code> stops and removes it; <code>dryRun: true</code> answers the plan and touches nothing</td></tr>
+  <tr><td>the close gate</td><td><code>lib/assistant.js:2304</code> into <code>lib/container-teardown.js:353</code></td><td>the queue's <code>done</code> door is refused while a labelled container RUNS, unless the reason names every one and says why it is kept</td></tr>
+</table>
+
+<h2>The proof, against the real daemon</h2>
+<p><code>node tools/verify-container-teardown.mjs</code> creates containers named with its own stamp, labels them with a
+throwaway tree, runs each proof through the real code path, and removes everything it created. The output below has the
+probe tree's machine path written as <code>&lt;probe tree&gt;</code>: the repo's own
+<code>tools/absolute-paths.mjs</code> refuses a landing that names a folder on the machine that wrote it, so a report
+quotes the shape rather than the temporary directory. The raw run printed the full path.</p>
+<pre>container teardown on Docker 29.5.2, image node:24-bookworm-slim, stamp mwtqxvlr40oz
+PASS brief: wag.worktree=&lt;probe tree&gt; and wag.row=269, with --rm
+  started wag-verify-mwtqxvlr40oz-settle (labelled, &lt;probe tree&gt;) and wag-verify-mwtqxvlr40oz-control (unlabelled)
+PASS settle: wag-verify-mwtqxvlr40oz-settle stopped and removed, wag-verify-mwtqxvlr40oz-control untouched
+  refusal: #1 cannot close while 1 labelled container still runs: wag-verify-mwtqxvlr40oz-gate (row 269). Stop and remove it first (POST /api/containers/teardown with {"tree": "&lt;probe tree&gt;"}), or name it in the reason, with why it is kept.
+PASS refusal: row #1 still queued
+PASS keep: row #2 closed with a reason that names wag-verify-mwtqxvlr40oz-gate
+PASS sweep: wag-verify-mwtqxvlr40oz-gate stopped and removed by the module's own teardown
+  GET /api/containers?tree=&lt;probe tree&gt; -&gt; 1 container: wag-verify-mwtqxvlr40oz-action (row 269)
+  POST /api/containers/teardown -&gt; 200 stopped 1, removed 1, left 0
+PASS action: POST /api/containers/teardown removed wag-verify-mwtqxvlr40oz-action, and the read is empty
+PASS read-back: no probe container is left on the daemon
+PASS all 7 steps</pre>
+<p>Each line is a claim with its own evidence:</p>
+<ul>
+  <li><b>the labelled container is stopped and removed on settle</b>: a real <code>Jobs.settle</code> ran, and the container the tree labelled was gone afterwards (<code>PASS settle</code>);</li>
+  <li><b>an unlabelled container is left alone</b>: the control started beside it was still running after the same settle, and the read-back at the end confirms only the probe's own names were ever removed;</li>
+  <li><b>the refusal fires with the right sentence</b>: the row's <code>done</code> write answered <code>ok: false</code> with the sentence naming the container, its row and the route that removes it, and the row was still <code>queued</code>;</li>
+  <li><b>a close whose reason names the container goes through</b>: the same row closed with a sentence naming the container and why it stays (<code>PASS keep</code>).</li>
+</ul>
+
+<h2>Tests</h2>
+<table>
+  <tr><th>run</th><th>tests</th><th>result</th></tr>
+  <tr><td><code>node --test test/container-teardown.test.js</code></td><td class="num">15</td><td class="good">pass 15, fail 0 (three blocks against the real daemon; skipped with a named reason when there is none)</td></tr>
+  <tr><td><code>node --test test/container-brief.test.js</code></td><td class="num">1</td><td class="good">pass 1, fail 0 - the paragraph is read off the body a stub gateway received, so it is what the worker reads</td></tr>
+  <tr><td>the focused set (brief, queue, todo, mount wiring)</td><td class="num">74</td><td class="good">pass 74, fail 0</td></tr>
+</table>
+
+<h2>What it does not do</h2>
+<ul>
+  <li><b>An unlabelled container is invisible.</b> That is the honest limit of a label: the panel can only stop what it can find, which is why the brief paragraph is half the feature. The settle's log line says what it did, not what it missed.</li>
+  <li><b>The close gate fails open.</b> The queue write is a synchronous door, so the gate reads the daemon synchronously with a 4 s ceiling; a docker that cannot answer is a log line, never a row a reader cannot close. A failing daemon is remembered for a minute so a settle loop does not spawn <code>docker</code> per turn.</li>
+  <li><b>The merge flow's compose teardown is unchanged.</b> <code>docker compose -p wtgui-merge-&lt;stamp&gt; down</code> is still the merge run's own cleanup; the labels are the net for what a worker forgets, and adding them to a compose service is the worker's step the brief now asks for.</li>
+  <li><b>No browser control was added.</b> The action is the route the panel exposes (and the refusal sentence points at it); the board's own chip for it is a later UI pass, not a second convention.</li>
+</ul>
+
+<h2>How to run it</h2>
+<pre>node tools/verify-container-teardown.mjs
+WTGUI_TEST_IMAGE=&lt;an image this daemon has&gt; node tools/verify-container-teardown.mjs
+node --test --test-concurrency=1 test/container-teardown.test.js test/container-brief.test.js</pre>
+<p class="note">Both the test's daemon block and the verify tool SKIP with a named reason on a machine with no Docker
+daemon or no image, and neither pulls an image: a test may not reach the network on a reader's machine. The default
+image is <code>node:24-bookworm-slim</code>; <code>WTGUI_TEST_IMAGE</code> overrides it.</p>
+</main>
+</body>
+</html>
