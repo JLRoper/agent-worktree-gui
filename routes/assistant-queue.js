@@ -14,7 +14,10 @@
 //                                                an optional `project` (the panel writes it at a cut, a script may post
 //                                                a path), and `edit` also takes `runId` - the gateway run (or panel job
 //                                                id) the row is on, so a row FILED after the fact can be read against
-//                                                the run it names instead of the tree fallback; `add` also takes
+//                                                the run it names instead of the tree fallback; `edit` also takes
+//                                                `wave` - the wave id the card joins, absent to leave it where it is
+//                                                and null or empty to take it out - because membership is the task's own
+//                                                field and no wave record lists its members. `add` also takes
 //                                                `pipeline` + `stage`: a row can be FILED
 //                                                onto a stage in the one write that creates it, instead of an add and a
 //                                                pipeline write with a crash window between them. `pipeline` puts an

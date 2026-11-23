@@ -1277,3 +1277,34 @@ test("a parked row's reason and detail are replaced through the route, and the h
   assert.equal(appended.status, 200, JSON.stringify(appended.payload));
   assert.equal(appended.payload.task.detail, "still waiting on G1\nchecked again at 14:10", "append adds a line instead of losing what the row already said");
 });
+
+// ---- the route's edit takes `wave`, and nothing else ------------------------------------------------
+// The edit patch accepts `wave` (lib/assistant/queue.js `editTask`) because membership is the task's own `waveId` and a
+// wave record holds no member list. This pins the WIRE: the route hands the field through in all three shapes, and a
+// `members` array in the same body is not a second door - it writes nothing, so no caller can believe it joined one.
+test("the queue route's edit writes, leaves and clears a card's wave, and `members` is not a field it takes", async (t) => {
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-wave-route-");
+  assistant.queueMutate("assistant-1", "add", { title: "join a wave" }, { by: "reader" });
+  const route = queueTransport(assistant);
+
+  const joined = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "edit", id: 1, wave: "wave_01" } });
+  assert.equal(joined.status, 200, JSON.stringify(joined.payload));
+  assert.equal(joined.payload.task.waveId, "wave_01", "the route passes `wave` through to the row");
+
+  // A `members` list is the shape the wave store refuses by design, and it is not accepted here either: the row gets
+  // the wave it was given and no member list of its own.
+  const withMembers = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "edit", id: 1, wave: "wave_02", members: [2, 3] } });
+  assert.equal(withMembers.status, 200, JSON.stringify(withMembers.payload));
+  assert.equal(withMembers.payload.task.waveId, "wave_02");
+  assert.equal("members" in withMembers.payload.task, false, "an edit writes no member list on the card");
+
+  // Absent on a plain edit leaves the wave alone; null takes the card out of it.
+  const retitled = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "edit", id: 1, title: "join a wave, renamed" } });
+  assert.equal(retitled.payload.task.waveId, "wave_02", "a title edit cannot pull a card out of its wave");
+  const cleared = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "edit", id: 1, wave: null } });
+  assert.equal(cleared.payload.task.waveId, null, "null clears the card back to no wave");
+
+  // The FILE agrees: the route's answer is a write, and the window's next read comes off this document.
+  const onDisk = JSON.parse(readFileSync(path.join(dir, "assistants", "assistant-1", "queue.json"), "utf8")).tasks[0];
+  assert.equal(onDisk.waveId, null);
+});

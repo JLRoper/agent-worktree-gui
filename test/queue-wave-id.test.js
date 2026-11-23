@@ -11,13 +11,18 @@
 //     one thing the design forbids ("no backfill and no default wave").
 //   * A SETTLE PRESERVES IT. settleTasks maps rows with a spread, but that is a property to pin, not to assume: a row
 //     with no wave id must still have none after it closes, and a row with one keeps it.
+//   * THE EDIT DOOR IS HOW A CARD JOINS ONE. A wave record holds no member list, so `editTask({wave})` is the only
+//     write that moves a card between waves; the lane on the next read is what proves it folded there and left the
+//     wave it came from. An unknown id rides through the door verbatim, and a wave's state is still folded from its
+//     members - the store's bytes must not move when membership does.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { TASK_WAVE_MAX, editTask, pickTask, readQueueFile, settleTasks, writeQueueFile } from "../lib/assistant/queue.js";
+import { Waves, waveLane } from "../lib/waves.js";
 
 const base = (over = {}) => ({ id: 1, title: "prove the lane", state: "queued", ...over });
 
@@ -116,4 +121,89 @@ test("the edit door sets and clears an abandonment; an unnamed value cannot be s
   assert.equal(editTask(named.tasks, 7, { reason: "still abandoned, new sentence" }).task.abandoned.reason, "the upstream feed was retired");
   // Cleared with null, and the row still exists with no abandonment.
   assert.equal(editTask(named.tasks, 7, { abandoned: null }).task.abandoned, null);
+});
+
+// ---- the edit door: how a card JOINS a wave ---------------------------------------------------------------
+// A wave record holds no member list (lib/waves.js rule 1), so this edit is the ONE write that moves a card between
+// waves. The lane is what proves the move: the wave it names folds it in, the wave it came from folds it out, and the
+// store's own bytes do not move - a wave's state is derived on every read and never written.
+
+const gapeless = (id, position) => ({ id, initiativeId: "init_a", position, title: `wave ${position}`, entryGate: null, exitGate: null, template: null, auto: false });
+const storeOf = (file, records) => {
+  writeFileSync(file, `${JSON.stringify({ version: 1, byInitiative: { init_a: records } }, null, 2)}\n`, "utf8");
+  return new Waves({ file, log: () => {} });
+};
+const laneOf = (waves, tasks) => waveLane({ waves, initiativeId: "init_a", tasks, rowFor: () => null, evidenceFor: () => null });
+
+test("the edit door moves a card into a wave, and the next read folds it there and out of the one it came from", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-wave-edit-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const waves = storeOf(path.join(dir, "waves.json"), [gapeless("wave_01", 1), gapeless("wave_02", 2)]);
+  const queueFile = path.join(dir, "queue.json");
+  writeQueueFile(queueFile, [pickTask(base({ id: 1, waveId: "wave_01", state: "done" }))], 2);
+
+  const moved = editTask(readQueueFile(queueFile).tasks, 1, { wave: "wave_02" });
+  assert.equal(moved.task.waveId, "wave_02", "the patch's `wave` is the row's `waveId`");
+  writeQueueFile(queueFile, moved.tasks, 2);
+
+  // THE NEXT READ, off the file, folded by the lane the board draws: one wave lost the card and the other gained it.
+  const lane = laneOf(waves, readQueueFile(queueFile).tasks);
+  assert.deepEqual(lane.waves[0].members.map((m) => m.id), [], "it left the wave it came from");
+  assert.deepEqual(lane.waves[1].members.map((m) => m.id), [1], "and folds into the wave it now names");
+});
+
+test("absent leaves a card in its wave, and null or empty takes it out", () => {
+  const tasks = [pickTask(base({ id: 3, waveId: "wave_01" }))];
+  // An ordinary edit cannot pull a card out of its wave: the field is absent and the row is untouched.
+  assert.equal(editTask(tasks, 3, { title: "renamed" }).task.waveId, "wave_01", "a title edit leaves the membership alone");
+  // Null and empty are the same answer - the card belongs to no wave, which is where a file written before the field reads.
+  for (const cleared of [null, ""]) {
+    assert.equal(editTask(tasks, 3, { wave: cleared }).task.waveId, null, `wave ${JSON.stringify(cleared)} clears to none`);
+  }
+});
+
+test("an unknown wave id is written verbatim and folds into no wave, never into the first", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-wave-unknown-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const waves = storeOf(path.join(dir, "waves.json"), [gapeless("wave_01", 1)]);
+  const queueFile = path.join(dir, "queue.json");
+  writeQueueFile(queueFile, [pickTask(base({ id: 4, waveId: "wave_01" }))], 2);
+
+  const edited = editTask(readQueueFile(queueFile).tasks, 4, { wave: "wave_not_in_any_store" });
+  assert.equal(edited.task.waveId, "wave_not_in_any_store", "the id is kept as written, not normalised away");
+  writeQueueFile(queueFile, edited.tasks, 2);
+  const read = readQueueFile(queueFile);
+  assert.equal(read.tasks[0].waveId, "wave_not_in_any_store", "and survives the file, so the window still names it");
+
+  // The lane folds only the waves the store holds: this card is in NO wave's member list, and above all not in the
+  // first one. Dropping the id or defaulting it into wave_01 would both read as a membership nobody wrote.
+  const lane = laneOf(waves, read.tasks);
+  assert.deepEqual(lane.waves[0].members.map((m) => m.id), [], "the unknown id is not defaulted into wave_01");
+  assert.equal(lane.waves.some((w) => w.members.some((m) => m.id === 4)), false, "and no wave claims it");
+});
+
+test("a wave's state is still folded from its members, and the edit writes no state to the store", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-wave-state-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const wavesFile = path.join(dir, "waves.json");
+  const waves = storeOf(wavesFile, [gapeless("wave_01", 1), gapeless("wave_02", 2)]);
+  const queueFile = path.join(dir, "queue.json");
+  writeQueueFile(queueFile, [pickTask(base({ id: 5, waveId: "wave_01", state: "done" }))], 2);
+
+  // A gate-less wave closes on its membership, so the one done card is what makes wave_01 read done.
+  const before = laneOf(waves, readQueueFile(queueFile).tasks);
+  assert.equal(before.waves[0].state, "done");
+  assert.equal(before.waves[1].state, "empty", "no member is not a default membership");
+  const bytesBefore = readFileSync(wavesFile, "utf8");
+
+  const moved = editTask(readQueueFile(queueFile).tasks, 5, { wave: "wave_02" });
+  writeQueueFile(queueFile, moved.tasks, 2);
+
+  // The SAME store, folded again: the states follow the members, and the file did not move a byte.
+  const after = laneOf(waves, readQueueFile(queueFile).tasks);
+  assert.equal(after.waves[0].state, "empty", "the wave it left folds empty from no members");
+  assert.equal(after.waves[1].state, "done", "the wave it joined folds done from the member it now holds");
+  assert.equal(readFileSync(wavesFile, "utf8"), bytesBefore, "the store is byte-identical: the edit wrote no state");
+  const records = JSON.parse(bytesBefore).byInitiative.init_a;
+  assert.equal(records.some((r) => "state" in r || "members" in r), false, "a wave record carries neither a state nor a member list");
 });
