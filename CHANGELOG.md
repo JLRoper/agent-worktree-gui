@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.157.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.157.7 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-689 releases from v0.1.0 (2026-10-20) to v1.157.6 (2026-11-22), 2431 commits between the tags. Every release is anchored by an
+690 releases from v0.1.0 (2026-10-20) to v1.157.7 (2026-11-22), 2435 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.157.7 — 2026-11-22 · 4 commits
+
+[`fcfc063`](https://github.com/JLRoper/agent-worktree-gui/commit/fcfc06376844c9ebdabd3a3a4ec27a203944222a) · [compare v1.157.6...v1.157.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.6...v1.157.7)
+
+### Fixed
+
+- fix(clarify): the answer is written to the row that asked, not lost to the settle ([`7bbff4e`](https://github.com/JLRoper/agent-worktree-gui/commit/7bbff4eb099356d62f5c06333990a18cd37077d4))
+
+### Docs & tests
+
+- docs: the landing note cites the scroll gate's geometry at the lines it lives on ([`b9a4819`](https://github.com/JLRoper/agent-worktree-gui/commit/b9a48198a0ce3fa9a6d4d672e8e82b33a1937668))
+- docs: render the changelog - 689 releases ([`0ffebed`](https://github.com/JLRoper/agent-worktree-gui/commit/0ffebed59434464e9861def2a5f244bb9d88454e))
+
+### Other
+
+- chore: 1.157.7 - the version this landing carries ([`fcfc063`](https://github.com/JLRoper/agent-worktree-gui/commit/fcfc06376844c9ebdabd3a3a4ec27a203944222a))
 
 ## v1.157.6 — 2026-11-22 · 5 commits
 
