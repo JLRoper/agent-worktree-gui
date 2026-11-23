@@ -129,7 +129,7 @@ await waitForState(
   { timeout: 120_000 },
 );
 
-const assistant = (await get("/api/state")).json?.assistant?.assistants?.[0];
+const assistant = (await get("/api/assistant")).json?.assistants?.[0];
 assert.ok(assistant?.id, "the panel seeds an assistant");
 const made = await post(base, "/api/assistant/queue", { body: { assistantId: assistant.id, action: "add", title: "the reports row", worktree: tree, project: "reports-proj" } });
 assert.equal(made.status, 200, made.text);
