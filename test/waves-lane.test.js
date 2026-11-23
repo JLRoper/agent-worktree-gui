@@ -437,3 +437,105 @@ test("an unreadable store draws no Add control, because there is nothing to add 
   assert.match(html, /The wave store cannot be read/);
   assert.doesNotMatch(html, /data-wave-add=/);
 });
+
+// ---- the reports chip ----------------------------------------------------------------------------------------------
+// The reader's ask: a chip on a task row that lists the .html reports the agents on that task left, and opens one in a
+// new tab of the browser it was clicked in. What the MARKUP must carry is proved here (the route is
+// test/reports-route.test.js's, the paint is tools/verify-wave-reports.mjs's):
+//
+//   * the chip names the task, its thread and its project, because those three are what the route is keyed by;
+//   * the list is drawn only while it is unfolded, and every link is a NEW TAB (`target="_blank" rel="noopener"`);
+//   * an answer with nothing to open is words, never a silent no-op or a link to a file that is not there.
+const reportMember = (over = {}) => ({ id: 4, title: "the record", project: "agent-worktree-gui", state: "running", thread: "t-a", ...over });
+
+test("every member row draws the reports chip, with the three fields the route is keyed by", () => {
+  lane.resetReports();
+  const html = lane.memberHtml(reportMember());
+  assert.match(html, /<button type="button" class="chip wave-reports" data-wave-reports="t-a\|4" data-task="4" data-thread="t-a" data-project="agent-worktree-gui" aria-expanded="false"/);
+  assert.match(html, />reports<\/button>/);
+  // Closed, it draws no list at all - the chip is the whole markup until the reader presses it.
+  assert.doesNotMatch(html, /data-wave-report-list/);
+});
+
+test("a task with no thread still draws the chip, disabled, and says why it cannot answer", () => {
+  lane.resetReports();
+  const html = lane.memberHtml(reportMember({ thread: null }));
+  assert.match(html, /data-wave-reports=""[^>]*disabled/);
+  assert.match(html, /this task names no thread, so its reports cannot be located/);
+});
+
+test("unfolded, the list is one new-tab link per report, and the chip carries the count", () => {
+  lane.resetReports();
+  const key = lane.reportKey(reportMember());
+  lane.setReports(key, {
+    status: "ok",
+    reports: [
+      { name: "a.html", path: "docs/reports/a.html", rel: "docs/reports/a.html", title: "The first report", at: new Date().toISOString(), source: "deliverable", url: "/api/reports/view?thread=t-a&task=4&path=docs%2Freports%2Fa.html" },
+      { name: "b.html", path: "docs/reports/b.html", rel: "docs/reports/b.html", title: "The second report", at: new Date().toISOString(), source: "tree", url: "/api/reports/view?thread=t-a&task=4&path=docs%2Freports%2Fb.html" },
+    ],
+  });
+  lane.openReports(key);
+  const closed = lane.memberHtml(reportMember());
+  // The count is on the chip even before the list is drawn again by a repaint.
+  assert.match(closed, /aria-expanded="true"/);
+  assert.match(closed, />reports 2<\/button>/);
+  const html = lane.reportsListHtml(reportMember());
+  assert.match(html, /data-wave-report-list="t-a\|4"/);
+  assert.match(html, /<a class="wave-report-link" href="\/api\/reports\/view\?thread=t-a&amp;task=4&amp;path=docs%2Freports%2Fa\.html" target="_blank" rel="noopener"/);
+  assert.match(html, /The first report/);
+  assert.match(html, /The second report/);
+  assert.match(html, /docs\/reports\/a\.html/);
+  // Both links are new tabs; the reader asked for one and the list must not decide otherwise for a nested path.
+  assert.equal([...html.matchAll(/<a /g)].length, 2);
+  assert.equal([...html.matchAll(/target="_blank"/g)].length, 2);
+  assert.equal([...html.matchAll(/rel="noopener"/g)].length, 2);
+});
+
+test("an answer with no report is said in words, not drawn as an empty list", () => {
+  lane.resetReports();
+  const key = lane.reportKey(reportMember());
+  lane.setReports(key, { status: "ok", reports: [] });
+  lane.openReports(key);
+  const html = lane.memberHtml(reportMember());
+  assert.match(html, />no reports<\/button>/);
+  assert.match(html, /no \.html report recorded for this task/);
+});
+
+test("a report with no file is named with its reason and given no link", () => {
+  lane.resetReports();
+  const key = lane.reportKey(reportMember());
+  lane.setReports(key, {
+    status: "ok",
+    reports: [{ name: "gone.html", path: "docs/reports/gone.html", rel: null, title: "The gone report", at: null, source: "deliverable", url: null, why: "the delivered file is gone" }],
+  });
+  lane.openReports(key);
+  const html = lane.reportsListHtml(reportMember());
+  assert.doesNotMatch(html, /<a /);
+  assert.match(html, /The gone report/);
+  assert.match(html, /the delivered file is gone/);
+});
+
+test("a failed read is an alert in the list, never a silent empty one", () => {
+  lane.resetReports();
+  const key = lane.reportKey(reportMember());
+  lane.setReports(key, { status: "error", reports: [], error: "HTTP 500" });
+  lane.openReports(key);
+  const html = lane.reportsListHtml(reportMember());
+  assert.match(html, /role="alert"/);
+  assert.match(html, /the reports read failed: HTTP 500/);
+});
+
+test("the chip's state is per task, and closing one leaves the other's answer cached", () => {
+  lane.resetReports();
+  const one = lane.reportKey(reportMember({ id: 4 }));
+  const two = lane.reportKey(reportMember({ id: 5 }));
+  assert.notEqual(one, two);
+  lane.setReports(one, { status: "ok", reports: [{ name: "a.html", title: "A", url: "/x", at: null, source: "tree", path: "a", rel: "a" }] });
+  lane.openReports(one);
+  lane.closeReports(one);
+  assert.equal(lane.reportsOpenFor(one), false);
+  assert.equal(lane.reportsFor(one).reports.length, 1, "the answer survives the fold, so the next press is not a second read");
+  assert.equal(lane.reportsFor(two), null);
+  const html = lane.memberHtml(reportMember({ id: 5 }));
+  assert.match(html, />reports<\/button>/, "a task nobody read yet says reports, not another task's count");
+});
