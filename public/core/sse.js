@@ -67,7 +67,7 @@ function connect({ waitForSnapshot = false } = {}) {
       resolve(received);
     };
   }) : null;
-  for (const type of ["snapshot", "row", "project", "drop", "job", "jobline", "remote-write",
+  for (const type of ["board", "snapshot", "row", "project", "drop", "job", "jobline", "remote-write",
     "remote-write-answered", "remote-write-review", "remote-write-review-done", "settings", "approval",
     "approval-answered", "jobs", "assistant", "held-replies", "treelist", "heartbeat"]) {
     es.addEventListener(type, () => {
@@ -78,6 +78,15 @@ function connect({ waitForSnapshot = false } = {}) {
     if (state.es !== es || state.paused) return;
     state.lastTransportAt = Date.now();
     setStream("● live");
+  });
+  // The BOARD frame, sent before the full snapshot on every connect: projects, rows, settings, tree list and hosts,
+  // without the per-row todos/collisions or the job and assistant panes. Applying it here is what makes the board
+  // clickable while the server is still building the full snapshot; the `snapshot` listener below then fills in the
+  // rest (and resolves the initial connect).
+  es.addEventListener("board", (e) => {
+    if (state.es !== es || state.paused) return;
+    state.lastEventAt = Date.now();
+    applySnapshot(JSON.parse(e.data));
   });
   es.addEventListener("snapshot", (e) => {
     if (state.es !== es || state.paused) return;
