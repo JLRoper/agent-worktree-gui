@@ -70,7 +70,7 @@
     12 s client deadline and drew "the panel server did not answer within 12s". The store was never the problem: 10
     initiatives, 12 waves, 601 queue rows. The cost was one seam - the wave gate's live evidence read - built for 19
     members when one gate on one wave needed two of them, and reading three halves of every member's evidence when that
-    gate reads one. Scoped to the gates that read it, a cold /api/initiatives now answers in 0.885 s and a cold
+    gate reads one. Scoped to the gates that read it, a cold /api/initiatives now answers in 0.536 s and a cold
     /api/waves in 0.014 s, on the same state, with the payload the tab draws unchanged.
   </p>
   <div class="meta">
@@ -140,31 +140,31 @@
 <table>
   <thead><tr><th>endpoint</th><th>before</th><th>after</th><th>note</th></tr></thead>
   <tbody>
-    <tr><td>GET /api/initiatives, cold</td><td class="num">4784</td><td class="num">885</td><td>first read in the process</td></tr>
-    <tr><td>GET /api/initiatives, warm</td><td class="num">60</td><td class="num">49</td><td>inside the 30 s evidence memo</td></tr>
+    <tr><td>GET /api/initiatives, cold</td><td class="num">4784</td><td class="num">536</td><td>a real build; the profile request bypasses the document cache by design</td></tr>
+    <tr><td>GET /api/initiatives, warm</td><td class="num">60</td><td class="num">136</td><td>before: the 30 s evidence memo; after: main&#39;s document cache (a 146 KB send)</td></tr>
     <tr><td>GET /api/waves?initiative=init_mwsst4kj_h5uclp</td><td class="num">4703</td><td class="num">14</td><td>the gated lane, first read</td></tr>
-    <tr><td>GET /api/waves?initiative=init_mwnwj4lh_owx257</td><td class="num">2154</td><td class="num">28</td><td>one member, no gate</td></tr>
-    <tr><td>GET /api/waves?initiative=init_mwtcua6x_g6qh4d</td><td class="num">2359</td><td class="num">13</td><td>one member, no gate</td></tr>
-    <tr><td>GET /api/waves?initiative=init_mwnrt9lo_iwu9bm</td><td class="num">15</td><td class="num">16</td><td>memo hit from the read before it, both arms</td></tr>
+    <tr><td>GET /api/waves?initiative=init_mwnwj4lh_owx257</td><td class="num">2154</td><td class="num">24</td><td>one member, no gate</td></tr>
+    <tr><td>GET /api/waves?initiative=init_mwtcua6x_g6qh4d</td><td class="num">2359</td><td class="num">12</td><td>one member, no gate</td></tr>
+    <tr><td>GET /api/waves?initiative=init_mwnrt9lo_iwu9bm</td><td class="num">15</td><td class="num">14</td><td>memo hit from the read before it, both arms</td></tr>
   </tbody>
 </table>
 <p>
-  The same read on the LIVE panel was 63374 ms, so the copy reads about thirteen times faster per member. The share is
+  The after column is the final tip, rebased onto main&#39;s own stale-while-revalidate cache (161b1fd5): the tab&#39;s warm read is now that cache hit, so its 136 ms is a 146 KB send rather than a fold, and the cold column is a real build because the profile request bypasses the cache by design. The same read on the LIVE panel was 63374 ms, so the copy reads about thirteen times faster per member. The share is
   what transfers, and it is measured on one run:
 </p>
 <table>
   <thead><tr><th>seam (profile key)</th><th>before, ms</th><th>share</th><th>after, ms</th><th>what it does</th></tr></thead>
   <tbody>
-    <tr><td><code>evidence</code></td><td class="num">6295.7</td><td class="num">99.1%</td><td class="num">827.0</td><td>one live read per wave member, before the fold</td></tr>
+    <tr><td><code>evidence</code></td><td class="num">6295.7</td><td class="num">99.1%</td><td class="num">409.8</td><td>one live read per wave member, before the fold</td></tr>
     <tr><td><code>member.landing</code></td><td class="num">3072.4</td><td class="num">48.3%</td><td class="num">0 (not read)</td><td>6 git spawns per member: two rev-parse, merge-base, two diff, merge-base --is-ancestor</td></tr>
-    <tr><td><code>member.files</code></td><td class="num">2909.7</td><td class="num">45.8%</td><td class="num">826.1</td><td>the artefact read; 4 git spawns when the member's tree is gone, a stat when it is not</td></tr>
+    <tr><td><code>member.files</code></td><td class="num">2909.7</td><td class="num">45.8%</td><td class="num">411.5</td><td>the artefact read; 4 git spawns when the member's tree is gone, a stat when it is not</td></tr>
     <tr><td><code>member.pr</code></td><td class="num">308.7</td><td class="num">4.9%</td><td class="num">0 (not read)</td><td>the host's pull-request list, through <code>prIndex</code></td></tr>
-    <tr><td><code>queues</code></td><td class="num">9.1</td><td class="num">0.1%</td><td class="num">12.6</td><td>four queue files, decorated against the board</td></tr>
+    <tr><td><code>queues</code></td><td class="num">9.1</td><td class="num">0.1%</td><td class="num">78.1</td><td>four queue files, decorated against the board</td></tr>
     <tr><td><code>gate-paths</code></td><td class="num">2.4</td><td class="num">0.0%</td><td class="num">2.0</td><td>the waves' gate records and their artefact paths</td></tr>
-    <tr><td><code>fold</code></td><td class="num">40.8</td><td class="num">0.6%</td><td class="num">37.5</td><td>the whole Initiatives document, ten initiatives</td></tr>
-    <tr><td><code>fold.queues</code></td><td class="num">11.7</td><td class="num"></td><td class="num">10.9</td><td>the fold's own queueView per assistant (a second pass)</td></tr>
-    <tr><td><code>fold.trees</code></td><td class="num">8.2</td><td class="num"></td><td class="num">7.0</td><td>projectForPath + rowFor for every attached tree</td></tr>
-    <tr><td><code>fold.lanes</code></td><td class="num">12.9</td><td class="num"></td><td class="num">12.9</td><td>waveLane for the ten initiatives</td></tr>
+    <tr><td><code>fold</code></td><td class="num">40.8</td><td class="num">0.6%</td><td class="num">39.7</td><td>the whole Initiatives document, ten initiatives</td></tr>
+    <tr><td><code>fold.queues</code></td><td class="num">11.7</td><td class="num"></td><td class="num">10.8</td><td>the fold's own queueView per assistant (a second pass)</td></tr>
+    <tr><td><code>fold.trees</code></td><td class="num">8.2</td><td class="num"></td><td class="num">7.1</td><td>projectForPath + rowFor for every attached tree</td></tr>
+    <tr><td><code>fold.lanes</code></td><td class="num">12.9</td><td class="num"></td><td class="num">16.0</td><td>waveLane for the ten initiatives</td></tr>
     <tr><td><code>wave.template</code></td><td class="num">0</td><td class="num"></td><td class="num">0</td><td>no wave in this state names a template; the 175 KB bundle is parsed once per stamp, never here</td></tr>
   </tbody>
 </table>
@@ -281,16 +281,16 @@ lib/wave-evidence.js:403    for (const rel of artefactPaths(paths)) files[rel] =
 <div class="verdict">
   <h4>The two reads now</h4>
   <p>
-    <b>GET /api/initiatives, cold: 4784 ms -> 885 ms</b> (5.4x), warm 49-60 ms. <b>GET /api/waves, cold: 4703 ms ->
-    14 ms</b> (336x) on the gated lane, and 2154-2359 ms -> 13-28 ms on the gate-less ones. The evidence read went from
+    <b>GET /api/initiatives, cold: 4784 ms -> 536 ms</b> (8.9x). <b>GET /api/waves, cold: 4703 ms ->
+    14 ms</b> (336x) on the gated lane, and 2154-2359 ms -> 12-24 ms on the gate-less ones. The evidence read went from
     19 members, 35 git spawns and 3 host reads to 2 members, 4 git spawns and no host read.
   </p>
 </div>
 <p>
-  The residual 826 ms is one member's artefact read with its tree gone: four git spawns on <code>n8n-jlr</code>, whose
+  The residual 411-826 ms is one member's artefact read with its tree gone: four git spawns on <code>n8n-jlr</code>, whose
   <code>origin/main</code> does not resolve, so the read tries the remote-tracking ref, falls back to the local branch,
   then asks for the newest commit that touched the path and its tree entry. Measured standalone on this host that read is
-  573 ms; inside the loaded panel it is 826 ms to 1.1 s. It is the floor of a <code>file-exists</code> gate on a cleaned
+  573 ms; inside the loaded panel it is 411 ms to 1.1 s across runs. It is the floor of a <code>file-exists</code> gate on a cleaned
   up tree, and it is paid once per thirty seconds, not once per repaint.
 </p>
 
@@ -384,8 +384,8 @@ curl -s "http://127.0.0.1:&lt;port&gt;/api/initiatives?profile=1" | python -m js
   </p>
   <p>
     <b>The residual cold read can exceed one second on this box.</b> It is four git spawns for one member whose tree is
-    gone; standalone that read is 573 ms, inside the loaded panel 0.83-1.27 s across runs. It is under a second when the
-    box is quiet and above it when four agents are running, and the table quotes the run it measured rather than the best
+    gone; standalone that read is 573 ms, inside the loaded panel 0.54-1.27 s across runs. It is under a second when the
+    box is quiet and above it when four agents are running; the table quotes the run it measured (536 ms) rather than the best
     one.
   </p>
   <p>
