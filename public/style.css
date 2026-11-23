@@ -5544,6 +5544,56 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   #as-initiatives .wave-close > .wave-join { flex: 0 0 196px; align-self: stretch; }
 }
 
+/* ---- 5b. AUTHORING: the Add control, a station's controls, and the one-line form ------------------ */
+/* The Add control sits on the section head beside "Waves N", in the same mini-button language the tree rows use, so a
+   control that changes the map looks like the controls that change the map everywhere else on this card. */
+#as-initiatives .wave-add { order: 2; height: 20px; padding: 0 8px; font-size: var(--tab-fs-meta); }
+/* A station's controls are RIGHT-ALIGNED under the row: edit the record, move it one place, delete it. Up/Down are a
+   reorder of the whole list in one write, so a station that is already first or last has the button disabled rather
+   than posting a move that changes nothing. */
+#as-initiatives .wave-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: var(--tab-s2); }
+#as-initiatives .wave-actions .init-mini { height: 20px; padding: 0 8px; font-size: 10.5px; }
+#as-initiatives .wave-actions .wave-del:hover { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+/* THE FORM. One line on a wide pane, two columns on a narrow one; a dashed edge so it reads as a draft the reader is
+   filling in, not as a station that already exists. It is drawn by the module from `waveForm`, so a snapshot repaint
+   cannot erase a half-typed title. */
+#as-initiatives .wave-form {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(130px, 1.4fr) auto auto;
+  align-items: end;
+  gap: var(--tab-s2);
+  margin: var(--tab-s2) 0;
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px dashed var(--tab-line-strong);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+@container (max-width: 820px) {
+  #as-initiatives .wave-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #as-initiatives .wave-field-title, #as-initiatives .wave-field-template, #as-initiatives .wave-form-error { grid-column: 1 / -1; }
+}
+#as-initiatives .wave-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#as-initiatives .wave-field > span { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--tab-ink-3); }
+#as-initiatives .wave-field input, #as-initiatives .wave-field select {
+  min-width: 0;
+  /* `.as-group input[type="text"]` gives every text input `flex: 1 1 250px`, and a flex basis is the MAIN size: in the
+     field's column that turned a 24px input into a 250px one. The field is a column, so the basis has to be off. */
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-surface);
+  color: var(--tab-ink);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1;
+}
+#as-initiatives .wave-field input:focus, #as-initiatives .wave-field select:focus { outline: 1px solid var(--tab-accent); outline-offset: 1px; border-color: var(--tab-line-strong); }
+#as-initiatives .wave-switch { display: inline-flex; align-items: center; gap: 5px; height: 24px; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
+#as-initiatives .wave-switch input { margin: 0; }
+#as-initiatives .wave-form-error { grid-column: 1 / -1; margin: 0; }
+
 /* ---- 6. THE LANES: parallel blocks, members as a manifest ---------------------------------------- */
 #as-initiatives .wave-lanes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--tab-s2); margin-top: var(--tab-s3); }
 /* Lanes run SIDE BY SIDE wherever the pane can hold two; below 900px of pane they stack, because a squeezed lane is

@@ -1,4 +1,6 @@
-// The waves' wire half, over a real server in a sandbox: one READ, and the same fold inside GET /api/initiatives.
+// The waves' READ half, over a real server in a sandbox: GET /api/waves, and the same fold inside GET
+// /api/initiatives. THE WRITE HALF IS test/waves-write.test.js's, and it is the one that proves the four POSTs; this
+// file still pins that a read writes nothing, which is why it keeps its own store and its own byte comparisons.
 //
 // WHAT THIS FILE PINS, in the order it runs:
 //
@@ -11,7 +13,8 @@
 //     board that names no wave is NOT a member and is not counted.
 //   * THE TAB AND THE ROUTE AGREE. GET /api/initiatives carries the identical wave lane, so the card cannot draw a
 //     different state from the route.
-//   * AN UNREADABLE STORE IS A 409 AND ITS BYTES ARE UNCHANGED, with no write route to overwrite them in this slice.
+//   * AN UNREADABLE STORE IS A 409 AND ITS BYTES ARE UNCHANGED - the read path never repairs a file, and the write path
+//     (test/waves-write.test.js) refuses beside it for the same reason.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -279,14 +282,20 @@ test("no wave-state field is written to the wave store by any of the reads above
   }
 });
 
-test("the route answers 400 without an initiative, 405 on a write, and 404 on a path it does not have", async () => {
+test("the route answers 400 without an initiative, 405 on a verb it does not have, and 404 on a path it does not have", async () => {
   const noInitiative = await get("/api/waves");
   assert.equal(noInitiative.status, 400);
   assert.match(noInitiative.json.error, /\?initiative=<id>/);
 
-  const wrote = await fetch(`${base}/api/waves?initiative=${initiativeId}`, { method: "POST", body: "{}" });
-  assert.equal(wrote.status, 405);
-  assert.match((await wrote.json()).error, /writes none|not allowed/);
+  // THE WRITE EXISTS NOW (test/waves-write.test.js owns its four verbs). A POST with no initiative is a 400, not the
+  // read-only slice's 405; 405 is kept for a method that is neither a read nor a write.
+  const wrote = await fetch(`${base}/api/waves`, { method: "POST", body: "{}" });
+  assert.equal(wrote.status, 400);
+  assert.match((await wrote.json()).error, /initiativeId/);
+
+  const put = await fetch(`${base}/api/waves?initiative=${initiativeId}`, { method: "PUT", body: "{}" });
+  assert.equal(put.status, 405);
+  assert.match((await put.json()).error, /not allowed/);
 
   const wrong = await get("/api/waves/nope");
   assert.equal(wrong.status, 404);

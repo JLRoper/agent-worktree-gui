@@ -20,7 +20,7 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
-import { waveLane } from "../lib/waves.js";
+import { WAVE_GATE_CHOICES, waveLane } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
@@ -216,7 +216,15 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     // The wave store's own status, so the lane can say "this file cannot be read" without a second request. Null when
     // the composition root handed in no wave store (a fixture that predates waves), which the lane draws as no waves.
     waveStatus: waveStatus
-      ? { file: waveStatus.file, found: waveStatus.found, readable: waveStatus.readable, error: waveStatus.error }
+      ? {
+          file: waveStatus.file,
+          found: waveStatus.found,
+          readable: waveStatus.readable,
+          error: waveStatus.error,
+          // The gate names the tab's one-line form offers (lib/waves.js `WAVE_GATE_CHOICES`). It rides the read the tab
+          // already takes, so the picker cannot drift from the door that validates every post (`pickWaveGate`).
+          gateChoices: WAVE_GATE_CHOICES,
+        }
       : null,
     initiatives: out,
   };

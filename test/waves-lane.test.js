@@ -331,3 +331,109 @@ test("the wave section head says the lane is a read, and keeps its count where i
   assert.match(html, /Waves <span class="chip">1<\/span>/);
   assert.match(html, /read from the wave store/);
 });
+
+// ---- the controls a writer adds ------------------------------------------------------------------------------------
+// The lane is the same string whether or not a writer exists; the controls are drawn only when the caller says one does
+// (`opts.canWrite`), so the read this module drew before them is still the default answer.
+test("with no writer a card with no waves draws nothing, and with one it draws its Add control and no form", () => {
+  const bare = lane.laneHtml({ id: "init_a", waves: [] }, { readable: true, found: true });
+  assert.equal(bare, "");
+  const writable = lane.laneHtml({ id: "init_a", waves: [] }, { readable: true, found: true }, undefined, { canWrite: true });
+  assert.match(writable, /data-wave-add="init_a"/);
+  assert.match(writable, /\+ Add a wave/);
+  assert.match(writable, /no waves recorded on this initiative yet/);
+  // DECISION 4: the press opens the form, it does not create a default-titled wave.
+  assert.doesNotMatch(writable, /data-wave-form=/);
+  assert.doesNotMatch(writable, /Wave 1|Untitled/);
+});
+
+test("the Add form is a title and both gates, empty, with Create and Cancel", () => {
+  const html = lane.laneHtml({ id: "init_a", waves: [] }, { readable: true, found: true }, undefined, {
+    canWrite: true,
+    checks: ["clean", "pr-merged"],
+    form: { mode: "add", title: "", entry: "", exit: "", template: "", auto: false, base: {}, error: "" },
+  });
+  assert.match(html, /data-wave-form="init_a"/);
+  assert.match(html, /data-wave-form-mode="add"/);
+  assert.match(html, /data-wave-field="title"[^>]*value=""/);
+  assert.match(html, /data-wave-field="entry"/);
+  assert.match(html, /data-wave-field="exit"/);
+  assert.match(html, /data-wave-field="template"/);
+  assert.match(html, /data-wave-field="auto"/);
+  assert.match(html, /data-wave-save="init_a">Create wave</);
+  assert.match(html, /data-wave-cancel="init_a"/);
+  // The pickers offer the server's checks and the "no gate" answer; nothing else.
+  assert.match(html, /<option value="clean">clean<\/option>/);
+  assert.match(html, /<option value="pr-merged">pr-merged<\/option>/);
+  assert.match(html, /<option value="">no gate<\/option>/);
+  // While the form is open, the Add control that opened it is not drawn a second time.
+  assert.doesNotMatch(html, /data-wave-add=/);
+  // THE FORM IS A RECORD'S FIELDS AND NOTHING ELSE: no state, no lane, no member.
+  const fields = [...html.matchAll(/data-wave-field="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(fields)].sort(), ["auto", "entry", "exit", "template", "title"]);
+});
+
+test("the Edit form carries the record's words, and a gate with parameters is kept rather than dropped", () => {
+  const html = lane.laneHtml({ id: "init_a", waves: [wave()] }, { readable: true, found: true }, undefined, {
+    canWrite: true,
+    checks: ["clean", "pr-merged"],
+    form: {
+      mode: "edit",
+      id: "wave_01",
+      title: "The read path",
+      entry: "",
+      exit: "file-exists",
+      template: "bundle.deploy",
+      auto: true,
+      base: { entry: null, exit: { check: "file-exists", path: "docs/design.md" } },
+      error: "the title cannot be empty",
+    },
+  });
+  assert.match(html, /data-wave-form-mode="edit"/);
+  assert.match(html, /data-wave-form-id="wave_01"/);
+  assert.match(html, /data-wave-field="title"[^>]*value="The read path"/);
+  assert.match(html, /data-wave-field="template"[^>]*value="bundle.deploy"/);
+  assert.match(html, /data-wave-field="auto" checked/);
+  assert.match(html, /Save wave/);
+  // A check outside the picker's list is drawn selected WITH its parameters kept, not silently reset to "no gate".
+  assert.match(html, /<option value="file-exists" selected>file-exists \(keeps its parameters\)<\/option>/);
+  assert.match(html, /wave-form-error[^>]*>the title cannot be empty</);
+});
+
+test("a station carries Edit, Up, Down and Delete, and the ends are disabled rather than posting a no-op", () => {
+  const first = lane.laneHtml({ id: "init_a", waves: [wave()] }, { readable: true, found: true }, undefined, { canWrite: true });
+  assert.match(first, /data-wave-edit="init_a\|wave_01"/);
+  assert.match(first, /data-wave-up="init_a\|wave_01"[^>]*disabled/);
+  assert.match(first, /data-wave-down="init_a\|wave_01"[^>]*disabled/);
+  assert.match(first, /data-wave-del="init_a\|wave_01"/);
+  // Two waves: the first can go down, the second can go up, and only the ends are shut.
+  const two = lane.laneHtml(
+    { id: "init_a", waves: [wave(), wave({ id: "wave_02", position: 2, title: "The write path" })] },
+    { readable: true, found: true },
+    undefined,
+    { canWrite: true },
+  );
+  const firstBlock = two.slice(0, two.indexOf("wave_02"));
+  assert.match(firstBlock, /data-wave-down="init_a\|wave_01"(?![^>]*disabled)/);
+  assert.match(two, /data-wave-up="init_a\|wave_02"(?![^>]*disabled)/);
+});
+
+test("with no writer a station carries none of the controls", () => {
+  const html = lane.laneHtml({ id: "init_a", waves: [wave()] }, { readable: true, found: true });
+  assert.doesNotMatch(html, /data-wave-edit=/);
+  assert.doesNotMatch(html, /data-wave-del=/);
+  assert.doesNotMatch(html, /data-wave-add=/);
+});
+
+test("the section head says the tab AUTHORS waves and still starts nothing", () => {
+  const html = lane.laneHtml({ id: "init_a", waves: [wave()] }, { readable: true, found: true }, undefined, { canWrite: true });
+  assert.match(html, /This tab AUTHORS waves/);
+  assert.match(html, /still opens nothing, closes nothing and starts nothing/);
+  assert.doesNotMatch(html, /has no write route/);
+});
+
+test("an unreadable store draws no Add control, because there is nothing to add to", () => {
+  const html = lane.laneHtml({ id: "init_a", waves: [] }, { readable: false, found: true, error: "boom" }, undefined, { canWrite: true });
+  assert.match(html, /The wave store cannot be read/);
+  assert.doesNotMatch(html, /data-wave-add=/);
+});
