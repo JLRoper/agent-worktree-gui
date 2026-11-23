@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARNESS: LIVE GATE
 // A real page applying a real delta: the stream's push after a first load is a delta (lib/snapshot-delta.js,
 // public/settings.js applySnapshotDelta), and the page must patch what it names instead of rebuilding the board.
 //

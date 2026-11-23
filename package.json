@@ -57,6 +57,7 @@
     "verify:all": "node tools/verify.mjs --all",
     "verify:console-render": "node tools/verify-console-render.mjs",
     "verify:console-fonts": "node tools/verify-console-fonts.mjs",
+    "verify:stream-delta": "node tools/verify-stream-delta.mjs",
     "verify:agent-card-pin": "node tools/verify-agent-card-pin.mjs",
     "verify:flicker": "node tools/verify-console-flicker.mjs",
     "verify:stream-default": "node tools/verify-stream-default.mjs",
