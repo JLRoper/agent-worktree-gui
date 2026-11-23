@@ -115,6 +115,11 @@ arrived on main with the boot-reads landing (`ed29a2a6`, 1.157.9). A clean `git 
 sitting, answers **15/17** with the same file named - so that red is main's, not this branch's, and no file in this
 diff names a folder on this machine.
 
+`npm run test:changed` on the same tree selects **71 files** and answers **164.0s, exit 1**, with two failures:
+`absolute-paths` (main's boot-rows file, above) and `git worktree remove walks THROUGH a junctioned node_modules - the
+measurement this fix exists for`, which is one of the seven the 1.157.6 landing recorded as its pre-existing set. No
+file this diff touches fails.
+
 The four answers are the same as the 1.157.6 landing's (102/102, 40/40, 11/11, 35/35), so the note's box changed no
 gate claim; the redesign gate's own ledger `docs/reports/initiatives-redesign/gate.json` had been stale since 1.144.0
 (16/16) and now carries this tree's run (18/18 docked).
