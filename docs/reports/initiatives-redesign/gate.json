@@ -1,52 +1,58 @@
 {
-  "at": "2026-11-21T07:47:00.964Z",
-  "version": "1.144.0",
-  "home": "$SCRATCH",
+  "at": "2026-11-23T04:35:00.969Z",
+  "version": "1.157.6",
+  "home": "C:/Users/roper/AppData/Local/Temp/wag-initiatives-gate-20796",
   "baseline": {
     "passed": 4,
     "total": 16,
     "source": "git archive of 158d0f69 captured into docs/reports/initiatives-redesign/before"
   },
   "after": {
-    "passed": 16,
-    "total": 16,
+    "passed": 18,
+    "total": 18,
     "score": 1,
     "checks": [
       {
         "id": "type-title",
         "label": "the card title is at least 13px and heavier than the body",
         "ok": true,
-        "detail": "13.5px, weight 600"
+        "detail": "15.5px, weight 600"
       },
       {
         "id": "type-body",
         "label": "the description is at least 12px with 1.5 line-height",
         "ok": true,
-        "detail": "12px / 18.6px"
+        "detail": "12.5px / 20px"
       },
       {
         "id": "type-fold",
         "label": "project, tree and assistant rows are at least 12px",
         "ok": true,
-        "detail": "12px fold, 12px tree, 12px assistant"
+        "detail": "12px fold, 12.5px tree, 12px assistant"
       },
       {
         "id": "type-meta",
         "label": "hints and chips are at least 10.5px",
         "ok": true,
-        "detail": "11px hint, 10.5px chip"
+        "detail": "11.5px hint, 11.5px chip"
       },
       {
         "id": "contrast-aa",
         "label": "every text run is at least 4.5:1 against its own background",
         "ok": true,
-        "detail": "worst 6.7:1 at .init-desc"
+        "detail": "worst 4.51:1 at .wave-member-project, 16 runs"
+      },
+      {
+        "id": "contrast-sample",
+        "label": "the contrast sample enters the folded row, its hover fill and the lane",
+        "ok": true,
+        "detail": "folded preview read, folded hover read, lane read (gate true, auto true, project true)"
       },
       {
         "id": "spacing-4",
         "label": "padding, gaps and margins sit on a 4px scale",
         "ok": true,
-        "detail": "3 values, all multiples of 4"
+        "detail": "4 values, all multiples of 4"
       },
       {
         "id": "hit-targets",
@@ -56,21 +62,27 @@
       },
       {
         "id": "chips-fit",
-        "label": "no chip clips its text",
+        "label": "no chip clips its text in a sample that has chips",
         "ok": true,
-        "detail": "21 chips, widest 168.1px"
+        "detail": "21 chips, widest 182.4px"
       },
       {
         "id": "alignment",
         "label": "the card's text shares one left edge",
         "ok": true,
-        "detail": "left edges 982, 982, 982, 982, 982, 998 (spread 16px)"
+        "detail": "left edges 986, 986, 986, 986, 986, 992 (spread 6px)"
+      },
+      {
+        "id": "folded-alignment",
+        "label": "every folded title starts on one left edge",
+        "ok": true,
+        "detail": "2 folded titles at 1014, 1014 (spread 0px)"
       },
       {
         "id": "line-length",
         "label": "a full description stays under 80 characters per line",
         "ok": true,
-        "detail": "72 ch at 466px"
+        "detail": "68 ch at 458px"
       },
       {
         "id": "empty-state",
@@ -82,7 +94,7 @@
         "id": "focus-ring",
         "label": "a keyboard-reached control paints a 2px ring at 3:1",
         "ok": true,
-        "detail": "2px solid, 8.3:1"
+        "detail": "2px solid, 8.9:1"
       },
       {
         "id": "hover",
@@ -94,13 +106,13 @@
         "id": "active",
         "label": "a pressed button paints a state beyond its own hover",
         "ok": true,
-        "detail": "pressed transform matrix(1, 0, 0, 1, 0, 1), background rgb(35, 42, 53)"
+        "detail": "pressed transform none, background rgb(16, 21, 28)"
       },
       {
         "id": "keyboard",
         "label": "a project fold opens from the keyboard",
         "ok": true,
-        "detail": "reached the fold after 5 Tab press(es), Enter changed its aria-expanded: yes"
+        "detail": "reached the fold after 7 Tab press(es), Enter changed its aria-expanded: yes"
       },
       {
         "id": "focus-persist",
@@ -111,8 +123,8 @@
     ]
   },
   "wide": {
-    "passed": 15,
-    "total": 16,
+    "passed": 17,
+    "total": 18,
     "misses": [
       "alignment"
     ]
@@ -126,15 +138,15 @@
   },
   "live": {
     "before": {
-      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       39596",
-      "pid": 39596,
+      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       32076",
+      "pid": 32076,
       "health": {
         "status": 200
       }
     },
     "after": {
-      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       39596",
-      "pid": 39596,
+      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       32076",
+      "pid": 32076,
       "health": {
         "status": 200
       }

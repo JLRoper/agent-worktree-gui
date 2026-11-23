@@ -5528,6 +5528,21 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .wave-auto-open.is-on { color: #d8c7ff; border-color: #5b4a86; background: rgba(163, 113, 247, 0.14); }
 #as-initiatives .wave-auto-open.is-wait { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
 #as-initiatives .wave-join { display: block; margin-top: 6px; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); line-height: 1.5; }
+/* THE CLOSING NOTE (the sketch's callout). The count is the lead, the rule is the note, and the note is a box: at
+   11.5px of ink-3 on the row fill a bare line is the least-read sentence in the wave, and it is the one sentence
+   that says what closing costs. */
+#as-initiatives .wave-join b { display: block; margin-bottom: 2px; color: var(--tab-ink); font-size: var(--tab-fs-chip); font-weight: 600; letter-spacing: 0.01em; }
+#as-initiatives .wave-join span { color: var(--tab-ink-2); }
+#as-initiatives .wave-close > .wave-join { margin-top: 0; padding: var(--tab-s2) var(--tab-s3); border: 1px solid var(--tab-line); border-left: 2px solid var(--tab-line-strong); border-radius: 0 var(--tab-r2) var(--tab-r2) 0; background: var(--tab-sunken); }
+#as-initiatives .wave-close { display: flex; flex-direction: column; gap: var(--tab-s2); margin-top: var(--tab-s3); }
+#as-initiatives .wave-close > .wave-lanes { margin-top: 0; }
+/* Wide enough for a third column: the note stands beside the lanes it is about, the way the sketch draws it. Below
+   900px of pane the note sits above them, because a 196px note beside two 340px lanes is the note nobody can read. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-close { flex-direction: row; align-items: flex-start; }
+  #as-initiatives .wave-close > .wave-lanes { flex: 1 1 auto; min-width: 0; }
+  #as-initiatives .wave-close > .wave-join { flex: 0 0 196px; align-self: stretch; }
+}
 
 /* ---- 6. THE LANES: parallel blocks, members as a manifest ---------------------------------------- */
 #as-initiatives .wave-lanes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--tab-s2); margin-top: var(--tab-s3); }
