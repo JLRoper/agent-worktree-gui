@@ -601,10 +601,14 @@ live panel: 7 initiatives, waves per initiative: [0, 0, 0, 0, 0, 0, 0] waveStatu
 answered the same seven initiatives and seven zero wave counts both times.</p>
 
 <h2 id="reproduce"><span class="n">11</span>Reproduce it</h2>
-<p class="kicker">The scripts that produced every number here are in this folder. They take <code>BASE</code> and
-<code>OUT</code> from the environment; the defaults are the scratch home this run used.</p>
+<p class="kicker">The seven scripts that produced every number here are in this folder. They take <code>BASE</code>,
+<code>OUT</code>, <code>WAG_PROOF_HOME</code>, <code>WAG_PROOF_OUT</code>, <code>TREE_A</code> and <code>TREE_B</code> from
+the environment and name no folder on this machine; <code>OUT</code> defaults to <code>shots</code> in the current
+directory.</p>
 
-<pre><code># 1. a copy of the panel's state, on its own port, so nothing can reach 127.0.0.1:7331
+# 1. a copy of the panel's state, on its own port, so nothing can reach 127.0.0.1:7331
+python docs/reports/initiatives-route-sketch-proof/setup-home.py     # copies ~/.wag/state, picks a free port, no assistant
+node   server.js                                                  # from this worktree, with WAG_HOME set to the home it printed
 python docs/reports/initiatives-route-sketch-proof/seed.py            # POST /api/initiatives, move x2, queue add/state x4, waves.json
 node   docs/reports/initiatives-route-sketch-proof/capture-live.mjs   # the measured cause (read only)
 node   docs/reports/initiatives-route-sketch-proof/capture-widths.mjs # 1440/768/480 + the wide float, DOM facts per width
