@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.160.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.161.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-700 releases from v0.1.0 (2026-10-20) to v1.160.0 (2026-11-23), 2471 commits between the tags. Every release is anchored by an
+701 releases from v0.1.0 (2026-10-20) to v1.161.0 (2026-11-23), 2476 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.161.0 — 2026-11-23 · 5 commits
+
+[`4ec29b6`](https://github.com/JLRoper/agent-worktree-gui/commit/4ec29b6dd7f497a701baa30323e22e9c654cd6d3) · [compare v1.160.0...v1.161.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.160.0...v1.161.0)
+
+### Added
+
+- feat(waves): file-exists reads the member's tree, else its landing commit ([`6dfe641`](https://github.com/JLRoper/agent-worktree-gui/commit/6dfe64172c7536df619205d588c1163b0d796615))
+
+### Docs & tests
+
+- docs: render the changelog - 700 releases ([`6743f08`](https://github.com/JLRoper/agent-worktree-gui/commit/6743f08916f86e811064c0cb60eb0d020e4a7779))
+- test(waves): the file-exists gate's acceptance, red before the read exists ([`afcd469`](https://github.com/JLRoper/agent-worktree-gui/commit/afcd469903803ca38e72c6da2505fbcdb27a7974))
+- test: read the assistant and the remote-write cards where they moved ([`993dd46`](https://github.com/JLRoper/agent-worktree-gui/commit/993dd46f2bedf410d0ec6dcac023345f490bf251))
+
+### Other
+
+- chore: 1.161.0 - the version this landing carries ([`4ec29b6`](https://github.com/JLRoper/agent-worktree-gui/commit/4ec29b6dd7f497a701baa30323e22e9c654cd6d3))
 
 ## v1.160.0 — 2026-11-23 · 3 commits
 
