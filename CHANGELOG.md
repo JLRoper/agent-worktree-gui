@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.161.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.161.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-702 releases from v0.1.0 (2026-10-20) to v1.161.1 (2026-11-23), 2480 commits between the tags. Every release is anchored by an
+703 releases from v0.1.0 (2026-10-20) to v1.161.6 (2026-11-23), 2483 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.161.6 — 2026-11-23 · 3 commits
+
+[`13b7c05`](https://github.com/JLRoper/agent-worktree-gui/commit/13b7c05710d9307ad50813e8e3d16421d5c8b42a) · [compare v1.161.1...v1.161.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.161.1...v1.161.6)
+
+### Added
+
+- feat(panel): a compacting run says so instead of "no events yet" ([`1dfc814`](https://github.com/JLRoper/agent-worktree-gui/commit/1dfc8141deec860dd22d47cce829941d16da2592))
+
+### Docs & tests
+
+- docs: render the changelog - 702 releases ([`aea7048`](https://github.com/JLRoper/agent-worktree-gui/commit/aea704865c17f34d63a68b497b2b06cbf37abd35))
+
+### Other
+
+- chore: 1.161.6 - the version this landing carries ([`13b7c05`](https://github.com/JLRoper/agent-worktree-gui/commit/13b7c05710d9307ad50813e8e3d16421d5c8b42a))
 
 ## v1.161.1 — 2026-11-23 · 4 commits
 
