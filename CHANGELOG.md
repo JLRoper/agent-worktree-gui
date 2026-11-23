@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.162.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.162.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-706 releases from v0.1.0 (2026-10-20) to v1.162.2 (2026-11-23), 2498 commits between the tags. Every release is anchored by an
+707 releases from v0.1.0 (2026-10-20) to v1.162.3 (2026-11-23), 2503 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.162.3 — 2026-11-23 · 5 commits
+
+[`c2d7e99`](https://github.com/JLRoper/agent-worktree-gui/commit/c2d7e99e754e52e392e6cd3b5bafc6ee61f69fbd) · [compare v1.162.2...v1.162.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.2...v1.162.3)
+
+### Docs & tests
+
+- docs(reports): file the three review PRs as the next wave's members ([`b209abf`](https://github.com/JLRoper/agent-worktree-gui/commit/b209abf4e9be91a6fd56193846274b101226a32b))
+- docs: render the changelog - 706 releases ([`182a366`](https://github.com/JLRoper/agent-worktree-gui/commit/182a36692239e564b9dd8621e2d6056eda448b64))
+- docs: render the changelog - 706 releases ([`0b57071`](https://github.com/JLRoper/agent-worktree-gui/commit/0b5707108f5a05f215bec131ce12b1eaefb73cdc))
+- docs(reports): record the second cap eviction that emptied W1 after the landing ([`28f9732`](https://github.com/JLRoper/agent-worktree-gui/commit/28f97326ecccd6dca6f4967bd1d4be69c7efbc3a))
+
+### Other
+
+- chore: 1.162.3 - the version this landing carries ([`c2d7e99`](https://github.com/JLRoper/agent-worktree-gui/commit/c2d7e99e754e52e392e6cd3b5bafc6ee61f69fbd))
 
 ## v1.162.2 — 2026-11-23 · 5 commits
 
