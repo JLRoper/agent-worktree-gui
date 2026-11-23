@@ -108,6 +108,13 @@ eight, and why each is not this diff:
 Seven of the eight are therefore pre-existing on this host (two proved by running them against the archive, five named by
 the previous landing's own note), and the eighth is fixed and green.
 
+The suite was not re-run at the new base - it is one node process per test file, and the four gates below are the
+round's own set. The one file this landing had touched was re-checked there: `node --test test/absolute-paths.test.js`
+answers **16/17** on this tree, and the failure names `test/boot-rows-before-answers.test.js:19` and `:23`, which
+arrived on main with the boot-reads landing (`ed29a2a6`, 1.157.9). A clean `git archive cf72e299` extract, run in this
+sitting, answers **15/17** with the same file named - so that red is main's, not this branch's, and no file in this
+diff names a folder on this machine.
+
 The four answers are the same as the 1.157.6 landing's (102/102, 40/40, 11/11, 35/35), so the note's box changed no
 gate claim; the redesign gate's own ledger `docs/reports/initiatives-redesign/gate.json` had been stale since 1.144.0
 (16/16) and now carries this tree's run (18/18 docked).
@@ -118,3 +125,28 @@ Twelve PNGs in `docs/assets/initiatives-redesign/sketch-proof-2026-11-23/`: the 
 wide pair before/after, the docked pair before/after, 347 and 239 (top and note), the ledger with the throwaway open,
 the folded route row at 1440 and 480, and the copy after cleanup. The six scripts that produced every number are in
 `docs/reports/initiatives-route-sketch-proof/`.
+
+## The forensics page: what happened to the original implementation
+
+The reader asked, after this landing, what became of the original implementation of the tab's rewrite. The answer is a
+page, `docs/reports/initiatives-tab-original-implementation-2026-11-23.html`, and its finding in one line: no code was
+lost.
+
+- Nine commits touching `public/core/initiative-fold.js` or `routes/initiatives.js` are not ancestors of main, and
+  every one of them has a twin on main with an identical tree (nine pairs, trees named in the page). Each landing
+  branch was rebased onto main rather than merged, so the branch keeps the pre-rebase copy; `reachable by hash` and
+  `lost` are not the same thing.
+- The redesign's first implementation (1.144.0, PR 818) was evolved in place by The Route, not replaced: the
+  two-column grid at `public/style.css:5658` is the same `@container (min-width: 1000px)` grid as
+  `3d3241fd:public/style.css:4825`, its empty states still draw, and its gate is still the gate. Its 4px spacing and
+  four-step type scale are the part that did not survive.
+- The one artifact that was destroyed is a page: the original implementation report, written untracked by row 205's
+  worker and killed with its worktree, and invisible to `git status` because `.git/info/exclude:12-13` ignores
+  `docs/reports/*.html` in every worktree. PR 854 rebuilt it and force-added it. The rule is still armed today, which
+  is why this page and the forensics page were both committed with `git add -f`.
+
+## The gate stamps on this tree
+
+The four gates were re-run after the rebase onto `cf72e299` (1.157.9), because the boot-reads change landed between
+this branch's cut and its landing. The answers and their stamps are in
+`docs/reports/initiatives-redesign/gates-1.157.10.json`, which is the record this note points at.
