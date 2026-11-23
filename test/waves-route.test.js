@@ -72,7 +72,7 @@ const created = await post(base, "/api/initiatives", { body: { title: "Waves of 
 assert.equal(created.status, 201, created.text);
 const initiativeId = created.json.initiative.id;
 
-const assistant = (await get("/api/state")).json.assistant.assistants[0];
+const assistant = (await get("/api/assistant")).json.assistants[0];
 assert.ok(assistant?.id, "the panel seeds an assistant");
 const addTask = async (title, worktree, projectName) => {
   const made = await post(base, "/api/assistant/queue", { body: { assistantId: assistant.id, action: "add", title, worktree, project: projectName } });

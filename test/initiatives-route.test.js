@@ -56,6 +56,8 @@ const get = async (p) => {
 };
 const readStore = () => JSON.parse(readFileSync(initiativesFile, "utf8"));
 const state = async () => (await get("/api/state")).json;
+// The remote-write cards left the snapshot for their own route, so the question a move parks is read there.
+const pendingCards = async () => (await get("/api/remote-write/state")).json.pending;
 
 // The level is a settings value, so a test that is about the wire shape of a write NAMES the level it needs instead
 // of leaning on the default. `all` is the strictest and asks for every change; `remove` leaves create and edit free
@@ -79,7 +81,7 @@ await waitForState(
 // One assistant, four tasks in four states, on the initiative's trees. The queue route is the shipped one; this is
 // the same write an assistant makes when it files a task, and a filed task is `queued` - the state before running,
 // counted by the tab's strip with the other three.
-const assistantState = async () => (await get("/api/state")).json.assistant;
+const assistantState = async () => (await get("/api/assistant")).json;
 const first = (await assistantState()).assistants[0];
 assert.ok(first?.id, "the panel seeds an assistant");
 const addTask = async (assistantId, title, worktree, projectName) => {
@@ -136,7 +138,7 @@ test("a move parks a question that names the tree and the initiative - and chang
   // The store did not move: this is the whole point of the card.
   assert.deepEqual(readStore().trees, {});
   // And the question that the page will draw carries both names, plus the fact that it grants no remote write.
-  const pending = (await state()).remoteWrites.pending.find((p) => p.id === asked.json.id);
+  const pending = (await pendingCards()).find((p) => p.id === asked.json.id);
   assert.ok(pending, "the question rides the snapshot, so a reload comes back to it");
   assert.equal(pending.kind, "initiative");
   assert.match(pending.title, /Add sso-one to "SSO migration"/);
@@ -146,7 +148,7 @@ test("a move parks a question that names the tree and the initiative - and chang
 });
 
 test("answering once applies the move, and leaves no push grant behind", async () => {
-  const pending = (await state()).remoteWrites.pending.find((p) => p.kind === "initiative");
+  const pending = (await pendingCards()).find((p) => p.kind === "initiative");
   const answered = await post(base, "/api/remote-write/answer", { body: { id: pending.id, choice: "once" } });
   assert.equal(answered.status, 200, answered.text);
   assert.equal(answered.json.resumed.ok, true);
@@ -230,11 +232,11 @@ test("an unreadable store is a 409 on every write, and the move asks nothing at 
   assert.equal(created.json.refused, "unreadable");
   assert.match(created.json.error, /NOT overwritten/);
 
-  const pendingBefore = (await state()).remoteWrites.pending.length;
+  const pendingBefore = (await pendingCards()).length;
   const moved = await post(base, "/api/initiatives/move", { body: { tree: treeA1, initiative: "init_whatever", action: "remove" } });
   assert.equal(moved.status, 409, moved.text);
   assert.equal(moved.json.refused, "unreadable");
-  assert.equal((await state()).remoteWrites.pending.length, pendingBefore, "no card whose only answer is a failure");
+  assert.equal((await pendingCards()).length, pendingBefore, "no card whose only answer is a failure");
   assert.equal(readFileSync(initiativesFile, "utf8"), broken);
 });
 
