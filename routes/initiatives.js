@@ -24,6 +24,10 @@ import { WAVE_GATE_CHOICES, waveFileExistsPaths, waveLane } from "../lib/waves.j
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
+// The read's cache is a file beside the store (see cachedView): the tab's first read after a restart must not wait on
+// the evidence join, which measured 25-52s on a loaded box.
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 /** The one path this prefix answers, and the row the mount table in server.js matches on. */
 export const INITIATIVES_PATH = "/api/initiatives";
@@ -340,24 +344,77 @@ export function createInitiativesRoutes({
     });
   };
 
-  // The read is a whole-store join (initiatives x trees x queue x waves x gate evidence) and it can take seconds while
-  // the panel walks the fleet - 34.7s measured on 2026-11-23 during a boot, for a 122 KB document. It is pure, so the
-  // answer is memoised for a few seconds; every write below drops it first, so no change is answered from a cache that
-  // was built before it.
-  let viewCache = null; // { at, doc }
-  const VIEW_TTL_MS = 4000;
+  // THE READ ANSWERS AT ONCE AND REBUILDS BEHIND THE READER. The join is the tab's whole document but the expensive
+  // part of it is the wave gate evidence (PR reads and landing judgements per member, lib/wave-evidence.js), which
+  // measured 25-52s on 2026-11-23 while the panel walked the fleet - longer than the client's 12s timeout, so the tab
+  // showed "the panel server did not answer" and never got a first document to cache. The last built document is
+  // therefore kept (in memory and on disk beside the store): a read returns it immediately and a stale one schedules a
+  // rebuild for the next read. A write still drops it and answers with a fresh build, so a change is never read back
+  // from a cache built before it.
+  let viewCache = loadViewCache(); // { at, doc }
+  let building = null;
+  const VIEW_STALE_MS = 2000;
+
+  function viewCacheFile() {
+    try {
+      return path.join(path.dirname(initiatives.statusOf().file), "initiatives-cache.json");
+    } catch {
+      return null;
+    }
+  }
+  function loadViewCache() {
+    const file = viewCacheFile();
+    if (!file || !existsSync(file)) return null;
+    try {
+      const raw = JSON.parse(readFileSync(file, "utf8"));
+      if (raw && raw.doc && Array.isArray(raw.doc.initiatives)) return { at: Number(raw.at) || 0, doc: raw.doc };
+    } catch {
+      /* a corrupt cache is no cache */
+    }
+    return null;
+  }
+  function saveViewCache(entry) {
+    const file = viewCacheFile();
+    if (!file) return;
+    try {
+      const tmp = `${file}.tmp`;
+      writeFileSync(tmp, JSON.stringify(entry), "utf8");
+      renameSync(tmp, file);
+    } catch {
+      /* the cache is an optimisation; the read still answers */
+    }
+  }
+  function rebuildView() {
+    if (building) return building;
+    building = (async () => {
+      try {
+        const doc = await view();
+        viewCache = { at: Date.now(), doc };
+        saveViewCache(viewCache);
+        return doc;
+      } finally {
+        building = null;
+      }
+    })();
+    return building;
+  }
   const cachedView = async () => {
     // A store that has become unreadable is never answered from the cache: `readable: false` and the parser's own
-    // sentence are the tab's whole point on that path, and a four-second-old "readable: true" would be a lie the
-    // reader would act on. The status check is a stat plus the store's own memoised load, not the join below.
+    // sentence are the tab's whole point on that path, and a stale "readable: true" would be a lie the reader would
+    // act on. The status check is a stat plus the store's own memoised load, not the join below.
     if (!initiatives.statusOf().readable) {
       viewCache = null;
       return view();
     }
-    if (viewCache && Date.now() - viewCache.at < VIEW_TTL_MS) return viewCache.doc;
-    const doc = await view();
-    viewCache = { at: Date.now(), doc };
-    return doc;
+    if (viewCache) {
+      if (Date.now() - viewCache.at > VIEW_STALE_MS && !building) {
+        void rebuildView().catch(() => {
+          /* the next read retries; this one already has a document to answer with */
+        });
+      }
+      return viewCache.doc;
+    }
+    return rebuildView();
   };
   const dropView = () => {
     viewCache = null;
@@ -449,7 +506,7 @@ export function createInitiativesRoutes({
       }
       log(`initiatives: "${out.initiative.title}" created (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
       onChange("created");
-      sendJson(res, 201, { ok: true, asked: false, changed: true, initiative: out.initiative, ...(await view()) });
+      sendJson(res, 201, { ok: true, asked: false, changed: true, initiative: out.initiative, ...(await rebuildView()) });
       return true;
     }
 
@@ -509,7 +566,7 @@ export function createInitiativesRoutes({
       }
       if (out.changed !== false) onChange("edited");
       log(`initiatives: "${out.initiative.title}" edited (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
-      sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, initiative: out.initiative, ...(await view()) });
+      sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, initiative: out.initiative, ...(await rebuildView()) });
       return true;
     }
 
@@ -546,7 +603,7 @@ export function createInitiativesRoutes({
           initiative: { id: rec.id, title: rec.title },
           tree,
           note: action === "add" ? "that worktree is already in this initiative" : "that worktree is not in this initiative",
-          ...(await view()),
+          ...(await rebuildView()),
         });
         return true;
       }
@@ -572,7 +629,7 @@ export function createInitiativesRoutes({
           initiative: { id: rec.id, title: rec.title },
           tree,
           action,
-          ...(await view()),
+          ...(await rebuildView()),
         });
         return true;
       }

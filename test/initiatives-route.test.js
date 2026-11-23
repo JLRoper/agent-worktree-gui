@@ -15,7 +15,7 @@
 //     (the running one first, because it is working now).
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
@@ -262,4 +262,15 @@ test("the read is memoised for a moment, and a write drops it", async () => {
   const after = (await get("/api/initiatives")).json;
   assert.notEqual(after.at, before.at, "a write drops the memoised read");
   assert.equal(after.initiatives.length, before.initiatives.length + 1);
+});
+
+test("the read is kept beside the store, so a restart answers before the join finishes", async () => {
+  // The evidence join measured 25-52s on a loaded box, longer than the tab's 12s timeout: without a document on disk a
+  // restarted panel cannot answer the tab at all. The cache is written beside the store on every build.
+  await get("/api/initiatives");
+  const file = path.join(path.dirname(initiativesFile), "initiatives-cache.json");
+  assert.ok(existsSync(file), "the cache file is written beside the store");
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  assert.ok(Array.isArray(raw.doc.initiatives), "the cached document is the tab's document");
+  assert.ok(Number(raw.at) > 0, "and it carries when it was built");
 });
