@@ -247,3 +247,19 @@ test("a repaired store works again on the next write", async () => {
   assert.equal(made.status, 201, made.text);
   assert.equal((await get("/api/initiatives")).json.readable, true);
 });
+
+test("the read is memoised for a moment, and a write drops it", async () => {
+  // The read behind this tab is a whole-store join (initiatives x trees x queue x waves x gate evidence) that measured
+  // 34.7s during a boot on 2026-11-23 for a 122 KB document, and the tab polls it. Two reads inside the window must
+  // answer the SAME document; a write must never be answered from a cache built before it.
+  const before = (await get("/api/initiatives")).json;
+  const again = (await get("/api/initiatives")).json;
+  assert.equal(again.at, before.at, "a second read inside the window reuses the document");
+  assert.equal(again.initiatives.length, before.initiatives.length);
+
+  const made = await post(base, "/api/initiatives", { body: { title: "Drops the memoised read" } });
+  assert.equal(made.status, 201, made.text);
+  const after = (await get("/api/initiatives")).json;
+  assert.notEqual(after.at, before.at, "a write drops the memoised read");
+  assert.equal(after.initiatives.length, before.initiatives.length + 1);
+});
