@@ -113,6 +113,7 @@ PASS all 7 steps</pre>
   <tr><td><code>node --test test/container-teardown.test.js</code></td><td class="num">15</td><td class="good">pass 15, fail 0 (three blocks against the real daemon; skipped with a named reason when there is none)</td></tr>
   <tr><td><code>node --test test/container-brief.test.js</code></td><td class="num">1</td><td class="good">pass 1, fail 0 - the paragraph is read off the body a stub gateway received, so it is what the worker reads</td></tr>
   <tr><td>the focused set (brief, queue, todo, mount wiring)</td><td class="num">74</td><td class="good">pass 74, fail 0</td></tr>
+  <tr><td><code>npm test</code>, once before the PR</td><td class="num">3735</td><td>3714 pass, 21 fail - and every failing name also fails at <code>origin/main</code> in a clean <code>git archive</code> export (assistant-queue-reattach, gateway-permissions, harness, initiative-tier-route, junctioned-node-modules, paths-http, paths, reasoning-runs, scan-upstream, waves-route, waves-write, worktree-assistant, worktree-naming), so none of the reds is this branch's</td></tr>
 </table>
 
 <h2>What it does not do</h2>
