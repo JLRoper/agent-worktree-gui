@@ -184,15 +184,28 @@ test("a met exit gate is not enough while the previous wave still holds a run", 
   assert.match(successor.why, /never opens under a wave that has not closed/);
 });
 
-test("no exit gate and an abandoned exit both open nothing, each with its own sentence", () => {
+test("no exit gate: the wave closes on membership and then its switch opens the next, and a wave that has not closed still opens nothing", () => {
   const handClosed = view(wave("wave_01", 1, { auto: true, exitGate: null }), [member(1, "done")]);
   const two = view(wave("wave_02", 2), [member(2, "queued")]);
-  const [, afterNothing] = waveAutoOpens([handClosed, two]);
-  assert.equal(handClosed.gates.exit.state, "none");
-  assert.equal(afterNothing.open, false);
-  assert.match(afterNothing.why, /names no exit gate/);
-  assert.match(afterNothing.why, /there is no read that can say met/);
+  const [, afterMembership] = waveAutoOpens([handClosed, two]);
+  assert.notEqual(handClosed.gates.exit.state, "met", "the gate nobody authored is never a met gate");
+  assert.equal(handClosed.state, "done", "every member closed is the close");
+  assert.equal(afterMembership.open, true, "a closed wave's switch opens the next one, gate or no gate");
+  assert.equal(afterMembership.gate.state, "none");
+  assert.match(afterMembership.why, /names no exit gate/);
+  assert.match(afterMembership.why, /reads done on membership/);
+  assert.match(afterMembership.why, /nothing was started/, "an open is not a start, and the record says so");
 
+  // A wave that still holds a queued member has not closed, so its switch opens nothing, however the gate reads.
+  const stillOpen = view(wave("wave_01", 1, { auto: true, exitGate: null }), [member(1, "queued")]);
+  const [, mustWait] = waveAutoOpens([stillOpen, two]);
+  assert.equal(mustWait.open, false);
+  assert.match(mustWait.why, /still reads ready/);
+  assert.match(mustWait.why, /never opens under a wave that has not closed/);
+});
+
+test("an exit closed as abandoned opens nothing, with its own sentence", () => {
+  const two = view(wave("wave_02", 2), [member(2, "queued")]);
   const abandoned = view(
     wave("wave_01", 1, { auto: true }),
     [member(1, "done", { abandoned: { reason: "the upstream feed was retired", by: "roper" } })],
@@ -240,7 +253,11 @@ test("the switch is evaluated on the lane read, and nothing is written to the st
   assert.equal(two.autoOpen.from, "wave_01");
   assert.equal(two.auto, false, "the record's switch is absent, so it is false");
   assert.equal(three.autoOpen.open, false, "and the chain stops at wave_02");
-  assert.equal(lane.currentId, "wave_02", "the current wave is still the fold's answer: wave_01 is done, wave_02 is ready");
+  // wave_02 names no exit gate and its one member is done, so the MEMBERSHIP closes it, and wave_03 (no members) is
+  // what a person is owed: the fold names it instead of leaving a done wave looking current.
+  assert.equal(two.state, "done", "a gate-less wave closes on its membership");
+  assert.equal(lane.currentId, null, "nothing is running or ready: wave_01 and wave_02 are done, wave_03 is empty");
+  assert.match(three.autoOpen.surface, /W2 done, W3 has no members - file its tasks/);
   // MEMBERSHIP IS EXPLICIT: wave_02 holds the task that names it, not a copy of wave_01's.
   assert.deepEqual(two.members.map((m) => m.id), [2]);
   assert.deepEqual(one.members.map((m) => m.id), [1]);

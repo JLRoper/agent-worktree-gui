@@ -306,11 +306,24 @@ test("no member and no gate: empty wins before any gate is read", () => {
   assert.equal(drawn.gates.exit.state, "none");
 });
 
-test("a null entry gate opens by hand (ready), and a null exit gate never closes it", () => {
+test("a null entry gate opens by hand (ready), and a null exit gate closes on membership", () => {
   const drawn = view([member(1, "queued")], { entryGate: null, exitGate: null });
   assert.equal(drawn.state, "ready");
   assert.equal(drawn.gates.exit.state, "none");
-  assert.match(drawn.gates.exit.why, /a person closes this wave/);
+  assert.match(drawn.gates.exit.why, /closes when every member is closed/);
+  // THE CLOSE NOBODY AUTHORED A GATE FOR: every member closed is the close, and the state says how it got there.
+  const closed = view([member(1, "done"), member(2, "done")], { entryGate: null, exitGate: null });
+  assert.equal(closed.state, "done");
+  assert.match(closed.stateWhy, /closes on its membership/);
+  // A named abandonment closes a member; a bare one is a status word and closes nothing.
+  const named = view([member(1, "done"), member(2, "queued", { abandoned: { reason: "the feed was retired" } })], { entryGate: null, exitGate: null });
+  assert.equal(named.state, "done");
+  assert.match(named.stateWhy, /1 abandoned for a named reason/);
+  const bare = view([member(1, "done"), member(2, "queued", { abandoned: true })], { entryGate: null, exitGate: null });
+  assert.equal(bare.state, "ready");
+  // A GATE THAT WAS AUTHORED STILL DECIDES: membership alone never closes a wave that names an exit gate.
+  const gated = view([member(1, "done")], { exitGate: { check: "pr-merged" } });
+  assert.notEqual(gated.state, "done");
 });
 
 test("the wave record on disk has NO state field, and a hand-written one is not read as state", (t) => {

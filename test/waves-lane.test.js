@@ -101,7 +101,7 @@ test("both gates are drawn, and a wave with no entry gate says so", () => {
 
 test("the auto chip is drawn off by default, and on only when the record says true", () => {
   assert.match(lane.waveHtml(wave(), null), /wave-auto is-off" title="off: this wave never opens the next one, however its exit gate reads - a person opens it">auto off</);
-  assert.match(lane.waveHtml(wave({ auto: true }), null), /wave-auto is-on" title="on: the next wave opens by itself once the exit gate of this wave reads met/);
+  assert.match(lane.waveHtml(wave({ auto: true }), null), /wave-auto is-on" title="on: when this wave closes, the next wave opens and its first queued card is started by the settle that closed this one/);
 });
 
 test("a predecessor with the switch off adds nothing to the markup: default-off draws exactly as before", () => {
@@ -132,6 +132,38 @@ test("a wave a switch opened says which wave opened it, and the sentence rides t
   assert.match(html, /nothing was started/);
   // The opened wave's OWN switch is still its record's: off here, and the lane says so beside the open.
   assert.match(html, /wave-auto is-off/);
+});
+
+test("a next wave that waits for a person draws the fold's one sentence, and nothing else starts", () => {
+  const html = lane.waveHtml(
+    wave({
+      autoOpen: {
+        open: false,
+        by: "hand",
+        from: "wave_01",
+        switchOn: false,
+        gate: { state: "none", met: false },
+        surface: "W1 done, W2 ready - press to open",
+        why: "wave_01 has auto off, so it never opens wave_02 whatever its exit gate reads: a person opens it",
+      },
+    }),
+    null,
+  );
+  assert.match(html, /class="chip wave-next is-wait" data-wave-next="W1 done, W2 ready - press to open"/);
+  assert.match(html, />W1 done, W2 ready - press to open</);
+  assert.match(html, /title="wave_01 has auto off/);
+  assert.doesNotMatch(html, /data-wave-auto-open/, "nothing opened: the chip is a press, not an open");
+});
+
+test("a next wave with no cards is said plainly, never skipped", () => {
+  const html = lane.waveHtml(
+    wave({
+      autoOpen: { open: true, by: "auto", from: "wave_01", switchOn: true, gate: { state: "none", met: false }, surface: "W1 done, W2 has no members - file its tasks", why: "wave_01 names no exit gate, and every member is closed" },
+    }),
+    null,
+  );
+  assert.match(html, /data-wave-next="W1 done, W2 has no members - file its tasks"/);
+  assert.match(html, />W1 done, W2 has no members - file its tasks</);
 });
 
 test("a switch that is on and did not open says why, with the gate's own word", () => {

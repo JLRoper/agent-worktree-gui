@@ -133,9 +133,9 @@ test("the rule ships at wake, and its failsafe is a watchdog knob defaulting to 
   assert.equal(pickSettings({ queueIdleMinutes: "soon" }).queueIdleMinutes, 30, "nonsense falls back to the default");
 });
 
-test("a successful settle on a queue row fires exactly one sweep, and the wake carries the four checks", async (t) => {
+test("a successful settle on a queue row fires exactly one sweep, and the wake carries the five checks", async (t) => {
   const { assistant, said } = await board(t);
-  assert.equal(QUEUE_SWEEP_CHECKS.split("\n").length, 6, "four numbered checks, the header and the closing line");
+  assert.equal(QUEUE_SWEEP_CHECKS.split("\n").length, 7, "five numbered checks, the header and the closing line");
 
   assistant.observe({ type: "job", job: settled() });
   await wait();
@@ -155,12 +155,17 @@ test("a successful settle on a queue row fires exactly one sweep, and the wake c
   assert.match(text, /\[settle\]/, "the landing judgement leads");
   assert.match(text, /\[queuesweep\]/, "and the queue's half rides with it");
   assert.match(text, /#7 land the sweep/, "the row is named");
-  // The four checks, verbatim: an unconstrained "mind the queue" wake is the vibe the row forbids.
+  // The five checks, verbatim: an unconstrained "mind the queue" wake is the vibe the row forbids.
   assert.match(text, /Sweep your queue now, in this order:/);
   assert.match(text, /1\. Read the queue first/);
   assert.match(text, /2\. Every RUNNING row: does \/api\/jobs hold a live job for its thread\?/);
   assert.match(text, /3\. Every QUEUED row: is its deliverable already on main\?/);
   assert.match(text, /4\. Every PARKED row: is the row it names as its blocker done\?/);
+  // The wave rule rides with the four: the driver's own rule, said in the manager's words.
+  assert.match(text, /5\. Every WAVE your rows belong to/);
+  assert.match(text, /whatever the auto switch says|does not depend on `auto`/);
+  assert.match(text, /press to open/);
+  assert.match(text, /has no members - file its tasks/);
   assert.match(text, /Then start what can be started, or say plainly that the queue is clean\./);
 });
 
