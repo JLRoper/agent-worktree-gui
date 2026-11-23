@@ -56,7 +56,11 @@ function projectEventIsNew(cur, patch) {
 
 function connect({ waitForSnapshot = false } = {}) {
   if (state.es) state.es.close();
-  const es = new EventSource("/api/stream");
+  // `shape=delta` is the page telling the server what it can apply: after the board frame, send only the rows and
+  // panes the board did not carry, and on every later push only what changed (lib/snapshot-delta.js,
+  // applySnapshotDelta in settings.js). A tab that predates this asks for nothing and is answered with the full
+  // snapshot exactly as before, so a deploy can never blank a board a reader already had open.
+  const es = new EventSource("/api/stream?shape=delta");
   state.es = es;
   state.awaitingStreamSnapshot = true;
   let finishInitial = () => {};
