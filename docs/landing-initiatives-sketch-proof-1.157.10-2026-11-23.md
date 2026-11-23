@@ -147,8 +147,12 @@ lost.
   four-step type scale are the part that did not survive.
 - The one artifact that was destroyed is a page: the original implementation report, written untracked by row 205's
   worker and killed with its worktree, and invisible to `git status` because `.git/info/exclude:12-13` ignores
-  `docs/reports/*.html` in every worktree. PR 854 rebuilt it and force-added it. The rule is still armed today, which
-  is why this page and the forensics page were both committed with `git add -f`.
+  `docs/reports/*.html` in every worktree. PR 854 rebuilt it and force-added it. The rule is still armed, which is why
+  this page and the forensics page were both committed with `git add -f` - and this branch closes the silence it
+  creates: `test/reports-are-tracked.test.js` compares every page on disk under `docs/reports` against the index, names
+  each one that is not there, and prints `git add -f` as the fix. A probe page proved it: `git status` stayed silent
+  about `docs/reports/zz-probe-lost-page.html` while the test went red naming it, and deleting the page returned the
+  file to 3/3.
 
 ## The gate stamps on this tree
 

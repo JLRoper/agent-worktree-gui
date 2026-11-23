@@ -219,7 +219,7 @@ prints zero lines, so the Route's landed commits carried no report at all. And t
 <pre><code>12: # Generated reports are local artefacts
 13: docs/reports/*.html</code></pre>
 
-<p>Which means the trap is still armed. Writing an untracked report into <code>docs/reports/</code> and asking
+<p>Which meant the trap was armed. Writing an untracked report into <code>docs/reports/</code> and asking
 <code>git status</code> about it produces no output at all, and the ignore is inherited by every worktree because
 <code>info/exclude</code> lives in the shared git directory:</p>
 
@@ -310,11 +310,39 @@ gh pr view 818 --json body -q .body</code></pre>
   </tbody>
 </table>
 
+<h2><span class="n">09</span>The trap, and the test that closes it</h2>
+<p class="kicker">The reader's decision on this page was to stop the silence rather than remember it. The branch now
+carries a check that makes a report page under <code>docs/reports/</code> impossible to leave behind unnoticed.</p>
+
+<p>Two files: <code>tools/reports-tracked.mjs</code>, which compares every <code>.html</code> on disk under the report
+folder against <code>git ls-files docs/reports</code>, and <code>test/reports-are-tracked.test.js</code>, which fails
+with the list of pages and the fix. The comparison is against the INDEX, not <code>git status</code>, because that is
+the difference the whole page is about: an ignored file is invisible to status and visible in the index.</p>
+
+<table>
+  <thead><tr><th>The check</th><th>What it answers</th></tr></thead>
+  <tbody>
+    <tr><td>this tree</td><td><span class="b ok">3/3 green</span> - every page on disk under <code>docs/reports</code> is in the index (33 of them at the time of writing, and the test refuses to pass on a listing that finds fewer than 30)</td></tr>
+    <tr><td>a probe page, written and not added</td><td><span class="b bad">red</span> - <code>git status --short</code> printed only the two new source files, and the test named <code>docs/reports/zz-probe-lost-page.html</code> and printed <code>Fix: git add -f &lt;page&gt; to keep it, or delete it</code>; the probe was then deleted and the test went back to 3/3</td></tr>
+    <tr><td>a fixture repo carrying the real rule</td><td><span class="b ok">red then green</span> - <code># Generated reports are local artefacts</code> plus <code>docs/reports/*.html</code> in its own <code>.git/info/exclude</code>: status silent, the check names the page, <code>git add -f</code> clears it</td></tr>
+    <tr><td>a page one folder down</td><td><span class="b ok">found</span> - <code>docs/reports/round/deep/page.html</code>, because reports keep their evidence beside them</td></tr>
+  </tbody>
+</table>
+
+<p>The ignore rule itself stays: a generated page is still untracked by default, and a hand-written report is still
+committed with <code>git add -f</code>. What changed is that the default is now loud. Its comment in
+<code>.git/info/exclude</code> points at the test, for the next reader who wonders why the line is there.</p>
+
+<p>What the check does not do: it only speaks when the suite runs, so a worker that never runs the tests still gets the
+old silence, and it only walks <code>docs/reports</code> - a page written anywhere else was never covered by the rule.
+Both are honest limits of a test, and both are better than a rule that hides the one artefact a round exists to
+produce.</p>
+
 <footer>
-  Written 2026-11-23 against origin/main <code>cf72e299</code> (1.157.9) and this branch's five commits. Every hash,
+  Written 2026-11-23 against origin/main <code>cf72e299</code> (1.157.9) and the commits this branch carries. Every hash,
   tree hash, file:line and count above was read in this session; the two PR bodies quoted are quoted, not paraphrased.
-  Committed with <code>git add -f</code>, because that is the only way a page in <code>docs/reports/</code> is ever
-  committed here.
+  Committed with <code>git add -f</code>, which is still how a page in <code>docs/reports/</code> is committed here -
+  the check only makes forgetting it loud.
 </footer>
 
 </div>
