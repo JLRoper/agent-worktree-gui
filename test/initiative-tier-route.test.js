@@ -49,7 +49,7 @@ const setTier = async (tier) => {
   assert.equal(out.status, 200, out.text);
   return out.json;
 };
-const pendingFor = async (id) => (await get("/api/state")).json.remoteWrites.pending.find((p) => p.id === id);
+const pendingFor = async (id) => (await get("/api/remote-write/state")).json.pending.find((p) => p.id === id);
 const answer = async (id, choice) => {
   const out = await post(base, "/api/remote-write/answer", { body: { id, choice } });
   assert.equal(out.status, 200, out.text);
@@ -110,7 +110,7 @@ test("at no permission, an attach is made at once and recorded with its actor", 
   assert.equal(added.status, 200, added.text);
   assert.equal(added.json.asked, false);
   assert.equal(added.json.changed, true);
-  assert.equal((await get("/api/state")).json.remoteWrites.pending.some((p) => p.kind === "initiative"), false, "no card at this level");
+  assert.equal((await get("/api/remote-write/state")).json.pending.some((p) => p.kind === "initiative"), false, "no card at this level");
 
   // The change landed in the store AND in the history, with the assistant's id and the time.
   const init = (await view()).initiatives.find((i) => i.id === id);

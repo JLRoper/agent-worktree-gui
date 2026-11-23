@@ -420,8 +420,8 @@ test("POST /api/waves/move reorders two waves and proves the positions hold", as
 });
 
 test("POST /api/waves/remove deletes the record, keeps the task row and counts it", async () => {
-  const state = (await get("/api/state")).json;
-  const assistantId = state.assistant.assistants[0].id;
+  const state = (await get("/api/assistant")).json;
+  const assistantId = state.assistants[0].id;
   const made = await post(base, "/api/assistant/queue", { body: { assistantId, action: "add", title: "A member of a doomed wave", worktree: tree, project: "project-a" } });
   assert.equal(made.status, 200, made.text);
   // MEMBERSHIP IS THE TASK'S OWN FIELD, so the wave id is written where a scan would write it: the queue file beside
