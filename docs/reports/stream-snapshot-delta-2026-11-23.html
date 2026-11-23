@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The stream pushed the whole board after every write</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.num, th.num { text-align:right; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>The stream pushed the whole board after every write</h1>
+<p class="sub">agent-worktree-gui 1.161.8. Row 256: what <code>/api/stream</code> costs a reader, what puts a full snapshot on it, the cut, and the same measurement after it. Every number below is from a run on this machine, and the file points are this branch's files.</p>
+
+<dl class="facts">
+  <dt>base</dt><dd>origin/main <code>abde8ed6</code> (1.161.6); row 256 was written against 1.161.0, this branch was rebased onto 1.161.6</dd>
+  <dt>branch</dt><dd>wtgui/read-queue-row-256-first-it-carries-the-218e51</dd>
+  <dt>the duplicate</dt><dd>lib/http/transport.js:55-90 (board frame, then the full snapshot), server.js:975 (broadcastSnapshot, 25 write sites)</dd>
+  <dt>the cut</dt><dd>lib/snapshot-delta.js:74 snapshotDelta; server.js:989 useDelta, server.js:1030 the push; public/settings.js:553 applySnapshotDelta; public/core/sse.js:63 <code>?shape=delta</code></dd>
+  <dt>the instrument</dt><dd>tools/measure-stream-bytes.mjs (bytes by frame type, frame rate, full-state frames, one write, the console's own lines); tools/verify-stream-delta.mjs (a real page applying a real delta)</dd>
+  <dt>the board measured</dt><dd>185 projects, 396 rows, 75 job cards, 190 rows carrying todos - the reader's own state, copied; state 3.30 MB, board frame 2.04 MB</dd>
+  <dt>raw numbers</dt><dd>stream-before-final.json, stream-after-final.json, live-before.json under <code>C:/Users/roper/AppData/Local/Temp/wag/8cd66866/</code></dd>
+  <dt>verdict</dt><dd>a first load is 37% smaller, one write is 20x smaller, and a live console received the same 59 lines in the same 30 s</dd>
+</dl>
+
+<h2>1. The measurement, on the live panel</h2>
+<p>30 seconds on the reader's own panel (v1.161.0, 185 projects, 128 job cards), read as a plain SSE client with no browser in between, while a turn of mine was writing. Bytes are frame bytes as they came off the socket, including the <code>event:</code> line.</p>
+<table>
+  <tr><th>frame</th><th class="num">frames</th><th class="num">bytes</th><th class="num">per frame</th><th>what it carries</th></tr>
+  <tr><td><code>jobline</code></td><td class="num">128</td><td class="num">7,527,547</td><td class="num">57.4 KB</td><td>one console line - a reasoning line carries its whole think buffer (max 140.2 KB)</td></tr>
+  <tr><td><code>snapshot</code></td><td class="num">1</td><td class="num">4,503,477</td><td class="num">4.29 MB</td><td><strong>full state</strong>: projects 2,143,048 B, jobs 2,008,476 B, assistant 187 KB, settings 80 KB, hosts 75 KB</td></tr>
+  <tr><td><code>board</code></td><td class="num">1</td><td class="num">2,182,660</td><td class="num">2.08 MB</td><td><strong>full state</strong>: settings 80 KB, projects 2,141,129 B, hosts 75 KB, tree list, scan roots</td></tr>
+  <tr><td><code>row</code></td><td class="num">141</td><td class="num">1,752,100</td><td class="num">12.1 KB</td><td>one worktree row that a scan re-read</td></tr>
+  <tr><td><code>job</code></td><td class="num">21</td><td class="num">448,364</td><td class="num">20.9 KB</td><td>one job card whose record moved</td></tr>
+  <tr><td><code>heartbeat</code></td><td class="num">5</td><td class="num">15,010</td><td class="num">2.9 KB</td><td>pool counters every 5 s</td></tr>
+  <tr><td><code>project</code></td><td class="num">13</td><td class="num">13,344</td><td class="num">1 KB</td><td>a project's own header fields</td></tr>
+  <tr><td><strong>total</strong></td><td class="num">316</td><td class="num"><strong>16,439,625</strong></td><td class="num">548 KB/s, 10.33 fps</td><td>two frames are a full state; they are 6.38 MB, 39% of the window</td></tr>
+</table>
+<p>The two full-state frames are the pair a connection opens with, and they were the only ones in the window. <code>board</code> is the compact frame the perf work added (commit <code>55a88439</code>, "no full snapshot is built while the boot pass runs, and the board frame is cached"), sent so the page can be clicked while the full snapshot is still being built. What the live measurement also shows is the size of the second half: <strong>4.29 MB on the same socket, of which 1.95 MB is the project rows the board frame had just sent</strong>, plus 2.03 MB of job transcripts and 80 KB of settings the page already had.</p>
+<p class="note">The 7.5 MB of <code>jobline</code> bytes is the largest line in that table and it is <em>not</em> this row's to fix: a reasoning line re-sends its whole think buffer (lib/jobs.js emitLine/push, #255's file). It is reported here because the row asked for bytes by frame type, and because it sets the scale a snapshot cut is measured against.</p>
+
+<h2>2. What puts a full snapshot on the stream, and how often</h2>
+<p>Two doors, one of them on a clock nobody sees:</p>
+<ul>
+  <li><strong>Every attach.</strong> <code>handleStream</code> writes <code>event: board</code> (lib/http/transport.js:55-62) and then, on the next turn, <code>event: snapshot</code> (lib/http/transport.js:84). A reload, a reconnect, a second tab, a panel restart - each one pays both frames, and the pair duplicates the project list, the settings and the hosts. Measured: 1 board + 1 snapshot per attach, both a full state.</li>
+  <li><strong>Every write.</strong> Twenty-five call sites call <code>broadcastSnapshot()</code> (server.js:975): a todo edit, a settings save, an approval, a collision ruling, a wave move, a release sweep, a round name arriving, a landing, a queue edit. Each one invalidated the snapshot cache, built the whole board, stringified it (3.2 MB measured here, 4.3 MB on the live board) and wrote it to every open tab. In a quiet 30 s window: none. In a working minute: as often as the reader's own writes and every agent's TODO updates.</li>
+</ul>
+<p>So the answer to "how often it repeats" is: <strong>twice per attach, and once per write</strong> - and the second one is the one that lands on a page mid-read.</p>
+
+<h2>3. The cut</h2>
+<p>One pure function decides what a push has to say: given the state the tabs hold and the state now, the panes that moved, the rows that moved and the rows and cards that left (lib/snapshot-delta.js:74). Three details make it a cut rather than a shuffle:</p>
+<ul>
+  <li><strong>A row travels whole, or not at all.</strong> The page replaces a row object wholesale when a <code>row</code> frame arrives (public/render-projects.js placeRow), so a field-by-field delta would draw rows with holes. A row that moved is sent entire; a row that did not is not sent.</li>
+  <li><strong>The ledger of what each tab was told.</strong> Rows reach a tab by three routes - their own <code>row</code> frame, a drop, and a snapshot or delta. Every one of them records the row's print (server.js:959, :1079), and a push skips a row whose print has not moved (lib/snapshot-delta.js:116). Without it, a board being scanned re-sends on every write every row the scan has already delivered - measured at 1.9 MB of the 4.3 MB.</li>
+  <li><strong>The job pane travels one card at a time.</strong> <code>jobs</code> is a list of summaries the page replaces wholesale, so a push carrying it re-sent every transcript on the board (1.2 MB of 75 cards). It now travels as the cards whose content moved, merged by the same <code>updateJob</code> a <code>job</code> frame uses (lib/snapshot-delta.js:134-159, public/settings.js:528).</li>
+</ul>
+<p><strong>The first load is not changed.</strong> On attach the board frame goes first, exactly as before, and the second frame answers "what did the board not carry": the job cards, the assistant, the approvals, the spawn transport, the skipped list, the paths - and the rows whose decorators moved. That is the same information a first load had before, without sending the project list twice. The shape is negotiated per client: the page asks with <code>?shape=delta</code> (public/core/sse.js:63) and a client that does not ask (an older tab, a curl, a script) is answered with the full frame, byte for byte as before (lib/http/transport.js:84). A delta that would be larger than the full frame falls back to the full frame (server.js:989), so a push can never cost more than the old one did.</p>
+<p class="note">Why a fresh frame rather than a smaller field set: the page's row object is replaced, not merged, so trimming fields would change what a row draws. The one exception is <code>ageMs</code>, a number derived at build time (<code>now - at</code>) that made 189 of 190 rows differ between two builds milliseconds apart; the comparison ignores it (lib/snapshot-delta.js:34-40) and the age still refreshes from every <code>row</code> frame and every full read.</p>
+
+<h2>4. Before and after, same board, same instrument</h2>
+<p>Two sandboxes, one state copy: the reader's own state directory copied in (185 projects, 396 rows, 75 job cards, 190 rows with todos), the same config, the same stub Runs API playing the same 25 s scripted turn, the same 30 s window. <em>Before</em> is a <code>git archive HEAD</code> export of the branch point (1.161.1); <em>after</em> is this branch, with BOTH shapes attached to it at once. The classic column is the control: it is the code path a page that has not reloaded still runs, byte for byte, and it lands within 0.8% of the before column - so the lean column is the cut and nothing else moved. The scan clocks are slowed in every run so the window measures the stream, not a scan's row churn.</p>
+<table>
+  <tr><th>the same measurement</th><th class="num">before<br>1.161.1</th><th class="num">after<br>classic reader</th><th class="num">after<br>lean reader</th><th class="num">lean vs classic</th></tr>
+  <tr><td>a tab's first load: board + second frame</td><td class="num">5,338,539 B</td><td class="num">5,377,419 B</td><td class="num">3,375,524 B</td><td class="num ok">-37%</td></tr>
+  <tr><td>&nbsp;&nbsp;of which the second frame</td><td class="num">3,301,605 B</td><td class="num">3,341,496 B (full)</td><td class="num">1,338,246 B (delta)</td><td class="num ok">-60%</td></tr>
+  <tr><td>30 s with a live console, all frames</td><td class="num">6,979,511 B</td><td class="num">7,483,516 B</td><td class="num">5,358,426 B</td><td class="num ok">-28%</td></tr>
+  <tr><td>30 s, bytes per second</td><td class="num">232,650</td><td class="num">249,451</td><td class="num">178,614</td><td class="num ok">-28%</td></tr>
+  <tr><td>30 s, frame rate</td><td class="num">9.07 fps</td><td class="num">10.57 fps</td><td class="num">9.83 fps</td><td class="num">fewer bytes per frame</td></tr>
+  <tr><td>30 s, full-state frames</td><td class="num">2</td><td class="num">2</td><td class="num">1</td><td class="num ok">the board only</td></tr>
+  <tr><td>one todo write: the frame it pushes</td><td class="num">3,319,175 B</td><td class="num">3,358,622 B</td><td class="num">166,072 B</td><td class="num ok">-95% (20x)</td></tr>
+  <tr><td>one todo write: every frame in the next 1.2 s</td><td class="num">4,294,160 B</td><td class="num">4,179,387 B</td><td class="num">986,837 B</td><td class="num ok">-76%</td></tr>
+</table>
+<p>What the 166,072 B push contains: the 11 rows whose decorators moved while the window ran (115.8 KB, the scan tail), the live run's job card (7.9 KB), and the small panes that changed - spawn 26.5 KB, assistant 10.2 KB, paths 0.8 KB. Nothing of the 1.86 MB of unchanged project rows, and nothing of the 1.24 MB of unchanged job transcripts.</p>
+<p class="note">The 30 s totals carry each sandbox's scan tail (1.54 MB before, 1.89 MB after, in <code>row</code> frames) - the same frames on both builds, and not part of what was cut. The two exact comparisons are the first load and the write; the window is quoted because the row asked for it.</p>
+
+<h2>5. A console watching a live run still receives its lines</h2>
+<p>The scripted turn writes one line every ~140 ms through the panel's own <code>lib/jobs.js</code> (a stub Runs API, real SSE, the shipped translation). In the same 30 s window, on the same board, the two clients received:</p>
+<table>
+  <tr><th></th><th class="num">classic reader</th><th class="num">lean reader</th></tr>
+  <tr><td><code>jobline</code> frames</td><td class="num">59</td><td class="num">59</td></tr>
+  <tr><td>their bytes</td><td class="num">18,299</td><td class="num">18,299</td></tr>
+  <tr><td>lines per second</td><td class="num">1.97</td><td class="num">1.97</td></tr>
+  <tr><td><code>job</code> cards</td><td class="num">3</td><td class="num">3</td></tr>
+</table>
+<p>Identical, frame for frame: the delta path touches <code>snapshot</code> frames only, and a line is still one frame per line. On the live panel the same window carried 128 lines in 30 s (4.27/s) - the rate the console draws at.</p>
+
+<h2>6. A real page applying a real delta</h2>
+<p><code>node tools/verify-stream-delta.mjs</code> boots a sandbox page, opens it with Playwright, makes ONE real todo write through the panel's own route and checks the page: 10/10 checks passed.</p>
+<pre>ok   the page asked for the lean shape - "http://127.0.0.1:53582/api/stream?shape=delta"
+ok   the board drew the seeded project and its rows - {"rows":2,"projects":1}
+ok   the write was accepted - "added #1: delta check"
+ok   a delta frame applied it (applySnapshotDelta ran) - {"deltas":1}
+ok   the row's todo arrived on the page - {"after":1}
+ok   the push did not rebuild the board (no renderAll) - {"rebuilds":0}
+ok   the project section on screen is the same node - {"sameSection":true}
+ok   every project is still on the board - {"before":["delta-checkout"],"after":["delta-checkout"]}
+ok   every row is still on the board - {"before":2,"after":2}
+ok   no page errors - []</pre>
+
+<h2>7. What was checked, and what is not cut</h2>
+<ul>
+  <li><code>node --test test/snapshot-delta.test.js test/stream-delta.test.js test/state-during-boot.test.js test/snapshot-cache.test.js</code>: 23/23. The load-bearing one replays every delta onto the previous state and asserts the result is exactly the full frame's state, rows, jobs, drops included.</li>
+  <li>One source-reading test named <code>applySnapshot</code> directly (test/assistant-reset-ui.test.js, "a new assistant becomes a choice on the next snapshot"); it now looks for the paint in the shared panes body and for the call to that body in <code>applySnapshot</code>, so the same guarantee covers both frame shapes. The behaviour is unchanged.</li>
+  <li><span class="warn">Not cut:</span> the first load still carries every job transcript (1.16 MB of the 1.34 MB delta). A card's console is drawn from its record, so cutting it would change what a first load contains - the row's own limit.</li>
+  <li><span class="warn">Not cut:</span> a reasoning line's think buffer (lib/jobs.js, 7.5 MB of the live 30 s). #255 is live in that file; it is the next 40% and it is measured here.</li>
+  <li><span class="warn">Not cut:</span> a page that is already open across the deploy keeps the old client and therefore the old shape - it is answered exactly as before until it reloads. That is deliberate: a delta the old page cannot merge would be worse than a big frame.</li>
+</ul>
+
+<h2>8. Reproducing it</h2>
+<pre>node tools/measure-stream-bytes.mjs --root &lt;checkout&gt; --label before --seconds 30 --writes
+node tools/measure-stream-bytes.mjs --root &lt;this branch&gt; --label after  --seconds 30 --writes
+node tools/verify-stream-delta.mjs</pre>
+<p class="small">The measurement writes its JSON beside the sandbox it made and prints the summary; the two runs above are stream-before-final.json and stream-after-final.json. It reads a COPY of the reader's state and leaves running job records out of it (their pids belong to the live panel), so nothing it does can settle a run that is not its own.</p>
+</main>
+</body>
+</html>
