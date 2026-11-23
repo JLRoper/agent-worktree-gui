@@ -133,6 +133,8 @@ import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-tur
 // the plan and an apply that runs it. The planner, the measuring and the report are lib/cleanup-*.js; this file only
 // hands the route the board's own remover and the events a removed row needs.
 import { CLEANUP_PREFIX, createProjectCleanupRoutes } from "./routes/project-cleanup.js";
+// The container teardown's on-demand action: the same stop-and-remove the settle runs, for a tree somebody names.
+import { CONTAINERS_PATH, createContainerRoutes } from "./routes/containers.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveFileTarget, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
@@ -2306,6 +2308,10 @@ const PREFIX_MOUNTS = [
       },
     }),
   },
+  // The containers prefix (routes/containers.js): the labelled containers a tree left behind, and the on-demand
+  // teardown of them - the same function the settle calls (lib/container-teardown.js), for a tree whose run is long
+  // gone. The route owns the wire shape and the status codes; the daemon work is the module's.
+  { prefix: CONTAINERS_PATH, handles: createContainerRoutes({ getConfig: () => config, sendJson, readBody, authorised, log }) },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.
