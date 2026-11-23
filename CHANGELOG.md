@@ -17,18 +17,18 @@ has no tag.
 
 ## v1.162.2 — 2026-11-23 · 5 commits
 
-[`5f38a5e`](https://github.com/JLRoper/agent-worktree-gui/commit/5f38a5e1a52e48cb32d95f799e0816c2d918c10c) · [compare v1.162.1...v1.162.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.1...v1.162.2)
+[`dadcc09`](https://github.com/JLRoper/agent-worktree-gui/commit/dadcc09578ceb88b61737d53b56c2f390e46a633) · [compare v1.162.1...v1.162.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.162.1...v1.162.2)
 
 ### Docs & tests
 
 - docs: the report carries the version this landing takes ([`4066847`](https://github.com/JLRoper/agent-worktree-gui/commit/4066847e73314b5d376c5d19b53315394e45c92f))
 - docs: render the changelog - 705 releases ([`0c78519`](https://github.com/JLRoper/agent-worktree-gui/commit/0c78519edccd3e78506bb4603af07117d6f85b58))
-- docs(reports): record the pre-initiatives SSO initiative with its waves and nine items ([`df3d5d0`](https://github.com/JLRoper/agent-worktree-gui/commit/df3d5d0ab6ba232c21fe40a5f1762b24d2f5751c))
-- docs(reports): correct the item count after the panel's cap evicted row 293 ([`e12d069`](https://github.com/JLRoper/agent-worktree-gui/commit/e12d0693ad2438565a2bc131635264b9e737ddf9))
+- docs(reports): record the pre-initiatives SSO initiative with its waves and nine items ([`0662836`](https://github.com/JLRoper/agent-worktree-gui/commit/0662836ff7cf23669ca2c25298b84245236420a2))
+- docs(reports): correct the item count after the panel's cap evicted row 293 ([`14e6fef`](https://github.com/JLRoper/agent-worktree-gui/commit/14e6fefe24601f9df03a05cb668176065079d211))
 
 ### Other
 
-- chore: 1.162.2 - the version this landing carries ([`5f38a5e`](https://github.com/JLRoper/agent-worktree-gui/commit/5f38a5e1a52e48cb32d95f799e0816c2d918c10c))
+- chore: 1.162.2 - the version this landing carries ([`dadcc09`](https://github.com/JLRoper/agent-worktree-gui/commit/dadcc09578ceb88b61737d53b56c2f390e46a633))
 
 ## v1.162.1 — 2026-11-23 · 7 commits
 
