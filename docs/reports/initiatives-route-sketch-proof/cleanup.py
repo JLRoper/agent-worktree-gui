@@ -4,10 +4,10 @@
 # initiatives with zero waves, and that the reader's own panel never moved.
 import json, os, urllib.request, urllib.error, datetime
 
-BASE = "http://127.0.0.1:7332"
-LIVE = "http://127.0.0.1:7331"
-HOME = r"C:/Users/roper/AppData/Local/Temp/wag/73596cb0/home"
-OUT = r"C:/Users/roper/AppData/Local/Temp/wag/73596cb0"
+BASE = os.environ.get("BASE", "http://127.0.0.1:7332")
+LIVE = os.environ.get("LIVE", "http://127.0.0.1:7331")
+HOME = os.environ.get("WAG_PROOF_HOME") or os.path.expanduser("~/wag-proof-home")
+OUT = os.environ.get("WAG_PROOF_OUT") or os.path.expanduser("~")
 TITLE = "Sketch proof: Menu SSO migration"
 
 

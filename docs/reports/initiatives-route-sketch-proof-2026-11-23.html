@@ -103,7 +103,7 @@ draw when a card has none: the toolbar, the folded title card, the status word a
     <tr><td>rows with <code>has-route</code></td><td class="num">0</td><td>class only when there is a dot</td></tr>
     <tr><td><code>.wave-row</code> stations</td><td class="num">0</td><td><code>public/assistant.js:3896</code> calls <code>wtWavesLane.laneHtml</code></td></tr>
     <tr><td><code>.wave-lanes</code> blocks</td><td class="num">0</td><td><code>public/core/waves-lane.js:184-205</code></td></tr>
-    <tr><td><code>waveStatus.found</code></td><td class="num">false</td><td>file <code>C:\Users\roper\.wag\state\waves.json</code> does not exist</td></tr>
+    <tr><td><code>waveStatus.found</code></td><td class="num">false</td><td>file <code>&lt;home&gt;\.wag\state\waves.json</code> does not exist</td></tr>
   </tbody>
 </table>
 
@@ -233,7 +233,7 @@ the verdict and the reason. Numbers are measured on the wide pane (1382px) unles
     </tr>
     <tr>
       <td>The spine: one line down the block with a station per wave.</td>
-      <td><code>.init-waves::before</code> at <code>left:9px</code>, 2px; each <code>.wave-row::before</code> paints its own stretch in its state colour from <code>data-wave-state</code> (<code>public/style.css:5461-5477</code>).</td>
+      <td><code>.init-waves::before</code> at <code>left:9px</code>, 2px; each <code>.wave-row::before</code> paints its own stretch in its state colour from <code>data-wave-state</code> (<code>public/style.css:5424-5466</code>).</td>
       <td><span class="b m">matches</span></td>
       <td>The colour is the server's attribute, so a stretch can never disagree with the chip beside it. This is closer to the sketch's picture than round B's own token sheet, which drew a spine per row.</td>
     </tr>
@@ -257,7 +257,7 @@ the verdict and the reason. Numbers are measured on the wide pane (1382px) unles
     </tr>
     <tr>
       <td>Gate chips: "entry clean met", "exit clean met", "auto on".</td>
-      <td><code>.wave-gate.is-met</code> "entry clean - met", "exit clean - met" with a 5px answer dot; <code>.wave-auto.is-on</code> "auto on" in warn, <code>.is-off</code> in idle; W2 adds the violet "opened by w.callback" (<code>public/core/waves-lane.js:51-57</code>, 126-130).</td>
+      <td><code>.wave-gate.is-met</code> "entry clean - met", "exit clean - met" with a 5px answer dot; <code>.wave-auto.is-on</code> "auto on" in warn, <code>.is-off</code> in idle; W2 adds the violet "opened by w.callback" (<code>public/core/waves-lane.js:51-57</code>, the opened-by chip at <code>127</code>).</td>
       <td><span class="b m">matches</span></td>
       <td>Each chip names the check and the read's answer; the dash before the answer is the live wording, and the colour is never the only signal.</td>
     </tr>
@@ -275,7 +275,7 @@ the verdict and the reason. Numbers are measured on the wide pane (1382px) unles
     </tr>
     <tr>
       <td>A nested task card per station: id, title, a second line naming the project/tree, the state at the right.</td>
-      <td><code>.wave-member</code>: <code>#483</code>, the title, a mono project tag (<code>oauth2-multi</code>), a state chip (<code>done</code>). At a 900px+ container it is a 4-column manifest (44px id / title / 150px project / 80px state) capped at 760px (<code>public/style.css:5576-5594</code>).</td>
+      <td><code>.wave-member</code>: <code>#483</code>, the title, a mono project tag (<code>oauth2-multi</code>), a state chip (<code>done</code>). At a 900px+ container it is a 4-column manifest (44px id / title / 150px project / 80px state) capped at 760px (<code>public/style.css:5592-5607</code>).</td>
       <td><span class="b m">matches</span></td>
       <td>The sketch stacks the project under the title; the manifest is the documented choice so two members compare down a column. The member's state is the task's own, never the wave's.</td>
     </tr>
@@ -289,7 +289,7 @@ the verdict and the reason. Numbers are measured on the wide pane (1382px) unles
       <td><b>The closing note</b>: a box at the right of the lanes, "2 lanes" bold above "closing this wave is ONE commit that names them all".</td>
       <td>Before: a full-width 11.5px ink-3 line above the lanes ("2 lanes - closing this wave is ONE commit that names them all"). After: <code>.wave-close</code> holding the lanes and a boxed <code>.wave-join</code> whose count is a bold lead; beside the lanes at 900px+, above them below.</td>
       <td><span class="b f">fixed</span></td>
-      <td>The one element the renderer under-drew. Section 4 has the measurements. <code>public/core/waves-lane.js:143-157</code>, <code>public/style.css:5530-5544</code>, and a new test at <code>test/waves-lane.test.js:294</code>.</td>
+      <td>The one element the renderer under-drew. Section 4 has the measurements. <code>public/core/waves-lane.js:146-157</code>, <code>public/style.css:5530-5544</code>, and a new test at <code>test/waves-lane.test.js:294</code>.</td>
     </tr>
     <tr>
       <td>Assistants and History as two open columns at the card's foot.</td>
@@ -299,7 +299,7 @@ the verdict and the reason. Numbers are measured on the wide pane (1382px) unles
     </tr>
     <tr>
       <td>No section head above the stations.</td>
-      <td><code>.init-sechead</code> "Waves 3" with the note "read from the wave store" (<code>public/core/waves-lane.js:201</code>).</td>
+      <td><code>.init-sechead</code> "Waves 3" with the note "read from the wave store" (<code>public/core/waves-lane.js:207</code>).</td>
       <td><span class="b d">different</span></td>
       <td>The line states where every word below it comes from and that nothing there writes a wave - the tab's read-only boundary, which the sketch does not draw because the sketch assumes waves can be made.</td>
     </tr>
@@ -346,10 +346,10 @@ and at a wide pane it stands where the sketch puts it: beside the lanes it is ab
 <p>What changed, in three files:</p>
 
 <ul>
-  <li><code>public/core/waves-lane.js:143</code> - the join keeps its <code>data-wave-join="2"</code> attribute and its
+  <li><code>public/core/waves-lane.js:146</code> - the join keeps its <code>data-wave-join="2"</code> attribute and its
   words, and gains a lead: <code>&lt;b&gt;2 lanes&lt;/b&gt; &lt;span&gt;closing this wave is ONE commit that names them
   all&lt;/span&gt;</code>.</li>
-  <li><code>public/core/waves-lane.js:148-157</code> - the lanes and the note are wrapped in one <code>.wave-close</code>
+  <li><code>public/core/waves-lane.js:155-157</code> - the lanes and the note are wrapped in one <code>.wave-close</code>
   block when both are owed, so the note can stand beside them. A refused lane set keeps its lanes and draws no note:
   the two sentences would contradict each other, and the existing test for that still passes.</li>
   <li><code>public/style.css:5530-5544</code> - the note's box (border, 2px lead edge, sunken fill, 8px radius) and the
@@ -461,10 +461,10 @@ in the CSS comments beside each rule. Each one has a wrong answer that still loo
   <li><b>A member's state is the task's own.</b> queued, running, parked and done are drawn verbatim, and a named
   abandonment replaces the word rather than being folded into it (<code>waves-lane.js:60-75</code>).</li>
   <li><b>An initiative with no waves draws no lane.</b> <code>laneHtml</code> returns the empty string
-  (<code>waves-lane.js:189</code>), so the seven cards that have no waves stay title cards rather than gaining a box a
+  (<code>waves-lane.js:192</code>), so the seven cards that have no waves stay title cards rather than gaining a box a
   reader learns to skip.</li>
   <li><b>A store that cannot be read is said, and repaired by nobody.</b> An unreadable <code>waves.json</code> draws an
-  alert with the error and a sentence saying the file is left exactly as it is (<code>waves-lane.js:193</code>).</li>
+  alert with the error and a sentence saying the file is left exactly as it is (<code>waves-lane.js:199</code>).</li>
   <li><b>The route dots are decorative and the status word carries the fact.</b> <code>aria-hidden</code> on the glyph,
   the same state in words in <code>.init-status</code> with a title naming every station - so the tab never carries a
   state in colour alone.</li>
@@ -605,20 +605,34 @@ answered the same seven initiatives and seven zero wave counts both times.</p>
 <code>OUT</code> from the environment; the defaults are the scratch home this run used.</p>
 
 <pre><code># 1. a copy of the panel's state, on its own port, so nothing can reach 127.0.0.1:7331
-python docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/seed.py            # POST /api/initiatives, move x2, queue add/state x4, waves.json
-node   docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/capture-live.mjs   # the measured cause (read only)
-node   docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/capture-widths.mjs # 1440/768/480 + the wide float, DOM facts per width
-node   docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/capture-ledger.mjs # the ledger and the folded route row
-node   docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/capture-pair.mjs   # the before/after pair, one panel, product files switched
-python docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/cleanup.py         # the three writers, then the re-read
+python docs/reports/initiatives-route-sketch-proof/seed.py            # POST /api/initiatives, move x2, queue add/state x4, waves.json
+node   docs/reports/initiatives-route-sketch-proof/capture-live.mjs   # the measured cause (read only)
+node   docs/reports/initiatives-route-sketch-proof/capture-widths.mjs # 1440/768/480 + the wide float, DOM facts per width
+node   docs/reports/initiatives-route-sketch-proof/capture-ledger.mjs # the ledger and the folded route row
+node   docs/reports/initiatives-route-sketch-proof/capture-pair.mjs   # the before/after pair, one panel, product files switched
+python docs/reports/initiatives-route-sketch-proof/cleanup.py         # the three writers, then the re-read
 
-# 2. the lane's own gates
-node --test test/waves-lane.test.js test/waves-lanes-join.test.js
-npm run test:changed        # 47 files, 576 tests
-npm test                    # the full sweep
+# 2. the lane's own gates on this tree, in one sitting after the rebase
+node --test test/waves-lane.test.js test/waves-lanes-join.test.js     # 34 tests, 34 pass
+npm run test:changed                     # 47 files, 576 tests, 576 pass
+npm test                                 # 3,595 tests, 3,587 pass, 8 fail
 
 # 3. the panel's own browser gate for this surface (its own sandbox, its own port)
 node tools/verify-waves-lane.mjs --shots &lt;scratch&gt;/lane</code></pre>
+
+<h3>What was run, and what it answered</h3>
+<table>
+  <thead><tr><th>Run</th><th>Answer</th></tr></thead>
+  <tbody>
+    <tr><td><code>node --test test/waves-lane.test.js test/waves-lanes-join.test.js</code></td><td>34 tests, 34 pass, 0 fail (42.6s)</td></tr>
+    <tr><td><code>npm run test:changed</code></td><td>47 files, 576 tests, 576 pass, 0 fail (51.7s)</td></tr>
+    <tr><td><code>node tools/verify-initiatives-tab.mjs</code></td><td>102/102 checks</td></tr>
+    <tr><td><code>node tools/verify-waves-lane.mjs</code></td><td>40/40 checks</td></tr>
+    <tr><td><code>node tools/verify-initiatives-redesign.mjs</code></td><td>11/11 claims; docked 18/18, wide 17/18 (the documented second-column alignment)</td></tr>
+    <tr><td><code>node tools/verify-initiatives-scroll.mjs</code></td><td>35/35 checks</td></tr>
+    <tr><td><code>npm test</code> (once, the final sweep)</td><td>3,595 tests, 3,587 pass, 8 fail. Seven fail on a clean <code>git archive origin/main</code> extract too (the set the 1.157.6 landing recorded, plus <code>child-tree</code> and <code>scan-roots</code>), and the eighth was <code>absolute-paths</code>, raised by this page's own scripts and fixed - it answers 17/17 after the fix.</td></tr>
+  </tbody>
+</table>
 
 <details>
   <summary>What the seed wrote into waves.json, verbatim</summary>
@@ -638,7 +652,7 @@ property of the task.</p>
   Written in the worktree <code>research-round-b-for-the-initiatives-tab-1d1d2c</code>, cut from
   <code>origin/main</code> <code>0ffebed</code> (1.157.6). Product files changed: <code>public/core/waves-lane.js</code>,
   <code>public/style.css</code>; test: <code>test/waves-lane.test.js</code>. Every capture is a PNG in
-  <code>docs/reports/../assets/initiatives-redesign/sketch-proof-2026-11-23/</code>, and every number in this page was produced by the scripts
+  <code>docs/reports/initiatives-route-sketch-proof/</code>, and every number in this page was produced by the scripts
   in the same folder.
 </footer>
 

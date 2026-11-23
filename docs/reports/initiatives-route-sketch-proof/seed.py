@@ -4,16 +4,17 @@
 # (there is no wave write route: routes/waves.js answers 405 "this slice reads waves and writes none").
 import json, os, urllib.request, urllib.error, datetime
 
-BASE = "http://127.0.0.1:7332"
-HOME = r"C:/Users/roper/AppData/Local/Temp/wag/73596cb0/home"
-OUT = r"C:/Users/roper/AppData/Local/Temp/wag/73596cb0"
+BASE = os.environ.get("BASE", "http://127.0.0.1:7332")
+# A MACHINE FOLDER MAY NOT ENTER THE TREE: the home and the two worktrees are passed in (test/absolute-paths.test.js).
+# The run that produced this report used WAG_PROOF_HOME=~/AppData/Local/Temp/wag/73596cb0/home and the two worktrees
+# named in the report, both under the agent-worktree-gui projects.
+HOME = os.environ.get("WAG_PROOF_HOME") or os.path.expanduser("~/wag-proof-home")
+OUT = os.environ.get("WAG_PROOF_OUT") or os.path.expanduser("~")
 TITLE = "Sketch proof: Menu SSO migration"
-DESC = ("Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP, "
-        "and prove a real two-factor login before the login page is cut over.\n\n"
-        "This initiative is a throwaway: three ordered waves, entry and exit gates on every one, an auto switch on the "
-        "first, and two lanes on the third. It exists to put the shipped renderer beside THE SKETCH at 1440, 768 and 480.")
-OAUTH_TREE = "C:/ProjectDevelopment/oauth2-multi/.worktrees/pictureviewer-sso-option-a-implement-the-839d5a"
-MENU_TREE = "C:/ProjectDevelopment/Menu/.worktrees/modernize-the-menu-login-e4affd"
+OAUTH_TREE = os.environ.get("TREE_A") or ""
+MENU_TREE = os.environ.get("TREE_B") or ""
+if not OAUTH_TREE or not MENU_TREE:
+    raise SystemExit("set TREE_A and TREE_B to two real worktree paths to attach (see the report, section 2)")
 
 
 def call(method, path, body=None):
