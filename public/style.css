@@ -1979,6 +1979,13 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .jl-tool-out { color: var(--con-color, var(--dim)); padding-left: 14px; white-space: pre-wrap; font-size: var(--term-size); }
 .jl-cmd { color: var(--dimmer); }
 .jl-dim { color: var(--dimmer); font-style: italic; }
+/* The gateway wait line (public/board/console.js waitLineHtml, written by lib/jobs.js at subscribe): the console's own
+   statement of a run whose stream has sent nothing yet, with its age. Quiet and dim while the wait is young; past
+   PULSE_SILENT_SECONDS it stops being an aside and states the silence plainly, in the amber the head badge already
+   uses for "no events yet" - it is the same fact, said where the reader is looking. Tabular figures keep the age from
+   reflowing the sentence as it ticks. */
+.jl-gwait { font-variant-numeric: tabular-nums; }
+.jl-gwait.is-silent { color: #f0c674; font-style: normal; }
 .jl-raw { color: var(--dim); }
 
 /* A unified diff, drawn as a window per hunk (core/console-format.js builds it). The head is the frame's own

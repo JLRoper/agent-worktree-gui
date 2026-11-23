@@ -60,6 +60,7 @@
     "verify:agent-card-pin": "node tools/verify-agent-card-pin.mjs",
     "verify:flicker": "node tools/verify-console-flicker.mjs",
     "verify:stream-default": "node tools/verify-stream-default.mjs",
+    "verify:gateway-wait": "node tools/verify-gateway-wait.mjs",
     "verify:think-toggle-cards": "node tools/verify-think-toggle-cards.mjs",
     "verify:two-assistants": "node tools/verify-two-assistants-e2e.mjs",
     "verify:wake-ladder": "node tools/verify-wake-ladder.mjs",
