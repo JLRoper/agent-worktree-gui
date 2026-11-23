@@ -1760,6 +1760,17 @@ function livePulse(j) {
       title: `${tool} is running - the last event from this run's stream was ${ago} ago. The pulse is the panel's heartbeat on that stream, not the agent's thoughts`,
     };
   }
+  // The gateway's own status frame, when it is the newest thing this run said: `hermes.status` is how a turn
+  // explains a silence it is about to have (compaction runs before the first model call). The text is the
+  // gateway's; the pulse shortens it to its first clause and keeps the whole sentence in the title.
+  const status = j.live.status;
+  if (status && (!last || status.at >= last)) {
+    return {
+      cls: "is-status",
+      text: `${statusPulseText(status.text)} · ${ago}`,
+      title: `${status.text} - the gateway's own status frame for this run, ${ago} ago. A compacting turn is silent until its first model call`,
+    };
+  }
   if (j.live.streaming && age !== null && age < PULSE_SILENT_SECONDS) {
     return {
       cls: "is-stream",
@@ -1772,6 +1783,14 @@ function livePulse(j) {
     text: `thinking ${ago}`,
     title: `nothing from this run's stream for ${ago} - the run is still live in the gateway and this panel still holds its stream. The pulse is a heartbeat, not the agent's thoughts`,
   };
+}
+
+// The status frame's first clause is what names the work ("📦 Preflight compression: ~203,774 tokens >= 200,000
+// threshold." -> "📦 Preflight compression"); the whole sentence stays in the title. Never re-worded.
+function statusPulseText(text) {
+  const whole = String(text || "").replace(/\s+/g, " ").trim();
+  const first = whole.split(/[:.]\s/)[0].trim() || whole;
+  return first.length > 44 ? `${first.slice(0, 43)}…` : first;
 }
 
 function livePulseHtml(j) {
