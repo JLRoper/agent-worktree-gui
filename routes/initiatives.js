@@ -20,14 +20,17 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
-import { WAVE_GATE_CHOICES, waveFileExistsPaths, waveLane } from "../lib/waves.js";
+import { WAVE_GATE_CHOICES, waveEvidenceNeeds, waveFileExistsPaths, waveLane } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
 // The read's cache is a file beside the store (see cachedView): the tab's first read after a restart must not wait on
-// the evidence join, which measured 25-52s on a loaded box.
+// the evidence join.
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+// The read's own phase clock (off unless the request asks with `?profile=1`): a seam times itself so a slow answer can
+// be cut at the seam that is slow rather than at the total.
+import { profileReport, timeAsync, timeSync, withProfile } from "../lib/read-profile.js";
 
 /** The one path this prefix answers, and the row the mount table in server.js matches on. */
 export const INITIATIVES_PATH = "/api/initiatives";
@@ -85,15 +88,17 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
   const level = initiativeTierInfo(tier);
-  const board = assistants.map((rec) => {
-    let view = null;
-    try {
-      view = queueFor(rec.id);
-    } catch {
-      view = null; // a queue that cannot be read is an empty one for this tab; its own pane still reports the error
-    }
-    return { rec, tasks: Array.isArray(view?.tasks) ? view.tasks : [] };
-  });
+  const board = timeSync("fold.queues", () =>
+    assistants.map((rec) => {
+      let view = null;
+      try {
+        view = queueFor(rec.id);
+      } catch {
+        view = null; // a queue that cannot be read is an empty one for this tab; its own pane still reports the error
+      }
+      return { rec, tasks: Array.isArray(view?.tasks) ? view.tasks : [] };
+    }),
+  );
   // Every assistant's rows, flattened once: a wave's members are the tasks that NAME it, from any project (decision
   // 2, 2026-11-21), so the fold must not filter them by this initiative's tree keys the way the assistant strips do.
   // The route may hand the SAME objects it gathered evidence for, so a member's evidence key and its fold key cannot
@@ -101,33 +106,35 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
   const waveTasks = Array.isArray(boardTasks) ? boardTasks : board.flatMap((b) => b.tasks);
   const waveStatus = waves && typeof waves.statusOf === "function" ? waves.statusOf() : null;
   const out = list.map((init) => {
-    const trees = initiatives.treesFor(init.id).map((rec) => {
-      const found = projectForPath(rec.path) || null;
-      const project = String(found?.name || "").trim();
-      const row = project ? rowFor(project, rec.path) : null;
-      return {
-        key: rec.key,
-        path: rec.path,
-        name: String(row?.round?.display || row?.name || nameOf(rec.path)),
-        branch: String(row?.branch || ""),
-        // The branch's page on the remote, exactly as the board row carries it (decorate -> branchLink). Passed
-        // through untouched - the tab draws the SAME link the chart does through public/core/branch-link.js, and a
-        // tree whose row has no resolvable page gets null here, so the tab can only draw plain text.
-        branchUrl: row?.branchUrl || null,
-        branchWhy: String(row?.branchWhy || ""),
-        branchLinkFrom: row?.branchLinkFrom || null,
-        project,
-        // A tree that is no longer on the board (removed, or outside every scan root) still belongs to the initiative:
-        // the tab shows it dimmed with its path, and the reader can take it out. Hiding it would strand the record.
-        missing: !row,
-        at: rec.at,
-        by: rec.by,
-        // The attachment's own actor and time: what the `own` tier reads, and what the Remove hint names, so a reader
-        // can see who put a tree here before deciding to take it out.
-        attachedAt: rec.attachedAt || null,
-        attachedBy: rec.attachedBy || null,
-      };
-    });
+    const trees = timeSync("fold.trees", () =>
+      initiatives.treesFor(init.id).map((rec) => {
+        const found = projectForPath(rec.path) || null;
+        const project = String(found?.name || "").trim();
+        const row = project ? rowFor(project, rec.path) : null;
+        return {
+          key: rec.key,
+          path: rec.path,
+          name: String(row?.round?.display || row?.name || nameOf(rec.path)),
+          branch: String(row?.branch || ""),
+          // The branch's page on the remote, exactly as the board row carries it (decorate -> branchLink). Passed
+          // through untouched - the tab draws the SAME link the chart does through public/core/branch-link.js, and a
+          // tree whose row has no resolvable page gets null here, so the tab can only draw plain text.
+          branchUrl: row?.branchUrl || null,
+          branchWhy: String(row?.branchWhy || ""),
+          branchLinkFrom: row?.branchLinkFrom || null,
+          project,
+          // A tree that is no longer on the board (removed, or outside every scan root) still belongs to the initiative:
+          // the tab shows it dimmed with its path, and the reader can take it out. Hiding it would strand the record.
+          missing: !row,
+          at: rec.at,
+          by: rec.by,
+          // The attachment's own actor and time: what the `own` tier reads, and what the Remove hint names, so a reader
+          // can see who put a tree here before deciding to take it out.
+          attachedAt: rec.attachedAt || null,
+          attachedBy: rec.attachedBy || null,
+        };
+      }),
+    );
     const byProject = new Map();
     for (const tree of trees) {
       const name = tree.project || "(outside every project)";
@@ -180,7 +187,7 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     // answer for THIS read about the switch on the wave before it - so the tab and GET /api/waves evaluate the auto
     // switch in the same fold, at the same moment, from the same evidence map.
     const lane = waves
-      ? waveLane({ waves, initiativeId: init.id, tasks: waveTasks, rowFor, templateExists, evidenceFor })
+      ? timeSync("fold.lanes", () => waveLane({ waves, initiativeId: init.id, tasks: waveTasks, rowFor, templateExists, evidenceFor }))
       : { waves: [], skipped: [], currentId: null };
     return {
       id: init.id,
@@ -306,11 +313,12 @@ export function createInitiativesRoutes({
   };
   // One evidence read per request, shared by every initiative's lane: a Map keyed by waveMemberKey, or null when no
   // reader was supplied or the read threw. Null is cannot-tell for every gate - the fold still paints, the gates
-  // never pass.
-  const evidenceFor = async (tasks, paths) => {
+  // never pass. `checks` is the gate vocabulary this answer contains (lib/waves.js `waveEvidenceNeeds`), so the read
+  // asks the host and git for the halves a gate here actually consumes and no others.
+  const evidenceFor = async (tasks, paths, checks) => {
     if (typeof waveEvidence !== "function") return null;
     try {
-      const map = await waveEvidence({ tasks, rowFor, paths });
+      const map = await waveEvidence({ tasks, rowFor, paths, checks });
       if (map instanceof Map) return map;
       log("initiatives: the wave evidence reader answered no map, so every gate reads cannot tell");
     } catch (error) {
@@ -321,27 +329,32 @@ export function createInitiativesRoutes({
   // `view` is async because the gates are a live read. It answers the whole document the tab draws; every caller
   // awaits it, so a POST's answer carries the same lane the next GET would.
   const view = async () => {
-    const tasks = waveTasks();
-    // Every artefact path any initiative's gates read: the read is one per path for the whole answer, so a wave's
-    // `file-exists` exit gate is judged on a path measured on this request.
-    const paths = waveFileExistsPaths(
-      (typeof initiatives?.initiativeList === "function" ? initiatives.initiativeList() : []).flatMap((init) =>
-        waves && typeof waves.wavesFor === "function" ? waves.wavesFor(init.id) : [],
-      ),
+    const tasks = timeSync("queues", () => waveTasks());
+    // Every wave this answer will fold: its gates are what decide which members owe an evidence read, and every
+    // artefact path a `file-exists` gate names is read once for the whole answer.
+    const records = timeSync("gate-paths", () => (typeof initiatives?.initiativeList === "function" ? initiatives.initiativeList() : []).flatMap((init) => (waves && typeof waves.wavesFor === "function" ? waves.wavesFor(init.id) : [])));
+    const needs = timeSync("gate-paths", () => waveEvidenceNeeds(records));
+    const paths = timeSync("gate-paths", () => waveFileExistsPaths(records));
+    // THE MEMBERS A GATE CAN READ, and no others. A task in no wave, or in a wave whose gates judge its board row,
+    // has no evidence a gate here consults: reading it would spend a host call and a git spawn on a field nobody
+    // draws. The fold still receives every task (`boardTasks: tasks`), so membership and the lane are unchanged.
+    const wanted = new Set(needs.waveIds);
+    const members = wanted.size ? tasks.filter((task) => wanted.has(String(task?.waveId ?? ""))) : [];
+    const evidence = await timeAsync("evidence", () => evidenceFor(members, paths, needs.checks));
+    return timeSync("fold", () =>
+      initiativesView({
+        initiatives,
+        projectForPath,
+        rowFor,
+        assistants: Array.isArray(assistant?.assistants) ? assistant.assistants : [],
+        queueFor: (id) => (typeof assistant?.queueView === "function" ? assistant.queueView(id) : null),
+        tier: tierOf(),
+        waves,
+        templateExists,
+        boardTasks: tasks,
+        evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
+      }),
     );
-    const evidence = await evidenceFor(tasks, paths);
-    return initiativesView({
-      initiatives,
-      projectForPath,
-      rowFor,
-      assistants: Array.isArray(assistant?.assistants) ? assistant.assistants : [],
-      queueFor: (id) => (typeof assistant?.queueView === "function" ? assistant.queueView(id) : null),
-      tier: tierOf(),
-      waves,
-      templateExists,
-      boardTasks: tasks,
-      evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
-    });
   };
 
   // THE READ ANSWERS AT ONCE AND REBUILDS BEHIND THE READER. The join is the tab's whole document but the expensive
@@ -429,6 +442,22 @@ export function createInitiativesRoutes({
     if (req.method === "GET") {
       if (route !== INITIATIVES_PATH) {
         sendJson(res, 405, { error: `GET is not allowed on ${route}` });
+        return true;
+      }
+      // THE TAB GETS THE CACHED DOCUMENT; AN OPERATOR ASKING FOR PHASES GETS A REAL BUILD. `?profile=1` is a
+      // measurement request (lib/read-profile.js), so it must not be answered from a cache - the phases of a cache hit
+      // describe the hit, not the read. The tab never sends it, and the document it draws is the one `cachedView`
+      // keeps, with no new key.
+      if (String(params.get("profile") || "") === "1") {
+        sendJson(
+          res,
+          200,
+          await withProfile(true, async () => {
+            const document = await view();
+            document.profile = profileReport();
+            return document;
+          }),
+        );
         return true;
       }
       sendJson(res, 200, await cachedView());
