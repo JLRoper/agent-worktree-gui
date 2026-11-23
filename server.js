@@ -168,7 +168,7 @@ import { HOT_AGENT_SEARCH_PATH, createHotAgentSearchRoutes } from "./routes/hot-
 import { CLARIFY_HISTORY_PATH, createClarifyHistoryRoutes } from "./routes/clarify-history.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
-import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
+import { STATE_PATH, AUDIT_PATH, BOARD_PATH, createStateRoutes } from "./routes/state.js";
 // The jobs prefix, lifted out of this file's own chain beside the state read: eleven blocks under /api/jobs (the
 // read, and the ten writes that settle, steer, answer and file a card) now live in one module, mounted from the
 // table. The store, the token, the assistant, the broadcast and the pointers all stay here and travel in.
@@ -214,7 +214,7 @@ import {
 // decides who may write and attaches the SSE reader, and static.js serves public/. All three are
 // handed the state they used to read by closure.
 import { authorised, handleStream, pageCaller } from "./lib/http/transport.js";
-import { acceptsGzip, gzip, readBody, readRawBody, sendJson } from "./lib/http/respond.js";
+import { acceptsGzip, gzip, readBody, readRawBody, sendJson, sendJsonText } from "./lib/http/respond.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
 import { createReleaseNotes } from "./lib/release-notes.js";
@@ -894,6 +894,31 @@ const snapshotCache = createSnapshotCache({
 });
 function invalidateSnapshot() {
   snapshotCache.invalidate();
+}
+
+// The snapshot as TEXT, memoised by the cache's generation: /api/state and the stream's full frame read this instead
+// of stringifying the board themselves. A 3.6 MB `JSON.stringify` is 0.6-1.3s of this one event loop, and the object
+// cache never spared it - every poll and every connect paid it again.
+function snapshotText() {
+  return syncTiming.measure("snapshot serialization", () => snapshotCache.text());
+}
+
+// THE BOARD FRAME. Projects, their rows, the settings the page draws them with, the tree list and the hosts - and
+// none of the decorators `snapshotBody` applies, which is where the per-row todos, collisions, descriptions and the
+// job, assistant and approval panes come from. Those are the other ~2 MB and none of them is needed to draw a
+// section or a row, so the stream sends this first (lib/http/transport.js) and the page can be clicked while the
+// full snapshot is still being built.
+function boardSnapshot() {
+  return {
+    ...store.snapshot({ settings: settingsOut() }),
+    treeList: treeListInfo(),
+    hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
+    scanRoots: config.scanRoots || [],
+  };
+}
+
+function boardText() {
+  return syncTiming.measure("board serialization", () => JSON.stringify(boardSnapshot()));
 }
 
 // A full-snapshot push after a write: invalidate FIRST so the frame carries current state,
@@ -1854,7 +1879,7 @@ if (config.dockMode != null) {
 //
 // The state read's handler is built once, above the table: `snapshot` is a function declaration further down this file
 // (hoisted, so this call is safe), and both of the state rows below are handed this one instance.
-const stateRoutes = createStateRoutes({ snapshot, sendJson });
+const stateRoutes = createStateRoutes({ snapshotText, boardText, sendJsonText });
 // The collisions handler is built further down, with the book it reads (the store is created beside the review lane).
 // A `const` here would be in its temporal dead zone at this point in the file, so the row resolves it per request.
 let collisionsHandle = null;
@@ -1981,6 +2006,10 @@ const PREFIX_MOUNTS = [
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },
+  // The board's compact read (routes/state.js's BOARD_PATH): the same handler, the smaller projection. The stream's
+  // first frame and this route answer the same bytes, so a page that fell back to polling can ask for the board
+  // alone instead of the whole snapshot.
+  { prefix: BOARD_PATH, handles: stateRoutes },
   // ...and the same read under its older name. A second row rather than a second branch: the table keys on a prefix,
   // and /api/audit shares none with /api/state, so the one handler above is mounted twice.
   { prefix: AUDIT_PATH, handles: stateRoutes },
@@ -7795,7 +7824,7 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (route === "/api/stream") return handleStream(req, res, { clients, snapshot, metrics: streamMetrics });
+    if (route === "/api/stream") return handleStream(req, res, { clients, boardText, snapshotText, metrics: streamMetrics });
 
     return serveStatic(req, res, staticRoute, build);
   } catch (e) {

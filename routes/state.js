@@ -29,19 +29,33 @@ export const STATE_PATH = "/api/state";
 /** The read's older name. Its own row in the mount table, because it shares no prefix with STATE_PATH. */
 export const AUDIT_PATH = "/api/audit";
 
-export function createStateRoutes({ snapshot, sendJson } = {}) {
-  if (typeof snapshot !== "function") {
-    throw new Error("createStateRoutes needs snapshot from the composition root");
+// The board's own read: the projects, their rows, the settings the page draws them with, the tree list and the hosts
+// - everything a section and a row need, and none of the panes (jobs, assistant, approvals, todos, collisions) the
+// full snapshot carries. It is what the stream sends first and what the page can paint while the rest is built.
+export const BOARD_PATH = "/api/board";
+
+export function createStateRoutes({ snapshotText, boardText, sendJsonText } = {}) {
+  if (typeof snapshotText !== "function") {
+    throw new Error("createStateRoutes needs snapshotText from the composition root");
   }
-  if (typeof sendJson !== "function") {
-    throw new Error("createStateRoutes needs sendJson from the server's transport");
+  if (typeof boardText !== "function") {
+    throw new Error("createStateRoutes needs boardText from the composition root");
+  }
+  if (typeof sendJsonText !== "function") {
+    throw new Error("createStateRoutes needs sendJsonText from the server's transport");
   }
   return async function stateRoutes(req, res, route) {
+    // The compact board read. Same headers and gzip path as the state read; the body is the smaller projection.
+    if (route === BOARD_PATH) {
+      sendJsonText(res, 200, boardText());
+      return true;
+    }
     if (route !== STATE_PATH && route !== AUDIT_PATH) return false;
     // The lifted block's own answer: one snapshot, status 200, sendJson's headers and gzip threshold. What used to
     // be `return sendJson(...)` is `sendJson(...); return true` because `true` is the mount table's contract: this
-    // row answered, so the chain stops here. The bytes on the wire are the same either way.
-    sendJson(res, 200, snapshot());
+    // row answered, so the chain stops here. The bytes on the wire are the same either way - the string itself now
+    // comes from the snapshot cache, so a poll of an unchanged board reuses the one built for the last reader.
+    sendJsonText(res, 200, snapshotText());
     return true;
   };
 }
