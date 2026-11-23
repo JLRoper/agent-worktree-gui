@@ -20,7 +20,7 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
-import { WAVE_GATE_CHOICES, waveLane } from "../lib/waves.js";
+import { WAVE_GATE_CHOICES, waveFileExistsPaths, waveLane } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
@@ -303,10 +303,10 @@ export function createInitiativesRoutes({
   // One evidence read per request, shared by every initiative's lane: a Map keyed by waveMemberKey, or null when no
   // reader was supplied or the read threw. Null is cannot-tell for every gate - the fold still paints, the gates
   // never pass.
-  const evidenceFor = async (tasks) => {
+  const evidenceFor = async (tasks, paths) => {
     if (typeof waveEvidence !== "function") return null;
     try {
-      const map = await waveEvidence({ tasks, rowFor });
+      const map = await waveEvidence({ tasks, rowFor, paths });
       if (map instanceof Map) return map;
       log("initiatives: the wave evidence reader answered no map, so every gate reads cannot tell");
     } catch (error) {
@@ -318,7 +318,14 @@ export function createInitiativesRoutes({
   // awaits it, so a POST's answer carries the same lane the next GET would.
   const view = async () => {
     const tasks = waveTasks();
-    const evidence = await evidenceFor(tasks);
+    // Every artefact path any initiative's gates read: the read is one per path for the whole answer, so a wave's
+    // `file-exists` exit gate is judged on a path measured on this request.
+    const paths = waveFileExistsPaths(
+      (typeof initiatives?.initiativeList === "function" ? initiatives.initiativeList() : []).flatMap((init) =>
+        waves && typeof waves.wavesFor === "function" ? waves.wavesFor(init.id) : [],
+      ),
+    );
+    const evidence = await evidenceFor(tasks, paths);
     return initiativesView({
       initiatives,
       projectForPath,
