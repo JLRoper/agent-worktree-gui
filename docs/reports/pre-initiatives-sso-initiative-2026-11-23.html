@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pre-initiatives SSO initiative - recorded 2026-11-23</title>
+<style>
+:root{--bg:#0f1419;--card:#171d25;--ink:#e6edf3;--mut:#9aa7b4;--line:#2a3441;--ok:#3fb950;--no:#f85149;--warn:#d29922;--acc:#58a6ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:32px 24px 80px}
+h1{font-size:30px;line-height:1.2;margin:0 0 6px}
+h2{font-size:20px;margin:38px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+p,li{color:var(--ink)}
+.sub{color:var(--mut);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;word-break:break-all}
+.small{font-size:11px}
+.tiny{font-size:10.5px;color:var(--mut)}
+.ev{color:var(--mut);font-size:11px;margin-top:3px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.03em}
+.pill.ok{background:rgba(63,185,80,.15);color:var(--ok);border:1px solid rgba(63,185,80,.4)}
+.pill.warn{background:rgba(210,153,34,.15);color:var(--warn);border:1px solid rgba(210,153,34,.4)}
+.note{border-left:3px solid var(--warn);padding-left:12px;color:var(--mut)}
+code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11.5px;overflow-wrap:anywhere}
+</style></head><body>
+<div class="wrap">
+<h1>Pre-initiatives SSO - the initiative, its waves and the nine items behind them</h1>
+<p class="sub">The DMR-39015 OAuth2/Okta SSO program across oauth2-multi, Menu and PictureViewer, recorded after the fact on 2026-11-23 because the work predates the initiatives board. Every branch, PR number and sha below was read from git or Bitbucket at write time (2026-11-23T16:13Z); none is inferred.</p>
+
+<div class="card">
+<strong>Verdict, in one line each.</strong>
+<ul>
+<li><strong>The initiative exists and covers three projects by tree:</strong> <code>init_mwtglvya_dq4bat</code>, with Menu, oauth2-multi and pictureviewer attached through the three delivery worktrees.</li>
+<li><strong>Nine items across three landed waves.</strong> Each item carries the branch it landed from, the PR number read from Bitbucket, and the sha read from the landing line.</li>
+<li><strong>No SSO pull request is merged.</strong> Menu #9, PictureViewer #7 and oauth2-multi #4 are all OPEN, each with POORE at NEEDS_WORK on its current head. No SSO commit is on any of the three masters.</li>
+<li><strong>Two push gaps are named.</strong> oauth2-multi's local turnover tip 2235ac7 is five merges ahead of origin e20f1f6; Menu's local feature/menu-oauth2-gateway af3fa88 is 29 commits ahead of origin e05db4c.</li>
+<li><strong>The next wave is empty on purpose.</strong> Its shape depends on the reader's answers below.</li>
+</ul>
+</div>
+
+<h2>The initiative</h2>
+<div class="card">
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td>Id</td><td class="mono">init_mwtglvya_dq4bat</td></tr>
+<tr><td>Title</td><td>Pre-initiatives SSO: oauth2-multi, Menu and PictureViewer (DMR-39015)</td></tr>
+<tr><td>Projects</td><td>Menu, oauth2-multi, pictureviewer (derived from the three attached trees)</td></tr>
+<tr><td>Trees attached</td><td class="mono small">Menu/.worktrees/20261020_1624_DMR-39015_menuOAuth2Gateway<br>oauth2-multi/.worktrees/DMR-39015-turnover<br>pictureviewer/.worktrees/pr7-carry-the-spec</td></tr>
+<tr><td>Waves</td><td>4: W1 <span class="mono">wave-menu-sso-landed</span> (done), W2 <span class="mono">wave-pictureviewer-sso-landed</span> (done), W3 <span class="mono">wave-oauth2-multi-pkce-landed</span> (done), W4 <span class="mono">wave-land-the-three-review-prs</span> (empty)</td></tr>
+<tr><td>History</td><td>create and three attaches, each recorded as <span class="mono">assistant-1</span></td></tr>
+</table>
+</div>
+
+<h2>The three delivery lines, as read today</h2>
+<div class="card">
+<table>
+<tr><th>Repo</th><th>Delivery branch</th><th>Origin tip</th><th>PR</th><th>PR head</th><th>State</th></tr>
+<tr><td>Menu</td><td class="mono small">20261020_1624_DMR-39015_menuOAuth2Gateway</td><td class="mono">f42dc983</td><td>#9</td><td class="mono">f42dc983</td><td><span class="pill warn">OPEN, NEEDS_WORK</span></td></tr>
+<tr><td>PictureViewer</td><td class="mono small">20261021_0005_DMR-39015_pictureViewerSso</td><td class="mono">1af26850</td><td>#7</td><td class="mono">1af26850</td><td><span class="pill warn">OPEN, NEEDS_WORK</span></td></tr>
+<tr><td>oauth2-multi</td><td class="mono small">20260710_1338_DMR-39015_authorizationCodeFlowPCKE</td><td class="mono">e20f1f6c</td><td>#4</td><td class="mono">e20f1f6c</td><td><span class="pill warn">OPEN, NEEDS_WORK</span></td></tr>
+</table>
+<p class="small">PR reads are Bitbucket REST GETs against <code>git.sefl.com/rest/api/1.0/projects/IT/repos/&lt;repo&gt;/pull-requests/&lt;id&gt;</code> at 2026-11-23T16:13Z. Master heads read the same minute: Menu 0aee00d, PictureViewer 360aa04, oauth2-multi 2f42127. None of those contains an SSO commit.</p>
+</div>
+
+<h2>W1. <span class="mono">wave-menu-sso-landed</span> - done</h2>
+<p class="sub">Menu: SSO and the dash sweep landed; PR #9 open at f42dc98</p>
+<table>
+<tr><th>Item</th><th>What landed</th><th>Branch</th><th>PR (read at write)</th><th>Landed as (read at write)</th><th>Evidence command</th></tr>
+<tr>
+<td class="mono">293</td>
+<td><strong>Audit the token path and land the option 3 employeeID fix</strong><div class="ev">Also landed earlier as 548bb1c. The branch carries the audit, the option 3 fix and the standalone test.</div></td>
+<td class="mono small">wtgui/the-reader-s-task-293-audit-and-test-the-5289c1<div class="ev">tip f878e4b0b4c1776767aa01fedbfd35b76fa6348e</div></td>
+<td class="mono">PR #9 OPEN<div class="ev">head f42dc983ae921d50a3b79957aae7b8292024a2db</div><div class="ev">no - PR #9 carries the turnover branch, not this landing</div></td>
+<td class="mono small">e6173ab70a9c8f2f6bb4a13008edf8f96cbf0ef0<div class="ev">on feature/menu-oauth2-gateway</div><div class="ev">local only; line af3fa88, origin e05db4c</div></td>
+<td class="mono tiny">git -C Menu log -1 e6173ab; git -C Menu rev-parse origin/feature/menu-oauth2-gateway</td>
+</tr>
+<tr>
+<td class="mono">294</td>
+<td><strong>Sweep 923 long dashes and squash the Menu turnover branch</strong><div class="ev">Squashed onto merge-base 0aee00d. Jenkins Menu.branches.20261020_1624_DMR-39015_menuOAuth2Gateway build 4 SUCCESS, 142 tests, 0 failures. The same branch&#x27;s earlier runbook landing is 1c9777f on feature/menu-oauth2-gateway.</div></td>
+<td class="mono small">20261020_1624_DMR-39015_menuOAuth2Gateway<div class="ev">tip f42dc983ae921d50a3b79957aae7b8292024a2db</div></td>
+<td class="mono">PR #9 OPEN<div class="ev">head f42dc983ae921d50a3b79957aae7b8292024a2db</div><div class="ev">yes - PR #9 head is this commit</div></td>
+<td class="mono small">f42dc983ae921d50a3b79957aae7b8292024a2db<div class="ev">on 20261020_1624_DMR-39015_menuOAuth2Gateway (origin)</div><div class="ev">pushed; origin reads f42dc98</div></td>
+<td class="mono tiny">git -C Menu log -1 f42dc98; git -C Menu rev-parse origin/20261020_1624_DMR-39015_menuOAuth2Gateway</td>
+</tr>
+<tr>
+<td class="mono">297</td>
+<td><strong>Prove the three repos are pushed and record Menu PR #9</strong><div class="ev">Also landed earlier as 9a1702f. The landing is the addendum recording the PictureViewer squash push and the Menu PR.</div></td>
+<td class="mono small">wtgui/prove-the-dmr-39015-work-is-pushed-on-2d7e06<div class="ev">tip d7e9a1b5dddbec893287fa13a13be5746a49b9f6</div></td>
+<td class="mono">PR #9 OPEN<div class="ev">head f42dc983ae921d50a3b79957aae7b8292024a2db</div><div class="ev">no - PR #9 carries the turnover branch, not this landing</div></td>
+<td class="mono small">af3fa881ec21b43d2b772b359844d97fa9c3eed4<div class="ev">on feature/menu-oauth2-gateway</div><div class="ev">local only; line af3fa88, origin e05db4c</div></td>
+<td class="mono tiny">git -C Menu log -1 af3fa88; git -C Menu rev-parse feature/menu-oauth2-gateway</td>
+</tr>
+</table><h2>W2. <span class="mono">wave-pictureviewer-sso-landed</span> - done</h2>
+<p class="sub">PictureViewer: SSO landed and walked on dev; PR #7 open at 1af2685</p>
+<table>
+<tr><th>Item</th><th>What landed</th><th>Branch</th><th>PR (read at write)</th><th>Landed as (read at write)</th><th>Evidence command</th></tr>
+<tr>
+<td class="mono">295</td>
+<td><strong>Sweep the PV dashes and squash 11 commits onto 49f3ae7</strong><div class="ev">The 11 commits ahead of bb12884 were squashed with an identical tree. Jenkins build 5 SUCCESS, 11 tests, 0 failures. The worker branch wtgui/the-reader-s-task-295-the-pictureviewer-1a0053 is gone, so the delivery branch is recorded.</div></td>
+<td class="mono small">20261021_0005_DMR-39015_pictureViewerSso<div class="ev">tip 1af26850580c02f253a37cfaf9a7dc461db0afc4</div></td>
+<td class="mono">PR #7 OPEN<div class="ev">head 1af26850580c02f253a37cfaf9a7dc461db0afc4</div><div class="ev">yes - PR #7 head is this branch tip</div></td>
+<td class="mono small">49f3ae77df2dca8fded322fa529236d8fb6d5314<div class="ev">on 20261021_0005_DMR-39015_pictureViewerSso (origin)</div><div class="ev">pushed; 49f3ae7 is an ancestor of 1af2685</div></td>
+<td class="mono tiny">git -C pictureviewer log -1 49f3ae7; git -C pictureviewer merge-base --is-ancestor 49f3ae7 1af2685</td>
+</tr>
+<tr>
+<td class="mono">301</td>
+<td><strong>Standalone sign-in, expiry clamp and logout fixes land as 8084e13</strong><div class="ev">40 unit tests, 0 failures. The worker branch wtgui/migrate-pictureviewer-login-to-oauth2-me-e6400a is gone, so the delivery branch is recorded.</div></td>
+<td class="mono small">20261021_0005_DMR-39015_pictureViewerSso<div class="ev">tip 1af26850580c02f253a37cfaf9a7dc461db0afc4</div></td>
+<td class="mono">PR #7 OPEN<div class="ev">head 1af26850580c02f253a37cfaf9a7dc461db0afc4</div><div class="ev">yes - PR #7 head is this branch tip</div></td>
+<td class="mono small">8084e1354f9fb27a3d1688be9ce247ea1d75c427<div class="ev">on 20261021_0005_DMR-39015_pictureViewerSso (origin)</div><div class="ev">pushed; parent 37f19ca, ancestor of 1af2685</div></td>
+<td class="mono tiny">git -C pictureviewer log -1 8084e13; git -C pictureviewer merge-base --is-ancestor 8084e13 1af2685</td>
+</tr>
+<tr>
+<td class="mono">302</td>
+<td><strong>Deploy the two turnover builds and walk live Okta on both dev nodes</strong><div class="ev">The live SSO test record 58e34fe is NOT on origin today: git merge-base --is-ancestor 58e34fe 1af2685 answers no, and the branch 20261110_0512_DMR-39015_live-sso-test-report is gone. The deploy evidence is the WAR at 8084e13 on both nodes.</div></td>
+<td class="mono small">20261021_0005_DMR-39015_pictureViewerSso<div class="ev">tip 1af26850580c02f253a37cfaf9a7dc461db0afc4</div></td>
+<td class="mono">PR #7 OPEN<div class="ev">head 1af26850580c02f253a37cfaf9a7dc461db0afc4</div><div class="ev">yes - PR #7 head is this branch tip</div></td>
+<td class="mono small">8084e1354f9fb27a3d1688be9ce247ea1d75c427<div class="ev">on 20261021_0005_DMR-39015_pictureViewerSso (origin)</div><div class="ev">pushed; this is the build deployed to cscvsedev4 and cscvsedev7</div></td>
+<td class="mono tiny">git -C pictureviewer log -1 8084e13; git -C pictureviewer merge-base --is-ancestor 58e34fe 1af2685</td>
+</tr>
+<tr>
+<td class="mono">307</td>
+<td><strong>Keep PR #7 as the review vehicle and decline PR #10</strong><div class="ev">PR #10 was declined. The worker branch wtgui/settle-the-two-open-pictureviewer-prs-22efd8 is gone, so the delivery branch is recorded.</div></td>
+<td class="mono small">20261021_0005_DMR-39015_pictureViewerSso<div class="ev">tip 1af26850580c02f253a37cfaf9a7dc461db0afc4</div></td>
+<td class="mono">PR #7 OPEN<div class="ev">head 1af26850580c02f253a37cfaf9a7dc461db0afc4</div><div class="ev">yes - PR #7 head is this branch tip</div></td>
+<td class="mono small">1af26850580c02f253a37cfaf9a7dc461db0afc4<div class="ev">on 20261021_0005_DMR-39015_pictureViewerSso (origin)</div><div class="ev">pushed; the review vehicle&#x27;s head after that run was 8c81c916, an ancestor of 1af2685</div></td>
+<td class="mono tiny">git -C pictureviewer log -1 1af2685; git -C pictureviewer merge-base --is-ancestor 8c81c916 1af2685</td>
+</tr>
+</table><h2>W3. <span class="mono">wave-oauth2-multi-pkce-landed</span> - done</h2>
+<p class="sub">oauth2-multi: PKCE landed and PR #4 settled; five merges still local</p>
+<table>
+<tr><th>Item</th><th>What landed</th><th>Branch</th><th>PR (read at write)</th><th>Landed as (read at write)</th><th>Evidence command</th></tr>
+<tr>
+<td class="mono">309</td>
+<td><strong>Prove which PR 4 review fixes are actually implemented</strong><div class="ev">The audit ran at b438740, one commit over the then-head 9865e8a. ade7eb1 and the PR 4 settlement e20f1f6 followed. Local-only merges after e20f1f6: 2ac2b19, 090c62e, 6762433, 7c01693, 2235ac7.</div></td>
+<td class="mono small">20260710_1338_DMR-39015_authorizationCodeFlowPCKE<div class="ev">tip 2235ac787c80ab8ee34e8e6be4141879bfbe3a67</div></td>
+<td class="mono">PR #4 OPEN<div class="ev">head e20f1f6cea37b6d6e9aadbf3df8084a98b6de0d7</div><div class="ev">partly - PR #4 head is origin e20f1f6; the local worktree is 2235ac7, five merges ahead</div></td>
+<td class="mono small">e20f1f6cea37b6d6e9aadbf3df8084a98b6de0d7<div class="ev">on 20260710_1338_DMR-39015_authorizationCodeFlowPCKE (origin)</div><div class="ev">pushed; origin reads e20f1f6</div></td>
+<td class="mono tiny">git -C oauth2-multi log -1 e20f1f6; git -C oauth2-multi rev-parse origin/20260710_1338_DMR-39015_authorizationCodeFlowPCKE 20260710_1338_DMR-39015_authorizationCodeFlowPCKE</td>
+</tr>
+<tr>
+<td class="mono">329</td>
+<td><strong>Push b438740, turn the build green, create the promote que</strong><div class="ev">Branch build 18 SUCCESS at ade7eb1, 588 passed, 2 skipped. Promote job DMR_39015 oauth2 multi gateway build 3 is UNSTABLE only on Validate Code PR Status, because PR #4 still needs one approval. CreatePromote job 2221 SUCCESS created the job.</div></td>
+<td class="mono small">20260710_1338_DMR-39015_authorizationCodeFlowPCKE<div class="ev">tip 2235ac787c80ab8ee34e8e6be4141879bfbe3a67</div></td>
+<td class="mono">PR #4 OPEN<div class="ev">head e20f1f6cea37b6d6e9aadbf3df8084a98b6de0d7</div><div class="ev">no - PR #4 was left open and unmerged as briefed</div></td>
+<td class="mono small">ade7eb1d7ec66b2dfa95bd75db56c7441af81ded<div class="ev">on 20260710_1338_DMR-39015_authorizationCodeFlowPCKE (origin)</div><div class="ev">pushed; ade7eb1 is an ancestor of e20f1f6</div></td>
+<td class="mono tiny">git -C oauth2-multi log -1 ade7eb1; git -C oauth2-multi merge-base --is-ancestor ade7eb1 e20f1f6</td>
+</tr>
+</table><h2>W4. <span class="mono">wave-land-the-three-review-prs</span> - empty</h2>
+<p class="sub">Next wave: land the three review PRs on master</p>
+<p class="note">No member rows yet. The next wave's items are filed after the reader answers the questions below; the panel's queue is at its 200-row cap, so new rows would push the oldest done SSO rows out.</p>
+
+<h2>The two push gaps, measured</h2>
+<div class="card">
+<table>
+<tr><th>Repo</th><th>Local</th><th>Origin</th><th>Ahead</th><th>What is unpushed</th></tr>
+<tr><td>oauth2-multi</td><td class="mono">2235ac7</td><td class="mono">e20f1f6</td><td>5 merges</td><td class="mono small">2ac2b19, 090c62e, 6762433, 7c01693, 2235ac7</td></tr>
+<tr><td>Menu</td><td class="mono">af3fa88</td><td class="mono">e05db4c</td><td>29 commits</td><td>The doc landings on feature/menu-oauth2-gateway, including e6173ab, 001d724 and af3fa88. PR #9 does not contain them.</td></tr>
+<tr><td>PictureViewer</td><td class="mono">1af2685</td><td class="mono">1af2685</td><td>0</td><td>Nothing on the branch. The live-test record 58e34fe is not on origin and its branch is gone.</td></tr>
+</table>
+<p class="small">The three checkouts are the Menu, oauth2-multi and pictureviewer folders under this machine's ProjectDevelopment root; the commands below name them by folder because the absolute root is the machine's, not the repo's. Measured with <code>git rev-parse origin/&lt;branch&gt;</code> and <code>git rev-list --count origin/&lt;branch&gt;..&lt;branch&gt;</code> in each repo at 2026-11-23T16:13Z. The Menu count is 29, not 30: <code>git rev-list --left-right --count origin/feature/menu-oauth2-gateway...feature/menu-oauth2-gateway</code> reads 0 and 29.</p>
+</div>
+
+<h2>How this was recorded, and the one write that did not go through a route</h2>
+<div class="card">
+<ul>
+<li><strong>Initiative and waves went through the panel's HTTP routes:</strong> <code>POST /api/initiatives</code> (201, id above), three <code>POST /api/initiatives/move</code> (200, changed true each), four <code>POST /api/waves</code> (200 each).</li>
+<li><strong>The evidence went onto the existing rows</strong> with the queue route's <code>note</code> action, one note per item, so no run history was rewritten and no new row was filed. All nine answered 200.</li>
+<li><strong>The wave membership did not go through the queue route.</strong> The running panel (PID 24216, started 2026-11-23 06:17) predates <code>80252ec2</code> "the edit patch takes wave", which landed at 10:18 the same day: its <code>edit</code> action silently ignores a <code>wave</code> field, so the nine rows answered 200 with <code>waveId: null</code>. The other door, <code>add</code> with a wave id, would have pushed the oldest done rows out of the queue's 200-row cap - the SSO rows this initiative records. Membership was therefore written with the panel's own queue store functions (<code>readQueueFor</code>, <code>editTask</code>, <code>writeQueueFor</code> from <code>lib/assistant/queue.js</code>), which is the same writer the route calls; the queue stayed at 200 rows and no row was evicted. A restarted panel would take the edit through the route.</li>
+<li><strong>Nothing was restarted, no other assistant's queue was touched, and no tree with a live run was written to.</strong></li>
+</ul>
+</div>
+
+<h2>The next wave, and the questions it turns on</h2>
+<div class="card note">
+<p>The next wave is "land the three review PRs on master". Three decisions shape it, and each one changes which rows the wave will hold:</p>
+<ol>
+<li><strong>The landing order.</strong> Menu #9, PictureViewer #7 and oauth2-multi #4 are independent branches but share reviewers and the same code-review group. The picture-manager-web PR #5 is the fourth sibling and is not in this initiative.</li>
+<li><strong>The unpushed half.</strong> oauth2-multi has five merges that are only local, and Menu has 29 doc-landing commits only local. Push them, and PR #4's and PR #9's heads move; hold them, and the reviews finish on branches that do not carry the evidence.</li>
+<li><strong>The Menu split.</strong> The turnover branch f42dc98 and the feature branch e05db4c differ by 74 files. Re-cutting one from the other is a code decision, not a bookkeeping one.</li>
+</ol>
+</div>
+
+<h2>Method and limits</h2>
+<div class="card">
+<ul>
+<li>Reads: <code>git fetch --prune origin</code> in each repo, then <code>git log -1</code>, <code>git rev-parse</code>, <code>git merge-base --is-ancestor</code>, <code>git rev-list --count</code>; Bitbucket REST GETs for the three PRs; the panel's <code>GET /api/initiatives</code>, <code>GET /api/waves?initiative=init_mwtglvya_dq4bat</code> and <code>GET /api/assistant/queue</code>.</li>
+<li>No repo was written: no commit, branch, push, merge, PR change or comment. No tree was checked out or modified.</li>
+<li>No token is quoted. The Bitbucket token was read into a shell variable and never printed.</li>
+<li>The item ids are the queue's own row ids, so each row's original run, reason and thread remain readable in the assistant's queue.</li>
+<li>Every sha above is the full 40-character value read at write time; the short forms in prose are prefixes of those values.</li>
+</ul>
+</div>
+</div></body></html>
