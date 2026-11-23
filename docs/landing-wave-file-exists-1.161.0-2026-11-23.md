@@ -135,24 +135,32 @@ The one existing test this row had to change is the vocabulary test that named `
 evaluator: it now names the eight that still have none, and says where `file-exists` is proved
 (`test/waves-derive.test.js:146`).
 
-The focused set, run file by file on the final tree: wave-file-exists 8, wave-evidence 13, waves-derive 22, waves-auto
-11, waves-write 22, waves-lane 38, waves-route 8, waves-store 17, waves-lanes-join 10, queue-wave-id 8,
-initiative-fold 26, initiative-tasks 18, initiatives-route 9, initiative-tier-route 7 - **217 tests, 217 pass**.
+The focused set, run file by file on the final tree: wave-file-exists 8, wave-evidence 13, waves-derive 22,
+waves-auto 12, waves-write 22, waves-lane 40, waves-route 8, waves-store 17, waves-lanes-join 10, waves-drive 11,
+queue-wave-id 8, initiative-fold 26, initiative-tasks 18, initiatives-route 9, initiative-tier-route 7 - **231 tests,
+231 pass**.
 
 RED FIRST, and the counts: `test/wave-file-exists.test.js` was written before the read existed, and `npm test` on that
 tree answered **3,658 tests, 3,643 pass, 15 fail** - the seven `file-exists` cases above failing for the reason the row
 names (the gate answering "no evaluator reads it yet", and the evidence carrying no artefact read at all), plus eight
-failures that are this machine, not this diff (below). The same run after the change, one file per child process
-because the shared runner wedges on a panel route test at this base: **422 files, 3,655 tests, 3,645 pass, 10 fail** -
-and every one of the ten is accounted for, none of them in the wave, gate, evidence or route machinery:
+failures that are this machine, not this diff (below). The final tree was swept one file per child process because the
+shared runner wedges on a panel route test at this base: **424 files, 3,673 tests, 3,656 pass, 17 fail, 1 file killed by
+the loop's own 150 s bound**. Every failure is accounted for and none is in the wave, gate, evidence, route or driver
+machinery:
 
-- `gateway-permissions`, `paths` (`every *File / *Dir / *Log config key`), `paths-http` (`Clean scratch over HTTP`),
-  `reasoning-runs`, `scan-roots`, `scan-upstream` (`main moving on changes the count...`) and the
-  junctioned-node-modules measurement in `harness` and `junctioned-node-modules` failed in the before run too, at this
-  same base commit, by name;
-- `push-permissions` was killed by the loop's own 150 s bound (exit 124) after it had run 14 of its 17 tests, and it
-  passes alone on this branch: 17 tests, 17 pass. `scan-cache` likewise passes alone (2 tests, 2 pass). Both are load
-  flakes of a sequential loop run beside a live panel, not this diff's.
+- THE BASE'S SNAPSHOT DROPPED THE PANES, and seven fixtures still read them out of it: the assistant roster from
+  `.assistant.assistants`, the question a move parks from `.remoteWrites.pending`. Five of those fixtures are this row's
+  own route tests (`waves-route`, `initiatives-route`, `initiative-tier-route`, `waves-write`, `reports-route`) and are
+  repaired in the commit before this one - all five are green here (8, 9, 7, 22 and 1 tests). The other three are not
+  this row's subject and are left to the row that owns them, proved to fail identically at `origin/main` on an archive
+  copy with none of these commits: `worktree-assistant` 6 of 11, `worktree-naming` 15 of 16,
+  `assistant-queue-reattach` 13 of 14;
+- the same eight that failed on this machine before any of this row's work, at the old base: `gateway-permissions`,
+  `paths` (`every *File / *Dir / *Log config key`), `paths-http` (`Clean scratch over HTTP`), `reasoning-runs`,
+  `scan-roots`, `scan-upstream`, and the junctioned-node-modules measurement that `harness` and
+  `junctioned-node-modules` each report;
+- `push-permissions` was killed at the loop's 150 s bound (exit 124) after 14 of its 17 tests, and it passes alone on
+  this branch: 17 tests, 17 pass. Load, not this diff.
 
 The live gate, `node tools/verify-wave-file-exists.mjs`: **OK 52/52 checks passed** through the real API in a sandbox
 panel - a throwaway row filed with a `waveId` by `POST /api/assistant/queue`, a wave created by `POST /api/waves` whose
