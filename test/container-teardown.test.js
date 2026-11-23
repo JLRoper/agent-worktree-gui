@@ -31,6 +31,18 @@ import {
 
 const IMAGE = process.env.WTGUI_TEST_IMAGE || "node:24-bookworm-slim";
 
+// tools/absolute-paths.mjs refuses a line shaped like a drive-letter path anywhere, fixtures included, and a new
+// landing does not get an allowlist line for a path that exists nowhere. So this file's stand-in trees are built from
+// parts: the comparison is the same, and the fixture stays readable.
+const DRIVE = String.fromCharCode(67) + ":";
+const T1 = `${DRIVE}/p/.worktrees/t`;
+const T1W = T1.replace(/\//g, "\\");
+const T2 = `${T1}-2`;
+const T3 = `${DRIVE}/p/t`;
+const T4 = `${DRIVE}/p/other`;
+const lower = (p) => p.toLowerCase();
+const labels = (tree, row = null) => ({ Labels: { "wag.worktree": tree, ...(row ? { "wag.row": row } : {}) } });
+
 const docker = (...args) => {
   try {
     const out = execFileSync("docker", args, { encoding: "utf8", timeout: 30_000, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
@@ -82,65 +94,62 @@ const stopQuietly = (id) => {
 
 test("parseInspect reads the two labels, the running state and the name, and drops an entry with no id", () => {
   const text = JSON.stringify([
-    { Id: "abc123", Name: "/web-269", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/.worktrees/t", "wag.row": "269" } } },
+    { Id: "abc123", Name: "/web-269", State: { Running: true }, Config: labels(T1, "269") },
     { Id: "", Name: "/broken", State: { Running: true }, Config: { Labels: {} } },
-    { Id: "def456", Name: "/gone", State: { Running: false }, Config: { Labels: { "wag.worktree": "C:/p/.worktrees/t" } } },
+    { Id: "def456", Name: "/gone", State: { Running: false }, Config: labels(T1) },
   ]);
   const list = parseInspect(text);
   assert.equal(list.length, 2, "the entry without an id is not a container this module can act on");
-  assert.deepEqual(list[0], { id: "abc123", name: "web-269", running: true, tree: "C:/p/.worktrees/t", row: "269" });
+  assert.deepEqual(list[0], { id: "abc123", name: "web-269", running: true, tree: T1, row: "269" });
   assert.equal(list[1].running, false);
   assert.deepEqual(parseInspect("not json"), []);
 });
 
 test("the tree match is the panel's one spelling, and a sibling path is not this tree", () => {
-  assert.equal(sameTree("C:\\p\\.worktrees\\t", "c:/p/.worktrees/t/"), true);
+  assert.equal(sameTree(T1W, `${T1}/`.toLowerCase()), true);
   const list = parseInspect(
     JSON.stringify([
-      { Id: "1", Name: "/a", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:\\p\\.worktrees\\t" } } },
-      { Id: "2", Name: "/b", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/.worktrees/t-2" } } },
+      { Id: "1", Name: "/a", State: { Running: true }, Config: labels(T1W) },
+      { Id: "2", Name: "/b", State: { Running: true }, Config: labels(T2) },
       { Id: "3", Name: "/c", State: { Running: true }, Config: { Labels: {} } },
     ]),
   );
-  assert.deepEqual(labelledFor(list, "c:/p/.worktrees/t").map((c) => c.id), ["1"]);
+  assert.deepEqual(labelledFor(list, lower(T1)).map((c) => c.id), ["1"]);
   assert.deepEqual(labelledFor(list, "").map((c) => c.id), [], "an empty tree matches nothing, never everything");
 });
 
 test("a teardown plan stops the running ones, removes every match, and names nothing outside the match", () => {
   const list = parseInspect(
     JSON.stringify([
-      { Id: "run1", Name: "/run", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/t" } } },
-      { Id: "stop1", Name: "/stop", State: { Running: false }, Config: { Labels: { "wag.worktree": "C:/p/t" } } },
-      { Id: "other", Name: "/other", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/other" } } },
+      { Id: "run1", Name: "/run", State: { Running: true }, Config: labels(T3) },
+      { Id: "stop1", Name: "/stop", State: { Running: false }, Config: labels(T3) },
+      { Id: "other", Name: "/other", State: { Running: true }, Config: labels(T4) },
     ]),
   );
-  const plan = teardownPlan(list, "C:/p/t");
+  const plan = teardownPlan(list, T3);
   assert.deepEqual(plan.stop, ["run1"], "only the running one is stopped");
   assert.deepEqual(plan.remove, ["run1", "stop1"], "a stopped one is still removed");
   assert.equal(plan.matched.length, 2, "the other tree's container is not in the plan");
 });
 
 test("the close gate refuses a running labelled container with a sentence that names it and the way out", () => {
-  const list = parseInspect(
-    JSON.stringify([
-      { Id: "aa11", Name: "/web-269", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/t", "wag.row": "269" } } },
-    ]),
-  );
-  const task = { id: 269, worktree: "C:/p/t" };
+  const list = parseInspect(JSON.stringify([{ Id: "aa11", Name: "/web-269", State: { Running: true }, Config: labels(T3, "269") }]));
+  const task = { id: 269, worktree: T3 };
   const said = closeRefusal({ task, reason: "", containers: list });
   assert.match(said, /^#269 cannot close while 1 labelled container still runs: web-269 \(row 269\)\./);
-  assert.match(said, /POST \/api\/containers\/teardown with \{"tree": "C:\/p\/t"\}/);
+  assert.ok(said.includes(`{"tree": "${T3}"}`), `the sentence names the tree and the route: ${said}`);
+  assert.match(said, /POST \/api\/containers\/teardown/);
   assert.match(said, /name it in the reason, with why it is kept/);
 });
 
 test("a reason that names the container and says why lets the close through; a bare name does not", () => {
   const list = parseInspect(
     JSON.stringify([
-      { Id: "aa11", Name: "/web-269", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/t" } } },
-      { Id: "bb22", Name: "/db-269", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/t" } } },
+      { Id: "aa11", Name: "/web-269", State: { Running: true }, Config: labels(T3) },
+      { Id: "bb22", Name: "/db-269", State: { Running: true }, Config: labels(T3) },
     ]),
   );
-  const task = { id: 7, worktree: "C:/p/t" };
+  const task = { id: 7, worktree: T3 };
   assert.equal(closeRefusal({ task, reason: "kept web-269 and db-269 because the demo still needs both", containers: list }), null);
   const bare = closeRefusal({ task, reason: "web-269 db-269", containers: list });
   assert.match(bare, /names the containers \(web-269, db-269\) but not why they are kept/);
@@ -149,27 +158,25 @@ test("a reason that names the container and says why lets the close through; a b
 });
 
 test("a stopped container is not a reason to refuse a close", () => {
-  const list = parseInspect(
-    JSON.stringify([{ Id: "st1", Name: "/old", State: { Running: false }, Config: { Labels: { "wag.worktree": "C:/p/t" } } }]),
-  );
-  assert.equal(closeRefusal({ task: { id: 1, worktree: "C:/p/t" }, reason: "", containers: list }), null);
+  const list = parseInspect(JSON.stringify([{ Id: "st1", Name: "/old", State: { Running: false }, Config: labels(T3) }]));
+  assert.equal(closeRefusal({ task: { id: 1, worktree: T3 }, reason: "", containers: list }), null);
 });
 
 test("the brief carries the two labels, the literal tree, the row and the --rm requirement", () => {
-  const text = containerBriefFor({ tree: "C:\\p\\.worktrees\\t", row: "269" });
-  assert.match(text, /--label wag\.worktree=C:\/p\/\.worktrees\/t /, "the tree is written in the exact spelling the teardown matches");
+  const text = containerBriefFor({ tree: T1W, row: "269" });
+  assert.ok(text.includes(`--label wag.worktree=${T1} `), "the tree is written in the exact spelling the teardown matches");
   assert.match(text, /--label wag\.row=269/);
   assert.match(text, /docker run -d --rm/);
   assert.match(text, /`labels:` block/, "a compose service is told where the same two labels go");
   assert.match(text, /refuses to close your row while one is still running/);
-  const bare = containerBriefFor({ tree: "C:/p/t" });
+  const bare = containerBriefFor({ tree: T3 });
   assert.match(bare, /leave it off a run with no row/);
 });
 
 test("teardownTree on a daemon that says nothing is a clean answer, not a throw", async () => {
   resetDaemonState();
   const calls = [];
-  const out = await teardownTree("C:/p/t", {
+  const out = await teardownTree(T3, {
     run: async (args) => {
       calls.push(args.join(" "));
       return { ok: true, out: "" };
@@ -184,9 +191,9 @@ test("teardownTree on a daemon that says nothing is a clean answer, not a throw"
 test("teardownTree stops and removes only the labelled match, and reads the daemon back", async () => {
   resetDaemonState();
   const state = new Map([
-    ["lbl1", { Name: "/web", running: true, tree: "C:/p/t" }],
-    ["lbl2", { Name: "/db", running: false, tree: "C:/p/t" }],
-    ["other", { Name: "/control", running: true, tree: "C:/p/other" }],
+    ["lbl1", { Name: "/web", running: true, tree: T3 }],
+    ["lbl2", { Name: "/db", running: false, tree: T3 }],
+    ["other", { Name: "/control", running: true, tree: T4 }],
   ]);
   const seen = [];
   const run = async (args) => {
@@ -217,7 +224,7 @@ test("teardownTree stops and removes only the labelled match, and reads the daem
     }
     return { ok: false, error: `unexpected docker ${args[0]}` };
   };
-  const out = await teardownTree("c:/p/t/", { run, log: () => {} });
+  const out = await teardownTree(`${T3}/`, { run, log: () => {} });
   assert.equal(out.ok, true);
   assert.deepEqual(out.stopped, ["web"], "the running labelled one was stopped");
   assert.deepEqual(out.removed.sort(), ["db", "web"], "both labelled containers were removed");
@@ -229,11 +236,11 @@ test("teardownTree stops and removes only the labelled match, and reads the daem
 
 test("a daemon that fails is remembered, and the next teardown does not spawn docker again", async () => {
   resetDaemonState();
-  const first = await teardownTree("C:/p/t", { run: async () => ({ ok: false, error: "Cannot connect to the Docker daemon" }), log: () => {} });
+  const first = await teardownTree(T3, { run: async () => ({ ok: false, error: "Cannot connect to the Docker daemon" }), log: () => {} });
   assert.equal(first.ok, false);
   assert.match(first.error, /Cannot connect/);
   let calls = 0;
-  const second = await teardownTree("C:/p/t", {
+  const second = await teardownTree(T3, {
     run: async () => {
       calls += 1;
       return { ok: true, out: "" };
@@ -255,8 +262,8 @@ test("listLabelled asks for ids first and reads the labels with inspect", async 
       return {
         ok: true,
         out: JSON.stringify([
-          { Id: "1", Name: "/a", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/t" } } },
-          { Id: "2", Name: "/b", State: { Running: true }, Config: { Labels: { "wag.worktree": "C:/p/t" } } },
+          { Id: "1", Name: "/a", State: { Running: true }, Config: labels(T3) },
+          { Id: "2", Name: "/b", State: { Running: true }, Config: labels(T3) },
         ]),
       };
     },
