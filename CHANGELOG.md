@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.161.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.161.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-701 releases from v0.1.0 (2026-10-20) to v1.161.0 (2026-11-23), 2476 commits between the tags. Every release is anchored by an
+702 releases from v0.1.0 (2026-10-20) to v1.161.1 (2026-11-23), 2480 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.161.1 — 2026-11-23 · 4 commits
+
+[`80252ec`](https://github.com/JLRoper/agent-worktree-gui/commit/80252ec251d8ea1affcd0890432a793b9e11fb0e) · [compare v1.161.0...v1.161.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.161.0...v1.161.1)
+
+### Added
+
+- feat(queue): the edit patch takes wave, so a card can join one ([`80252ec`](https://github.com/JLRoper/agent-worktree-gui/commit/80252ec251d8ea1affcd0890432a793b9e11fb0e))
+
+### Docs & tests
+
+- test: reports-route reads the assistant roster where it moved ([`7500d6e`](https://github.com/JLRoper/agent-worktree-gui/commit/7500d6ebb1382831cd54ab14b61064d0eff7ee95))
+- docs: the landing note's measured counts, and the gate reading the roster's new home ([`c0b2f7d`](https://github.com/JLRoper/agent-worktree-gui/commit/c0b2f7d795f70f568bd0173e91f10e4e4ce00d18))
+- docs: render the changelog - 701 releases ([`f691aca`](https://github.com/JLRoper/agent-worktree-gui/commit/f691acaf3d4b8a1eceb948741875ac9d59ed3531))
 
 ## v1.161.0 — 2026-11-23 · 5 commits
 
