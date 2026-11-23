@@ -340,6 +340,29 @@ export function createInitiativesRoutes({
     });
   };
 
+  // The read is a whole-store join (initiatives x trees x queue x waves x gate evidence) and it can take seconds while
+  // the panel walks the fleet - 34.7s measured on 2026-11-23 during a boot, for a 122 KB document. It is pure, so the
+  // answer is memoised for a few seconds; every write below drops it first, so no change is answered from a cache that
+  // was built before it.
+  let viewCache = null; // { at, doc }
+  const VIEW_TTL_MS = 4000;
+  const cachedView = async () => {
+    // A store that has become unreadable is never answered from the cache: `readable: false` and the parser's own
+    // sentence are the tab's whole point on that path, and a four-second-old "readable: true" would be a lie the
+    // reader would act on. The status check is a stat plus the store's own memoised load, not the join below.
+    if (!initiatives.statusOf().readable) {
+      viewCache = null;
+      return view();
+    }
+    if (viewCache && Date.now() - viewCache.at < VIEW_TTL_MS) return viewCache.doc;
+    const doc = await view();
+    viewCache = { at: Date.now(), doc };
+    return doc;
+  };
+  const dropView = () => {
+    viewCache = null;
+  };
+
   return async function initiativesRoutes(req, res, route, url) {
     if (route !== INITIATIVES_PATH && !route.startsWith(`${INITIATIVES_PATH}/`)) return false;
     const config = getConfig() || {};
@@ -351,7 +374,7 @@ export function createInitiativesRoutes({
         sendJson(res, 405, { error: `GET is not allowed on ${route}` });
         return true;
       }
-      sendJson(res, 200, await view());
+      sendJson(res, 200, await cachedView());
       return true;
     }
     if (req.method !== "POST") {
@@ -370,6 +393,8 @@ export function createInitiativesRoutes({
       return true;
     }
     const payload = body && typeof body === "object" ? body : {};
+    // A write is about to change the map: the memoised read must not answer the next GET with the state from before it.
+    dropView();
 
     // ---- create ----------------------------------------------------------------------------------------------------
     if (route === INITIATIVES_PATH) {

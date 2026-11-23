@@ -3404,8 +3404,31 @@
   // lines of who did what.
   const initHistoryOpen = new Set();
   const initNotes = new Map(); // initiative id (or "new") -> { text, bad, requestId } - what the last write answered
-  let initDoc = null; // the last document this pane read
-  let initReadAt = 0; // when, for the freshness gap below
+  // A HARD REFRESH PAINTS THE MAP BEFORE THE READ ANSWERS. The read is a whole-store join and can take seconds while the
+  // panel walks the fleet (34.7s measured 2026-11-23 during a boot, for a 122 KB document); the tab used to sit empty
+  // until it returned, and a 12s timeout left it saying the panel was restarting. The last document is kept in
+  // localStorage, so the first paint draws the map and the read only refreshes it - the age line says how old it is, so
+  // a cached paint is never passed off as a fresh one.
+  const INIT_CACHE_KEY = "wm.initiativesDoc";
+  function initCacheRead() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(INIT_CACHE_KEY) || "null");
+      if (raw && raw.doc && Array.isArray(raw.doc.initiatives)) return raw;
+    } catch {
+      /* a corrupt cache is no cache */
+    }
+    return null;
+  }
+  function initCacheWrite(doc) {
+    try {
+      localStorage.setItem(INIT_CACHE_KEY, JSON.stringify({ at: Date.now(), doc }));
+    } catch {
+      /* a full quota costs the cache, never the read */
+    }
+  }
+  const initCached = initCacheRead();
+  let initDoc = initCached ? initCached.doc : null; // the last document this pane read (or the cached one, before the read)
+  let initReadAt = initCached ? Number(initCached.at) || 0 : 0; // when, for the freshness gap below
   let initLoading = false;
   let initErr = "";
   let initSeq = 0;
@@ -3467,6 +3490,7 @@
         initDoc = d;
         initReadAt = Date.now();
         initErr = "";
+        initCacheWrite(d);
       })
       .catch((err) => {
         if (seq !== initSeq) return;
@@ -3498,6 +3522,7 @@
     initDoc = { ...d, at: d.at || new Date().toISOString() };
     initReadAt = Date.now();
     initErr = "";
+    initCacheWrite(initDoc);
   }
 
   // A PROJECT'S TREES, unfolded. Each row is a LINK to the board (the row itself, scrolled to and flashed) and one
