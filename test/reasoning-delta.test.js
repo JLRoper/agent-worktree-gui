@@ -59,7 +59,7 @@ test("consume accumulates cumulative text into one coalesced, non-persisted prev
   assert.equal(frames[0].line.thinkOnly, true, "the browser knows it is a preview, not a console line");
 });
 
-test("flushReasoning dedupes identical text and grows the same block on the next chunk", () => {
+test("flushReasoning dedupes identical text and sends only the tail on the next chunk", () => {
   const { jobs, j, thinkFrames } = harness();
   jobs.consume(j, { event: "reasoning.delta", delta: "abc" });
   jobs.flushReasoning(j);
@@ -70,8 +70,47 @@ test("flushReasoning dedupes identical text and grows the same block on the next
   jobs.flushReasoning(j);
   const frames = thinkFrames();
   assert.equal(frames.length, 2, "a new chunk emits again");
-  assert.equal(frames[1].line.think, "abcdef", "cumulative growth, not a replacement");
+  assert.equal(frames[1].line.think, "def", "only the words since the last frame cross the wire");
+  assert.equal(frames[1].line.thinkFrom, 3, "the frame says where its chunk starts inside the block");
   assert.equal(frames[1].line.at, frames[0].line.at, "the at is stable across frames (one block)");
+});
+
+// The invariant the change buys: the block's text crosses the wire EXACTLY once, in order, however many flushes it
+// takes. Re-sending the block on every flush is what made a long thought cost the square of its length.
+test("the frames of one block concatenate to it, with no text sent twice", () => {
+  const { jobs, j, thinkFrames } = harness();
+  const words = "the panel shows what the run is doing without buying the same words twice";
+  let i = 0;
+  for (const ch of words) {
+    jobs.consume(j, { event: "reasoning.delta", delta: ch });
+    // Flush every third character: the same 120 ms coalescing, made deterministic.
+    i += 1;
+    if (i % 3 === 0) jobs.flushReasoning(j);
+  }
+  jobs.flushReasoning(j);
+  const frames = thinkFrames();
+  let running = 0;
+  for (const [n, f] of frames.entries()) {
+    assert.equal(f.line.thinkFrom, running, `frame ${n} starts where the last one ended`);
+    assert.ok(f.line.think.length > 0, "no empty frame");
+    running += f.line.think.length;
+  }
+  assert.equal(frames.map((f) => f.line.think).join(""), words, "the chunks reassemble the block exactly");
+  assert.equal(running, words.length, "the wire carried the block's characters once, not once per flush");
+  assert.ok(frames.length > 5, "several flushes happened, so the claim is not vacuous");
+});
+
+test("a block that is not an extension of what was sent starts over at 0 (whole-block frame)", () => {
+  const { jobs, j, thinkFrames } = harness();
+  jobs.consume(j, { event: "reasoning.delta", delta: "abcdef" });
+  jobs.flushReasoning(j);
+  // A caller that rewrites the block instead of appending to it: the next paint must be able to replace it.
+  j.reasoningLive = "rewritten";
+  jobs.flushReasoning(j);
+  const frames = thinkFrames();
+  assert.equal(frames.length, 2);
+  assert.equal(frames[1].line.think, "rewritten");
+  assert.equal(frames[1].line.thinkFrom, 0, "an unappendable block is sent whole, as before");
 });
 
 test("an empty delta is ignored and does not arm a timer", () => {
