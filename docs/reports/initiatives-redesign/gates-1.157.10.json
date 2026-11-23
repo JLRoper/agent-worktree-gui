@@ -1,0 +1,38 @@
+{
+  "round": "The Route proved against the sketch, 2026-11-23 (report sections 3 and 4), version 1.157.10",
+  "spec": "docs/reports/initiatives-route-sketch-proof-2026-11-23.html",
+  "rule": "The round is green only when every gate below answers green on the same tree, run in one sitting. A gate that is red is listed here red, with its count - never left out of the list. The 1.144.0 round listed three gates and omitted the scroll gate while it answered 31/33, and that omission is how a red whole was called green.",
+  "cut_from": "origin/main cf72e299 (1.157.9), rebased from fcfc0637 (1.157.7) and before that 0ffebed (1.157.6); this landing carries 1.157.10",
+  "gates": [
+    {
+      "id": "tab",
+      "command": "node tools/verify-initiatives-tab.mjs",
+      "answer": "102/102 checks",
+      "at": "2026-11-23T04:37:02Z",
+      "covers": "the tab renders, folds and re-reads; the four actions sit on one row at a 347px and a 239px pane, in the order New initiative, Refresh, About, Compact rows; the folded head draws a triangle and the open head an inverted one at 11px; no page or console error"
+    },
+    {
+      "id": "waves-lane",
+      "command": "node tools/verify-waves-lane.mjs",
+      "answer": "40/40 checks",
+      "at": "2026-11-23T04:37:14Z",
+      "covers": "the lane's own row, its gate and automation words, its position, its member project tag, the abandoned member and the unreadable store; no horizontal overflow at 1440 and 768 with the card open"
+    },
+    {
+      "id": "redesign",
+      "command": "node tools/verify-initiatives-redesign.mjs",
+      "answer": "11/11 claims; docked score 18/18 of the 16-check rubric (before 4/16); wide 17/18, the one miss being the deliberate second-column alignment",
+      "at": "2026-11-23T04:55:01Z",
+      "covers": "one left edge for the card's text and for the folded list, the contrast sample entering the folded row, its hover fill and the lane (worst 4.51:1, 16 runs), the keyboard ring, the 900px pane, and no regression against the recorded baseline; the reader's 7331 listener is the same pid before and after the sandbox; re-run after the ledger's home was written as a token instead of a host folder (test/absolute-paths.test.js), still 11/11 and 18/18"
+    },
+    {
+      "id": "scroll",
+      "command": "node tools/verify-initiatives-scroll.mjs",
+      "answer": "35/35 checks",
+      "at": "2026-11-23T04:38:22Z",
+      "covers": "the pane scrolls at all, the last card's reachable bottom is inside the pane at maximum scroll, the whole box is demanded whenever the card fits, and the same holds after the five-second re-read"
+    }
+  ],
+  "captures": "docs/assets/initiatives-redesign/sketch-proof-2026-11-23/",
+  "note": "The four commands above are the round's set. The unit suite (npm test) is recorded in docs/landing-initiatives-sketch-proof-1.157.10-2026-11-23.md and is not a substitute for any of them. The redesign gate's own ledger, docs/reports/initiatives-redesign/gate.json, had been stale since 1.144.0 (16/16) and this run refreshed it to 18/18 docked, 17/18 wide. The redesign gate was run at 04:37:50Z and again at 04:55:01Z, the second time after `tools/verify-initiatives-redesign.mjs:207` was changed to write the ledger's home as $SCRATCH: both runs answered 11/11 and 18/18, and the ledger in the tree is the second."
+}

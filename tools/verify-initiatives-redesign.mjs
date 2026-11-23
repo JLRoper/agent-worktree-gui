@@ -204,7 +204,11 @@ try {
     process.exitCode = 2;
   } else {
     result = await withBrowser(async ({ page, browser, pageErrors, consoleErrors }) => {
-      const out = { at: new Date().toISOString(), version: deps.version, home: slash(HOME), live: { before: liveBefore } };
+      // THE LEDGER IS A COMMITTED FILE, so the scratch home is written as a token, never as a folder on this machine:
+      // test/absolute-paths.test.js refuses a host path anywhere in the tree, and the temp name carries this run's pid
+      // so it could not be recorded once for every run anyway. The 1.144.0 ledger says $SCRATCH for the same reason.
+      const homeLabel = slash(HOME).startsWith(slash(os.tmpdir())) ? `$SCRATCH${slash(HOME).slice(slash(os.tmpdir()).length)}` : slash(HOME);
+      const out = { at: new Date().toISOString(), version: deps.version, home: homeLabel, live: { before: liveBefore } };
       await openInitiatives(page, panel.base);
       await openSurface(page);
       // ...and the card that carries the fixture's waves, so the docked sample enters the lane as well as the folded

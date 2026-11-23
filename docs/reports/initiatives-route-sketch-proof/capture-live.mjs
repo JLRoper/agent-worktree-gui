@@ -1,9 +1,9 @@
 // The measured cause, on the reader's own panel: read-only. Seven initiatives, zero waves.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { withBrowser, openPage } from "file:///C:/ProjectDevelopment/agent-worktree-gui/.worktrees/research-round-b-for-the-initiatives-tab-1d1d2c/tools/browser.mjs";
+import { withBrowser, openPage } from "../../../tools/browser.mjs";
 
 const BASE = process.env.BASE || "http://127.0.0.1:7331";
-const OUT = process.env.OUT || "C:/Users/roper/AppData/Local/Temp/wag/73596cb0/shots";
+const OUT = process.env.OUT || "shots";
 mkdirSync(OUT, { recursive: true });
 
 const read = () =>
