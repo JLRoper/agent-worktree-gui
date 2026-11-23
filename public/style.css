@@ -5576,6 +5576,9 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .wave-field > span { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--tab-ink-3); }
 #as-initiatives .wave-field input, #as-initiatives .wave-field select {
   min-width: 0;
+  /* `.as-group input[type="text"]` gives every text input `flex: 1 1 250px`, and a flex basis is the MAIN size: in the
+     field's column that turned a 24px input into a 250px one. The field is a column, so the basis has to be off. */
+  flex: 0 0 auto;
   height: 24px;
   padding: 0 6px;
   border: 1px solid var(--tab-line);
