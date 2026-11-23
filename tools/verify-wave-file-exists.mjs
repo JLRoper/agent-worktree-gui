@@ -135,8 +135,8 @@ try {
   const beforeWaves = await GET(`/api/waves?initiative=${initiativeId}`);
   check("it starts with no waves", beforeWaves.json?.waves?.length, 0);
 
-  const state = await GET("/api/state");
-  const assistant = state.json?.assistant?.assistants?.[0];
+  const state = await GET("/api/assistant");
+  const assistant = state.json?.assistants?.[0];
   ok("the panel seeds an assistant", Boolean(assistant?.id), String(assistant?.id || ""));
 
   // ---- 1. The wave, then a row that names it, through the API -------------------------------------------------------
