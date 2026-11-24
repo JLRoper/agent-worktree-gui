@@ -43,7 +43,7 @@
 // Nothing here invents a pending mechanism: the re-asked card arrives the way every card does, from the run's own
 // `clarify.request` into `j.question`.
 
-import { clarifyItems, collapseKey, readerReplies, reaskQuoteCheck, reaskText } from "../lib/clarify-history.js";
+import { clarifyItems, collapseKey, fourDirectionsOf, readerReplies, reaskQuoteCheck, reaskText } from "../lib/clarify-history.js";
 
 /** The read the popup makes, and the prefix the mount table in server.js matches on. */
 export const CLARIFY_HISTORY_PATH = "/api/clarify/history";
@@ -253,7 +253,7 @@ export function createClarifyHistoryRoutes({
     }
     const store = jobs.clarifyHistory;
     if (!store) {
-      sendJson(res, 200, { entries: [], items: [], total: 0, attempts: 0, outstanding: 0, kept: 0, cap: 0 });
+      sendJson(res, 200, { entries: [], items: [], total: 0, attempts: 0, outstanding: 0, fourDirections: fourDirectionsOf([]), kept: 0, cap: 0 });
       return true;
     }
     const params = url?.searchParams || new URL(req.url || "/", "http://127.0.0.1").searchParams;
@@ -275,6 +275,9 @@ export function createClarifyHistoryRoutes({
       total: out.total,
       attempts: out.attempts,
       outstanding: out.outstanding,
+      // "of the cards asked this week, how many offered four directions" - the design's measurement, counted over
+      // every kept item rather than the page the popup draws.
+      fourDirections: out.fourDirections,
       kept: out.kept,
       cap: out.cap,
     });
