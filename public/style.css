@@ -1737,7 +1737,6 @@ body.is-out-gripping * { cursor: nwse-resize; }
 .jl-think .think-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: think-pulse 1.1s ease-in-out infinite; }
 .jl-think .think-live .jl-live { font-size: 10px; }
 @keyframes think-pulse { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .jl-think .think-dot { animation: none; opacity: .8; } }
 /* ONE blank line sets every piece of the stream apart from the piece above it — a reasoning block, a group of tool
    output, a chunk of the agent's own words. The reasoning block had this rule first and everything else wears the same
    class (`jl-sep`, put on each piece by streamBodyHtml and by the live append), so the three cannot drift into three
@@ -6555,7 +6554,8 @@ body.pipeline-modal-open { overflow: hidden; }
 .as-task-pipeline .as-qflow:hover { color: var(--text); border-color: #8fb8ff; }
 @media (prefers-reduced-motion: reduce) {
   .pflow[data-motion] .pflow-node[data-mark="current"] .pflow-dot,
-  .pflow[data-motion] .pflow-arc { animation: none; }
+  .pflow[data-motion] .pflow-arc,
+  .jl-think .think-dot { animation: none; }
 }
 
 /* ---- a window squashed to a sliver: the folder heads ARE the board ------------------------------------------
