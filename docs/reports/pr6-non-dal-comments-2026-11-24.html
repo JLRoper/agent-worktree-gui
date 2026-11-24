@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Three comments on manifest-multi PR 6, reworded to the head that moved</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:18px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 220px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  footer { margin-top:36px; padding-top:12px; border-top:1px solid var(--line); color:var(--dim); font-size:12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Three comments on manifest-multi PR 6, reworded to the head that moved</h1>
+<p class="sub">IT/manifest-multi pull request 6, posted 2026-11-24 from the draft review of the non-DAL half. Comments only.</p>
+
+<dl class="facts">
+  <dt>Pull request</dt><dd>IT/manifest-multi #6, "Java DAL Layer Code Review for manifest-multi 2026111_CARTER_B_DMR-44710", OPEN, version 2</dd>
+  <dt>Head reviewed by the draft</dt><dd>988c320b6f</dd>
+  <dt>Head when the comments went up</dt><dd>34e261dfd4ac (rescoped at 2026-11-24T20:27:19Z)</dd>
+  <dt>Comments posted</dt><dd>13143, 13144, 13163</dd>
+  <dt>Anchors</dt><dd>sorter:43, test:69, test:56, all ADDED, all attached (orphaned false)</dd>
+  <dt>Writes made</dt><dd>three comment POSTs and nothing else: no approval, merge, decline, edit or branch write</dd>
+</dl>
+
+<h2>The head moved between the draft and the post</h2>
+<p>The draft was written against <code>988c320</code>. While it sat, the author pushed <code>34e261d</code>, "Outbound Strip--&gt; normalize sort timestamps to minute precision". That commit does two things that touch the draft's findings:</p>
+<ul>
+  <li><code>OutboundStripShipmentSorter.java:39-43</code> now returns <code>null</code> for a missing date or time and otherwise truncates the effective time with <code>effectiveTime.truncatedTo(ChronoUnit.MINUTES)</code>. The minute-versus-second mismatch the draft raised as F1 is therefore answered at the head: both sides of the comparison are minutes.</li>
+  <li><code>UnitTest_OutboundStripShipmentSorter.java:68-80</code> adds <code>sortOutboundShipments_statusSecondsDoNotBreakMinuteTie</code>, a same-minute case. The draft's F2 said no tie case existed; at the head one does, though it pins the tie in a single input order.</li>
+</ul>
+<p>The same window carries the review traffic that settles the question: the author replied to Lefler's comment 13117 at 20:28:15Z (<code>13142</code>, "I don't think I can drop the seconds at the initial parse time, but I now have it truncating the seconds in the lib when it actually sorts"), and Lefler posted the PR-level comment <code>13162</code> at 20:40:58Z, "DAL side is good to go!". Posting the draft's F1 as a live MAJOR would have contradicted both the code and the reviewer who raised it.</p>
+<p>The reader chose to reword the three comments to the current head rather than post the 988c320 wording or hold them. F1 became a resolved note that keeps the measurement, F2 moved onto the new tie test and the still missing ORDER BY, and F3 was unchanged because that branch is still unexercised at the head.</p>
+
+<h2>The three comments</h2>
+<table>
+  <tr><th style="width:70px">Id</th><th style="width:330px">Anchor</th><th style="width:90px">Label</th><th style="width:60px">Words</th><th>First line</th></tr>
+  <tr><td><code>13143</code></td><td><code>manifest-lib/src/main/java/com/sefl/manifest/lib/outbound/strip/OutboundStripShipmentSorter.java:43</code></td><td>resolved note</td><td>124</td><td>Resolved at 34e261d, in effectiveTimestamp at lines 39 to 43.</td></tr>
+  <tr><td><code>13144</code></td><td><code>manifest-lib/src/test/java/com/sefl/manifest/lib/outbound/strip/UnitTest_OutboundStripShipmentSorter.java:69</code></td><td>MINOR</td><td>120</td><td>Minor, in sortOutboundShipments_statusSecondsDoNotBreakMinuteTie at lines 68 to 80.</td></tr>
+  <tr><td><code>13163</code></td><td><code>manifest-lib/src/test/java/com/sefl/manifest/lib/outbound/strip/UnitTest_OutboundStripShipmentSorter.java:56</code></td><td>MINOR</td><td>116</td><td>Minor, in sortOutboundShipments_nullTimestampsLastAndInputUnchanged at lines 54 to 66.</td></tr>
+</table>
+
+<h3>13143 - the precision fix, with the measurement kept</h3>
+<pre>Resolved at 34e261d, in effectiveTimestamp at lines 39 to 43. Truncating to minutes removes the mixed precision this review flagged: pickup time parses as HHMM and the fallback status time as HHMMSS, so before this commit a fallback row at 16:55:30 sorted above a real pickup at 16:55:00. The scale of it is why this mattered rather than being a corner case: in a 20,000 row dev sample of TRACING.TRACE_HEADER, PU_TIME is blank on 10,018 rows, so the fallback carries the majority of the sort. Lefler raised the same question on GetOutboundStripShipmentsMapping.java line 141 and has since written that the DAL side is good to go. One residual: the DAL still parses STATUS_TIME at HHMMSS, so the one precision invariant now lives here only.</pre>
+
+<h3>13144 - the tie is tested in one direction only</h3>
+<pre>Minor, in sortOutboundShipments_statusSecondsDoNotBreakMinuteTie at lines 68 to 80. The tie is now exercised, but in one direction only: pickup-0852 asserts ahead of fallback-0852-45 because both keys truncate to 08:52 and Stream.sorted is stable, so encounter order decides. Swap those two entries in the input list and the test fails. Encounter order is pinned nowhere: neither select has an ORDER BY (GetOutboundStripShipmentsMapping.java around line 29, GetReturnShipmentsMapping.java around line 30), so Oracle returns whatever it likes and two shipments sharing a minute can swap between runs. Stability of the sort is sound; reproducibility of the tie order is not. Pick one: assert the tie independently of input order, add a secondary key such as PRO, or add ORDER BY to both selects.</pre>
+
+<h3>13163 - the date present, both times null branch</h3>
+<pre>Minor, in sortOutboundShipments_nullTimestampsLastAndInputUnchanged at lines 54 to 66. The shipment named missing passes null for the pickup date, so it exits through the pickupDate == null test at OutboundStripShipmentSorter.java line 39 and never reaches the date present, both times null branch at lines 39 to 41. That branch is reachable in data: 2 of the 20,000 sampled dev rows carry a pickup date with both PU_TIME and STATUS_TIME blank, and those rows sort last through it. The code handles it correctly, so this is coverage, not a defect. One more case with a pickup date and both times null, asserting it sorts last, would close it and pin the nullsLast contract where it is actually used.</pre>
+
+<p>The three texts are ASCII, contain no em dash, en dash or arrow, and run 124, 120 and 116 words. Each was sent as UTF-8 JSON with an explicit anchor.</p>
+
+<h2>Anchors: why they stick</h2>
+<p>Both anchored files are new in this PR, so every line is an added line at the head. The PR diff scoped to each file reports one hunk covering the whole file: <code>OutboundStripShipmentSorter.java</code> at <code>0+0 -&gt; 1+45</code> and <code>UnitTest_OutboundStripShipmentSorter.java</code> at <code>0+0 -&gt; 1+99</code>. The posted anchors read back with <code>lineType ADDED</code>, <code>fileType TO</code> and <code>orphaned false</code>, so none of them floats.</p>
+
+<h2>Read back</h2>
+<table>
+  <tr><th style="width:70px">Id</th><th>GET result</th></tr>
+  <tr><td><code>13143</code></td><td>HTTP 200, author <code>Roper</code>, state OPEN, severity NORMAL, anchor sorter line 43 ADDED TO, orphaned false, 740 characters</td></tr>
+  <tr><td><code>13144</code></td><td>HTTP 200, author <code>Roper</code>, state OPEN, severity NORMAL, anchor test line 69 ADDED TO, orphaned false, 793 characters</td></tr>
+  <tr><td><code>13163</code></td><td>HTTP 200, author <code>Roper</code>, state OPEN, severity NORMAL, anchor test line 56 ADDED TO, orphaned false, 699 characters</td></tr>
+</table>
+<p>The activities feed read after posting lists five top level comments, in id order: 13117 Lefler (the DAL anchor he raised), 13143, 13144, 13162 Lefler ("DAL side is good to go!"), 13163. That is the two pre-existing comments plus exactly the three new ids, with no fourth write to the PR.</p>
+
+<h2>What was not touched</h2>
+<ul>
+  <li><span class="ok">PR state OPEN, version 2, open true, closed false, head 34e261d</span> on the read after posting. No approve, merge, decline or description edit was made.</li>
+  <li><span class="ok">Reviewers unchanged</span>: Roper, code_review_java, code_review_java_dal and Lefler all UNAPPROVED, Lefler's <code>lastReviewedCommit</code> still 988c320, which is the commit he reviewed.</li>
+  <li><span class="ok">Branches unchanged</span>: <code>refs/heads/2026111_CARTER_B_DMR-44710</code> read 34e261d from the fetch taken before the posts and the same 34e261d from <code>ls-remote</code> after them; <code>refs/heads/master</code> read 12f1246 both times. Nothing was pushed to manifest-multi.</li>
+  <li><span class="warn">Nits stay in the draft</span>: F4 (the 12 space indent and the misleading test name), F5 (no trailing newline in two files), F6 (the WARN stack trace on the employee lookup) and F7 (the duplicated comparator) were not posted, as the task limited the batch to three.</li>
+</ul>
+
+<footer>
+  Draft review: C:/Users/roper/AppData/Local/Temp/wag/assistant-2-manifest-pr6/pr6-non-dal-review-2026-11-24.html. Work tree: C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-677-detail-is-in-the-queue-file-f1cbe5. Every API call was either a GET or one of the three comment POSTs.
+</footer>
+
+</main>
+</body>
+</html>
