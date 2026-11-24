@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.166.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.166.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-721 releases from v0.1.0 (2026-10-20) to v1.166.4 (2026-11-24), 2562 commits between the tags. Every release is anchored by an
+722 releases from v0.1.0 (2026-10-20) to v1.166.5 (2026-11-24), 2565 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.166.5 — 2026-11-24 · 3 commits
+
+[`fe53a5b`](https://github.com/JLRoper/agent-worktree-gui/commit/fe53a5bf68480bca6e81e639c3f02f717431a6db) · [compare v1.166.4...v1.166.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.4...v1.166.5)
+
+### Fixed
+
+- fix: hide the wave connector inside the current station's disc ([`5c353af`](https://github.com/JLRoper/agent-worktree-gui/commit/5c353af3185a77ff8220cd61ed8e00def9ea7373))
+
+### Docs & tests
+
+- docs: render the changelog - 721 releases ([`50e8836`](https://github.com/JLRoper/agent-worktree-gui/commit/50e88366be7fc97bff48f62c7be87582b035c96f))
+
+### Other
+
+- chore: 1.166.5 - the version this landing carries ([`fe53a5b`](https://github.com/JLRoper/agent-worktree-gui/commit/fe53a5bf68480bca6e81e639c3f02f717431a6db))
 
 ## v1.166.4 — 2026-11-24 · 4 commits
 
