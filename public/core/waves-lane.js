@@ -70,28 +70,66 @@
   }
 
   /**
-   * One member: its id, its title, its project when it has one, the task's own state - or its named abandonment - and
-   * the reports chip, with the list behind it when the reader has unfolded it.
+   * The tag the worktree column's owner chip draws ("A3", "M1"), from the same rule public/app.js `ownerTagOf`
+   * applies: the number is the one the role label ends in, the letters are that label's initials. It is written a
+   * second time here because this script loads before public/app.js and cannot reach into it - and the two chips are
+   * one fact ("who owns this"), so they must read the same tag. Kept identical to that rule, minus the em dash it
+   * also splits on: this file carries plain hyphens only.
+   */
+  function ownerTagOf(member) {
+    const source = String((member && (member.assistantLabel || member.assistantName)) || "").trim();
+    const m = /^(.*?)[\s#]*(\d+)\s*$/.exec(source);
+    const words = String(m ? m[1] : source)
+      .split(/[\s/-]+/)
+      .filter(Boolean);
+    const initials = words
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+    return `${initials || "A"}${m ? m[2] : ""}`;
+  }
+
+  /**
+   * One member: its id, its title, its project when it has one, its owner CHIP, the task's own state - or its named
+   * abandonment - and the reports chip, with the list behind it when the reader has unfolded it.
    *
-   * A `<div>`, not the `<span>` this row used to be: the list the chip unfolds is a block (one row per report), and a
-   * block inside a span is markup a browser tolerates and a screen reader narrates wrong. Every rule that gives the row
-   * its look is the class (public/style.css `#as-initiatives .wave-member`), so the tag is the only thing that changed.
+   * THE BAR IS A PRESS (row 291, ask 2). `data-wave-open` names the owner and the task, so a press anywhere on the row
+   * opens that task in the OWNING assistant's queue through the queue's own opener (`window.__assistantTaskRef`, the
+   * one the chart's `#405` anchors and the initiative task cards use). The title is a BUTTON for the keyboard, because
+   * a row that is one big `role="button"` would contain three more buttons - the two chips and the title - which is a
+   * nesting a screen reader narrates wrong.
+   *
+   * THE OWNER CHIP (ask 3) is `.owner-tag`: the very class the worktree column's owner cell draws, so the two chips
+   * are one look and one fact. It is a button with the id and the title already on it, and its press asks that
+   * assistant about this task (`window.__assistantQuestionAbout`).
+   *
+   * A `<div>`, not the `<span>` this row used to be: it holds block content (the button, the reports list).
    */
   function memberHtml(member, esc = defaultEsc) {
     const abandoned = member && member.abandoned && String(member.abandoned.reason || "").trim() ? String(member.abandoned.reason).trim() : "";
     const state = abandoned ? "abandoned" : MEMBER_STATES.includes(member && member.state) ? member.state : "queued";
     const id = member && member.id != null ? `#${member.id}` : "#";
+    const taskId = member && member.id != null ? String(member.id) : "";
+    const title = member && member.title ? String(member.title) : "";
     const project = member && member.project ? String(member.project) : "";
     const pipeline = member && member.pipeline ? String(member.pipeline) : "";
-    const why = [
-      member && member.title ? String(member.title) : "",
-      project ? `project ${project}` : "",
-      pipeline ? `pipeline ${pipeline}${member.pipelineFrom === "wave" ? " (the wave's template)" : ""}` : "",
-      abandoned ? `abandoned: ${abandoned}` : "",
-    ]
+    // Who owns the row, from the read (lib/waves.js `waveMember`): a row from a read taken before the owner was
+    // carried has none, and then the bar keeps its old markup - no press, no chip - rather than naming a guess.
+    const own = String((member && member.assistantId) || "").trim();
+    const ownName = String((member && (member.assistantName || member.assistantLabel)) || own).trim();
+    const canOpen = Boolean(own && taskId);
+    const openAttrs = canOpen ? ` data-wave-open="${esc(own)}" data-wave-task="${esc(taskId)}"` : "";
+    const ownerChip = canOpen
+      ? `<button type="button" class="owner-tag wave-owner" data-wave-owner="${esc(own)}" data-wave-task="${esc(taskId)}" data-wave-title="${esc(title)}" aria-label="${esc(`${ownerTagOf(member)} - ${ownName} owns task #${taskId}`)}" title="${esc(`${ownName} owns #${taskId} - press to ask it about this task: its chat opens with "I have a question about #${taskId}" and this title already typed, the caret after it, and nothing sent`)}">${esc(ownerTagOf(member))}</button>`
+      : "";
+    const titleEl = canOpen
+      ? `<button type="button" class="wave-member-title wave-open"${openAttrs} title="${esc(`open #${taskId} in ${ownName}'s queue`)}">${esc(title)}</button>`
+      : `<span class="wave-member-title">${esc(title)}</span>`;
+    const why = [title, project ? `project ${project}` : "", ownName ? `owned by ${ownName}` : "", pipeline ? `pipeline ${pipeline}${member.pipelineFrom === "wave" ? " (the wave's template)" : ""}` : "", abandoned ? `abandoned: ${abandoned}` : ""]
       .filter(Boolean)
       .join(" - ");
-    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b><span class="wave-member-title">${esc(member && member.title ? member.title : "")}</span>${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
+    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${own ? ` data-member-owner="${esc(own)}"` : ""}${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""}${openAttrs} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b>${titleEl}${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}${ownerChip}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
   }
 
   // ---- the reports chip: a task's .html reports, listed under its member row ----------------------------------------
@@ -464,7 +502,8 @@
     "#as-initiatives .wave-report-link.is-dead { color: var(--tab-ink-3); text-decoration: line-through; }",
     "#as-initiatives .wave-report-meta, #as-initiatives .wave-report-why, #as-initiatives .wave-report-skipped { overflow-wrap: anywhere; }",
     "@container (min-width: 900px) {",
-    "  #as-initiatives .wave-member { grid-template-columns: 44px minmax(0, 1fr) 150px 80px auto; }",
+    // THE COLUMN SET IS public/style.css's (the row is a grid there, one column per fact: id, title, project, owner
+    // chip, state, reports). It used to be repeated here because a live run held the shared sheet; it has one owner now.
     "  #as-initiatives .wave-reports-list { grid-column: 1 / -1; }",
     "}",
   ].join("\n");
@@ -553,6 +592,41 @@
     void pressReports(chip);
   }
 
+  // ---- the bar's two presses (row 291) -----------------------------------------------------------------------------
+  // THE OWNER CHIP AND THE BAR ARE TWO PRESSES ON ONE ELEMENT, so the order here is the whole contract: the chip is
+  // answered first and STOPS (it opens a chat and types a sentence, and the bar must not also open a queue behind it);
+  // the reports chip and any link keep their own presses; everything else on the bar opens the task. Both openers are
+  // published by public/assistant.js (`window.__assistantTaskRef`, `window.__assistantQuestionAbout`), the same way the
+  // chart's owner chip reaches `window.__assistantRegarding` - this script owns the markup and knows no composer.
+  function onLaneClick(event) {
+    const target = event.target && event.target.closest ? event.target : null;
+    if (!target) return;
+    const owner = target.closest("[data-wave-owner]");
+    if (owner) {
+      event.preventDefault();
+      event.stopPropagation();
+      const ask = root.__assistantQuestionAbout;
+      if (typeof ask === "function") {
+        ask({
+          assistantId: owner.getAttribute("data-wave-owner") || "",
+          taskId: owner.getAttribute("data-wave-task") || "",
+          title: owner.getAttribute("data-wave-title") || "",
+        });
+      }
+      return;
+    }
+    const bar = target.closest("[data-wave-open]");
+    if (!bar) return;
+    // A control INSIDE the bar keeps its press: the reports chip unfolds a list, and a link opens its own page.
+    if (target.closest("[data-wave-reports], a")) return;
+    const own = bar.getAttribute("data-wave-open") || "";
+    const task = bar.getAttribute("data-wave-task") || "";
+    if (!own || !task) return;
+    event.preventDefault();
+    const open = root.__assistantTaskRef;
+    if (typeof open === "function") void open(own, task);
+  }
+
   /** Escape closes what a press opened and hands focus back to the chip that opened it. */
   function onReportsKey(event) {
     if (!event || event.key !== "Escape") return;
@@ -597,6 +671,7 @@
     if (reportsBound) return true;
     reportsBound = true;
     doc.addEventListener("click", onReportsClick);
+    doc.addEventListener("click", onLaneClick);
     doc.addEventListener("keydown", onReportsKey);
     return true;
   }
@@ -618,6 +693,8 @@
     gateWord,
     gateChipHtml,
     memberHtml,
+    // The owner chip's tag, from the worktree column's own rule: a test proves the two chips read the same tag.
+    ownerTagOf,
     // The reports chip: its markup, its session state and the installer a page uses. The state functions are public so a
     // test can put a task's answer in the cache and prove what the lane draws from it without a browser or a fetch.
     reportKey,
