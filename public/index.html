@@ -303,7 +303,7 @@
           <select id="term-weight-select"></select>
         </label>
 
-        <div class="settings-row settings-gap" title="Thinking text — the colour of the agent's reasoning, set apart from what a skill prints and from the rest of the console. It applies wherever reasoning is drawn: the 🧠 block above a console and the reasoning lines of the 🌊 single stream. Default keeps today's look (a quiet italic lavender). Its SIZE is the console's own (Console size, below): one size drives the console's words, a tool's output and the reasoning together, so it has no size picker of its own — and a card's Ctrl+wheel zoom on any of its text moves all three at once. Saved in this browser.">
+        <div class="settings-row settings-gap" title="Thinking text - the colour of the agent's reasoning, set apart from what a skill prints and from the rest of the console. It applies to the reasoning rows of the one console stream. Default keeps today's look (a quiet italic lavender). Its SIZE is the console's own (Console size, below): one size drives the console's words, a tool's output and the reasoning together, so it has no size picker of its own - and a card's Ctrl+wheel zoom on any of its text moves all three at once. Saved in this browser.">
           <span>Thinking text <span class="settings-info">ⓘ</span></span>
           <input id="think-color" type="color" value="#b3a8cc" aria-label="Thinking text colour">
           <span class="settings-unit mono" id="think-color-state">default</span>
@@ -488,21 +488,9 @@
 
       <div class="settings-group" id="settings-panel-cards" data-settings-group="cards" role="tabpanel" aria-labelledby="settings-tab-cards" hidden>
 
-        <label class="settings-row" for="show-thinking" title="The agent's own reasoning, read from its session store, as a block above each turn's console — folded until you open it. It is 1–2 KB a block, which is why it is off by default. The brain button on a card turns it on for that one session, and that choice wins over this switch.">
+        <label class="settings-row" for="show-thinking" title="The agent's own reasoning, read from its session store, as dim rows of the turn's console in the order it happened - one row per assistant message, clipped to a few lines until you press it. It is 1-2 KB a block, which is why it is off by default. The brain button on a card turns it on for that one session, and that choice wins over this switch.">
           <span>Show thinking <span class="settings-info">ⓘ</span></span>
           <input id="show-thinking" type="checkbox">
-          <span class="settings-unit mono">default for cards</span>
-        </label>
-
-        <label class="settings-row" for="stream-default" title="Draw every card's console as ONE stream: what the agent thought (while Show thinking is on), said, called and got back, in the order it happened, with no burst to open. A result is still the shut box it is everywhere else, one click away. Off — the card keeps the separate thinking block over its console and its condensed tool groups, which is what every card did before this switch existed. The wave button on a card turns it on or off for that one session, and that choice wins over this switch. Saved in this browser.">
-          <span>Combined output <span class="settings-info">ⓘ</span></span>
-          <input id="stream-default" type="checkbox">
-          <span class="settings-unit mono">default for cards</span>
-        </label>
-
-        <label class="settings-row" for="show-stream-button" title="Draw the wave button on every card's head. It turns the one-stream console on or off for that one session, and that choice still wins over Combined output above. Off — the default — no card draws it: the head keeps its five controls, and Combined output is the only place that view is chosen. Saved in this browser.">
-          <span>Wave button <span class="settings-info">ⓘ</span></span>
-          <input id="show-stream-button" type="checkbox">
           <span class="settings-unit mono">default for cards</span>
         </label>
 
@@ -1289,7 +1277,7 @@
        view are its own shapes. test/console-markdown.test.js imports this same file. -->
   <script src="/core/console-markdown.js"></script>
   <!-- Where a reasoning block sits among a turn's console lines, and how a stream is cut into pieces. Pure, and
-       published on globalThis as `wtStream`: app.js's single-stream path (the 🌊) calls it by name at render time,
+       published on globalThis as `wtStream`: the turn's body (public/render-jobs.js) calls it by name at render time,
        and test/single-stream.test.js imports this same file. -->
   <script src="/core/stream-merge.js"></script>
   <!-- Is the board's live path still delivering? One pure answer (`wtLive`) for the 30 s safety net: a frame arriving

@@ -1567,7 +1567,6 @@ function placeRow(project, row, { flash = false } = {}) {
     // to show, and leaving it on the page would be a duplicate.
     if (cardOut && oldDetail) oldDetail.remove();
     rememberAgentOrder(key, dEl);
-    restoreThinkBodies(dEl);
     // Put the reader back: the reply they were typing, where the caret was, and how far each
     // transcript had been scrolled.
     restoreTyping(dEl, typing);
@@ -1768,10 +1767,6 @@ function renderProjectRows(name, { typing = null } = {}) {
     if (!dEl) continue;
     state.detailEls.set(key, dEl);
     fillAgentSlots(dEl, prevCards.get(key) || new Map());
-    // The thinking block lives in the card and this path re-renders or re-inserts every card in the
-    // project. Without this the running turn's open block came back at its FIRST line on every project
-    // event, which is what read as the reasoning flickering while the tool calls scrolled out of view.
-    restoreThinkBodies(dEl);
     rememberAgentOrder(key, dEl);
     restoreTyping(dEl, prevTyping.get(key) || null);
     restoreAddAgent(dEl);

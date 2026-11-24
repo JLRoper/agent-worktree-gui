@@ -53,7 +53,7 @@ new MutationObserver((rs) => { for (const r of rs) window.__copySaw += r.addedNo
 ${code}`,
     });
     const out = await page.evaluate(async () => {
-      const SELS = ["pre.job-out", ".think-body", ".sub-console", "tr.detail", ".tgrp", ".queue-ago", "[data-q-clock]"];
+      const SELS = ["pre.job-out", ".sub-console", "tr.detail", ".tgrp", ".queue-ago", "[data-q-clock]"];
       const mismatches = [];
       let checks = 0;
       let docWalks = 0;

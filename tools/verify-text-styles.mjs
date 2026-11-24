@@ -266,7 +266,6 @@ async function runMode(ctx, work, mode) {
       localStorage.setItem(`wtgui.think.${thread}`, "1");
       localStorage.setItem("wtgui.streamWords", "0");
       localStorage.setItem("wtgui.streamLines", "0");
-      if (m === "stream") localStorage.setItem(`wtgui.stream.${thread}`, "1");
     }, { thread: THREAD, mode });
     await page.goto(sandbox.base, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => typeof state !== "undefined" && state.jobs, null, { timeout: 30000 });
@@ -344,7 +343,8 @@ function judge(cap) {
   const { before: b, after: a, reloaded: r, reset: z } = cap;
   const driven = [b, a, r, z].every((x) => x && x.ok) && b.think.length >= 2 && b.skillBoxCount >= 1 && b.prose.length >= 1;
   if (!driven) return { checks, driven: false };
-  const stream = cap.mode === "stream";
+  // There is one console now: reasoning is always rows of it, never a block above it.
+  const stream = true;
   const thinkDefault = stream ? "#b3a8cc" : "#9aa4b2";
 
   // 1. unset: the look the console always had

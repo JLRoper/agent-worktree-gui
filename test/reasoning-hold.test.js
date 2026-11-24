@@ -251,5 +251,5 @@ test("the page holds only what a reader is watching: words/s on, turn live, reas
   assert.match(wants, /reasoningShown\(turn\)/);
   const shown = con.slice(con.indexOf("function reasoningShown(turn)"), con.indexOf("function reasoningWants(evt)"));
   assert.match(shown, /thinkingOn\(thread\)/, "reasoning switched off is not drawn, so it is not waited for");
-  assert.match(shown, /thinkOpenFor\(turn/, "a folded 🧠 block is typing into nothing: it holds nothing either");
+  assert.doesNotMatch(shown, /thinkOpenFor/, "one stream: there is no folded block that could be typing into nothing");
 });

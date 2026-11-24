@@ -86,8 +86,6 @@ function computedSize(decl, vars) {
 
 const CONSOLE_TEXT = ["normal output", ".job-out"];
 const REASONING_TEXT = ["reasoning", ".jl-think"];
-const REASONING_BLOCK = ["reasoning (the 🧠 block, which carries .mono)", ".think-block.mono"];
-const REASONING_BLOCK_BARE = ["the 🧠 block's own rule", ".think-block"];
 const TOOL_OUTPUT = ["a tool's output", ".jl-tool-out"];
 const THREE = [CONSOLE_TEXT, REASONING_TEXT, TOOL_OUTPUT];
 
@@ -132,8 +130,7 @@ test("the Display group's tooltip does not promise Thinking text a size of its o
 });
 
 test("the stylesheet reads each style's colour with a fallback, and one size for all three kinds of text", () => {
-  assert.match(css, /\.jl-think\s*\{[^}]*color:\s*var\(--think-color,\s*#b3a8cc\)/, "the 🌊 stream's reasoning keeps its lavender");
-  assert.match(css, /\.think-block\s*\{[^}]*color:\s*var\(--think-color,\s*var\(--dim\)\)/, "the 🧠 block keeps its dim");
+  assert.match(css, /\.jl-think\s*\{[^}]*color:\s*var\(--think-color,\s*#b3a8cc\)/, "the reasoning rows keep their lavender");
   assert.match(css, /\.jl-text\s*\{\s*color:\s*var\(--con-color,\s*#e6e9ef\)/);
   assert.match(css, /\.jl-tool-out\s*\{[^}]*color:\s*var\(--con-color,\s*var\(--dim\)\)/);
   assert.match(css, /\.jl-store\s*\{[^}]*color:\s*var\(--con-color,\s*var\(--dim\)\)/);
@@ -150,8 +147,8 @@ test("the stylesheet reads each style's colour with a fallback, and one size for
 });
 
 test("the three kinds of console text compute the SAME font-size, at the default and at a card's zoom", () => {
-  const decls = Object.fromEntries([...THREE, REASONING_BLOCK_BARE, REASONING_BLOCK].map(([, sel]) => [sel, fontSizeOf(sel)]));
-  for (const [what, sel] of [...THREE, REASONING_BLOCK_BARE, REASONING_BLOCK]) {
+  const decls = Object.fromEntries(THREE.map(([, sel]) => [sel, fontSizeOf(sel)]));
+  for (const [what, sel] of THREE) {
     assert.equal(decls[sel], "var(--term-size)", `${what} (${sel}) asks for the console's one size`);
   }
   // "compute", not "name": resolve the shipped declarations the way the browser does, over the two values in force
@@ -235,9 +232,9 @@ test("Ctrl+wheel writes that one variable on the card, and the card re-emits it 
   assert.match(src, /getComputedStyle\(card\)\.getPropertyValue\("--term-size"\)/, "the step starts from the one size in force");
   assert.match(src, /card\.style\.setProperty\("--term-size", `\$\{next\}px`\)/);
   assert.match(jobs, /const zoom = state\.consoleZoom\.get\(thread\);\s*\n\s*const sizeVars = zoom \? `--term-size:\$\{zoom\}px` : ""/, "a rebuilt card carries its zoom back");
-  // One step per gesture, wherever in the card the wheel was: normal output, a tool's output and the 🧠 block all
-  // resolve to the same selector list and the same write.
-  assert.match(src, /const zone = target \? target\.closest\("\.job-out, \.think-body"\) : null;/);
+  // One step per gesture, wherever in the card the wheel was: normal output, a tool's output and the reasoning rows
+  // all live in the one console, so there is one selector and one write.
+  assert.match(src, /const zone = target \? target\.closest\("\.job-out"\) : null;/);
   assert.equal(src.split("zoomConsole(zone, e.deltaY < 0 ? 1 : -1);").length - 1, 1, "one size change per wheel event");
   assert.doesNotMatch(src, /--out-size|--think-size\b|thinkZoom|THINK_ZOOM/, "and no second knob survives in the page either");
 });
@@ -253,7 +250,7 @@ test("the page wires every control, fills the pickers at start-up and retires th
   assert.match(init, /applyTextStyle\(kind\)/, "the saved look is painted before the first card is drawn");
 });
 
-test("an empty line stands before every reasoning section, in the stream and in the block", () => {
+test("an empty line stands before every reasoning row of the stream", () => {
   // In the stream the reasoning row is a piece like any other: the blank line above it is the stream's own `jl-sep`
   // rule, which every piece wears — one rule, so a reasoning row, a tool group and a chunk of prose cannot drift into
   // three different gaps. The reasoning line's own rule is its VOICE only.
@@ -261,9 +258,6 @@ test("an empty line stands before every reasoning section, in the stream and in 
   assert.match(sep, /margin-top:\s*1\.5em/, "one console line (line-height 1.5) above every piece of the stream");
   assert.doesNotMatch(css.match(/\n\.jl-think\s*\{([^}]*)\}/)[1], /margin-top/, "the reasoning row adds no second gap of its own");
   assert.match(css, /\.job-out\s*>\s*\.jl-sep:first-child\s*\{\s*margin-top:\s*0/, "but not above the very first piece of a console");
-  assert.match(css, /\.think-block\s*\+\s*\.think-block\s*\{\s*margin-top:\s*1\.5em/, "between the blocks of the 🧠 block");
-  const block = css.match(/\n\.think\s*\{([^}]*)\}/)[1];
-  assert.match(block, /margin:\s*18px 0 8px/, "and above the 🧠 block itself, where the old gap was 6px");
   // The rule has to win over a flat piece's own `margin: 0`, or a tool group would get no blank line above it at all.
   const flatAt = css.indexOf(".tgrp.tgrp-flat {");
   const sepAt = css.indexOf(".job-out > .jl-sep {");

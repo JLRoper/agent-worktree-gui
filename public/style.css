@@ -1298,25 +1298,6 @@ button.chip:active { transform: translateY(1px); }
    these rows are what the children are actually doing, read from their own sessions in the store. */
 /* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
 .subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
-/* Thinking: a block above the turn's console, folded until opened, deliberately quieter than the output - it is
-   how the agent got there, not what it produced. */
-.think { margin: 18px 0 8px; padding-left: 10px; border-left: 2px solid #3a4152; }
-.think > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; user-select: none; }
-.think > summary::-webkit-details-marker { display: none; }
-.think > summary::before { content: "\25b8"; color: var(--dimmer); font-family: var(--ui); font-size: 9px; }
-.think[open] > summary::before { content: "\25be"; }
-.think-title { font-size: 10.5px; letter-spacing: .03em; color: #9db4d0; }
-.think-meta { font-size: 10.5px; color: var(--dimmer); }
-.think-body { margin: 6px 0 2px; max-height: 260px; overflow: auto; }
-.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--term-size); line-height: var(--con-row-space, 1.5); font-style: italic; color: var(--think-color, var(--dim)); margin: 0 0 8px; }
-/* The blocks also carry .mono, which sets a 12px size and would otherwise win on the var: this rule is two classes
-   deep so the reasoning is the console's own size, the same one Ctrl+wheel writes on the card for all three kinds
-   of text. Reasoning has no size knob of its own — one size drives the console, its tool output and this. */
-.think-block.mono { font-size: var(--term-size); }
-/* An empty line before every reasoning section: a thought is not glued to the tool output or the thought above it. */
-.think-block + .think-block { margin-top: 1.5em; }
-.think-block:last-child { margin-bottom: 0; }
-.think-empty { color: var(--dimmer); font-style: normal; }
 /* The card's own switch. Off is a quiet glyph; on is visibly live, because the block it controls is easy to miss. */
 /* The anchor pin: one card can hold its place on screen while other cards above it grow. Off is a quiet
    glyph in the card head; on is the accent, because it changes how the whole board scrolls. */
@@ -1326,11 +1307,6 @@ button.btn-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a204
 button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 button.btn-think:hover { color: var(--text); border-color: var(--line); }
 button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
-/* The 🌊 beside the 🧠: the same button, saying the card is drawn as ONE stream. Blue rather than violet, because it
-   is a different choice rather than a second level of the same one. */
-button.btn-stream { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
-button.btn-stream:hover { color: var(--text); border-color: var(--line); }
-button.btn-stream.is-on { color: #9ed4ff; border-color: #2f4a63; background: #14202b; }
 
 
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
@@ -1745,6 +1721,23 @@ body.is-out-gripping * { cursor: nwse-resize; }
    (italic, dim) so it still reads as thought and not as something the agent said out loud — and the console's one
    size, so a Ctrl+wheel over any of a card's text moves this line with the rest of it. */
 .jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--term-size); }
+/* A thinking row is CLIPPED to a few lines: the thought is how the agent got there, not what it produced, and a
+   100 kB block of it must not push the tool calls off the card. The whole text is still in the node (a copy and a
+   find see it); a press opens it in place, which is what the row's own title says. Four lines at the console's own
+   leading is the clip - a px height would fight a card's Ctrl+wheel zoom. */
+.jl-think.think-row { position: relative; display: block; cursor: pointer; padding-right: 92px; border-radius: 2px; }
+.jl-think.think-row:hover { background: rgba(157, 180, 208, .05); }
+.jl-think.think-row:focus-visible { outline: 1px solid #55407a; outline-offset: 1px; }
+.jl-think .think-text { display: block; max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
+.jl-think.think-row.is-open .think-text { max-height: none; }
+/* ...and while the thought is still arriving, the row says so IN the console: a pulsing dot and the age since its
+   first word, in the row's own top-right corner so it never pushes the words around. It appears with the first
+   delta and is removed at the first tool or at the end of the turn (public/board/console.js). */
+.jl-think .think-live { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; gap: 5px; font-style: normal; font-size: 10px; letter-spacing: .02em; color: var(--dimmer); }
+.jl-think .think-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: think-pulse 1.1s ease-in-out infinite; }
+.jl-think .think-live .jl-live { font-size: 10px; }
+@keyframes think-pulse { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .jl-think .think-dot { animation: none; opacity: .8; } }
 /* ONE blank line sets every piece of the stream apart from the piece above it — a reasoning block, a group of tool
    output, a chunk of the agent's own words. The reasoning block had this rule first and everything else wears the same
    class (`jl-sep`, put on each piece by streamBodyHtml and by the live append), so the three cannot drift into three

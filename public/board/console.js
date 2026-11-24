@@ -98,11 +98,68 @@ function waitLineHtml(l) {
 }
 // ---- end gateway wait line
 
+// ---- reasoning: one row of the same stream ----------------------------------------------------------
+// A thought is a console line, not a pane above it. Two writers put rows here and they must agree on
+// what one row IS: the run's own live preview (a `thinkOnly` frame, appended while it grows) and the
+// settled read of lib/thinking.js blocks (merged into the record by `at`). Both name the row
+// `think:<at>`, so an append, a repaint and a store read all address the same node, and when the store
+// read replaces the previews it removes those rows rather than drawing the same thought twice.
+//
+// The row is DIM and clipped to a few lines (the CSS does the clipping, this markup carries the whole
+// thought so a copy and a search still see it); a press opens it in place. While thought is still
+// arriving the row carries its own "thinking" mark INSIDE the console output, with the age the card's
+// clock ticks from the block's `at` - a reader looking at the stream can tell a thought still being
+// written from one that has finished.
+const thinkOpenRows = new Set(); // lid -> the reader opened this thought
+
+function thinkLid(at) {
+  return `think:${Number(at) || 0}`;
+}
+
+// The markup of one thinking row. `sep` is the stream's blank line above a piece (wtStream.pieces).
+function thinkRowHtml(l, sep = "") {
+  const lid = String(l.lid ?? thinkLid(l.at));
+  const text = String(l.text ?? "");
+  const live = Boolean(l.live);
+  const open = thinkOpenRows.has(lid);
+  const from = Number(l.at) || Date.now();
+  return `<div class="jl jl-think think-row${sep ? ` ${esc(sep)}` : ""}${open ? " is-open" : ""}" data-lid="${esc(lid)}" data-ltext="${esc(text)}" data-lkind="think" data-think-row="1" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}" title="${live ? "what the agent is thinking now" : "click to read the whole thought"}"><span class="think-text">${linkifyText(text)}</span>${live ? `<span class="think-live" data-think-live="1"><span class="think-dot" aria-hidden="true"></span>thinking <span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span></span>` : ""}</div>`;
+}
+
+// Patch a row whose thought grew, or whose thought stopped. The text and the mark are the only things
+// that move; the node, its open state and the reader's selection inside it stay where they are.
+function patchThinkRow(el, l) {
+  const lid = String(l.lid ?? thinkLid(l.at));
+  const text = String(l.text ?? "");
+  const box = el.querySelector(":scope > .think-text");
+  if (box) {
+    const html = linkifyText(text);
+    if (box.innerHTML !== html) box.innerHTML = html;
+  }
+  el.dataset.ltext = text;
+  const open = thinkOpenRows.has(lid);
+  el.classList.toggle("is-open", open);
+  el.setAttribute("aria-expanded", open ? "true" : "false");
+  const mark = el.querySelector(":scope > [data-think-live]");
+  if (l.live && !mark) {
+    const from = Number(l.at) || Date.now();
+    el.insertAdjacentHTML(
+      "beforeend",
+      `<span class="think-live" data-think-live="1"><span class="think-dot" aria-hidden="true"></span>thinking <span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span></span>`,
+    );
+  } else if (!l.live && mark) mark.remove();
+  el.title = l.live ? "what the agent is thinking now" : "click to read the whole thought";
+}
+// ---- end reasoning rows ------------------------------------------------------------------------------
+
 // One console line. data-ltext/data-lkind carry the line itself rather than what it renders to, because a
 // burst rebuild reads the lines back out of the DOM (groupLines): a link, a running clock or a diff window's
 // markup must not change what the next render believes the line said.
 function lineHtml(l, live = "", cls = "") {
   const kind = l.kind || "raw";
+  // A thinking row is not prose and is never typed here: the live preview already arrives in chunks, and
+  // the settled store blocks carry their own pace (paceThinkBlock feeds the same queue under this lid).
+  if (kind === "think") return thinkRowHtml(l, cls);
   // A line the stream is still revealing is drawn up to what may be shown NOW, not up to the wire's whole text:
   // a repaint mid-paragraph (a scan, a pinned copy, the 3s result sweep) must not jump the console ahead of the
   // words the reader is watching arrive. Every other line — history, a tool line, reasoning — is drawn whole.
@@ -1476,16 +1533,14 @@ async function toggleSubConsole(id) {
 // complete, so the hold ends by itself and never has to wait out MAX_HOLD_MS.
 //
 // Only while there is something to wait for AND a reader watching it: the words/s setting is on (0 keeps the console
-// exactly as the run sent it), the turn is live, the tab is visible, and the reasoning is on screen - the 🌊 stream
-// always draws it, the 🧠 block only while it is open (typing into a folded block is a wait for nothing).
+// exactly as the run sent it), the turn is live, the tab is visible, and the reasoning is on screen - the stream draws
+// it as rows of the console, so it is on screen whenever the card's 🧠 is on.
 const REASONING_READ_WAIT_MS = 2000; // a store read that has not answered by now is not worth holding a console for
 const REASONING_READ_COOLDOWN_MS = 250; // one read serves a whole burst of calls
 
 function reasoningShown(turn) {
   const thread = turn.thread || turn.id;
-  if (!thinkingOn(thread)) return false;
-  if (streamOn(thread) && globalThis.wtStream) return true;
-  return thinkOpenFor(turn, turnKey(turn, ""));
+  return thinkingOn(thread);
 }
 
 function reasoningWants(evt) {
@@ -1994,7 +2049,7 @@ function wireConsole(el) {
 // - the typing stream on every tick (paintTypedLines -> consoleOuts);
 // - every streamed line (drawJobLine);
 // - every stream repaint (paintStreamConsole);
-// - the 400 ms sweep, three times over (consoles, thinking bodies, subagent consoles).
+// - the 400 ms sweep, twice over (consoles and subagent consoles).
 // On the reader's board each of those is a walk of a 55k-node page to find a few dozen nodes. A console only arrives by
 // being placed, so a node observer of their own notes each one as it lands. A lookup returns the noted ones still in
 // the page, still of that kind, in document order: the same list the walk returned. It must be its own observer and
@@ -2002,7 +2057,7 @@ function wireConsole(el) {
 // this same task is counted; taking the copy observer's records would run the copy buttons' mount in the middle of a
 // paint. Before the watch is set up (placedNodes.watch, beside the copy observer) a lookup is the walk it replaces.
 // What it cannot see is a node that TAKES one of these classes after it was placed; nothing in this file does that
-// (no classList.add / className write names job-out, think-body, sub-console, detail, tgrp or queue-ago, and nothing
+// (no classList.add / className write names job-out, sub-console, detail, tgrp or queue-ago, and nothing
 // sets data-q-clock or data-detail on a placed node), and test/placed-nodes.test.js holds the lookup to the walk's
 // answer through every way a node does arrive and leave.
 function placedNodes(sel) {
@@ -2377,9 +2432,7 @@ function paintTypedLines(keys) {
           if (!drawRowText(el, rec)) continue;
         } else if (!drawRowText(el, shown)) continue;
         grew(out);
-        const body = el.closest(".think-body");
-        if (body) stickThinkBody(body);
-        else stickSoon(out);
+        stickSoon(out);
       }
     }
   }
@@ -2444,7 +2497,7 @@ function saveTypeLines(value) {
 async function loadThinkingAfter(turn) {
   const until = Date.now() + REASONING_READ_WAIT_MS;
   while (state.thinkLoading.has(turn.id) && Date.now() < until) await new Promise((r) => setTimeout(r, 20));
-  await loadThinking(turn, "");
+  await loadThinking(turn);
 }
 
 // One turn's thoughts, from the store, bounded by the turn's own clock.
@@ -2455,40 +2508,58 @@ async function loadThinkingAfter(turn) {
 // while that turn's own session holds its blocks. That is what made only the one assistant whose session matched its
 // thread show any reasoning at all.
 //
-// Visibility is a different question with a different answer (see `thinkHtml`): the 🧠 switch belongs to the CARD.
+// Visibility is a different question with a different answer (see `streamBodyHtml`): the 🧠 switch belongs to the CARD.
 function thinkingSessionFor(turn) {
   return String(turn?.sessionId || turn?.thread || turn?.id || "");
 }
 
 // ---- reconcile thinking ----
-// A live-streamed reasoning.delta preview grows ONE block under a stable `at`. The store poll's
-// finished reasoning block carries a DIFFERENT `at` (the message timestamp). Adopting it wholesale
-// while the turn is live would (a) hand paceThinkBlock a brand-new `think:<at>` lid, so it types the
-// whole text again from word 0 — the "doubling back" — and (b) show the same reasoning twice. Keep
-// the live block's own lid and settle the store's complete text INTO it instead: the same `at` means
-// the stream keeps growing one line, never restarting. With no live preview this is the old behaviour.
-function reconcileThinking(prev, fresh) {
-  const live = (prev || []).filter((b) => b && b.live);
-  if (!live.length) return fresh;        // no live-streamed preview: store poll replaces wholesale, as before
-  if (!fresh.length) return prev;        // nothing authoritative yet: keep the growing preview
-  const complete = fresh.map((b) => String(b.text ?? "")).join("\n\n");
-  const kept = prev.filter((b) => !b || !b.live);
-  // The complete text starts at the thought's first word, so the block's own offset goes back to 0 with it.
-  kept.push({ ...live[live.length - 1], text: complete, base: 0, live: true });
-  kept.sort((a, b) => Number(a.at) - Number(b.at));
-  return kept;
+// Two writers describe the same thought. The run's own live preview grows under a stable `at` (the moment
+// its first delta arrived); the store records the finished block under a DIFFERENT `at` (the moment the
+// assistant message was written). While the turn runs the preview is what the reader is watching, so the
+// store's complete text is settled INTO the preview blocks it belongs to - matched oldest-first against the
+// tail of the store's list, because a tab that joined late holds only the newest thought - and the live row
+// keeps its identity instead of restarting from word 0. When the turn has SETTLED the store is the
+// transcript: its blocks replace the previews outright, and the preview rows come out of the console, so
+// one thought is drawn once.
+function reconcileThinking(prev, fresh, settled = false) {
+  const previews = (prev || []).filter((b) => b && b.preview);
+  if (!fresh.length) return prev; // an empty or failed read is not "nothing was thought"
+  if (!previews.length || settled) return fresh;
+  const head = fresh.slice(0, Math.max(0, fresh.length - previews.length));
+  const tail = fresh.slice(-previews.length);
+  return [...head, ...tail.map((b, i) => ({ ...previews[i], text: String(b.text ?? ""), preview: true }))];
 }
 // ---- end reconcile thinking ----
 
-async function loadThinking(turn, copy = "") {
-  const key = turnKey(turn, copy);
+// Take the live preview rows out of the console record. The store's blocks are merged by `at` on the next
+// paint, so the settled console shows each thought once, in the order the record placed it.
+function dropThoughtPreviews(turn) {
+  const buf = state.jobLines.get(turn.id);
+  if (!buf) return;
+  const keep = buf.filter((l) => !(l && l.preview && l.kind === "think"));
+  if (keep.length !== buf.length) state.jobLines.set(turn.id, keep);
+}
+
+// A store read changes ROWS of the console, so the console is what is repainted. The version bump is the
+// repaint's licence: paintStreamConsole skips a console whose own appends have drawn the current record, and
+// a store read is not an append.
+function repaintThoughts(turn) {
+  if (!state.jobLineVersion) state.jobLineVersion = new Map();
+  state.jobLineVersion.set(turn.id, (state.jobLineVersion.get(turn.id) || 0) + 1);
+  paintStreamConsole(turn, "");
+  if (document.querySelector(`pre.job-out[data-out="${CSS.escape(turn.id)}@pin"]`)) paintStreamConsole(turn, "@pin");
+}
+
+async function loadThinking(turn) {
   if (state.thinkLoading.has(turn.id)) return;
   state.thinkLoading.add(turn.id);
   const prev = state.thinkCache.get(turn.id)?.blocks || [];
-  // The block keeps what it has unless a read it can TRUST says otherwise. This is the only pane on a card that is
-  // polled; the run's own output is appended and never rebuilt, which is why the recording of a run never flickers and
-  // this did.
+  const live = turnLive(turn);
+  // The console keeps what it has unless a read it can TRUST says otherwise: a failed read, or an empty answer
+  // while the turn still runs, must not blank rows and refill them on the next poll.
   let blocks = prev;
+  let adopted = false;
   try {
     // Bounded by the turn's own clock, which stops where the next turn began (an interrupted turn has no endedAt).
     const { from, to } = turnBounds(turn);
@@ -2498,27 +2569,24 @@ async function loadThinking(turn, copy = "") {
     if (r.ok) {
       const d = await r.json();
       const fresh = Array.isArray(d.blocks) ? d.blocks : [];
-      // A read that FAILED (`error`) is not a turn that recorded nothing: taking its empty array would blank the block
-      // and refill it on the next poll — a collapse and reopen, every couple of seconds, on every live card.
-      // And a live turn's block list only ever GROWS (the store appends one row per assistant message and takes none
-      // away), so an empty answer while the turn is still running is a bad read too. A shorter non-empty answer is left
-      // alone: past MAX_BLOCKS the oldest block legitimately drops out of the window.
-      if (!d.error && (fresh.length || !prev.length || !turnLive(turn))) blocks = reconcileThinking(prev, fresh);
+      if (!d.error && fresh.length) {
+        blocks = reconcileThinking(prev, fresh, !live);
+        adopted = true;
+      }
     }
   } catch {
-    /* an unreadable store is not worth a banner: the block just keeps what it already shows */
+    /* an unreadable store is not worth a banner: the rows just keep what they already show */
   } finally {
     state.thinkLoading.delete(turn.id);
   }
   state.thinkCache.set(turn.id, { blocks, at: Date.now() });
-  paintThink(turn, "");
-  if (document.querySelector(`details.think[data-think-turn="${CSS.escape(turnKey(turn, "@pin"))}"]`)) paintThink(turn, "@pin");
+  if (adopted) {
+    if (!live) dropThoughtPreviews(turn);
+    else syncThoughtRows(turn, blocks.filter((b) => b && b.preview));
+    repaintThoughts(turn);
+  }
 }
 
-// Repaint just the block, so a read landing mid-turn does not rebuild the card under the reader.
-// A block opened by the panel (because its turn is running) is not the reader opening it: without this the auto-open
-// would be remembered as a choice and the block would never fold again after the turn ends.
-const thinkAutoOpened = new WeakSet();
 
 function stickSubConsole(box) {
   if (!box || !box.isConnected) return;
@@ -2529,18 +2597,6 @@ function stickSubConsole(box) {
   const max = box.scrollHeight - box.clientHeight;
   if (max <= 0 || Math.abs(box.scrollTop - max) <= 1) return;
   setScroll(box, max);
-}
-
-function stickThinkBody(body) {
-  if (!body || !body.isConnected) return;
-  // A reasoning block growing inside a card's session scroller grows the body too (see stickCardBodySoon): in the
-  // docked Chat pane the block has no box of its own, so this is the growth a long thinking stream produces.
-  stickCardBodySoon(body);
-  const key = body.closest("details.think")?.dataset.thinkTurn || "";
-  if (state.thinkPinned.get(key) === false) return;
-  const max = body.scrollHeight - body.clientHeight;
-  if (max <= 0 || Math.abs(body.scrollTop - max) <= 1) return;
-  setScroll(body, max);
 }
 
 // In the single-stream mode there is no block to repaint: the blocks are lines of the console itself, so a read that
@@ -2798,176 +2854,6 @@ function paintStreamConsole(turn, copy = "", thread = turn.thread || turn.id) {
   return true;
 }
 
-// A poll of the store used to be drawn by replacing the whole `<details>`: one fresh node per read, every block
-// inside it new. That is what made the block churn 5.6 rows a second on a card whose model had stopped, and it took
-// the reader's selection, the block's open state and the copy button with every read. What a poll's answer actually
-// changes is the WORDS: the last thought grows as the stream types it, one more thought appears at the end, and the
-// count in the summary moves. So the node stays — its `open` belongs to the reader (sweepThinking folds it when the
-// turn ends, and the card repaint on a status change re-renders it) — the summary's copy button is never touched, and
-// only the text that moved is written, in place, so a selection standing in an untouched block survives the read.
-const thinkRowKey = (n) => n?.dataset?.lid || (n?.classList?.contains("think-empty") ? "@empty" : "");
-
-// Same element skeleton, different words: the one case that can be patched without replacing anything.
-function sameThinkShape(a, b) {
-  if (!a || !b || a.nodeType !== b.nodeType) return false;
-  if (a.nodeType === 3) return true;
-  if (a.nodeType !== 1) return false;
-  if (a.tagName !== b.tagName) return false;
-  if ((a.getAttribute("class") || "") !== (b.getAttribute("class") || "")) return false;
-  // A link's identity is its target: linkifyText can turn a half-typed URL into an anchor mid-read, and that changes
-  // the tree's shape rather than its words.
-  if (a.tagName === "A" && (a.getAttribute("href") || "") !== (b.getAttribute("href") || "")) return false;
-  if (a.childNodes.length !== b.childNodes.length) return false;
-  for (let i = 0; i < a.childNodes.length; i++) if (!sameThinkShape(a.childNodes[i], b.childNodes[i])) return false;
-  return true;
-}
-
-function writeThinkText(live, fresh) {
-  for (let i = 0; i < live.childNodes.length; i++) {
-    const l = live.childNodes[i];
-    const f = fresh.childNodes[i];
-    if (!f) return;
-    if (l.nodeType === 3) {
-      if (l.nodeValue !== f.nodeValue) l.nodeValue = f.nodeValue;
-    } else if (l.nodeType === 1) {
-      writeThinkText(l, f);
-    }
-  }
-}
-
-// One row of the block, patched against the one it replaced in the cache: same lid keeps its node (and whatever the
-// reader has selected in it), a row the window has dropped is removed, a new thought is inserted where it belongs.
-function syncThinkBody(body, freshBody) {
-  const next = [...freshBody.children];
-  const byKey = new Map();
-  for (const n of body.children) {
-    const k = thinkRowKey(n);
-    if (k && !byKey.has(k)) byKey.set(k, n);
-  }
-  // The "nothing yet — it will appear here as the agent thinks" row BECOMES the first thought instead of being
-  // replaced by it. It is the one line the reader is watching before there is anything to read, and the first block
-  // arriving is that row's content, not a new row under it: adopt it, so the block's first paint keeps its node
-  // (and the harness's "every row it drew" count is the reader's count, not a placeholder swapped for a paragraph).
-  const empty = byKey.get("@empty");
-  const first = next[0];
-  if (empty && first && first.dataset.lid && !empty.dataset.lid) {
-    empty.dataset.lid = first.dataset.lid;
-    empty.className = first.className;
-    empty.innerHTML = first.innerHTML;
-    byKey.delete("@empty");
-    byKey.set(first.dataset.lid, empty);
-  }
-  let cursor = body.firstElementChild;
-  for (const want of next) {
-    const k = thinkRowKey(want);
-    const have = k ? byKey.get(k) : null;
-    if (k) byKey.delete(k);
-    let place = have;
-    if (have) {
-      if (have !== cursor) body.insertBefore(have, cursor);
-      if (have.innerHTML !== want.innerHTML) {
-        if (sameThinkShape(have, want)) writeThinkText(have, want);
-        else have.innerHTML = want.innerHTML;
-      }
-    } else {
-      body.insertBefore(want, cursor);
-      place = want;
-    }
-    cursor = place.nextElementSibling;
-  }
-  while (cursor) {
-    const gone = cursor;
-    cursor = cursor.nextElementSibling;
-    gone.remove();
-  }
-  // The body grew (or was rebuilt): the repair pass and the stick both key off this, so a patched body is a box the
-  // page knows has moved without measuring it to find out.
-  body._grow = (Number(body._grow) || 0) + 1;
-}
-
-function syncThinkBlock(el, fresh) {
-  const meta = el.querySelector(":scope > summary .think-meta");
-  const wantMeta = fresh.querySelector(":scope > summary .think-meta");
-  if (meta && wantMeta && meta.textContent !== wantMeta.textContent) meta.textContent = wantMeta.textContent;
-  const body = el.querySelector(".think-body");
-  const freshBody = fresh.querySelector(".think-body");
-  if (!body || !freshBody) return false;
-  syncThinkBody(body, freshBody);
-  return true;
-}
-
-function paintThink(turn, copy = "") {
-  const key = turnKey(turn, copy);
-  // The block (or, in the 🌊 mode, the console that carries the reasoning) is drawn inside ONE card, and that card's
-  // thread is the value its 🧠 wrote. Reading the choice back from the node the turn actually belongs to is what keeps
-  // the repaint and the button on one key, whatever the turn's own thread says.
-  const block = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
-  const consoleOut = block ? null : document.querySelector(`pre.job-out[data-out="${CSS.escape(turn.id)}${CSS.escape(copy)}"]`);
-  const thread = (block || consoleOut)?.closest(".job[data-thread]")?.dataset.thread || turn.thread || turn.id;
-  // The 🌊 draws the reasoning inside the console, so that is the thing to repaint — there is no block on the page.
-  if (streamOn(thread) && paintStreamConsole(turn, copy, thread)) return;
-  const el = block;
-  if (!el) return;
-  const holder = document.createElement("div");
-  holder.innerHTML = thinkHtml(turn, copy, thread);
-  const fresh = holder.firstElementChild;
-  if (!fresh) return;
-  const body = el.querySelector(".think-body");
-  // A block that lost its body (a shape this renderer no longer draws) is healed once by the old wholesale path.
-  if (!body) {
-    el.replaceWith(fresh);
-    const made = fresh.querySelector(".think-body");
-    if (made) stickThinkBody(made);
-    return;
-  }
-  // Where the reader was. A patched body keeps its scroll by itself; this is for the row that grew past the box.
-  const keep = { top: body.scrollTop };
-  if (!syncThinkBlock(el, fresh)) return;
-  // The body is the same node, and a new thought appended under it must not push the reader's line out of view
-  // unless they were reading at the bottom (or the panel pinned it there).
-  if (state.thinkPinned.get(key) === false) setScroll(body, Math.min(keep.top, Math.max(0, body.scrollHeight - body.clientHeight)));
-  else stickThinkBody(body);
-}
-
-
-// While a turn is running its block is open and re-read, which is what the separate live reasoning line used to do; once
-// the turn ends it folds unless the reader left it open. One control, one mental model.
-function thinkOpenFor(turn, key) {
-  if (state.thinkOpen.has(key)) return true;
-  if (state.thinkClosed.has(key)) return false;
-  return turnLive(turn);
-}
-
-function thinkHtml(turn, copy = "", thread = turn.thread || turn.id) {
-  const key = turnKey(turn, copy);
-  // The CARD's thread, handed down from the renderer. It is the same value the 🧠 beside this block writes, so a press
-  // always flips the block drawn under it: a turn that carries a thread of its own (an assistant's turns run under a
-  // session the gateway named) or carries none must not answer for the card's choice.
-  if (!thinkingOn(thread)) return "";
-  const entry = state.thinkCache.get(turn.id);
-  const blocks = entry?.blocks || [];
-  const open = thinkOpenFor(turn, key);
-  const meta = !entry ? "reading…" : blocks.length ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}` : "none recorded";
-  return `<details class="think" data-copy data-think-turn="${esc(key)}"${open ? " open" : ""}>
-    <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
-    <div class="out-wrap"><div class="think-body">${
-      blocks.length
-        ? blocks.map((b) => {
-            // The same words/s the prose types at: the block is fed the first time it is seen on a live turn, and
-            // the tick repaints it through this very data-lid.
-            const shown = paceThinkBlock(turn, b);
-            return `<div class="think-block mono" data-lid="think:${esc(b.at)}">${linkifyText(shown == null ? b.text : shown)}</div>`;
-          }).join("")
-        : `<div class="think-block mono think-empty">${
-            entry
-              ? turnLive(turn)
-                ? "nothing yet — it will appear here as the agent thinks"
-                : "this turn recorded no thinking"
-              : "reading the store…"
-          }</div>`
-    }</div>${toBottomBtnHtml()}</div>
-  </details>`;
-}
 
 // ---- copy buttons ------------------------------------------------------------------------------
 // One mechanism for every "lift this block" affordance: an element carrying `data-copy` carries a small
@@ -3008,18 +2894,6 @@ function mountCopyButtons(root) {
 
 // Generic by construction: ANY render path that puts a `[data-copy]` block on the page gets its button -
 // a card rebuilt from scratch, a console line appended by the run's stream, a pinned copy of a turn.
-//
-// The same hook arms the thinking block's OPEN state, and for the same reason: it is a fact about nodes that arrive
-// from a render path, whoever wrote it. A `<details open>` inserted into the document fires a `toggle` of its own,
-// queued as a task — indistinguishable, to the listener below, from the reader pressing it. Every re-read of the store
-// inserts one (`paintThink` → `el.replaceWith`), so without this every live turn's block was remembered as "the reader
-// opened it", `state.thinkOpen` grew a key per turn, and a finished turn's reasoning never folded again. The observer
-// runs as a microtask, before that queued task, so the flag is always in place in time.
-function armPlacedThink(root) {
-  if (!root || root.nodeType !== 1) return;
-  if (root.matches?.("details.think[open]")) thinkAutoOpened.add(root);
-  for (const d of root.querySelectorAll?.("details.think[open]") || []) thinkAutoOpened.add(d);
-}
 
 // ---- motion nobody can see -------------------------------------------------------------------------------------
 // A card's pulse dot is a looping opacity + transform animation, which the compositor runs for free while the dot is
@@ -3281,7 +3155,6 @@ const copyObserver = new MutationObserver((records) => {
     for (const node of r.addedNodes) {
       if (node.nodeType !== 1) continue;
       mountCopyButtons(node);
-      armPlacedThink(node);
       watchMotion(node);
       scheduleCommandFoldMark(node);
     }
@@ -3446,18 +3319,10 @@ function setScroll(el, top) {
 // Rebuilds land before the browser has finished laying the new nodes out, so a "go to the bottom" can be clamped
 // to a shorter height than the console ends up with. Once the frame is done, put the pinned ones back on their
 // newest line - and only those, so a console the reader took control of is never moved.
-// The synchronous half of settleScrolls: run it right after a rebuild inserts nodes, so nothing is ever painted at
-// the first line before the frame-based pass gets to it. That one-frame flash is what read as the block "jumping".
-function restoreThinkBodies(root) {
-  if (!root) return;
-  for (const b of root.querySelectorAll(".think-body")) restoreThinkBody(b);
-}
-
 function settleScrolls(root) {
   const run = () => {
     if (!root || !root.isConnected) return;
     for (const o of root.querySelectorAll("pre.job-out")) stickConsole(o);
-    for (const b of root.querySelectorAll(".think-body")) restoreThinkBody(b);
     for (const s of root.querySelectorAll(".sub-console")) stickSubConsole(s);
     // The card's session scroller gets the same second pass: a rebuild writes its bottom before the new nodes are
     // laid out, and the height the reader is following is the one the card ends up with, not the one it had at the
@@ -3467,20 +3332,6 @@ function settleScrolls(root) {
     positionModelPop();
   };
   requestAnimationFrame(() => requestAnimationFrame(run));
-}
-
-// A thinking block in a rebuilt card is a fresh node at its first line. Pinned follows the newest line (as the
-// live block does); one the reader took control of returns to where they had it.
-function restoreThinkBody(body) {
-  if (!body || !body.isConnected) return;
-  const key = body.closest("details.think")?.dataset.thinkTurn || "";
-  if (state.thinkPinned.get(key) !== false) {
-    stickThinkBody(body);
-    return;
-  }
-  const was = state.thinkScroll.get(key);
-  if (!was) return;
-  setScroll(body, Math.min(was.top, Math.max(0, body.scrollHeight - body.clientHeight)));
 }
 
 function stickConsole(pre) {
@@ -3726,15 +3577,13 @@ function placeInOrder(parent, want) {
 function holdScrolls(root) {
   const held = [];
   if (!root) return held;
-  for (const el of root.querySelectorAll("pre.job-out, .think-body, .sub-console")) {
-    const think = el.classList.contains("think-body");
+  for (const el of root.querySelectorAll("pre.job-out, .sub-console")) {
     const sub = el.classList.contains("sub-console");
     held.push({
       el,
-      think,
       sub,
       top: el.scrollTop,
-      key: think ? el.closest("details.think")?.dataset.thinkTurn || "" : sub ? el.dataset.subConsoleBox || "" : el.dataset.out || "",
+      key: sub ? el.dataset.subConsoleBox || "" : el.dataset.out || "",
     });
   }
   return held;
@@ -3748,11 +3597,7 @@ function releaseScrolls(held) {
     if (!el || !el.isConnected) continue;
     const max = el.scrollHeight - el.clientHeight;
     if (max <= 0) continue;
-    const pinned = h.think
-      ? state.thinkPinned.get(h.key) !== false
-      : h.sub
-        ? state.subConsolePinned.get(h.key) !== false
-        : consolePinned(h.key);
+    const pinned = h.sub ? state.subConsolePinned.get(h.key) !== false : consolePinned(h.key);
     setScroll(el, pinned ? max : Math.min(h.top, max));
   }
 }
@@ -3789,6 +3634,104 @@ const endFollowOnScroll = (e) => {
   if (state.pendingFocus) state.pendingFocus = null;
 };
 
+// ---- the live thought, as a row of the console -------------------------------------------------------
+// The card a turn is drawn in owns the 🧠 answer; a turn of an assistant's can carry a thread of its own,
+// so the switch is read from the card the console is in, exactly as the settled renderer reads it.
+function cardThreadOf(id) {
+  const out = document.querySelector(`pre.job-out[data-out="${CSS.escape(String(id))}"]`);
+  const card = out?.closest?.(".job[data-thread]");
+  return card?.dataset?.thread || state.jobs.get(id)?.thread || String(id);
+}
+
+// The turn's own console buffer, created the way recordJobLine creates one: seeded from the record's
+// tail when the turn is live, so a tab that joined mid-turn does not lose the lines above the preview.
+function consoleBufferFor(turn) {
+  let buf = state.jobLines.get(turn.id);
+  if (buf) return buf;
+  const rec = state.jobs.get(turn.id);
+  buf = turnLive(rec) && Array.isArray(rec.lines) ? rec.lines.slice() : [];
+  state.jobLines.set(turn.id, buf);
+  return buf;
+}
+
+// One frame of a live thought. It grows the block its `at` names; a new `at` closes the previous
+// live block (its mark stops) and starts a block of its own, which is drawn after whatever the last
+// tool left in the console. `thinkFrom` is the offset the words start at inside the block, so a tab
+// that joined mid-block begins where it attached and a contiguous chunk is spliced on.
+function growLiveThought(turn, line) {
+  const at = Number(line.at) || Date.now();
+  const entry = state.thinkCache.get(turn.id) || { blocks: [], at: 0 };
+  const chunk = String(line.think);
+  const from = Number(line.thinkFrom) || 0;
+  const changed = [];
+  let block = entry.blocks.find((b) => b && b.preview && Number(b.at) === at) || null;
+  if (!block) {
+    for (const b of entry.blocks) {
+      if (b && b.preview && b.live) {
+        b.live = false;
+        changed.push(b);
+      }
+    }
+    block = { at, text: "", live: true, preview: true, base: 0 };
+    entry.blocks.push(block);
+    entry.blocks.sort((a, b) => Number(a.at) - Number(b.at));
+  }
+  const base = Number(block.base) || 0;
+  if (from > 0 && base + String(block.text || "").length === from) block.text = String(block.text || "") + chunk;
+  else {
+    block.base = from;
+    block.text = chunk;
+  }
+  block.live = true;
+  changed.push(block);
+  state.thinkCache.set(turn.id, { blocks: entry.blocks, at: Date.now() });
+  syncThoughtRows(turn, changed);
+}
+
+// A thought stopped: the row keeps every word it has and loses only the mark. `at` of 0 stops
+// whichever block is live, which is what a call or the terminal line does.
+function endLiveThought(turn, at = 0) {
+  if (!turn) return;
+  const entry = state.thinkCache.get(turn.id);
+  if (!entry) return;
+  const changed = [];
+  for (const b of entry.blocks) {
+    if (!b || !b.preview || !b.live) continue;
+    if (at && Number(b.at) !== at) continue;
+    b.live = false;
+    changed.push(b);
+  }
+  if (!changed.length) return;
+  state.thinkCache.set(turn.id, { blocks: entry.blocks, at: Date.now() });
+  syncThoughtRows(turn, changed);
+}
+
+// Put the preview rows in the turn's console record, in arrival order, and draw the ones that moved.
+// A preview line is marked `preview` so the settled read takes it out again: the store's block replaces
+// it by `at`, never beside it. When the card's 🧠 is off the row is not drawn, but the block is still
+// kept, so turning it on mid-turn paints what has already been read.
+function syncThoughtRows(turn, blocks) {
+  if (!state.jobLines) return;
+  const shown = thinkingOn(cardThreadOf(turn.id));
+  const buf = consoleBufferFor(turn);
+  for (const block of blocks) {
+    const line = {
+      kind: "think",
+      lid: thinkLid(block.at),
+      at: Number(block.at) || Date.now(),
+      text: String(block.text ?? ""),
+      preview: true,
+      live: Boolean(block.live),
+    };
+    const i = buf.findIndex((l) => l && l.preview && String(l.lid) === line.lid);
+    if (i >= 0) buf[i] = { ...buf[i], ...line };
+    else buf.push(line);
+    if (shown) drawJobLine({ id: turn.id, line: { ...line, mode: i >= 0 ? "set" : "new" } });
+  }
+  trimJobLines?.();
+}
+// ---- end the live thought ----------------------------------------------------------------------------
+
 function appendJobLine(evt) {
   // The run's live numbers ride the line they belong to: a jobline frame carries them (lib/jobs.js emitLine),
   // so the pulse's age advances with the output instead of needing a summary frame per token.
@@ -3797,58 +3740,25 @@ function appendJobLine(evt) {
     if (job) job.live = evt.live;
   }
   const line = evt.line || {};
-  // A reasoning block that arrived on the run's own stream is PUSHED, so it can be shown
-  // before the store poll finds it. The console keeps its dim preview line; the full text
-  // seeds the 🧠 pane additively, keyed by the line's own server timestamp. A live-streamed
-  // chunk (reasoning.delta) carries a STABLE at and is marked `live`: one growing block that
-  // owns the pane while the turn runs, so a later store poll cannot re-key it and retype the
-  // whole text from word 0 (see reconcileThinking / loadThinking). A finished
-  // reasoning.available is the same reasoning under a different at — ignore it once a live
-  // block exists, or the reader sees two copies of one thought.
-  //
-  // THE LIVE PREVIEW ARRIVES AS APPENDS. lib/jobs.js `flushReasoning` sends only the words since the last frame and
-  // names their offset in `thinkFrom`; the block is the same `at` throughout, so a contiguous chunk is spliced onto
-  // the copy this tab already holds and the pacer keeps typing where it was. A frame with no `thinkFrom` (or 0) is a
-  // whole block and still replaces - the finished line, and any sender that predates the offset.
-  if (line.think) {
+  // A reasoning frame: `line.think` is the words since the last frame, `line.thinkFrom` their offset in
+  // the block, and `at` names the block. The console draws it as a row of its own, in arrival order, and
+  // a NEW `at` starts a new row rather than growing the one above the call it has already led to.
+  if (line.think || line.thinkEnd) {
     const turn = state.jobs.get(evt.id);
     if (turn) {
-      const at = Number(line.at) || Date.now();
-      const entry = state.thinkCache.get(turn.id) || { blocks: [], at: 0 };
-      const hasLive = entry.blocks.some((b) => b && b.live);
-      const chunk = String(line.think);
-      const from = Number(line.thinkFrom) || 0;
-      const held = from > 0 ? entry.blocks.find((b) => b && b.live && Number(b.at) === at) : null;
-      // Where the block's own text starts inside the thought. 0 for a block that was streamed from its first word;
-      // the offset a tab joined at, for one that was picked up mid-block.
-      const base = held ? Number(held.base) || 0 : 0;
-      if (held && base + held.text.length === from) {
-        // Contiguous: this is the block this tab is already showing, grown by the words just sent.
-        held.text += chunk;
-        state.thinkCache.set(turn.id, { blocks: entry.blocks, at: Date.now() });
-        paintThink(turn, "");
-      } else if (line.thinkOnly || !hasLive) {
-        // A live-streamed chunk drops stale store/available blocks: the pane shows exactly ONE
-        // growing block, never the finished copy alongside the streaming one. A tab that joined mid-block (or whose
-        // stream dropped) holds nothing to splice onto, so its block starts at the offset the frame names: the pane
-        // shows the thought from where this tab attached, and the store read at settle paints all of it.
-        const blocks = line.thinkOnly
-          ? entry.blocks.filter((b) => b && b.live && Number(b.at) !== at)
-          : entry.blocks.filter((b) => Number(b.at) !== at);
-        blocks.push({ at, text: chunk, ...(line.thinkOnly ? { live: true, base: from } : {}) });
-        blocks.sort((a, b) => Number(a.at) - Number(b.at));
-        state.thinkCache.set(turn.id, { blocks, at: Date.now() });
-        paintThink(turn, "");
-      }
+      if (line.think) growLiveThought(turn, line);
+      if (line.thinkEnd) endLiveThought(turn, Number(line.at) || 0);
     }
   }
-  // A streamed reasoning chunk (`line.thinkOnly`) is a PUSHED PREVIEW of one growing block, not a
-  // console line: lib/jobs.js emits it coalesced, keyed by a stable `at`, as the words since the last frame. The
-  // `line.think` branch above just painted the 🧠 pane from it; returning here keeps it out
-  // of the line-by-line hold, recordJobLine() and drawJobLine(). One frame per token would otherwise
-  // flood the transcript and repaint the console. The marked `live` block stays authoritative while
-  // the turn runs; the store poll adopts the finished text only once the turn settles (see loadThinking).
+  // The frames above are a PUSHED PREVIEW of a thought, not record lines: lib/jobs.js emits them
+  // coalesced, keyed by a stable `at`, as the words since the last frame. growLiveThought() has already
+  // put the row in the console and drawn it; returning here keeps the preview out of the line-by-line
+  // hold and out of the server's record. `thinkEnd` is the same idea: the row's mark stops, nothing is
+  // recorded. One frame per token would otherwise flood the transcript and repaint the console.
   if (line.thinkOnly) return;
+  // A call or the turn's terminal line ends the thought above it in the stream: its mark stops here even
+  // when the server's own thinkEnd frame was lost, and the row keeps its words.
+  if (line.kind === "tool" || line.kind === "tool-out" || line.kind === "result") endLiveThought(state.jobs.get(evt.id), 0);
   // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
   // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
   // is not reading anything, so it never holds a line either — the answer is there in full when the reader returns.
@@ -3942,8 +3852,9 @@ function drawJobLine(evt) {
   // clock, so the console fills in a word or two at a time instead of a coalesced phrase at a time.
   const shownText = line.kind === "text" ? typedText(line, evt.id) : line.text;
   // Whether this turn is drawn as ONE stream. Only that console sets a piece apart from the piece above it: the
-  // condensed layout keeps its own margins, which is the layout it already had.
-  const streaming = streamOn(state.jobs.get(evt.id)?.thread || evt.id);
+  // condensed layout keeps its own margins, which is the layout it already had. There is one console now, so
+  // every turn is drawn as that stream.
+  const streaming = true;
   for (const out of outs) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are. The answer comes from the console's own remembered state (set by its
@@ -3959,6 +3870,26 @@ function drawJobLine(evt) {
     if (wait) {
       if (wait.isConnected) wait.remove();
       out._wait = null;
+    }
+    // A thought is a row of the stream. The same lid on a later frame is the SAME row grown (or its mark
+    // stopping), so the node, its open state and the reader's place in it all survive the words arriving.
+    if (line.kind === "think") {
+      const existing = line.lid ? lidRows(out, line.lid)[0] || null : null;
+      if (existing) {
+        patchThinkRow(existing, line);
+      } else {
+        const holder = document.createElement("div");
+        holder.innerHTML = thinkRowHtml(line, out.lastElementChild ? "jl-sep" : "");
+        const fresh = holder.firstElementChild;
+        if (fresh) {
+          out.appendChild(fresh);
+          indexSubtree(out, fresh);
+        }
+      }
+      grew(out);
+      if (stick && !globalThis.consoleHeld?.(out)) stickSoon(out);
+      out._drawnVer = (state.jobLineVersion && state.jobLineVersion.get(evt.id)) || 0;
+      continue;
     }
     // A tool call joins the burst at the tail of the console and updates its tally in place; anything said in
     // between ends that burst, so the next call starts a fresh tally where the transcript has got to.

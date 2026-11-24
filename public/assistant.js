@@ -2319,7 +2319,6 @@
     }
     restoreScrolls(host, prevScrolls);
     applyStoredScrolls(host);
-    restoreThinkBodies(host);
     restoreReplyDraft(conv.thread);
     restoreTyping(host, typing);
     restoreCardSelection(held);

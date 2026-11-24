@@ -120,13 +120,18 @@ test("an empty delta is ignored and does not arm a timer", () => {
   assert.equal(j.reasoningTimer, null, "no flush timer armed");
 });
 
-test("flush at settle emits the final chunk before the turn ends", () => {
-  const { jobs, j, thinkFrames } = harness();
+test("flush at settle emits the final chunk before the turn ends, then stops its mark", () => {
+  const { jobs, j, frames, thinkFrames } = harness();
   jobs.consume(j, { event: "reasoning.delta", delta: "final words" });
-  // settle() flushes the live reasoning preview the same way it flushes the answer paragraph.
+  // settle() flushes the live reasoning preview the same way it flushes the answer paragraph, then emits the
+  // `thinkEnd` frame the console uses to remove the row's still-thinking mark.
   jobs.settle(j, "completed", {});
-  const frames = thinkFrames();
-  assert.equal(frames.length, 1, "the last chunk is not lost when the turn settles");
-  assert.equal(frames[0].line.think, "final words");
+  const chunks = thinkFrames().filter((f) => f.line.think !== "");
+  assert.equal(chunks.length, 1, "the last chunk is not lost when the turn settles");
+  assert.equal(chunks[0].line.think, "final words");
+  const end = thinkFrames().find((f) => f.line.thinkEnd);
+  assert.ok(end, "the row is told the thought stopped");
+  assert.equal(end.line.at, chunks[0].line.at, "the mark stops on the same block it started on");
+  assert.equal(j.reasoningAt, null, "the next delta opens a new block");
   assert.equal(j.reasoningTimer, null, "the coalescing timer is cleared at settle");
 });

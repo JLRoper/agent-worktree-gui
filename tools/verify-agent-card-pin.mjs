@@ -123,7 +123,7 @@ async function diagnose(page, base, label) {
       pane: pane ? { hidden: pane.classList.contains("hidden"), hasJob: Boolean(pane.querySelector(".job")), html: pane.innerHTML.length } : null,
       bodies: rows,
       pres,
-      think: [...document.querySelectorAll(".think-body")].map((t) => ({ sh: t.scrollHeight, ch: t.clientHeight, text: t.textContent.length })),
+      think: [...document.querySelectorAll(".jl-think")].map((t) => ({ sh: t.scrollHeight, ch: t.clientHeight, text: t.textContent.length })),
       lines: [...document.querySelectorAll(".jl, .job-out")].length,
     };
   });
