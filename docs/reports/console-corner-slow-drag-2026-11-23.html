@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The console corner, read per step - row 281</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 34px 60px; background: #0f1218; color: #d7dee9;
+         font: 14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 24px; margin: 0 0 4px; color: #fff; }
+  h2 { font-size: 16px; margin: 30px 0 8px; color: #9ecbff; letter-spacing: .01em; }
+  h3 { font-size: 13.5px; margin: 20px 0 6px; color: #c8a6ff; }
+  p, li { max-width: 90ch; }
+  .meta { color: #8b98a9; font-size: 12.5px; margin-bottom: 18px; }
+  .meta b { color: #d7dee9; font-weight: 600; }
+  .lede { border-left: 3px solid #7a5cc0; padding: 2px 0 2px 14px; color: #c9d3e2; }
+  code { font: 12px/1.45 "Cascadia Mono", Consolas, monospace; background: #171d26; padding: 1px 5px; border-radius: 4px; color: #d9e2ee; }
+  .stack { font: 11px/1.4 "Cascadia Mono", Consolas, monospace; color: #8b98a9; }
+  table { border-collapse: collapse; margin: 8px 0 4px; font: 11.5px/1.35 "Cascadia Mono", Consolas, monospace; }
+  th, td { border: 1px solid #232b37; padding: 2px 7px; text-align: right; }
+  th { background: #171d26; color: #9aa7b8; font-weight: 600; }
+  tr.bad td { background: #2a1620; color: #ffb3ab; }
+  .cols { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  .cols > div { min-width: 0; }
+  .num { font: 12.5px "Cascadia Mono", Consolas, monospace; }
+  .yes { color: #7ee787; }
+  .no { color: #ff9c94; }
+  ul { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 3px 0; }
+  .box { border: 1px solid #232b37; border-radius: 8px; padding: 12px 16px; background: #12171f; margin: 10px 0; }
+  .box h3 { margin-top: 0; }
+  pre { background: #12171f; border: 1px solid #232b37; border-radius: 6px; padding: 10px 12px; overflow: auto;
+         font: 11.5px/1.45 "Cascadia Mono", Consolas, monospace; color: #b9c6d6; }
+  .small { font-size: 12px; color: #8b98a9; }
+</style>
+</head>
+<body>
+
+<h1>The console corner, read per step</h1>
+<div class="meta">
+  Queue row <b>281</b> &middot; agent-worktree-gui &middot; branch
+  <b>wtgui/read-queue-row-281-first-it-carries-the-f9bd09</b> &middot; 2026-11-23, finished 2026-11-24 00:30 &middot;
+  version <b>1.166.0</b> &middot; Chromium via Playwright 1.64.1, Node 26.3.0, headless, 1440x900
+</div>
+
+<p class="lede">The reader's words: grab the agent console's bottom-right handle and drag it <b>DOWN SLOWLY</b>;
+it misbehaves again. This is the third time. What follows is not a theory about why: it is a per-step reading of
+the drag in a real browser, the loop the trace names, the change that removes the disagreement, and the gate that
+now runs that reading on every landing.</p>
+
+<h2>1. What was measured, and how</h2>
+<p>One harness, <code>tools/verify-console-corner-slow-drag.mjs</code>, boots a throwaway panel
+(<code>tools/panel-testkit.mjs</code>), seeds a docked Chat pane with two turns - one settled, one running - opens
+both, puts the transcript on its <b>foot</b> (where a reader watching a live turn sits), then presses the console's
+grip and walks the pointer <b>down 3px every 110ms for 40 steps</b>: 120px of travel over 4.4 seconds. At every step
+it records the console's height, its rect's top and bottom, its own <code>scrollTop</code>, the transcript's
+<code>scrollTop</code>, and the grip's own rect. Four shapes are driven:</p>
+<ul>
+  <li><b>settled</b> - nothing arrives while the hand is down (the drag alone);</li>
+  <li><b>live</b> - a paragraph streams into the console being resized, one word or two per step, the way the wire
+      sends it;</li>
+  <li><b>above</b> - a row lands in the turn <i>above</i> the console, so content grows on the other side of the
+      reader's place (40/40 rows fed, asserted, so the shape cannot be vacuous);</li>
+  <li><b>clipped</b> - the console is shrunk to 300px first, so its content is taller than the box, it scrolls inside
+      itself, and the drag back down is the reader revealing the turn they clipped: the shape where two scrolls (the
+      transcript's and the console's own) both have somewhere to write.</li>
+</ul>
+<p>Each reading is taken <b>after</b> the step's pointer move and one frame, so a row says what the page drew for
+that step - never a before-and-after pair, which is exactly the sampling that missed this defect twice.</p>
+
+<h2>2. The trace, per step: the drag is right, the corner is not</h2>
+<p>Both columns are the <b>live</b> shape on this machine, same viewport, same seed. <span class="yes">green</span>
+rows are steps whose grip stayed on the pointer; <span class="no">red</span> rows are steps where it did not.
+<code>corner off</code> is the grip's bottom edge minus where the pointer is (negative = the corner is above the
+hand). <code>height step</code> is how much the console's height moved in that step.</p>
+
+<div class="cols">
+  <div>
+    <h3>Before this branch - worst corner <span class="no">120px</span></h3>
+    <table class="trace">
+<thead><tr><th>step</th><th>pointer y</th><th>console h</th><th>box top</th><th>transcript scrollTop</th><th>grip bottom</th><th>corner off</th><th>height step</th></tr></thead><tbody>
+<tr class="bad"><td>1</td><td>744.7</td><td>2246.0</td><td>-1502.3</td><td>4982</td><td>743.7</td><td>-3.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>2</td><td>747.7</td><td>2249.0</td><td>-1505.3</td><td>4985</td><td>743.7</td><td>-6.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>3</td><td>750.7</td><td>2252.0</td><td>-1508.3</td><td>4988</td><td>743.7</td><td>-9.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>4</td><td>753.7</td><td>2255.0</td><td>-1511.3</td><td>4991</td><td>743.7</td><td>-12.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>5</td><td>756.7</td><td>2258.0</td><td>-1514.3</td><td>4994</td><td>743.7</td><td>-15.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>6</td><td>759.7</td><td>2261.0</td><td>-1517.3</td><td>4997</td><td>743.7</td><td>-18.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>7</td><td>762.7</td><td>2264.0</td><td>-1520.3</td><td>5000</td><td>743.7</td><td>-21.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>8</td><td>765.7</td><td>2267.0</td><td>-1523.3</td><td>5003</td><td>743.7</td><td>-24.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>9</td><td>768.7</td><td>2270.0</td><td>-1526.3</td><td>5006</td><td>743.7</td><td>-27.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>10</td><td>771.7</td><td>2273.0</td><td>-1529.3</td><td>5009</td><td>743.7</td><td>-30.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>11</td><td>774.7</td><td>2276.0</td><td>-1532.3</td><td>5012</td><td>743.7</td><td>-33.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>12</td><td>777.7</td><td>2279.0</td><td>-1535.3</td><td>5015</td><td>743.7</td><td>-36.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>13</td><td>780.7</td><td>2282.0</td><td>-1538.3</td><td>5018</td><td>743.7</td><td>-39.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>14</td><td>783.7</td><td>2285.0</td><td>-1541.3</td><td>5021</td><td>743.7</td><td>-42.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>15</td><td>786.7</td><td>2288.0</td><td>-1544.3</td><td>5024</td><td>743.7</td><td>-45.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>16</td><td>789.7</td><td>2291.0</td><td>-1547.3</td><td>5027</td><td>743.7</td><td>-48.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>17</td><td>792.7</td><td>2294.0</td><td>-1550.3</td><td>5030</td><td>743.7</td><td>-51.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>18</td><td>795.7</td><td>2297.0</td><td>-1553.3</td><td>5033</td><td>743.7</td><td>-54.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>19</td><td>798.7</td><td>2300.0</td><td>-1556.3</td><td>5036</td><td>743.7</td><td>-57.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>20</td><td>801.7</td><td>2303.0</td><td>-1559.3</td><td>5039</td><td>743.7</td><td>-60.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>21</td><td>804.7</td><td>2306.0</td><td>-1562.3</td><td>5042</td><td>743.7</td><td>-63.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>22</td><td>807.7</td><td>2309.0</td><td>-1565.3</td><td>5045</td><td>743.7</td><td>-66.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>23</td><td>810.7</td><td>2312.0</td><td>-1568.3</td><td>5048</td><td>743.7</td><td>-69.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>24</td><td>813.7</td><td>2315.0</td><td>-1571.3</td><td>5051</td><td>743.7</td><td>-72.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>25</td><td>816.7</td><td>2318.0</td><td>-1574.3</td><td>5054</td><td>743.7</td><td>-75.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>26</td><td>819.7</td><td>2321.0</td><td>-1577.3</td><td>5057</td><td>743.7</td><td>-78.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>27</td><td>822.7</td><td>2324.0</td><td>-1580.3</td><td>5060</td><td>743.7</td><td>-81.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>28</td><td>825.7</td><td>2327.0</td><td>-1583.3</td><td>5063</td><td>743.7</td><td>-84.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>29</td><td>828.7</td><td>2330.0</td><td>-1586.3</td><td>5066</td><td>743.7</td><td>-87.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>30</td><td>831.7</td><td>2333.0</td><td>-1589.3</td><td>5069</td><td>743.7</td><td>-90.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>31</td><td>834.7</td><td>2336.0</td><td>-1592.3</td><td>5072</td><td>743.7</td><td>-93.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>32</td><td>837.7</td><td>2339.0</td><td>-1595.3</td><td>5075</td><td>743.7</td><td>-96.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>33</td><td>840.7</td><td>2342.0</td><td>-1598.3</td><td>5078</td><td>743.7</td><td>-99.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>34</td><td>843.7</td><td>2345.0</td><td>-1601.3</td><td>5081</td><td>743.7</td><td>-102.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>35</td><td>846.7</td><td>2348.0</td><td>-1604.3</td><td>5084</td><td>743.7</td><td>-105.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>36</td><td>849.7</td><td>2351.0</td><td>-1607.3</td><td>5087</td><td>743.7</td><td>-108.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>37</td><td>852.7</td><td>2354.0</td><td>-1610.3</td><td>5090</td><td>743.7</td><td>-111.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>38</td><td>855.7</td><td>2357.0</td><td>-1613.3</td><td>5093</td><td>743.7</td><td>-114.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>39</td><td>858.7</td><td>2360.0</td><td>-1616.3</td><td>5096</td><td>743.7</td><td>-117.00</td><td>+3.0</td></tr>
+<tr class="bad"><td>40</td><td>861.7</td><td>2363.0</td><td>-1619.3</td><td>5099</td><td>743.7</td><td>-120.00</td><td>+3.0</td></tr>
+</tbody></table>
+    <p class="small">height grew +120.0px in 40 steps;
+    the box's top moved -120.0px;
+    the transcript's scrollTop moved
+    +120px.</p>
+  </div>
+  <div>
+    <h3>After this branch - worst corner <span class="yes">0px</span></h3>
+    <table class="trace">
+<thead><tr><th>step</th><th>pointer y</th><th>console h</th><th>box top</th><th>transcript scrollTop</th><th>grip bottom</th><th>corner off</th><th>height step</th></tr></thead><tbody>
+<tr><td>1</td><td>744.7</td><td>2246.0</td><td>-1499.3</td><td>4979</td><td>746.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>2</td><td>747.7</td><td>2249.0</td><td>-1499.3</td><td>4979</td><td>749.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>3</td><td>750.7</td><td>2252.0</td><td>-1499.3</td><td>4979</td><td>752.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>4</td><td>753.7</td><td>2255.0</td><td>-1499.3</td><td>4979</td><td>755.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>5</td><td>756.7</td><td>2258.0</td><td>-1499.3</td><td>4979</td><td>758.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>6</td><td>759.7</td><td>2261.0</td><td>-1499.3</td><td>4979</td><td>761.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>7</td><td>762.7</td><td>2264.0</td><td>-1499.3</td><td>4979</td><td>764.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>8</td><td>765.7</td><td>2267.0</td><td>-1499.3</td><td>4979</td><td>767.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>9</td><td>768.7</td><td>2270.0</td><td>-1499.3</td><td>4979</td><td>770.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>10</td><td>771.7</td><td>2273.0</td><td>-1499.3</td><td>4979</td><td>773.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>11</td><td>774.7</td><td>2276.0</td><td>-1499.3</td><td>4979</td><td>776.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>12</td><td>777.7</td><td>2279.0</td><td>-1499.3</td><td>4979</td><td>779.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>13</td><td>780.7</td><td>2282.0</td><td>-1499.3</td><td>4979</td><td>782.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>14</td><td>783.7</td><td>2285.0</td><td>-1499.3</td><td>4979</td><td>785.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>15</td><td>786.7</td><td>2288.0</td><td>-1499.3</td><td>4979</td><td>788.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>16</td><td>789.7</td><td>2291.0</td><td>-1499.3</td><td>4979</td><td>791.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>17</td><td>792.7</td><td>2294.0</td><td>-1499.3</td><td>4979</td><td>794.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>18</td><td>795.7</td><td>2297.0</td><td>-1499.3</td><td>4979</td><td>797.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>19</td><td>798.7</td><td>2300.0</td><td>-1499.3</td><td>4979</td><td>800.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>20</td><td>801.7</td><td>2303.0</td><td>-1499.3</td><td>4979</td><td>803.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>21</td><td>804.7</td><td>2306.0</td><td>-1499.3</td><td>4979</td><td>806.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>22</td><td>807.7</td><td>2309.0</td><td>-1499.3</td><td>4979</td><td>809.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>23</td><td>810.7</td><td>2312.0</td><td>-1499.3</td><td>4979</td><td>812.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>24</td><td>813.7</td><td>2315.0</td><td>-1499.3</td><td>4979</td><td>815.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>25</td><td>816.7</td><td>2318.0</td><td>-1499.3</td><td>4979</td><td>818.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>26</td><td>819.7</td><td>2321.0</td><td>-1499.3</td><td>4979</td><td>821.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>27</td><td>822.7</td><td>2324.0</td><td>-1499.3</td><td>4979</td><td>824.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>28</td><td>825.7</td><td>2327.0</td><td>-1499.3</td><td>4979</td><td>827.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>29</td><td>828.7</td><td>2330.0</td><td>-1499.3</td><td>4979</td><td>830.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>30</td><td>831.7</td><td>2333.0</td><td>-1499.3</td><td>4979</td><td>833.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>31</td><td>834.7</td><td>2336.0</td><td>-1499.3</td><td>4979</td><td>836.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>32</td><td>837.7</td><td>2339.0</td><td>-1499.3</td><td>4979</td><td>839.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>33</td><td>840.7</td><td>2342.0</td><td>-1499.3</td><td>4979</td><td>842.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>34</td><td>843.7</td><td>2345.0</td><td>-1499.3</td><td>4979</td><td>845.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>35</td><td>846.7</td><td>2348.0</td><td>-1499.3</td><td>4979</td><td>848.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>36</td><td>849.7</td><td>2351.0</td><td>-1499.3</td><td>4979</td><td>851.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>37</td><td>852.7</td><td>2354.0</td><td>-1499.3</td><td>4979</td><td>854.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>38</td><td>855.7</td><td>2357.0</td><td>-1499.3</td><td>4979</td><td>857.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>39</td><td>858.7</td><td>2360.0</td><td>-1499.3</td><td>4979</td><td>860.7</td><td>+0.00</td><td>+3.0</td></tr>
+<tr><td>40</td><td>861.7</td><td>2363.0</td><td>-1499.3</td><td>4979</td><td>863.7</td><td>+0.00</td><td>+3.0</td></tr>
+</tbody></table>
+    <p class="small">height grew +120.0px in 40 steps; the box's top moved
+    +0.0px;
+    the transcript's scrollTop moved
+    +0px while the hand was down
+    (the release then puts it back on the foot).</p>
+  </div>
+</div>
+
+<p><b>Read the second column of numbers, not the height.</b> Before: the height grows by exactly the pointer's
+travel at every step (<code>height step</code> is +3.0, 40 times), and the grip's bottom edge is
+<b>743.7px for all 40 steps</b> while the pointer travels to 861.7px -
+120px out by the end. The drag was never wrong about the height. Something else moved the box's top
+edge by the same 3px, in the same step, for the whole gesture: -120.0px over the run, while the
+transcript's own scrollTop moved +120px.</p>
+
+<h3>The <code>clipped</code> shape: the same corner, a console that was already short</h3>
+<p>A reader who has already shrunk the console is the other ordinary state, and there the box has <b>two</b> scrolls
+to keep still: the transcript's, and the console's own (its content is taller than the box). The gate drives it too:
+shrink to 300px, put the console's own scroll on its tail, then the same 40 steps down. Every fifth row of that
+40-step run, before and after:</p>
+<div class="cols">
+  <div>
+    <h3>clipped, before - worst corner <span class="no">120px</span></h3>
+    <table class="trace">
+<thead><tr><th>step</th><th>pointer y</th><th>console h</th><th>box top</th><th>transcript scrollTop</th><th>grip bottom</th><th>corner off</th></tr></thead><tbody>
+<tr class="bad"><td>1</td><td>744.7</td><td>303.0</td><td>440.7</td><td>3039</td><td>743.7</td><td>-3.00</td></tr>
+<tr class="bad"><td>5</td><td>756.7</td><td>315.0</td><td>428.7</td><td>3051</td><td>743.7</td><td>-15.00</td></tr>
+<tr class="bad"><td>10</td><td>771.7</td><td>330.0</td><td>413.7</td><td>3066</td><td>743.7</td><td>-30.00</td></tr>
+<tr class="bad"><td>20</td><td>801.7</td><td>360.0</td><td>383.7</td><td>3096</td><td>743.7</td><td>-60.00</td></tr>
+<tr class="bad"><td>30</td><td>831.7</td><td>390.0</td><td>353.7</td><td>3126</td><td>743.7</td><td>-90.00</td></tr>
+<tr class="bad"><td>40</td><td>861.7</td><td>420.0</td><td>323.7</td><td>3156</td><td>743.7</td><td>-120.00</td></tr>
+</tbody></table>
+    <p class="small">height grew +120.0px; the box's top moved -120.0px; the transcript's scrollTop moved +120px.
+    The console's own pin also wrote (one <code>scrollTop</code> a step), but that one moves the content inside the
+    box, not the corner.</p>
+  </div>
+  <div>
+    <h3>clipped, after - worst corner <span class="yes">0px</span></h3>
+    <table class="trace">
+<thead><tr><th>step</th><th>pointer y</th><th>console h</th><th>box top</th><th>transcript scrollTop</th><th>grip bottom</th><th>corner off</th></tr></thead><tbody>
+<tr><td>1</td><td>744.7</td><td>303.0</td><td>443.7</td><td>3036</td><td>746.7</td><td>+0.00</td></tr>
+<tr><td>5</td><td>756.7</td><td>315.0</td><td>443.7</td><td>3036</td><td>758.7</td><td>+0.00</td></tr>
+<tr><td>10</td><td>771.7</td><td>330.0</td><td>443.7</td><td>3036</td><td>773.7</td><td>+0.00</td></tr>
+<tr><td>20</td><td>801.7</td><td>360.0</td><td>443.7</td><td>3036</td><td>803.7</td><td>+0.00</td></tr>
+<tr><td>30</td><td>831.7</td><td>390.0</td><td>443.7</td><td>3036</td><td>833.7</td><td>+0.00</td></tr>
+<tr><td>40</td><td>861.7</td><td>420.0</td><td>443.7</td><td>3036</td><td>863.7</td><td>+0.00</td></tr>
+</tbody></table>
+    <p class="small">height grew +120.0px; the box's top moved +0.0px; the transcript's scrollTop moved +0px while
+    the hand was down, and its own console's scrollTop was held too. The release then puts the transcript back on
+    its foot (3036 &rarr; 3156) in one write, through <code>setScroll</code>.</p>
+  </div>
+</div>
+<p>The clipped shape is the one that proves the fix is a <b>stand-down</b> and not an arithmetic that happened to
+work on one body: both pins are asked the same question (<code>cardBodyHeld</code> / <code>consoleHeld</code>) and
+both answer "the gesture owns this box". Sampled every fifth row for space; the gate asserts all 40.</p>
+
+<h2>3. Which loop moved it: the page's tail pin</h2>
+<p>The harness wraps <code>Element.prototype.scrollTop</code> and keeps the calling frame of every write to a
+transcript. The first write of the live run, before this branch:</p>
+<ul><li><code>5116 &rarr; 5119</code><br><span class="stack">    at HTMLDivElement.set [as scrollTop] (eval at evaluate (:370:30), &lt;anonymous&gt;:107:91) |     at setScroll (http://127.0.0.1:60205/board/console.js?v=ec1000f9fc60:3315:16) |     at http://127.0.0.1:60205/board/console.js?v=ec1000f9fc60:3414:41</span></li>
+<li><code>5136 &rarr; 5137</code><br><span class="stack">    at HTMLDivElement.set [as scrollTop] (eval at evaluate (:370:30), &lt;anonymous&gt;:107:91) |     at setScroll (http://127.0.0.1:60205/board/console.js?v=ec1000f9fc60:3315:16) |     at http://127.0.0.1:60205/board/console.js?v=ec1000f9fc60:3414:41</span></li></ul>
+<p>That frame is <code>stickCardBodySoon</code>'s animation-frame flush in
+<code>public/board/console.js:3414</code> (<code>setScroll(b, max)</code> at :3315). It is the panel's
+"follow the foot" pin for the card's session scroller: the console in the docked pane is drawn at its content
+height, so the console's own pin has nothing to scroll and the <i>body</i> is the box that follows the stream. When
+the drag grows the console by 3px, the pin writes the transcript's <code>scrollTop</code> to its new maximum, which
+moves the console's <b>top</b> edge up by 3px - and the corner is <code>top + height</code>, so the two writes
+cancel to the pixel.</p>
+<p>That is the structural cause the row guessed at, confirmed: <b>two loops own the same box</b>. The drag owns the
+height; the tail pin owns the transcript's offset; the reader's hand is on the sum of the two. The <b>page's</b>
+pin is the one that disagrees with the gesture.</p>
+
+<h3>The browser's anchor is the other candidate, and it is not the culprit - it is the fix for the shape above</h3>
+<p>Chromium's own scroll anchoring also adjusts a scrollport's offset, silently, with no <code>scrollTop</code>
+write for a page to see. It was tried as the second half of the stand-down (a
+<code>body.is-out-gripping .job-body { overflow-anchor: none }</code> rule) and <b>measured wrong</b>: with the
+transcript on its foot and a row landing in the turn ABOVE, a still hand lost <b>86.25px</b> of corner with the
+anchor disabled, because the browser was the thing holding the reader's place while content grew above it. That
+rule is not in the change; the sheet says why, and the gate's <code>above</code> shape fails if it is added back.</p>
+
+<div class="cols">
+  <div>
+    <h3>The <code>above</code> shape, before - worst corner <span class="no">119.75px</span></h3>
+    <p class="small">The console's top edge moved -119.75px
+    while the hand was still; the transcript's scrollTop moved
+    +206px.</p>
+  </div>
+  <div>
+    <h3>The <code>above</code> shape, after - worst corner <span class="yes">0.75px</span></h3>
+    <p class="small">Top edge moved +0.25px;
+    the transcript's own scrollTop absorbed the row (86px) exactly as the browser's anchor intends.</p>
+  </div>
+</div>
+
+<h2>4. Why this keeps coming back</h2>
+<p>Three landings, three fixes, one structural mistake repeated. The corner's arithmetic has always been
+re-derived by hand against "the body under the box this time":</p>
+<ul>
+  <li><b>PR 780 (0faf5d13, 1.114.1)</b> - <code>tools/verify-console-corner-tail.mjs</code> closed a jitter whose
+      cause was <code>stickSoon</code> correcting inside an animation frame only. The correction moved from a frame
+      to a microtask. The <i>shape</i> did not change: a second loop still wrote the same box.</li>
+  <li><b>PR 748</b> - one builder for every readable command line. The body became a different tree with different
+      growth points; the pin calls were re-attached by hand.</li>
+  <li><b>PR 881 (13a343f)</b> - one stream with thinking rows, the brain pane deleted, the body now the same
+      <code>pre.job-out</code> the tools use. The console's growth and the transcript's growth are now the same
+      event, which is why the page's pin and the drag now write the same number in the same step.</li>
+</ul>
+<p>Each rewrite handed the corner a body its arithmetic was not written for, and the gate that covered it
+(<code>verify-console-corner-tail.mjs</code>, and <code>verify-console-resize.mjs</code> before it) samples the
+height and the corner at the END of a step. A cancellation is invisible to that sampling: the height is right, the
+corner is wrong, and neither a before nor an after picture of one step shows the other loop. Nor did either tool
+ever press DOWN on a transcript that is on its foot: the old tail harness drags UP on a board card, where the pin
+never fires, and the resize harness drags a card with no session scroller at all.</p>
+
+<h2>5. The change, and what it forbids</h2>
+<div class="box">
+  <h3>One owner for the height</h3>
+  <p>The console's height is now <code>--out-h</code>, written only by <code>setOutHeight</code>
+  (<code>public/board/console.js</code>) and read by the sheet's <code>.job-out { height: var(--out-h, auto) }</code>.
+  The three paths that used to write <code>style.height</code> on their own - the grip gesture, the remembered
+  height a rebuild restores (<code>applyStoredHeight</code>), and the float's slack console drag
+  (<code>public/assistant.js</code>) - all call it. There is no second place to read a second number from.</p>
+</div>
+<div class="box">
+  <h3>The gesture owns the rect, not just the height</h3>
+  <p>At the press it reads the box's <b>top edge</b> and the pixels of the grip the hand landed inside; every move
+  is <code>pointer + grab - top</code>. The height is no longer "the drawn height plus this move's travel", so a
+  reflow cannot accumulate, and the corner lands on the pointer by construction. The clamps are still applied once,
+  at the release.</p>
+</div>
+<div class="box">
+  <h3>The page's tail pin stands down for the drag</h3>
+  <p><code>cardBodyHeld(body)</code> is asked by <code>stickCardBodySoon</code> (and its queued frame),
+  <code>stickCardBody</code>, <code>stickSoon</code>'s flush and <code>stickConsole</code>; while the gesture is
+  live, nothing scrolls the transcript or the console it holds. The <b>browser's</b> anchor is left alone on
+  purpose (section 3). On release, a transcript that was following its foot goes back to it once, through
+  <code>setScroll</code>, so a resize the reader asked for cannot take the stream's follow away - before this
+  branch, a slow drag in the settled shape left the transcript <b>120px short of its foot</b> and stopped it
+  following.</p>
+</div>
+<p><b>What this forbids a future console rewrite from doing:</b> writing a height on a <code>.job-out</code> anywhere
+but through <code>setOutHeight</code>; and re-pinning the transcript (or the console's own tail) while a corner
+gesture is live. A new body, a new stream shape or a new pane changes what is <i>inside</i> the box - it does not
+get to invent a second geometry. Both rules are asserted by <code>test/console-grip.test.js</code> (one writer, one
+variable, no <code>overflow-anchor</code> stand-down, the frozen-top arithmetic) and by the harness below.</p>
+
+<h2>6. The gate</h2>
+<p><code>tools/verify-console-corner-slow-drag.mjs</code> is declared <code>// HARNESS: LIVE GATE</code>, wired as
+<code>npm run verify:console-slow-drag</code>, and <code>test/harness.test.js</code> holds every live gate to a
+package.json script - so it is a rumour the moment that wiring is dropped. <code>npm run verify:all</code> runs it
+with the rest of the fleet.</p>
+<p>What it asserts, per scenario, at every one of the 40 steps:</p>
+<ul>
+  <li>the grip's bottom edge is on the pointer (2px band);</li>
+  <li>no step moves the box backwards under the pointer;</li>
+  <li>the height grew by the pointer's own travel (120px for 120px);</li>
+  <li>nothing re-pinned the transcript's foot while the pointer was down (box top within 1px, and the scrollTop
+      move reported);</li>
+  <li>after the release: the transcript is back on its foot, and <code>--out-h</code> holds the height the gesture
+      chose.</li>
+</ul>
+<p><b>Failing-first proof.</b> Run against a <code>git archive</code> of <code>origin/main</code>
+(<code>fd2f3c7b</code>, v1.165.1, the base this landing is cut from - no second worktree), with the same harness:</p>
+<pre>node tools/verify-console-corner-slow-drag.mjs --root &lt;archive of origin/main&gt;
+NUMBERS settled worst corner 0px (top moved 0, pin moved 0, height +120) |
+        live    worst corner 120px (top moved -120, pin moved 120, height +120) |
+        above   worst corner 119.75px (top moved -119.75, pin moved 206, height +120) |
+        clipped worst corner 120px (top moved -120, pin moved 120, height +120)
+RESULT: FAIL (11 checks)</pre>
+<p>and against this branch</p>
+<pre>npm run verify:console-slow-drag
+NUMBERS settled worst corner 0px (top moved 0, pin moved 0, height +120) |
+        live    worst corner 0px (top moved 0, pin moved 0, height +120) |
+        above   worst corner 0.75px (top moved 0.25, pin moved 86, height +120) |
+        clipped worst corner 0px (top moved 0, pin moved 0, height +120)
+RESULT: PASS</pre>
+<p>Each half was also removed on its own to check the gate is not passing by luck: with
+<code>cardBodyHeld</code> forced to <code>false</code>, the live shape returns to <b>120px</b> out; with the gesture's
+arithmetic reverted to the drawn rect, the corner is right in the settled shape and only stays right because the top
+is frozen - which is why both halves are in the gate.</p>
+
+<h2>7. What is not this branch</h2>
+<p>Four reds were found while running the suites and are <b>pre-existing on main</b>, verified by running the same
+file against the archive of <code>origin/main</code> (<code>fd2f3c7b</code>):</p>
+<ul>
+  <li><code>test/worktree-assistant.test.js</code> - 6 failures (<code>TypeError: Cannot read properties of
+      undefined (reading 'id')</code> from a route answer); identical on main.</li>
+  <li><code>test/paths.test.js</code> - "every *File / *Dir / *Log config key ... is derived by
+      <code>lib/paths.js</code>"; identical on main.</li>
+  <li><code>test/harness.test.js</code> - "every declared harness is wired the way its own header says":
+      <code>tools/verify-wave-file-exists.mjs</code> declares <code>// HARNESS: LIVE GATE</code> and no
+      <code>package.json</code> script runs it. Identical on main; that harness's wiring belongs to the waves row,
+      not this one.</li>
+  <li><code>tools/verify-console-resize.mjs</code> - "a reload draws the console at the height the gesture left it"
+      (chosen 270 -> 230) and its cap check; identical numbers on main. It is a real, separate defect: the stored
+      height does not come back on a reload in that harness's shape.</li>
+</ul>
+
+<h2>8. Process hygiene</h2>
+<p>The harness starts <b>one</b> sandbox panel (<code>node server.js</code>) and <b>one</b> headless Chromium, and both
+are killed on exit - the browser in <code>withBrowser</code>'s <code>finally</code>, the panel in
+<code>panel.stop()</code> after it. Since this row's mandatory item is that no node instance the test starts is left
+running, the harness now <b>asserts</b> the panel's pid is gone (signal 0, the "does this pid still exist" question on
+both platforms), so a leak fails the gate instead of being found by a reader later:</p>
+<pre>PASS  the sandbox panel this run started is gone: pid 51496 exited with the run</pre>
+<p>The host's own node/chromium list, read with <code>Get-CimInstance Win32_Process</code> immediately before and
+after that run (this machine carries other worktrees, so the absolute count is theirs, and the <b>diff</b> is what
+this run owns):</p>
+<pre>before=54 after=52
+new PIDs: (none)
+processes whose command line names read-queue-row-281 or a wtgui-corner-slow sandbox: 0
+Playwright chromium / headless_shell left: 0
+the msedge.exe processes are the reader's own browser, not this harness</pre>
+<p>Two unrelated PIDs that were already running exited during the window; <b>nothing appeared</b>. The gate itself
+exits 0 (<code>RESULT: PASS</code>), so a leaked sandbox is now a red the next reader sees.</p>
+
+<p class="small">The traces quoted above are the harness's own <code>--trace</code> output, unedited. This page is
+self-contained: no server, no build step, no external asset.</p>
+
+</body>
+</html>

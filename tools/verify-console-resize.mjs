@@ -328,8 +328,8 @@ async function main() {
         // ---- 3. TEN 20px moves UP: the grip stays on the cursor and the console loses 20px a step
         const g1 = await grab(page, LONG);
         check(near(g1.after.h, g1.at.h), "pointerdown leaves the console the size it was", `h ${g1.at.h} -> ${g1.after.h}`);
+        // `--out-h` is the console height's one owner (public/board/console.js setOutHeight); inlineH is that variable.
         check(g1.after.inlineH === `${g1.at.h}px` && g1.after.max === "none",
-          // `--out-h` is the console height's one owner (public/board/console.js setOutHeight); this read is that variable.
           "the height it has is pinned as the gesture starts, and the cap lifted in the same breath",
           `inlineH=${g1.after.inlineH} max=${g1.after.max}`);
         check(near(g1.at.b, g1.at.grip.b) && near(g1.at.r, g1.at.grip.r),
