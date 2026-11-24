@@ -549,13 +549,19 @@ test("intersectingFiles matches the same file and a parent directory, not a subs
   assert.deepEqual(intersectingFiles(["lib/a.js"], ["lib/ab.js"]), []);
 });
 
-test("a stale running task still blocks a queued one, and the reason says it is stale", () => {
+test("a STALE running task no longer blocks a queued one: its run has ended, so the cut would start the row", () => {
+  // Row 293: the digest used to print SKIP for a queued row whose blocker was itself stale - a row whose run had
+  // ended, with no live worker in it. The cut never refused that: it refuses a live worker on the ROW or a live run in
+  // the TREE, and a stale row is neither. The digest was saying no where the cut said yes, which is the same
+  // disagreement in the other direction from the held-file case. A holder is a row a LIVE job is working.
   const a = addTask([], { title: "dead run", thread: "T1", files: ["lib/x.js"] });
   const b = addTask(a.tasks, { title: "next", files: ["lib/x.js"] }, { nextId: a.nextId });
   const running = setTaskState(b.tasks, 1, "running");
   const decorated = decorateTasks(running.tasks, { isLive: () => false });
   const queued = decorated.find((t) => t.id === 2);
-  assert.match(queued.skipped, /#1 \(stale\)/);
+  assert.equal(decorated.find((t) => t.id === 1).stale, true, "the blocker's run has ended");
+  assert.equal(queued.conflict, undefined, "a stale row is not a live holder, so there is nothing to skip for");
+  assert.equal(queued.skipped, undefined);
 });
 
 // ---- panel-completed -------------------------------------------------------------------------------------
@@ -613,20 +619,24 @@ test("queueCounts counts each state and both derived flags", () => {
   let q = addTask([], { title: "q1" }).tasks;
   q = addTask(q, { title: "r1", thread: "T1", files: ["a.js"] }, { nextId: 2 }).tasks;
   q = setTaskState(q, 2, "running").tasks;
-  q = addTask(q, { title: "p1" }, { nextId: 3 }).tasks;
-  q = setTaskState(q, 3, "parked", { reason: "blocked" }).tasks;
-  q = addTask(q, { title: "d1" }, { nextId: 4 }).tasks;
-  q = setTaskState(q, 4, "done", { by: "reader" }).tasks;
-  q = addTask(q, { title: "c1", files: ["a.js"] }, { nextId: 5 }).tasks;
-  const d = decorateTasks(q, { isLive: () => false });
+  // A second running row whose thread is NOT live: `stale` is a flag on a running task, and this keeps one in the
+  // fixture now that a stale row no longer counts as a conflict. It claims no file, so it cannot block c1.
+  q = addTask(q, { title: "r2", thread: "T2" }, { nextId: 3 }).tasks;
+  q = setTaskState(q, 3, "running").tasks;
+  q = addTask(q, { title: "p1" }, { nextId: 4 }).tasks;
+  q = setTaskState(q, 4, "parked", { reason: "blocked" }).tasks;
+  q = addTask(q, { title: "d1" }, { nextId: 5 }).tasks;
+  q = setTaskState(q, 5, "done", { by: "reader" }).tasks;
+  q = addTask(q, { title: "c1", files: ["a.js"] }, { nextId: 6 }).tasks;
+  const d = decorateTasks(q, { isLive: (t) => t === "T1" });
   const c = queueCounts(d);
-  assert.equal(c.total, 5);
+  assert.equal(c.total, 6);
   assert.equal(c.queued, 2);
-  assert.equal(c.running, 1);
+  assert.equal(c.running, 2);
   assert.equal(c.parked, 1);
   assert.equal(c.done, 1);
-  assert.equal(c.stale, 1, "the running task's thread is not live");
-  assert.equal(c.conflict, 1, "c1's file clashes with the running task's");
+  assert.equal(c.stale, 1, "r2's thread is not live");
+  assert.equal(c.conflict, 1, "c1's file is held by the LIVE r1");
 });
 
 test("every digest line carries state, thread, worktree, PR state and its skip reason", () => {
@@ -639,15 +649,16 @@ test("every digest line carries state, thread, worktree, PR state and its skip r
   q = addTask(q, { title: "parked", reason: "waiting", worktree: "C:/wt2" }, { nextId: 10 }).tasks;
   q = setTaskState(q, 10, "parked", { reason: "waiting on review" }).tasks;
   const rowFor = (t) => (t.worktree === "C:/wt" ? { path: "C:/wt", verdict: "OPEN", pr: { number: 3, state: "OPEN" } } : null);
-  const lines = queueDigest(q, { size: 3, isLive: () => false, rowFor });
+  const lines = queueDigest(q, { size: 3, isLive: (t) => t === "T1", rowFor });
   const text = lines.join("\n");
-  assert.match(lines[0], /8 queued · 1 running, 1 stale · 1 parked · 0 done/);
+  assert.match(lines[0], /8 queued · 1 running · 1 parked · 0 done/);
   // A queued task: state, thread, worktree and PR are all said, even when there is nothing to say.
   assert.match(text, /- ○ #2 queued · queued 2 · thread \(none\) · tree \(none\) · PR none/);
-  // …and the skip reason rides on the line of the task that is being skipped.
-  assert.match(text, /- ○ #1 queued · clashing · thread \(none\) · tree \(none\) · PR none · files a\.js · SKIP: files in use by #9 \(stale\)/);
+  // …and the skip reason rides on the line of the task that is being skipped. The blocker is LIVE (T1), so this is
+  // the one kind of overlap the cut refuses: the sentence is the lane predicate's, not a second phrase of the digest's.
+  assert.match(text, /- ○ #1 queued · clashing · thread \(none\) · tree \(none\) · PR none · files a\.js · SKIP: files in use by #9 \(thread T1, running\) - #1 also claims a\.js/);
   // A running task: the same facts, plus the PR's number and the verdict on its thread.
-  assert.match(text, /- ● #9 running · running · thread T1 · tree C:\/wt · PR OPEN #3 · files a\.js · STALE: that thread has no live run/);
+  assert.match(text, /- ● #9 running · running · thread T1 · tree C:\/wt · PR OPEN #3 · files a\.js · LIVE, and a SPAWN into its tree is refused until this run ends/);
   // A parked task: the same facts, plus why it is parked. The park carries no hold, so it reads `parked (manual)` — the
   // release condition slot says out loud that there is nothing the panel can test (see test/queue-holds.test.js).
   assert.match(text, /- ⏸ #10 parked \(manual\) · parked · thread \(none\) · tree C:\/wt2 · PR none · PARKED, and a SPAWN carrying this id is refused until it is unparked: waiting on review/);
