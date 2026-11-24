@@ -73,6 +73,7 @@
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
     "verify:chart-edges": "node tools/verify-chart-edges.mjs",
     "verify:initiatives-tab": "node tools/verify-initiatives-tab.mjs",
+    "verify:initiatives-order": "node tools/verify-initiatives-order-archive.mjs",
     "verify:initiatives-scroll": "node tools/verify-initiatives-scroll.mjs",
     "verify:initiatives-creep": "node tools/verify-initiatives-creep.mjs",
     "verify:initiatives-read-backoff": "node tools/verify-initiatives-read-backoff.mjs",

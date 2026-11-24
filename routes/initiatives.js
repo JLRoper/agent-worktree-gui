@@ -1,12 +1,22 @@
 // The initiatives: one tab's read, the writes a reader or an assistant may make, and the permission tier that decides
 // which of them asks first.
 //
-//   GET  /api/initiatives              the store, every initiative with its projects, worktrees and history, and the
-//                                      assistants that have worked on it (counts and recency)
+//   GET  /api/initiatives              the store, every active initiative with its projects, worktrees and history, and
+//                                      the assistants that have worked on it (counts and recency); plus the archived
+//                                      records in their own list, which nothing else in the panel reads
 //   POST /api/initiatives              { title, description } - create
 //   POST /api/initiatives/update       { id, title?, description? } - edit the words only
 //   POST /api/initiatives/move         { tree, initiative, action: "add"|"remove" } - attach or detach, unless the
 //                                      tier says this change has to ask
+//   POST /api/initiatives/reorder      { id, to, by? } - move one ACTIVE initiative to a 1-based position, immediately.
+//                                      ITS OWN PATH ON PURPOSE: `/move` above means a TREE, and a reorder posted there
+//                                      would detach a worktree. `to` is the index in the list the tab draws, the same
+//                                      contract as POST /api/waves/move, and the answer is the whole document the next
+//                                      GET would answer, so the tab and the store cannot disagree about the order.
+//   POST /api/initiatives/archive      { id, by? } - put one away, REFUSED while anything under it is open. The refusal
+//                                      names the blocking rows (`blocked`: wave/task id and title) and reads its liveness
+//                                      from the wave fold (archiveBlockers below), not from a second opinion.
+//   POST /api/initiatives/restore      { id, by? } - put it back at the position it was archived with
 //
 // WHY THE TIER IS A SETTING AND NOT FOUR ROUTES. The reader's question is "how often do I want to be interrupted about
 // this map", and the answer is one of four levels (lib/initiative-permissions.js). The level decides ONLY whether the
@@ -20,7 +30,7 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
-import { WAVE_GATE_CHOICES, taskWithOwner, waveEvidenceNeeds, waveFileExistsPaths, waveLane } from "../lib/waves.js";
+import { WAVE_GATE_CHOICES, taskWithOwner, waveEvidenceNeeds, waveFileExistsPaths, waveIsOpen, waveLane, waveMemberOpen } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
@@ -76,6 +86,10 @@ function taskRowOf(task, nowMs, rowFor) {
     runId: task.state === "running" ? String(task.runId || "") : "",
     pr: number ? { number, state: prState, url } : null,
     at: lastTouched(task, nowMs),
+    // THE NAMED ABANDONMENT, passed through as the row keeps it: the archive refusal reads it with the wave fold's own
+    // liveness rule (lib/waves.js `waveMemberOpen`), and a task a person abandoned for a written reason is closed work.
+    // No other surface reads it from here, so it is carried for the refusal rather than drawn.
+    abandoned: task && task.abandoned ? task.abandoned : null,
   };
 }
 
@@ -87,6 +101,9 @@ function taskRowOf(task, nowMs, rowFor) {
 export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null, evidenceFor = null, boardTasks = null, ownerLabel = null }) {
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
+  // The archived records, read once: the tab's Archived view and the counts. A store handed in by a fixture that
+  // predates archive answers no list, and the view draws an empty one rather than failing.
+  const archivedList = typeof initiatives.archivedList === "function" ? initiatives.archivedList() : [];
   const level = initiativeTierInfo(tier);
   const board = timeSync("fold.queues", () =>
     assistants.map((rec) => {
@@ -110,8 +127,11 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
   // be built from two different reads of one row.
   const waveTasks = Array.isArray(boardTasks) ? boardTasks : board.flatMap((b) => b.tasks);
   const waveStatus = waves && typeof waves.statusOf === "function" ? waves.statusOf() : null;
-  const out = list.map((init) => {
-    const trees = timeSync("fold.trees", () =>
+  // The trees behind one initiative, and the projects they fall into: the fold the open card draws, and the only part
+  // of it an ARCHIVED card needs (its counts). One function, so an archived card and an active one cannot disagree
+  // about how many worktrees a put-away initiative still owns - which is what proves Restore loses nothing.
+  const foldTrees = (init) =>
+    timeSync("fold.trees", () =>
       initiatives.treesFor(init.id).map((rec) => {
         const found = projectForPath(rec.path) || null;
         const project = String(found?.name || "").trim();
@@ -140,15 +160,20 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
         };
       }),
     );
+  const foldProjects = (trees) => {
     const byProject = new Map();
     for (const tree of trees) {
       const name = tree.project || "(outside every project)";
       if (!byProject.has(name)) byProject.set(name, []);
       byProject.get(name).push(tree);
     }
-    const projects = [...byProject.entries()]
+    return [...byProject.entries()]
       .map(([name, rows]) => ({ name, trees: rows.sort((a, b) => a.name.localeCompare(b.name)) }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  };
+  const out = list.map((init, at) => {
+    const trees = foldTrees(init);
+    const projects = foldProjects(trees);
     const treeKeys = new Set(trees.map((t) => t.key));
     const people = [];
     for (const { rec, tasks } of board) {
@@ -201,6 +226,12 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       createdAt: init.createdAt,
       updatedAt: init.updatedAt,
       updatedBy: init.updatedBy,
+      // The reader's place in the list, and the stored number behind it: the card draws its arrows from this, so the
+      // first card's up arrow and the last card's down arrow are disabled by the same read that draws the words.
+      // `orderBy` is who moved it last - carried so a caller can prove the write recorded an actor, not drawn.
+      position: at + 1,
+      order: init.order,
+      orderBy: init.orderBy,
       projects,
       projectCount: projects.length,
       treeCount: trees.length,
@@ -216,6 +247,28 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       // caller handed in without the reader (a fixture with only initiativeList and treesFor) draws no history rather
       // than failing the whole view: the tab is a read, and a read should not depend on a method added later.
       history: typeof initiatives.historyFor === "function" ? initiatives.historyFor(init.id) : [],
+    };
+  });
+  // THE ARCHIVED LIST. Its own array, never mixed into `initiatives`: every count, chip, lane and drive in the panel
+  // reads the active list, so an archived initiative is absent from all of them by construction rather than by a filter
+  // somebody has to remember. The card needs the same counts the active one shows and the stamp that says who put it
+  // away, and nothing else: no lane is folded for it (the archive rule guarantees its waves are closed), so putting a
+  // heavy initiative away makes the tab cheaper rather than dearer.
+  const archived = archivedList.map((init) => {
+    const trees = foldTrees(init);
+    const projects = foldProjects(trees);
+    return {
+      id: init.id,
+      title: init.title,
+      description: init.description,
+      createdAt: init.createdAt,
+      updatedAt: init.updatedAt,
+      order: init.order,
+      archivedAt: init.archivedAt,
+      archivedBy: init.archivedBy,
+      projects,
+      projectCount: projects.length,
+      treeCount: trees.length,
     };
   });
   return {
@@ -243,7 +296,59 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
         }
       : null,
     initiatives: out,
+    // What the reader put away, drawn only by the Archived view. Never folded into the list above.
+    archived,
+    // The two counts the filter draws, taken from the arrays the answer carries so a chip cannot disagree with them.
+    counts: { active: out.length, archived: archived.length },
   };
+}
+
+/**
+ * WHAT STILL HAS TO BE CLOSED BEFORE AN INITIATIVE CAN BE ARCHIVED: every wave the fold reads open, and every task
+ * under the initiative that is still live - on one of its trees, or filed into one of its waves from another project.
+ *
+ * THE LIVENESS RULE IS THE WAVE FOLD'S OWN (lib/waves.js `waveIsOpen` / `waveMemberOpen`), the same pair the wave drive
+ * closes a wave with and the lane draws its state from. A second opinion here would let the tab archive work the
+ * driver still considers open, which is exactly the "refuse while open" answer the reader gave. `[]` is a clean
+ * initiative. Every entry names the row by id and title, because a refusal that says "something is open" is a wall.
+ *
+ * @param {object} init one initiative as `initiativesView` folds it
+ * @returns {Array<{kind: "wave"|"task", id: string|number, title: string, state: string, why: string}>}
+ */
+export function archiveBlockers(init) {
+  const out = [];
+  const seen = new Set();
+  const addTask = (task, owner) => {
+    if (!waveMemberOpen(task)) return;
+    const key = `${owner || "?"}:${task.id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      kind: "task",
+      id: task.id,
+      title: String(task.title || ""),
+      state: String(task.state || ""),
+      why: `#${task.id} "${String(task.title || "")}" reads ${task.state}`,
+    });
+  };
+  for (const wave of Array.isArray(init?.waves) ? init.waves : []) {
+    if (waveIsOpen(wave)) {
+      out.push({
+        kind: "wave",
+        id: String(wave.id || ""),
+        title: String(wave.title || ""),
+        state: String(wave.state || ""),
+        why: `wave ${wave.id} "${String(wave.title || "")}"${wave.position ? ` (W${wave.position})` : ""} reads ${wave.state}${wave.stateWhy ? `: ${wave.stateWhy}` : ""}`,
+      });
+    }
+    for (const member of Array.isArray(wave.members) ? wave.members : []) addTask(member, member.assistantId);
+  }
+  // The tasks on the initiative's own trees, including the ones filed into no wave at all: the tab counts them beside
+  // each assistant, so they are work under this initiative whether or not a wave has claimed them.
+  for (const person of Array.isArray(init?.assistants) ? init.assistants : []) {
+    for (const task of Array.isArray(person.taskRows) ? person.taskRows : []) addTask(task, person.id);
+  }
+  return out;
 }
 
 export function createInitiativesRoutes({
@@ -605,6 +710,58 @@ export function createInitiativesRoutes({
       return true;
     }
 
+    // ---- the reader's order -------------------------------------------------------------------------------------------
+    // A REORDER IS NOT A MOVE. `/move` above attaches or detaches a TREE and can park a permission card; this route
+    // moves the CARD, saves at once (the reader asked for no Save button), and never asks: the tier is about the map's
+    // membership, not about the order the reader keeps his own list in. `to` is 1-based in the ACTIVE list, exactly the
+    // waves route's contract, and the answer is the whole document the next GET would answer plus a plain `order` list
+    // a caller can assert against without reading the fold.
+    if (route === `${INITIATIVES_PATH}/reorder`) {
+      const refused = unreadable();
+      if (refused) {
+        sendJson(res, 409, refused);
+        return true;
+      }
+      const id = String(payload.id || "").trim();
+      if (!id) {
+        sendJson(res, 400, { ok: false, error: "a reorder needs the initiative id" });
+        return true;
+      }
+      const existing = initiatives.initiativeById(id);
+      if (!existing) {
+        sendJson(res, 404, { ok: false, error: `no such initiative: ${id}` });
+        return true;
+      }
+      if (existing.archivedAt) {
+        sendJson(res, 409, { ok: false, error: `"${existing.title}" is archived - restore it before moving it in the list` });
+        return true;
+      }
+      const by = actorOf(payload);
+      const out = initiatives.reorder({ id, to: payload.to, by });
+      if (out.notFound) {
+        sendJson(res, 404, out);
+        return true;
+      }
+      if (!out.ok) {
+        sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
+        return true;
+      }
+      if (out.changed !== false) onChange("reordered");
+      const view = await rebuildView();
+      log(`initiatives: "${existing.title}" (${id}) moved to position ${out.to} by ${by}${out.changed === false ? " - already there" : ""}`);
+      sendJson(res, 200, {
+        ok: true,
+        asked: false,
+        changed: out.changed !== false,
+        to: out.to,
+        // The new order, plainly: the document below carries the same list folded, and this is the one line a caller
+        // can assert a reorder against without reading the fold (the waves route's own answer shape).
+        order: view.initiatives.map((init, at) => ({ id: init.id, position: at + 1 })),
+        ...view,
+      });
+      return true;
+    }
+
     // ---- the one write that asks ------------------------------------------------------------------------------------
     if (route === `${INITIATIVES_PATH}/move`) {
       const tree = String(payload.tree || payload.path || "").trim();
@@ -628,6 +785,12 @@ export function createInitiativesRoutes({
       const rec = initiatives.initiativeById(initiativeId);
       if (!rec) {
         sendJson(res, 404, { error: `no such initiative: ${initiativeId || "(none)"}` });
+        return true;
+      }
+      // An archived initiative is out of the map: a tree cannot be attached to it or taken out of it until it is back
+      // in the list, so its saved membership is exactly what Restore returns.
+      if (rec.archivedAt) {
+        sendJson(res, 409, { ok: false, error: `"${rec.title}" is archived - restore it before moving a worktree in or out of it` });
         return true;
       }
       const has = initiatives.forTree(tree).some((i) => i.id === rec.id);
@@ -697,6 +860,105 @@ export function createInitiativesRoutes({
         tree,
         action,
         note: "the question is in the dock, bottom right - the tree moves when you answer it",
+      });
+      return true;
+    }
+
+    // ---- archive: put it away, but only when nothing under it is open ----------------------------------------------
+    // THE REFUSAL IS THE POINT OF THIS ROUTE (the reader's answer 2). The blocking rows are read from the SAME fold
+    // the tab draws and the wave drive closes a wave from (archiveBlockers -> lib/waves.js waveIsOpen/waveMemberOpen),
+    // built fresh for this request rather than from the memoised read: a task that started a second ago must refuse
+    // the archive, and a document up to two seconds old would let it through. The answer names every blocking row by
+    // id and title, so the reader knows exactly which card to close.
+    if (route === `${INITIATIVES_PATH}/archive`) {
+      const refused = unreadable();
+      if (refused) {
+        sendJson(res, 409, refused);
+        return true;
+      }
+      const id = String(payload.id || "").trim();
+      if (!id) {
+        sendJson(res, 400, { ok: false, error: "an archive needs the initiative id" });
+        return true;
+      }
+      const existing = initiatives.initiativeById(id);
+      if (!existing) {
+        sendJson(res, 404, { ok: false, error: `no such initiative: ${id}` });
+        return true;
+      }
+      const by = actorOf(payload);
+      if (existing.archivedAt) {
+        sendJson(res, 200, { ok: true, asked: false, changed: false, note: `"${existing.title}" is already archived`, ...(await cachedView()) });
+        return true;
+      }
+      // One fresh fold, used twice: its lanes are the rows the refusal names, and the write below is what the answer's
+      // document draws. The document that answers is rebuilt after the write, so an archived initiative is absent from
+      // the list the tab gets back in the very same breath.
+      const fresh = await rebuildView();
+      const entry = fresh.initiatives.find((init) => init.id === id) || null;
+      if (!entry) {
+        sendJson(res, 404, { ok: false, error: `no such initiative: ${id}` });
+        return true;
+      }
+      const blockers = archiveBlockers(entry);
+      if (blockers.length) {
+        const names = blockers.map((b) => (b.kind === "wave" ? `wave ${b.id} "${b.title}"` : `#${b.id} "${b.title}"`));
+        const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join("; ")} and ${names[names.length - 1]}`;
+        const error = `"${existing.title}" cannot be archived while ${blockers.length === 1 ? "this is" : "these are"} still open: ${list} - close ${blockers.length === 1 ? "it" : "them"}, then archive again`;
+        log(`initiatives: refused to archive "${existing.title}" (${id}) - ${blockers.map((b) => b.why).join("; ")}`);
+        sendJson(res, 409, { ok: false, asked: false, changed: false, blocked: blockers, error, initiative: { id, title: existing.title } });
+        return true;
+      }
+      const out = initiatives.archive({ id, by });
+      if (!out.ok) {
+        sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
+        return true;
+      }
+      if (out.changed) onChange("archived");
+      log(`initiatives: archived "${existing.title}" (${id}) by ${by} - no wave or task under it was open`);
+      sendJson(res, 200, {
+        ok: true,
+        asked: false,
+        changed: out.changed !== false,
+        archived: { id, title: existing.title, archivedAt: out.initiative?.archivedAt || null, archivedBy: out.initiative?.archivedBy || null },
+        ...(await rebuildView()),
+      });
+      return true;
+    }
+
+    // ---- restore: back to the place the number names ---------------------------------------------------------------
+    if (route === `${INITIATIVES_PATH}/restore`) {
+      const refused = unreadable();
+      if (refused) {
+        sendJson(res, 409, refused);
+        return true;
+      }
+      const id = String(payload.id || "").trim();
+      if (!id) {
+        sendJson(res, 400, { ok: false, error: "a restore needs the initiative id" });
+        return true;
+      }
+      const existing = initiatives.initiativeById(id);
+      if (!existing) {
+        sendJson(res, 404, { ok: false, error: `no such initiative: ${id}` });
+        return true;
+      }
+      const by = actorOf(payload);
+      const out = initiatives.restore({ id, by });
+      if (!out.ok) {
+        sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
+        return true;
+      }
+      if (out.changed) onChange("restored");
+      const view = await rebuildView();
+      const back = view.initiatives.find((init) => init.id === id) || null;
+      log(`initiatives: restored "${existing.title}" (${id}) by ${by}${back ? ` at position ${back.position}` : ""}`);
+      sendJson(res, 200, {
+        ok: true,
+        asked: false,
+        changed: out.changed !== false,
+        restored: { id, title: existing.title, position: back ? back.position : null },
+        ...view,
       });
       return true;
     }

@@ -19,11 +19,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+// The store itself, so the "another writer" half of the order proof is a real second writer over the same file rather
+// than a second POST through the same process.
+import { Initiatives, normTreePath } from "../lib/initiatives.js";
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-initiatives-route-"));
 const repos = path.join(sandbox, "repos");
 mkdirSync(repos, { recursive: true });
-after(() => rmSync(sandbox, { recursive: true, force: true }));
+after(() => rmSync(sandbox, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
 
 // Two projects, four worktrees: the shape the proof's screenshot names. Nothing here is about git beyond giving the
 // scan rows to find, so each tree is one commit on its own branch.
@@ -196,10 +199,24 @@ test("the read groups the trees by project and counts the assistants by state, n
   assert.deepEqual(view.assistants[0].counts, { queued: 1, running: 1, done: 1, parked: 1 });
   assert.ok(view.assistants[0].lastAt, "a running task makes the assistant count as working now");
 
-  // The chart column's field is on the rows themselves, and only on rows that have one.
-  const s = await state();
+  // The chart column's field is on the rows themselves, and only on rows that have one. /api/state answers the LAST
+  // text and rebuilds behind it (server.js `snapshotText`, "a reader never waits for the build"), so the read that
+  // follows a write can be one poll stale by design: poll for the chips rather than reading once and calling the
+  // overlay missing.
   const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
+  let s = await state();
   const rowFor = (tree) => s.projects.flatMap((p) => p.worktrees).find((r) => norm(r.path) === norm(tree));
+  if (![treeA1, treeA2, treeB1, treeB2].every((t) => rowFor(t)?.initiatives?.length)) {
+    s = await waitForState(
+      base,
+      (st) =>
+        [treeA1, treeA2, treeB1, treeB2].every((t) => {
+          const row = (st.projects || []).flatMap((p) => p.worktrees || []).find((r) => norm(r.path) === norm(t));
+          return Boolean(row && row.initiatives && row.initiatives.length);
+        }),
+      "the four rows carry their initiative chip",
+    );
+  }
   assert.deepEqual(rowFor(treeA1).initiatives, [{ id: view.id, title: "SSO migration" }]);
   // Nothing else on the board wears the field: the four trees above are the whole membership, and a project's own
   // main checkout is a row with no initiative - which is the normal, unenforced case.
@@ -273,4 +290,193 @@ test("the read is kept beside the store, so a restart answers before the join fi
   const raw = JSON.parse(readFileSync(file, "utf8"));
   assert.ok(Array.isArray(raw.doc.initiatives), "the cached document is the tab's document");
   assert.ok(Number(raw.at) > 0, "and it carries when it was built");
+});
+
+// ---- row 297: the reader's order, and the archive --------------------------------------------------------------------
+// A BOUNDED WAIT FOR THE BOARD, because the snapshot is rebuilt on the panel's own clock (a scan), not on this test's:
+// the read below is retried until the row carries the overlay this test asks about, and a row that never gets there is
+// a failure with the last answer in the sentence rather than a race.
+async function rowWhen(treePath, predicate, why, timeout = 25_000) {
+  const started = Date.now();
+  let last = null;
+  while (Date.now() - started < timeout) {
+    const snapshot = (await get("/api/state")).json;
+    last = snapshot.projects.flatMap((p) => p.worktrees || []).find((r) => normTreePath(r.path) === normTreePath(treePath)) || null;
+    if (last && predicate(last)) return last;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  assert.fail(`${why} (the row last read: ${JSON.stringify(last && last.initiatives)})`);
+}
+
+// THE ORDER IS A FIELD AND A SAVE PER PRESS. A reorder posts `to`, the 1-based place the card should end at, and the
+// answer is the whole document the next GET would be - so a reload shows the same sequence. The proof also rewrites
+// the file through a SECOND Initiatives instance: the panel re-reads the store when its stamp moves, and an order
+// another writer set is the order the tab draws.
+test("a reorder saves at once, numbers the record, survives a reload and another writer's rewrite", async () => {
+  await setTier("none");
+  const made = [];
+  for (const title of ["Order Alpha", "Order Beta", "Order Gamma"]) {
+    const r = await post(base, "/api/initiatives", { body: { title, description: `${title} is a card to move` } });
+    assert.equal(r.status, 201, r.text);
+    made.push(r.json.initiative.id);
+  }
+  const before = (await get("/api/initiatives")).json.initiatives;
+  assert.deepEqual(before.map((i) => i.position), before.map((_, at) => at + 1), "the read is 1..n before anything moves");
+  // The three fresh cards lead the list (a new initiative lands on top), in the reverse of the order they were made.
+  assert.deepEqual(before.slice(0, 3).map((i) => i.id), made.slice().reverse());
+
+  // MOVE THE THIRD CARD TO THE FRONT. One press, one write, and the answer is the list the next GET would give.
+  const target = before[2].id;
+  const moved = await post(base, "/api/initiatives/reorder", { body: { id: target, to: 1 } });
+  assert.equal(moved.status, 200, moved.text);
+  assert.equal(moved.json.changed, true);
+  assert.equal(moved.json.asked, false, "a reorder never parks a question: the tier is about membership");
+  assert.equal(moved.json.to, 1);
+  const expected = [target, ...before.map((i) => i.id).filter((id) => id !== target)];
+  assert.deepEqual(moved.json.order.map((o) => o.id), expected);
+  assert.deepEqual(moved.json.order.map((o) => o.position), expected.map((_, at) => at + 1));
+  assert.deepEqual(moved.json.initiatives.map((i) => i.id), expected, "the answer is the lane the next GET would answer");
+
+  // THE STORE HOLDS IT: every record carries a number and the moved one carries who moved it.
+  const doc = readStore();
+  const orderById = new Map(doc.initiatives.map((i) => [i.id, i.order]));
+  assert.deepEqual(expected.map((id) => orderById.get(id)), expected.map((_, at) => at + 1));
+  assert.equal(doc.initiatives.find((i) => i.id === target).orderBy, "reader");
+
+  // A RELOAD: the read the tab takes when it opens is the same sequence, from the file.
+  const reloaded = (await get("/api/initiatives")).json.initiatives.map((i) => i.id);
+  assert.deepEqual(reloaded, expected);
+
+  // ANOTHER WRITER: a second store instance over the same file moves the first card to the third place. `?profile=1`
+  // is the read that BUILDS rather than answering from the tab's two-second memo, and that memo is the only thing
+  // between the file and the answer here: the tab's own poll picks the change up the same way on its next build.
+  const other = new Initiatives({ file: initiativesFile, log: () => {} });
+  const rewritten = other.reorder({ id: expected[0], to: 3, by: "assistant-9" });
+  assert.equal(rewritten.ok, true, JSON.stringify(rewritten));
+  const afterOther = (await get("/api/initiatives?profile=1")).json.initiatives.map((i) => i.id);
+  assert.deepEqual(afterOther, [expected[1], expected[2], expected[0], ...expected.slice(3)]);
+
+  // A PRESS THAT MOVES NOTHING WRITES NOTHING: the same place is `changed: false` and the bytes do not move.
+  const bytes = readFileSync(initiativesFile, "utf8");
+  const same = await post(base, "/api/initiatives/reorder", { body: { id: afterOther[0], to: 1 } });
+  assert.equal(same.status, 200, same.text);
+  assert.equal(same.json.changed, false);
+  assert.equal(readFileSync(initiativesFile, "utf8"), bytes);
+
+  // A REORDER WITHOUT `to` IS A REFUSAL, not a card dropped at the end.
+  const bad = await post(base, "/api/initiatives/reorder", { body: { id: afterOther[0] } });
+  assert.equal(bad.status, 400, bad.text);
+  assert.match(bad.json.error, /1-based position/);
+});
+
+// THE ARCHIVE'S REFUSAL NAMES WHAT IS OPEN, and the liveness rule is the wave fold's own: a wave with a queued member
+// reads open, the member is open, and both are named by id and title. Closing the member closes the wave (no exit gate
+// closes on membership), and the SAME press then lands - with the trees, the wave and the task link still in place.
+test("archiving is refused while a wave or a task under it is open, names them, and lands once they are closed", async () => {
+  await setTier("none");
+  const created = await post(base, "/api/initiatives", {
+    body: { title: "Archive candidate", description: "this one has a kerfuffle in its description and nothing else" },
+  });
+  assert.equal(created.status, 201, created.text);
+  const id = created.json.initiative.id;
+  // An ACTIVE CONTROL on the same tree: the earlier tests' store was replaced by the repair test, so this file makes its
+  // own initiative that stays active. It is what proves the chart overlay is live while the archived id is absent from
+  // it, rather than the row simply carrying no overlay at all.
+  const keeper = await post(base, "/api/initiatives", { body: { title: "Keeper initiative", description: "stays on the map" } });
+  assert.equal(keeper.status, 201, keeper.text);
+  const keeperId = keeper.json.initiative.id;
+  const kept = await post(base, "/api/initiatives/move", { body: { tree: treeA1, initiative: keeperId, action: "add" } });
+  assert.equal(kept.status, 200, kept.text);
+  const position = (await get("/api/initiatives")).json.initiatives.find((i) => i.id === id).position;
+  const attached = await post(base, "/api/initiatives/move", { body: { tree: treeA1, initiative: id, action: "add" } });
+  assert.equal(attached.status, 200, attached.text);
+  const wave = await post(base, "/api/waves", { body: { initiativeId: id, title: "The open wave" } });
+  assert.equal(wave.status, 200, wave.text);
+  const waveId = wave.json.wave.id;
+  const task = await addTask(first.id, "hold the archive", treeA1, "project-a");
+  const joined = await post(base, "/api/assistant/queue", { body: { assistantId: first.id, action: "edit", id: task.id, wave: waveId } });
+  assert.equal(joined.status, 200, joined.text);
+
+  const refused = await post(base, "/api/initiatives/archive", { body: { id } });
+  assert.equal(refused.status, 409, refused.text);
+  assert.equal(refused.json.changed, false);
+  assert.match(refused.json.error, /cannot be archived/);
+  assert.match(refused.json.error, /still open/);
+  const blocked = refused.json.blocked || [];
+  assert.ok(
+    blocked.some((b) => b.kind === "wave" && b.id === waveId && b.title === "The open wave"),
+    `the wave is named by id and title: ${JSON.stringify(blocked)}`,
+  );
+  assert.ok(
+    blocked.some((b) => b.kind === "task" && Number(b.id) === Number(task.id) && b.title === "hold the archive"),
+    `the task is named by id and title: ${JSON.stringify(blocked)}`,
+  );
+  // Nothing was written: the record is still active and its tree is still attached.
+  const refusedDoc = readStore();
+  assert.equal(refusedDoc.initiatives.find((i) => i.id === id).archivedAt, null);
+  assert.equal(refusedDoc.trees[normTreePath(treeA1)].initiatives.includes(id), true);
+
+  // CLOSE THE MEMBER. The wave closes on membership, so the same press now lands.
+  await setState(first.id, task.id, "done");
+  const archived = await post(base, "/api/initiatives/archive", { body: { id } });
+  assert.equal(archived.status, 200, archived.text);
+  assert.equal(archived.json.changed, true);
+  assert.equal(archived.json.initiatives.some((i) => i.id === id), false, "it left the active list");
+  assert.equal(archived.json.archived.some((i) => i.id === id), true, "and it is in the archived one");
+  assert.equal(archived.json.counts.active, archived.json.initiatives.length);
+  assert.equal(archived.json.counts.archived, archived.json.archived.length);
+  const archivedCard = archived.json.archived.find((i) => i.id === id);
+  assert.match(archivedCard.description, /kerfuffle/, "the description travels, which is what the search reads");
+  assert.equal(archivedCard.treeCount, 1, "archiving detached nothing");
+  assert.equal(archivedCard.archivedBy, "reader");
+
+  // AN ARCHIVED INITIATIVE IS ABSENT FROM EVERY COUNT. Three places, checked one by one:
+  //   1. the tab's own document (the counts and both lists) - it is not in `initiatives` and not in `counts.active`;
+  //   2. the store's index, which is THE map server.js `withInitiatives` and `rowExtras` overlay the chart column, the
+  //      project table and every per-row frame from - the tree is still keyed there, and the archived id is not in it;
+  //   3. the live board snapshot, polled until the overlay is there at all (the SSO initiative, which is NOT archived,
+  //      is the control) and then asserted without the archived id.
+  const otherStore = new Initiatives({ file: initiativesFile, log: () => {} });
+  const overlay = otherStore.index().get(normTreePath(treeA1)) || [];
+  assert.equal(overlay.some((i) => i.id === id), false, "the index the chart overlays from carries no archived chip");
+  assert.equal(overlay.some((i) => i.id === keeperId), true, "and it still carries the active one");
+  const treeRow = await rowWhen(
+    treeA1,
+    (row) => (row.initiatives || []).some((i) => i.id === keeperId) && !(row.initiatives || []).some((i) => i.id === id),
+    "the board row never carried the overlay without the archived chip",
+  );
+  assert.equal((treeRow.initiatives || []).some((i) => i.id === id), false, "the archived initiative draws no chip");
+
+  // ITS WORK IS STILL THERE WHILE IT IS AWAY: the tree record and the wave are untouched.
+  const awayDoc = readStore();
+  assert.equal(awayDoc.trees[normTreePath(treeA1)].initiatives.includes(id), true, "the tree is still attached");
+  const awayWaves = await get(`/api/waves?initiative=${id}`);
+  assert.equal(awayWaves.status, 200, awayWaves.text);
+  assert.equal(awayWaves.json.waves.some((w) => w.id === waveId), true, "the wave is still in the store");
+
+  // A REORDER OF AN ARCHIVED CARD IS REFUSED: it is not in the list the arrows move.
+  const reorderAway = await post(base, "/api/initiatives/reorder", { body: { id, to: 1 } });
+  assert.equal(reorderAway.status, 409, reorderAway.text);
+  assert.match(reorderAway.json.error, /archived/);
+
+  // RESTORE PUTS IT BACK AT ITS SAVED NUMBER, with everything it had.
+  const restored = await post(base, "/api/initiatives/restore", { body: { id } });
+  assert.equal(restored.status, 200, restored.text);
+  assert.equal(restored.json.changed, true);
+  assert.equal(restored.json.restored.position, position, "the place it was archived from");
+  assert.equal(restored.json.initiatives[position - 1].id, id, "and the list reads that place");
+  assert.equal(restored.json.archived.some((i) => i.id === id), false, "the archived list let it go");
+  const back = restored.json.initiatives.find((i) => i.id === id);
+  assert.equal(back.treeCount, 1, "its tree came back with it");
+  assert.equal((back.waves || []).some((w) => w.id === waveId), true, "its wave came back with it");
+  const taskRows = (back.assistants || []).flatMap((a) => a.taskRows || []);
+  assert.equal(taskRows.some((t) => Number(t.id) === Number(task.id) && t.title === "hold the archive"), true, "its task link came back with it");
+  const backSnapshot = await state();
+  assert.ok(backSnapshot.projects.length > 0);
+  const backRow = await rowWhen(
+    treeA1,
+    (row) => (row.initiatives || []).some((i) => i.id === keeperId) && (row.initiatives || []).some((i) => i.id === id),
+    "the board row never carried the restored chip again",
+  );
+  assert.equal((backRow.initiatives || []).some((i) => i.id === id), true, "and the chart chip is back");
 });

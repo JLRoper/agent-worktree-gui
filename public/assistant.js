@@ -3567,6 +3567,12 @@
   })();
   let initEditId = ""; // the initiative whose words are in the edit form
   let initAddId = ""; // the initiative whose "add a worktree" picker is open
+  // WHICH LIST THE TAB DRAWS (row 297): the active map, or the initiatives that were archived. Module state, so a poll
+  // or a repaint leaves the reader where they were, and a reload starts on the active list.
+  let initView = "active";
+  // THE ARCHIVED VIEW'S SEARCH WORDS. One string over titles AND descriptions; the filter itself is
+  // initArchivedMatches, and the box is drawn only in the archived view.
+  let initSearch = "";
   // The markup the pane is showing. It is the whole of what this renderer draws, so a pass that produces the same
   // string has nothing to write: the DOM on screen is already that markup, and rewriting it would only cost the
   // reader their scroll anchor, their selection and the task-fold nodes the pass reconciles (public/assistant.js,
@@ -4035,7 +4041,7 @@
     return true;
   }
 
-  function initCardHtml(init) {
+  function initCardHtml(init, at = 0, count = 1) {
     const blocked = initBlocked();
     const desc = String(init.description || "").trim();
     const projects = init.projects || [];
@@ -4049,6 +4055,17 @@
     const assistantsOpen = initAssistOpen.has(init.id);
     const historyOpen = initHistoryOpen.has(init.id);
     const history = Array.isArray(init.history) ? init.history : [];
+    // THE ORDER ARROWS (row 297, answer 1). One pair on EVERY active card, at every position, and the arrow at an end
+    // is DISABLED rather than missing so a card keeps its height as it moves up and down the list. `position` is the
+    // server's own 1-based place in the list it answered with (routes/initiatives.js), so the disabled ends and the
+    // target the press sends are the same facts the store holds. Each press is a write on its own - no Save button, no
+    // drag, no batched "apply" that could leave the tab and the store disagreeing.
+    const position = Number(init.position) > 0 ? Number(init.position) : at + 1;
+    const total = Math.max(1, Number(count) || 1);
+    const orderHtml = `<span class="init-order" role="group" aria-label="move this initiative in the list">
+          <button type="button" class="init-arrow" data-init-up="${esc(init.id)}"${blocked || position <= 1 ? " disabled" : ""} aria-label="move ${esc(init.title)} one place up" title="${position <= 1 ? "already the first initiative in the reader's list" : "move this initiative one place up - it saves the moment you press, no Save button"}">▲</button>
+          <button type="button" class="init-arrow" data-init-down="${esc(init.id)}"${blocked || position >= total ? " disabled" : ""} aria-label="move ${esc(init.title)} one place down" title="${position >= total ? "already the last initiative in the reader's list" : "move this initiative one place down - it saves the moment you press, no Save button"}">▼</button>
+        </span>`;
     const fold = (name) => initFolds.has(`${init.id}::${name}`);
     const projectsHtml = projects.length
       ? projects
@@ -4132,12 +4149,14 @@
       </div>
       ${descHtml}
       <div class="init-chips">
+        ${orderHtml}
         <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} this initiative spans">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} behind this piece of work">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
         ${statusHtml}
         ${init.updatedAt ? `<span class="as-hint init-meta">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
         ${open ? `<button type="button" class="init-mini init-edit" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
+        ${open ? `<button type="button" class="init-mini init-archive" data-init-archive="${esc(init.id)}"${blocked ? " disabled" : ""} title="put this initiative away - refused while a wave or a task under it is still open, and nothing is detached, lost or renumbered when it goes">Archive</button>` : ""}
       </div>
       ${open
         ? `${editHtml}
@@ -4192,6 +4211,42 @@
     </article>`;
   }
 
+  // AN ARCHIVED CARD (row 297, answer 2). The same card shape with the one control that matters: Restore, which puts it
+  // back at the number it went away with. No folds, no Add, no Edit and no arrows: an archived initiative is out of the
+  // map, and its waves and trees are drawn as counts rather than as a lane because the archive rule only let it go once
+  // every wave and task under it was closed. The description is drawn WHOLE in the DOM (the clamp is CSS only), which is
+  // what makes the search find a word that appears nowhere in the title.
+  function initArchivedCardHtml(init) {
+    const blocked = initBlocked();
+    const desc = String(init.description || "").trim();
+    const archivedWhen = init.archivedAt ? `${relTime(init.archivedAt)} ago` : "";
+    const archivedBy = String(init.archivedBy || "");
+    const who = archivedBy && archivedBy !== "reader" ? ` by ${archivedBy}` : "";
+    return `<article class="as-group init-card is-archived" data-init-archived-card="${esc(init.id)}">
+      <div class="init-head">
+        <h5 class="init-arch-title">${esc(init.title)}</h5>
+        <span class="as-hint init-arch-when" title="${esc(init.archivedAt || "")}">archived${archivedWhen ? ` ${esc(archivedWhen)}` : ""}${esc(who)}</span>
+      </div>
+      ${desc ? `<p class="init-desc is-arch-desc">${esc(desc)}</p>` : `<p class="init-desc is-empty">no description</p>`}
+      <div class="init-chips">
+        <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} still behind this piece of work">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
+        <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} still attached - archiving detaches nothing, and Restore returns you to them">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
+        <button type="button" class="init-mini init-restore" data-init-restore="${esc(init.id)}"${blocked ? " disabled" : ""} title="put this initiative back in the active list at the place it was archived from - its worktrees, its waves and its task links are exactly as they were">Restore</button>
+      </div>
+      ${initNoteFor(init.id)}
+    </article>`;
+  }
+
+  // THE ARCHIVED VIEW'S SEARCH: every word the reader types has to appear in the TITLE or the DESCRIPTION, in any case.
+  // One haystack for both fields, because the ask was "a word from either finds it" and a title-only filter is the half
+  // that looks like it works.
+  function initArchivedMatches(init, query) {
+    const words = String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    const hay = `${String(init?.title || "")}\n${String(init?.description || "")}`.toLowerCase();
+    return words.every((word) => hay.includes(word));
+  }
+
   function initTyping() {
     const el = document.activeElement;
     if (!el || !el.closest || !el.closest("#as-initiatives")) return false;
@@ -4226,6 +4281,7 @@
     "data-init-history-fold", "data-init-add", "data-init-edit", "data-init-move", "data-init-open", "data-init-new",
     "data-init-refresh", "data-init-task-card", "data-init-tasks-more", "data-init-assistant", "data-init-create",
     "data-init-save", "data-init-cancel", "data-init-field", "data-init-about", "data-init-density",
+    "data-init-up", "data-init-down", "data-init-archive", "data-init-restore", "data-init-filter", "data-init-search",
   ];
   let initKeyboardModality = false;
   document.addEventListener("keydown", (e) => {
@@ -4373,12 +4429,22 @@
       return;
     }
     const list = initDoc.initiatives || [];
+    const archivedAll = Array.isArray(initDoc.archived) ? initDoc.archived : [];
     const unreadable = initDoc.readable === false;
+    // The counts the filter draws come from the arrays the server answered with, so a chip cannot disagree with the
+    // list under it. `counts` rides the document too; the arrays are the source and the counts are the same numbers.
+    const activeCount = Number.isFinite(Number(initDoc.counts?.active)) ? Number(initDoc.counts.active) : list.length;
+    const archivedCount = Number.isFinite(Number(initDoc.counts?.archived)) ? Number(initDoc.counts.archived) : archivedAll.length;
+    // What the current view draws: the active cards, or the archived ones that match the search. The archived view
+    // never touches the active list, and the active view never draws an archived card - the two are separate arrays on
+    // the wire, so an archived initiative cannot leak into a count by being filtered late.
+    const archivedShown = archivedAll.filter((init) => initArchivedMatches(init, initSearch));
+    const showingArchived = initView === "archived";
     const storeLine = unreadable
       ? `<div class="as-ask is-bad" role="alert"><b>The initiative store cannot be read, so nothing may be written.</b> ${esc(initDoc.error || "")} The file is left exactly as it is: fix or move it, then try again.</div>`
       : initDoc.found === false
         ? `<p class="as-help">nothing saved yet - the first initiative creates <span class="mono">${esc(String(initDoc.file || "initiatives.json").split(/[\\/]/).pop())}</span> beside the panel's other state</p>`
-        : `<p class="as-help">${list.length} initiative${list.length === 1 ? "" : "s"} in <span class="mono" title="${esc(initDoc.file || "")}">${esc(String(initDoc.file || "initiatives.json").split(/[\\/]/).pop())}</span></p>`;
+        : `<p class="as-help">${activeCount} active initiative${activeCount === 1 ? "" : "s"}${archivedCount ? `, ${archivedCount} archived` : ""} in <span class="mono" title="${esc(initDoc.file || "")}">${esc(String(initDoc.file || "initiatives.json").split(/[\\/]/).pop())}</span></p>`;
     const newForm = initNewOpen
       ? `<div class="init-form" data-init-newform>
           <label class="as-role-caption" for="as-init-new-title">title</label>
@@ -4393,13 +4459,13 @@
           ${initNoteFor("new")}
         </div>`
       : "";
-    const empty = list.length
-      ? ""
-      : `<div class="as-empty init-empty" data-init-empty>
+    const empty = !showingArchived && !list.length
+      ? `<div class="as-empty init-empty" data-init-empty>
           <h5>No initiatives yet</h5>
           <p class="init-empty-copy">An initiative is a title, a description and the worktrees behind it. One may span several projects and several assistants, and a worktree with none is normal: nothing is enforced.</p>
           <div class="as-actions"><button type="button" class="primary" data-init-new="empty"${unreadable ? " disabled" : ""}>New initiative</button></div>
-        </div>`;
+        </div>`
+      : "";
     const tier = initDoc.tier && initDoc.tier.id ? initDoc.tier : { id: "all", label: "ask me for everything", hint: "every create, edit, attach and detach waits for your answer" };
     const focusToken = initFocusToken(host);
     // THE SHELL IS A TOOLBAR AND ONE META LINE (round A direction B). The heading and its hint, the reader's four
@@ -4427,6 +4493,17 @@
           </div>
         </div>
         ${initAboutOpen ? `<div class="init-about" data-init-about-body><p class="as-help">You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.</p></div>` : ""}
+        <!-- THE VIEW SWITCH AND THE ARCHIVED SEARCH (row 297, answer 2). Two lists, one tab: Active is the map the
+             chart counts and the waves drive; Archived is what the reader put away, searchable by a word from a title
+             OR a description. The counts are the server's own (its counts field), so a chip cannot disagree with
+             the list under it. -->
+        <div class="init-views">
+          <div class="init-seg" role="group" aria-label="which initiatives the tab draws">
+            <button type="button" class="init-view" data-init-filter="active" aria-pressed="${showingArchived ? "false" : "true"}" title="the initiatives still on the map - the ones the chart counts, the waves drive and the arrows move">Active <span class="chip">${activeCount}</span></button>
+            <button type="button" class="init-view" data-init-filter="archived" aria-pressed="${showingArchived ? "true" : "false"}" title="the initiatives you put away - searchable by a word from the title or the description, and one press from coming back">Archived <span class="chip">${archivedCount}</span></button>
+          </div>
+          ${showingArchived ? `<input type="search" class="init-search" data-init-search placeholder="search archived titles and descriptions" aria-label="search the archived initiatives - a word from a title or a description finds it" spellcheck="false" autocomplete="off" value="${esc(initSearch)}">` : ""}
+        </div>
         <div class="init-meta">
           ${storeLine}
           <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative and wave changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
@@ -4435,7 +4512,13 @@
         ${newForm}
       </div>
       ${empty}
-      ${list.map(initCardHtml).join("")}`;
+      ${showingArchived
+        ? archivedAll.length
+          ? archivedShown.length
+            ? archivedShown.map(initArchivedCardHtml).join("")
+            : `<div class="as-empty init-empty" data-init-noarch>nothing archived matches "${esc(initSearch)}" - the search reads titles and descriptions, so a word from either finds it</div>`
+          : `<div class="as-empty init-empty" data-init-noarch>nothing is archived yet - open an initiative and its card carries Archive. A wave or a task that is still open refuses the move; a clean one goes away with its trees, waves and task links untouched, and Restore brings it back to its place.</div>`
+        : list.map((init, at) => initCardHtml(init, at, list.length)).join("")}`;
     // THE READER'S PLACE IS CARRIED ACROSS THE REPAINT, on the ROW they were looking at and not on the old
     // scrollTop. This pane is rebuilt from a poll, and a rebuild is not a no-op for the content above the reader: a
     // task row is filed or retires out of an open fold, a relative stamp crosses a minute and rewraps a line. A
@@ -4590,6 +4673,62 @@
         initEditId = "";
         setInitNote(id, d.changed === false ? "nothing changed - the words are the same ones" : "saved", false);
       }
+    } catch (err) {
+      setInitNote(id, String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  // ---- the order arrows and the archive ----------------------------------------------------------------------------
+  // EACH PRESS IS ITS OWN WRITE (row 297, answer 1). The card's arrow sends `to`, the 1-based place it should end at,
+  // and adopts the whole document the answer carries - the same lane the next GET would answer - so the tab cannot
+  // paint an order the store does not hold. A poll cannot fight the press either: the write drops the server's
+  // memoised read and the answer replaces the document the pane draws from.
+  async function initReorder(id, to) {
+    const init = initById(id);
+    if (!init) return;
+    try {
+      const d = await initPost("/api/initiatives/reorder", { id, to });
+      adoptInitiatives(d);
+      setInitNote(id, d.changed === false ? "the list is already in that order" : `moved to position ${d.to} - saved`, false);
+    } catch (err) {
+      setInitNote(id, String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  // ARCHIVE, AND THE REFUSAL THAT NAMES WHAT IS OPEN (row 297, answer 2). A 409 carries the server's own sentence and
+  // its `blocked` list; the note under the card repeats the rows by id and title, because "something is open" is a wall
+  // and the reader needs to know which card to close. Nothing is written on a refusal: the server checked the store
+  // before it answered.
+  async function initArchive(id) {
+    const init = initById(id);
+    if (!init) return;
+    try {
+      const d = await initPost("/api/initiatives/archive", { id });
+      adoptInitiatives(d);
+      setInitNote(id, `archived "${init.title}" - it is in the Archived view, and Restore puts it back where it was`, false);
+    } catch (err) {
+      const blocked = Array.isArray(err?.data?.blocked) ? err.data.blocked : [];
+      const names = blocked.map((b) => (b.kind === "wave" ? `wave ${b.id} "${b.title}"` : `#${b.id} "${b.title}"`));
+      setInitNote(
+        id,
+        names.length ? `cannot archive: ${names.join(", ")} ${names.length === 1 ? "is" : "are"} still open - close ${names.length === 1 ? "it" : "them"}, then archive again` : String((err && err.message) || err),
+        true,
+      );
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  // RESTORE PUTS IT BACK, and the tab follows it: the active view is selected again so the card is where the reader can
+  // see it land, and its note names the place it returned to.
+  async function initRestore(id) {
+    try {
+      const d = await initPost("/api/initiatives/restore", { id });
+      adoptInitiatives(d);
+      initView = "active";
+      const position = Number(d.restored?.position) > 0 ? Number(d.restored.position) : null;
+      setInitNote(id, position ? `restored to position ${position} - its worktrees, waves and task links are intact` : "restored to the active list", false);
     } catch (err) {
       setInitNote(id, String((err && err.message) || err), true);
     }
@@ -4757,6 +4896,40 @@
           paintInitHue(themeId);
           showBanner(`${initTitleOf(themeId)}: themed hue ${hue}° - Ctrl+click again for another, Shift+click to clear`);
         }
+        return;
+      }
+      // THE ORDER ARROWS, THE VIEW SWITCH AND THE ARCHIVE (row 297). They answer BEFORE the press rule: the arrows sit
+      // inside a card (so the rule would call them "self"), and the view switch and the search sit OUTSIDE every card
+      // (the rule calls that "outside" and the handler would stop there). Each arrow sends the 1-based place it should
+      // end at, taken from the position the answer carried, and one press is one write.
+      const arrow = e.target && e.target.closest ? e.target.closest("[data-init-up], [data-init-down]") : null;
+      if (arrow) {
+        e.preventDefault();
+        const id = String(arrow.dataset.initUp || arrow.dataset.initDown || "");
+        const init = initById(id);
+        if (!init) return;
+        const listed = Array.isArray(initDoc?.initiatives) ? initDoc.initiatives : [];
+        const at = Number(init.position) > 0 ? Number(init.position) : listed.findIndex((row) => row.id === id) + 1;
+        void initReorder(id, arrow.dataset.initUp ? at - 1 : at + 1);
+        return;
+      }
+      const viewBtn = e.target && e.target.closest ? e.target.closest("[data-init-filter]") : null;
+      if (viewBtn) {
+        e.preventDefault();
+        initView = String(viewBtn.dataset.initFilter || "") === "archived" ? "archived" : "active";
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const restoreBtn = e.target && e.target.closest ? e.target.closest("[data-init-restore]") : null;
+      if (restoreBtn) {
+        e.preventDefault();
+        void initRestore(String(restoreBtn.dataset.initRestore || ""));
+        return;
+      }
+      const archiveBtn = e.target && e.target.closest ? e.target.closest("[data-init-archive]") : null;
+      if (archiveBtn) {
+        e.preventDefault();
+        void initArchive(String(archiveBtn.dataset.initArchive || ""));
         return;
       }
       const kind = wtInitiativeFold.press(e.target, { card, open: cardOpen });
@@ -4995,6 +5168,25 @@
       return false;
     };
     host.addEventListener("input", (e) => {
+      // THE ARCHIVED SEARCH (row 297). It filters in the page, over the document already read, and repaints the list
+      // under the box; the box is put back with focus and the caret at the end, because a repaint replaces the input
+      // node it was typed into. A poll repaint is already held while a field has the caret (initTyping), so the words
+      // are never lost between keystrokes.
+      const search = e.target && e.target.closest ? e.target.closest("[data-init-search]") : null;
+      if (search) {
+        initSearch = String(search.value ?? "");
+        renderAssistantInitiatives(true);
+        const again = host.querySelector("[data-init-search]");
+        if (again) {
+          again.focus({ preventScroll: true });
+          try {
+            again.setSelectionRange(again.value.length, again.value.length);
+          } catch {
+            /* a browser that refuses the range leaves the caret where it is */
+          }
+        }
+        return;
+      }
       if (readWaveField(e.target.closest("[data-wave-field]"))) return;
       const field = e.target.closest("[data-init-field]");
       if (!field) return;

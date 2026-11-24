@@ -5487,6 +5487,78 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-mini:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
 #as-initiatives .init-mini:active { transform: none; background: var(--tab-sunken); color: var(--tab-ink); }
 #as-initiatives .init-mini[disabled] { opacity: .55; cursor: not-allowed; }
+/* ---- THE ORDER ARROWS (row 297, answer 1) -------------------------------------------------------- */
+/* ONE PAIR ON EVERY ACTIVE CARD, drawn on every card at every position and DISABLED at the ends rather than
+   omitted: an arrow that disappears at the top would change the card's height as it moved, which is the jump the
+   reader asked to be spared. The pair rides the front of the facts row - the one row drawn open AND folded - and
+   never the title's row, whose width is the title's own (row 295, ask 3). The press saves at once, so the control
+   carries no "apply" state of its own. */
+#as-initiatives .init-order { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; margin-right: var(--tab-s2); }
+#as-initiatives .init-arrow {
+  width: 22px;
+  min-width: 22px;
+  height: var(--tab-control);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+#as-initiatives .init-arrow:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
+#as-initiatives .init-arrow:active { transform: none; background: var(--tab-sunken); color: var(--tab-ink); }
+#as-initiatives .init-arrow[disabled] { opacity: .4; cursor: not-allowed; }
+/* ---- THE VIEW SWITCH AND THE ARCHIVED SEARCH (row 297, answer 2) --------------------------------- */
+/* Two lists, one tab. The switch sits under the toolbar and above the store line, so it reads as the tab's frame
+   rather than as one of the reader's verbs; the search takes the rest of the row and is drawn only in the archived
+   view, where it has something to search. */
+#as-initiatives .init-views { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tab-s2); margin: 0 0 var(--tab-s3); }
+#as-initiatives .init-seg { display: inline-flex; flex: 0 0 auto; align-items: center; }
+#as-initiatives .init-seg .init-view {
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  cursor: pointer;
+}
+#as-initiatives .init-seg .init-view:first-child { border-radius: var(--tab-r2) 0 0 var(--tab-r2); }
+#as-initiatives .init-seg .init-view:last-child { border-radius: 0 var(--tab-r2) var(--tab-r2) 0; border-left: 0; }
+#as-initiatives .init-seg .init-view:hover { background: var(--tab-raised); color: var(--tab-ink); }
+#as-initiatives .init-seg .init-view[aria-pressed="true"] { background: var(--tab-sunken); border-color: var(--tab-line-strong); color: var(--tab-ink); font-weight: 600; }
+#as-initiatives .init-seg .init-view .chip { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); }
+#as-initiatives .init-search {
+  flex: 1 1 220px;
+  min-width: 120px;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font: var(--tab-fs-meta)/1.4 var(--tab-font-mono);
+}
+#as-initiatives .init-search::placeholder { color: var(--tab-ink-3); }
+#as-initiatives .init-search:focus-visible { outline: none; border-color: var(--tab-accent); }
+/* ---- AN ARCHIVED CARD ---------------------------------------------------------------------------- */
+/* The plate, not the ledger row: an archived initiative is out of the list and is drawn as one self-contained card,
+   with its counts, the stamp that says who put it away, and the one control that matters. The description is clamped
+   by CSS with the WHOLE text in the DOM, so a browser find and the search both reach every word. */
+#as-initiatives .init-card.is-archived { padding: var(--tab-s4); background: var(--tab-sunken); border-style: dashed; box-shadow: none; }
+#as-initiatives .init-card.is-archived .init-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--tab-s2); margin-bottom: var(--tab-s2); }
+#as-initiatives .init-arch-title { margin: 0; font-family: var(--tab-font-ui); font-size: var(--tab-fs-display); font-weight: 600; line-height: var(--tab-lh-tight); color: var(--tab-ink); text-transform: none; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+#as-initiatives .init-arch-when { flex: 0 0 auto; margin-left: auto; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
+#as-initiatives .init-desc.is-arch-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin: 0 0 var(--tab-s2); color: var(--tab-ink-2); }
+#as-initiatives .init-card.is-archived .init-chips { padding-top: var(--tab-s2); border-top: 1px solid var(--tab-line); }
+#as-initiatives .init-card.is-archived .init-restore { margin-left: auto; }
 #as-initiatives .init-form {
   display: flex;
   flex-direction: column;
