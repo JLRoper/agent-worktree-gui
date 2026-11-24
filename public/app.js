@@ -2250,6 +2250,19 @@ function questionLinks(q) {
   </div>`;
 }
 
+// The four-direction strip: ONE line under the question, on every card that offers choices, saying what shape the
+// card has. It is a MEASUREMENT, never a gate: a card whose choices are missing a direction (or whose recommended
+// choice is not first) still raises, answers and settles exactly as before. The sentence is built server-side by
+// lib/clarify-shape.js and travels on `question.shape.line`, so the card, the history and a test read one wording;
+// this function only draws it. A card with no choices draws nothing: it offers no directions to be short of.
+function questionShape(q) {
+  const shape = q && typeof q.shape === "object" ? q.shape : null;
+  const line = String(shape?.line || "").trim();
+  if (!line || !(Number(shape?.count) > 0)) return "";
+  const why = String(shape?.why || "").trim();
+  return `<div class="tq-shape${shape.ok ? " is-complete" : ""}" data-q-shape title="${esc(why || line)}">${esc(line)}</div>`;
+}
+
 function questionPrompt(turn, copy = "") {
   const q = turn.question;
   if (!q) return "";
@@ -2336,6 +2349,7 @@ function questionPrompt(turn, copy = "") {
     <div class="tq-head mono">${sending ? "⏳ sending your answer — the agent is being released" : "❓ waiting on you — the agent is parked until you answer"}</div>
     ${again}
     <div class="tq-question">${parts.html}</div>
+    ${questionShape(q)}
     ${relativeNote}
     ${questionLinks(q)}
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
