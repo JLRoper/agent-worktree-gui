@@ -228,8 +228,8 @@ try {
         await ensureCardOpen(page, "init_kafka");
         await page.evaluate(() => {
           const card = document.querySelector('#as-initiatives [data-init-card="init_kafka"]');
-          const head = card?.querySelector(".init-desc-head");
-          if (head && head.getAttribute("aria-expanded") !== "true") head.click();
+          const more = card?.querySelector("[data-init-desc-fold]");
+          if (more && more.getAttribute("aria-expanded") !== "true") more.click();
         });
         await scrollPaneTo(page, '#as-initiatives [data-init-card="init_kafka"]');
         await page.waitForTimeout(200);

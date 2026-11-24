@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 295: chips left, description clamped, name across the card</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 170px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; white-space:pre-wrap; overflow-wrap:anywhere; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.num, th.num { white-space:nowrap; text-align:right; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul, ol { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  figure { margin:16px 0 20px; }
+  figure img { width:100%; max-width:1000px; border:1px solid var(--line); border-radius:6px; display:block; }
+  figcaption { font-size:13px; color:var(--dim); margin-top:6px; }
+  .pair { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  .pair figure { margin:0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 295: the chips move left, the description clamps, and the name spans the card</h1>
+<p class="sub">The Initiatives tab's three asks from queue row 295, measured at the 480px dock and at a 1400px wide float, before and after.</p>
+
+<dl class="facts">
+  <dt>Branch</dt><dd><code>wtgui/read-queue-row-295-first-it-carries-the-614492</code></dd>
+  <dt>Gate</dt><dd><code>tools/verify-initiatives-bar-clamp-title.mjs</code>, 103 checks</dd>
+  <dt>After</dt><dd><span class="ok">103/103 checks pass</span> at both frames</dd>
+  <dt>Before (base export of <code>main</code>)</dt><dd><span class="no">42/87 checks pass</span>, 45 failures, same gate</dd>
+  <dt>Files</dt><dd><code>public/assistant.js</code>, <code>public/core/waves-lane.js</code>, <code>public/style.css</code></dd>
+  <dt>Gates moved with the layout</dt><dd><code>verify-initiatives-tab</code>, <code>verify-initiatives-scroll</code>, <code>initiatives-measure</code>, <code>capture-initiatives-redesign</code>, <code>test/initiative-fold.test.js</code></dd>
+</dl>
+
+<h2>1. Which assumptions I implemented</h2>
+<p>All three assumptions filed on the row were implemented as written, and none of them was overruled afterwards.</p>
+<table>
+  <tr><th>Ask</th><th>Assumption filed on the row</th><th>Status</th></tr>
+  <tr>
+    <td>1. Move the OWNER and STATUS chips left, just after the task number</td>
+    <td>Nothing else moves: the reports chip stays at the right, the bar stays full width, the card gains no scrollbar</td>
+    <td><span class="ok">implemented</span>. The project tag travels with the name (it names the same thing); the reports chip holds the right edge in both drawings</td>
+  </tr>
+  <tr>
+    <td>2. Clamp the expanded description with a show more / show less control</td>
+    <td>Minimized by default at a few lines, the full text still in the DOM, the control drawn only on a real overflow</td>
+    <td><span class="ok">implemented</span>. Three lines; the clamp is a line box so the whole text stays in the DOM; the control is hidden when the text fits</td>
+  </tr>
+  <tr>
+    <td>3. The expanded name is a full-width header above both columns, wrapping like the minimized card</td>
+    <td>The name goes above both columns; its wrap must match the minimized card exactly</td>
+    <td><span class="ok">implemented</span>. Same available width open and closed (measured), same break points (measured line by line)</td>
+  </tr>
+</table>
+
+<h2>2. What changed</h2>
+<h3>Ask 1: the task bar's order</h3>
+<p>The member row is drawn id, owner chip, status chip, title, project, reports (<code>public/core/waves-lane.js:97</code> and <code>:136</code>). The wide drawing's grid columns follow the same order, <code>44px auto 80px minmax(0, 1fr) 150px auto</code> (<code>public/style.css:5827</code>), and the wrapped drawing gives the reports chip <code>margin-left: auto</code> so it keeps the right edge at any width (<code>public/style.css:5791</code>).</p>
+
+<h3>Ask 2: the clamped description</h3>
+<p>An expanded card draws the whole description and clamps it with three line boxes (<code>public/style.css:5332</code>). The label row carries the word and one control (<code>public/assistant.js:4087</code>), and the control is decided by measurement: the clamp is lifted for the length of one read, the natural height is compared with the clamped height, and the button is hidden when the text fits (<code>public/assistant.js:4017</code>). A pane with no layout yet is measured on its next frame rather than guessed at (<code>public/assistant.js:4008</code>). The reader's own state for one card is a set (<code>public/assistant.js:3492</code>), so a repaint cannot shut a description the reader opened.</p>
+
+<h3>Ask 3: the name's row</h3>
+<p>The wide grid gives the head both columns, <code>"head head"</code> above <code>"desc side"</code> (<code>public/style.css:5915</code>). The open head then pays the LEDGER row's own insets rather than the plate's, and the caret is taken out of the row's flow into the same 18px column the minimized row uses (<code>public/style.css:5213</code>), so the title is offered exactly the width the minimized row offers. Edit moved to the facts row (<code>public/style.css:5378</code>, <code>public/assistant.js:4123</code>): anything in the name's row shortens the title, and a control beside it breaks the words one place earlier, which is the defect itself.</p>
+
+<h2>3. The measurements</h2>
+<p>Every number below is read from the painted page by the gate, at both frames, on the base export of <code>main</code> and on this branch. The same gate is what fails on the base: nothing here is a description of the layout.</p>
+
+<h3>Ask 1: the bar's order and the right edge</h3>
+<table>
+  <tr><th>Reading</th><th>Frame</th><th>Before</th><th>After</th></tr>
+  <tr><td>Wave bar children, mapped by class and read in DOM order</td><td>dock 480</td><td class="num">id, title, project, owner, status, reports</td><td class="num ok">id, owner, status, title, project, reports</td></tr>
+  <tr><td>Same bar, first line read left to right</td><td>dock 480</td><td class="num">id, title, project, owner, status</td><td class="num ok">id, owner, status, title</td></tr>
+  <tr><td>Reports chip's right edge against the bar's content right edge, bar #11</td><td>dock 480</td><td class="num">1280 vs 1540</td><td class="num ok">1540 vs 1540</td></tr>
+  <tr><td>Bar width against its section's width, bars #21 / #11 / #13</td><td>dock 480</td><td class="num">351/351, 324/324, 324/324</td><td class="num ok">351/351, 324/324, 324/324</td></tr>
+  <tr><td>Card scrollWidth / clientWidth (row 291's rule)</td><td>dock 480</td><td class="num">461/461</td><td class="num ok">461/461</td></tr>
+  <tr><td>Wave bar children, wide drawing</td><td>wide 1400</td><td class="num">id, title, project, owner, status, reports</td><td class="num ok">id, owner, status, title, project, reports</td></tr>
+  <tr><td>Reports chip on the right edge, every bar</td><td>wide 1400</td><td class="num">right edge held</td><td class="num ok">right edge held</td></tr>
+</table>
+<p class="small">At the dock the bar wraps: the id, the owner, the status and the start of the name share the first line, and the reports chip sits alone at the right of a later line because 324px of lane cannot hold all six facts. The order the reader asked for is the order it reads.</p>
+
+<h3>Ask 2: the clamp</h3>
+<table>
+  <tr><th>Reading</th><th>Frame</th><th>Before</th><th>After</th></tr>
+  <tr><td>Quarter-end description: drawn height / height it needs</td><td>dock 480</td><td class="num">280px / 280px (whole)</td><td class="num ok">60px / 280px (3 x 20px)</td></tr>
+  <tr><td>Its show more control</td><td>dock 480</td><td class="num no">absent</td><td class="num ok">drawn, 82.3 x 30px, reads "show more"</td></tr>
+  <tr><td>Its body's textContent against the store's description</td><td>dock 480</td><td class="num">776 chars = 776</td><td class="num ok">776 chars = 776, last words findable in the page</td></tr>
+  <tr><td>Quarter-end description after pressing show more</td><td>dock 480</td><td class="num">no control to press</td><td class="num ok">280px drawn of 280px needed, control reads "show less"</td></tr>
+  <tr><td>Quarter-end description after pressing show less</td><td>dock 480</td><td class="num">-</td><td class="num ok">60px, 3 lines, control reads "show more"</td></tr>
+  <tr><td>Batch sweeper description (fits the clamp): drawn / needed</td><td>dock 480</td><td class="num">40px / 40px</td><td class="num ok">40px / 40px, control hidden, 0px wide</td></tr>
+  <tr><td>Quarter-end description: drawn / needed</td><td>wide 1400</td><td class="num">260px / 260px</td><td class="num ok">60px / 260px</td></tr>
+  <tr><td>Batch sweeper: control drawn</td><td>wide 1400</td><td class="num no">no control</td><td class="num ok">hidden, 0px wide (it fits)</td></tr>
+</table>
+
+<h3>Ask 3: the name's row and its wrap</h3>
+<table>
+  <tr><th>Reading</th><th>Frame</th><th>Before</th><th>After</th></tr>
+  <tr><td>Kafka card: the name's row width, closed / open</td><td>dock 480</td><td class="num no">410px / 401px</td><td class="num ok">410px / 410px</td></tr>
+  <tr><td>Kafka title: available width, closed / open</td><td>dock 480</td><td class="num no">392px / 323.72px</td><td class="num ok">392px / 392px</td></tr>
+  <tr><td>Kafka title: the words on each line, closed</td><td>dock 480</td><td class="num">"Kafka rating pipeline hardening across the consumer, the" / "retry topic and the DBA-signed verify pack"</td><td class="num ok">identical</td></tr>
+  <tr><td>Kafka title: the words on each line, open</td><td>dock 480</td><td class="num no">"Kafka rating pipeline hardening across the" / "consumer, the retry topic and the DBA-signed" / "verify pack" (3 lines)</td><td class="num ok">identical to closed (2 lines)</td></tr>
+  <tr><td>Kafka title height, closed / open</td><td>dock 480</td><td class="num no">38.75px / 58.13px</td><td class="num ok">38.75px / 38.75px</td></tr>
+  <tr><td>Kafka title's right edge against the row's right edge minus the caret column</td><td>dock 480</td><td class="num no">1497.72 vs 1557</td><td class="num ok">1566 vs 1566</td></tr>
+  <tr><td>Every card's name row, closed / open</td><td>wide 1400</td><td class="num no">1329px / 498.09px (left column only)</td><td class="num ok">1329px / 1329px (both columns)</td></tr>
+  <tr><td>Every card's title: available width, closed / open</td><td>wide 1400</td><td class="num no">1311px / 420.81px</td><td class="num ok">1311px / 1311px</td></tr>
+  <tr><td>Kafka title lines, closed / open</td><td>wide 1400</td><td class="num no">1 line / 2 lines</td><td class="num ok">1 line / 1 line</td></tr>
+  <tr><td>The name's row against the two columns (open)</td><td>wide 1400</td><td class="num no">head 62..560, over the left column only</td><td class="num ok">head 62..1391, desc 62..520.2, projects 584.09..1382</td></tr>
+  <tr><td>Font and line height, both states</td><td>both</td><td class="num">15.5px / 19.375px</td><td class="num ok">15.5px / 19.375px</td></tr>
+</table>
+<p class="small">The available width is measured by putting one long unbreakable word into the title for the length of a synchronous read, so a short title reports the width it would be given rather than the width its own text happens to take. The line comparison is per character (one Range per character, grouped by line), so two drawings with equal widths but a different break still compare unequal.</p>
+
+<h2>4. What was run</h2>
+<table>
+  <tr><th>Run</th><th>Result</th></tr>
+  <tr><td><code>node tools/verify-initiatives-bar-clamp-title.mjs</code> (new)</td><td><span class="ok">103/103</span> on this branch, <span class="no">42/87</span> on the base export (45 failures, the same gate with <code>--root</code>)</td></tr>
+  <tr><td><code>node tools/verify-initiatives-scroll.mjs</code></td><td><span class="ok">35/35</span></td></tr>
+  <tr><td><code>node tools/verify-initiatives-redesign.mjs</code></td><td><span class="ok">18/18 (100%)</span>, before 4/16 (25%)</td></tr>
+  <tr><td><code>node tools/verify-waves-lane.mjs</code></td><td><span class="ok">79/79</span></td></tr>
+  <tr><td><code>node --test test/initiative-fold.test.js test/waves-lane.test.js</code></td><td><span class="ok">70/70</span></td></tr>
+  <tr><td><code>node tools/verify-initiatives-tab.mjs</code></td><td><span class="warn">67/78</span>, and 66/77 on the base export with THE SAME 11 failing check names - the sandbox's attach flow and its project grouping are red before this change</td></tr>
+  <tr><td><code>node tools/verify-wave-reports.mjs</code></td><td><span class="warn">2/4</span> here and 2/4 on the base export, "the panel seeded an assistant" fails on both</td></tr>
+</table>
+<p class="small">The two red gates were run on the base export of <code>main</code> as well as here: the failing check names are identical, so neither is this branch's. The export is a <code>git archive</code> of <code>main</code> under the scratch directory, initialised as a one-commit repo because <code>server.js</code> reads <code>git rev-parse</code> at boot.</p>
+
+<h2>5. Screenshots</h2>
+<div class="pair">
+  <figure>
+    <img src="initiatives-row-295-2026-11-24/before-dock-480.png" alt="Before, dock 480">
+    <figcaption>Before, dock 480: two chips sit after the name, the reports chip does not reach the bar's right edge, and the open card's name is narrower than the minimized row's.</figcaption>
+  </figure>
+  <figure>
+    <img src="initiatives-row-295-2026-11-24/after-dock-480.png" alt="After, dock 480">
+    <figcaption>After, dock 480: <code>#id | owner | status | name</code>, reports at the right, the description clamped with show more, the name's row the minimized row's width.</figcaption>
+  </figure>
+</div>
+<div class="pair" style="margin-top:14px">
+  <figure>
+    <img src="initiatives-row-295-2026-11-24/before-wide-float-1400.png" alt="Before, wide float 1400">
+    <figcaption>Before, wide 1400: the name sits in the left column and wraps there, and the facts sit under it in that column.</figcaption>
+  </figure>
+  <figure>
+    <img src="initiatives-row-295-2026-11-24/after-wide-float-1400.png" alt="After, wide float 1400">
+    <figcaption>After, wide 1400: the name's row spans both columns above the description and the projects, which stay side by side beneath it.</figcaption>
+  </figure>
+</div>
+
+<h2>6. Notes a reviewer will want</h2>
+<ul>
+  <li>The two gate logs, verbatim, are beside this page as <code>before-run.txt</code> and <code>after-run.txt</code>; the counts in section 4 are taken from them.</li>
+  <li>A negative right margin on the open head (<code>calc(var(--tab-s2) - var(--tab-s4) - 1px)</code>) is what makes the open row pay the ledger row's insets rather than the plate's. It is the one place the two drawings' boxes are reconciled by hand, and the gate asserts the result rather than the rule.</li>
+  <li>The clamp's three lines are a stylesheet literal with the module's constant named in its comment; the gate measures the drawn height against three line heights, so a change to either number fails.</li>
+  <li>Edit moved from the name's row to the facts row. It is drawn only on an open card, as before, and the facts row is drawn on every card, so it is still reachable in every state it was reachable in.</li>
+  <li>The gate is new and carries three ask-specific proofs in one run; the page gates it grew out of (<code>verify-initiatives-tab</code>, <code>verify-initiatives-scroll</code>, <code>verify-waves-lane</code>) still run, and the description's own fold cases in the tab gate were rewritten for the clamp rather than deleted.</li>
+</ul>
+</main>
+</body>
+</html>

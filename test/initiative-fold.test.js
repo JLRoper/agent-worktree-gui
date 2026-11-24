@@ -25,6 +25,7 @@ const fold = globalThis.wtInitiativeFold;
 const { DOTS, PREVIEW_LINES, press, cut, countChips } = fold;
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
+const style = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const route = readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8");
 
@@ -184,20 +185,32 @@ test("the card is built from the module's rules, not from a second copy of them"
 
 test("the two folds are two states, kept per initiative while the tab is open", () => {
   assert.match(assistant, /const initOpen = new Set\(\);/, "the card's open state is a book of its own");
-  assert.match(assistant, /const initDescClosed = new Set\(\);/, "and so is the description's");
-  assert.match(assistant, /const descOpen = open && !initDescClosed\.has\(init\.id\);/, "the description only folds inside an open card");
-  assert.match(assistant, /const descHtml = desc && open/, "…and a title card has no description header to press");
+  assert.match(assistant, /const initDescMore = new Set\(\);/, "and so is the description's, which starts clamped");
+  assert.match(assistant, /const descMore = open && initDescMore\.has\(init\.id\);/, "the whole description is only ever drawn inside an open card");
+  assert.match(assistant, /const descHtml = desc && open/, "…and a title card has no description label to press");
   assert.match(assistant, /aria-expanded="\$\{open \? "true" : "false"\}"/, "the title card states its own state");
-  assert.match(assistant, /aria-expanded="\$\{descOpen \? "true" : "false"\}"/, "and so does the description's header");
+  assert.match(assistant, /aria-expanded="\$\{descMore \? "true" : "false"\}"/, "and so does the show more / show less control");
   assert.match(assistant, /data-init-card-toggle="\$\{esc\(init\.id\)\}"/, "the title card is one control, not a label");
-  assert.match(assistant, /class="init-proj init-desc-head" data-init-desc-fold=/, "the description's header carries its own action");
+  assert.match(assistant, /class="init-mini init-desc-more" data-init-desc-fold=/, "the description's label row carries the clamp's one control");
 });
 
 test("both fold headers are buttons, so Enter and Space toggle them without a key handler", () => {
   // A real <button> gets Enter and Space from the browser; a div with role="button" would need a keydown branch this
   // file would then have to test. The markup is what makes the keyboard promise true.
   assert.match(assistant, /<button type="button" class="init-head-btn" data-init-card-toggle=/, "the title card");
-  assert.match(assistant, /<button type="button" class="init-proj init-desc-head" data-init-desc-fold=/, "the description's header");
+  assert.match(assistant, /<button type="button" class="init-mini init-desc-more" data-init-desc-fold=/, "the description's show more control");
+});
+
+test("the expanded description is clamped by a line box, not by a cut, and the control is measured (row 295)", () => {
+  // The reader's second ask: a few lines by default, the whole text still in the DOM, and no dead toggle on a
+  // description that fits. The clamp is CSS on the drawn body - a text cut would take the words out of the page -
+  // and the one decision about the control is a measurement taken with the clamp lifted for the length of one read.
+  assert.match(assistant, /class="init-desc\$\{descMore \? "" : " is-clamped"\}"/, "an open card draws the body clamped by default");
+  assert.match(assistant, /body\.classList\.remove\("is-clamped"\);\s*\n\s*const natural = body\.scrollHeight;\s*\n\s*body\.classList\.add\("is-clamped"\);/, "the natural height is read with the clamp lifted, in the same task");
+  assert.match(assistant, /more\.hidden = natural <= body\.clientHeight \+ 1;/, "the control is drawn only when the text really overflows");
+  assert.match(assistant, /descMeasuredFrame/, "a pane with no layout is measured on its next frame, never guessed at");
+  assert.match(style, /#as-initiatives \.init-desc\.is-clamped \{[^}]*-webkit-line-clamp: 3;/, "the clamp is three lines of CSS");
+  assert.match(assistant, /data-init-desc-row=/, "the body and its control are one row for the paint pass");
 });
 
 test("the module is loaded before the pane that reads it", () => {
