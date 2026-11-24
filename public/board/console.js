@@ -131,11 +131,16 @@ function thinkRowHtml(l, sep = "") {
 function patchThinkRow(el, l) {
   const lid = String(l.lid ?? thinkLid(l.at));
   const text = String(l.text ?? "");
-  const box = el.querySelector(":scope > .think-text");
-  if (box) {
-    const html = linkifyText(text);
-    if (box.innerHTML !== html) box.innerHTML = html;
+  let box = el.querySelector(":scope > .think-text");
+  if (!box) {
+    // The box is where the four-line clip lives and what the live mark sits beside. A row WITHOUT it (one an older
+    // paint flattened) would be drawn with no clip at all, so it is put back rather than written over.
+    box = document.createElement("span");
+    box.className = "think-text";
+    el.insertBefore(box, el.firstChild);
   }
+  const html = linkifyText(text);
+  if (box.innerHTML !== html) box.innerHTML = html;
   el.dataset.ltext = text;
   // The row's visible text IS this string now, so its own high-water mark has to say so: `_drawn` is what
   // drawRowText appends from, and a row patched here while `_drawn` still named a LONGER text would take only the
