@@ -263,15 +263,25 @@ function steerPage(thread, options) {
     open = resolve;
   });
   const calls = [];
+  const steerState = { replyDrafts: {}, jobs: new Map(), replyQueue: new Map() };
+  // The SEND's one clear (public/app.js `clearSentDraft`): a steer that lands empties the box and the draft map for
+  // the thread the box is bound to. The real three-store clear (map, paste-chip mirror, DOM) is proved against a
+  // browser in tools/verify-reply-draft-send.mjs; this page only needs its effect on the box and the map.
+  const clearSentDraft = (thread, text, box = null) => {
+    const bound = String((box && box.dataset && box.dataset.reply) || thread || "");
+    if (bound) steerState.replyDrafts[bound] = "";
+    if (box) box.text = "";
+    return true;
+  };
   const run = new Function(
     "document", "CSS", "state", "apiFetch", "focusReplyBox", "attachmentBlock", "attachmentsFor", "rememberReply",
-    "readBox", "writeBox", "clearBoxDraft", "queueReply", "clearAttachments", "updateJob", "inflightToolName",
+    "readBox", "writeBox", "clearBoxDraft", "clearSentDraft", "queueReply", "clearAttachments", "updateJob", "inflightToolName",
     "jobLines",
     `${["steerFromBox", "steerTurn"].map((n) => pageRegion(src, n)).join("\n")}\nreturn { steerFromBox, steerTurn };`,
   )(
     page.document,
     CSS,
-    { replyDrafts: {}, jobs: new Map(), replyQueue: new Map() },
+    steerState,
     (url, opts) => {
       calls.push({ url, body: JSON.parse(opts.body) });
       return gate;
@@ -285,6 +295,7 @@ function steerPage(thread, options) {
       b.text = v;
     },
     () => {},
+    clearSentDraft,
     () => {},
     () => {},
     () => {},

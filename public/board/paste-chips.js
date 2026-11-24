@@ -310,6 +310,20 @@ function clearBoxDraft(boxOrKey) {
   saveChipDrafts();
 }
 
+// A SEND's half of this module: the mirror for the thread the reply went to, cleared by KEY. A reply box is
+// keyed `reply:<thread>` (public/render-jobs.js), and the send path used to reach the mirror only THROUGH a
+// live box node - so a card that was rebuilt, moved or folded away for the length of the POST left this
+// store behind, and the landing repaint replayed the sent words (with their chips) under the answer. Clearing
+// by key means the store a repaint reads is empty whether or not a box is still on the page.
+function forgetReplyDraft(thread) {
+  const t = String(thread || "");
+  if (!t) return false;
+  const key = `reply:${t}`;
+  if (!state.boxModels.has(key)) return false;
+  clearBoxDraft(key);
+  return true;
+}
+
 // Remember what this box holds. Only a draft that carries a chip needs a model: a plain draft is text, and the
 // panel already keeps its text.
 function rememberBoxModel(box) {
@@ -1149,6 +1163,7 @@ window.WMApp.board.pasteChips = {
   transferBoxModel,
   rememberBoxModel,
   clearBoxDraft,
+  forgetReplyDraft,
   chipBoxOf,
   boxKeyOf,
   caretOffset,

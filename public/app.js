@@ -3572,6 +3572,46 @@ function restoreReplyDraft(thread) {
   restorePersistedBox(box);
 }
 
+// ---- the draft a send consumed, cleared in ONE place ------------------------------------------------
+// A sent reply must leave nothing a repaint can hand back, and the draft lives in three stores:
+// state.replyDrafts (the map the box's input listener writes), the paste-chip mirror this tab keeps for a draft
+// that ever carried a chip (state.boxModels + sessionStorage, public/board/paste-chips.js), and the box's own
+// DOM. They used to be cleared by separate statements keyed on whatever thread name the send path happened to
+// hold, and the mirror was reachable only THROUGH a box node the send could still see. So a send whose card was
+// rebuilt, moved or folded away for the length of the POST left the mirror behind, and the landing repaint - the
+// moment the box IS rebuilt - took the sent words, chip and all, back out of it and drew them under the answer.
+// A preset send (the queue's drain, Retry turn, Continue) had the hole the other way round: it was allowed to
+// clear only an EMPTY box, yet it wiped the draft map regardless, so the reader's next plain draft died on the
+// following repaint while a chipped one survived on the mirror alone.
+//
+// `thread` is the name the send path holds; the BOX's own binding (box.dataset.reply) wins over it, because the
+// panel can rename a thread while a turn settles and the draft belongs to the box, not to the name. `sent` is the
+// text that went out. A box holding something ELSE is the reader's newer draft: it is left exactly as it is, map
+// and mirror included, and only the just-sent record is written.
+function clearSentDraft(thread, sent, box = null) {
+  const bound = String((box && box.dataset && box.dataset.reply) || thread || "");
+  if (!bound) return false;
+  const text = String(sent == null ? "" : sent).trim();
+  // The response's repaint may restore a typing snapshot taken while the POST was open: this is the record
+  // that tells restoreTyping (and a pending steer's seed) that the snapshot is the text that has just gone out.
+  state.justSent.set(bound, { text, at: Date.now() });
+  const boxes = [...document.querySelectorAll(`.reply-box[data-reply="${CSS.escape(bound)}"]`)];
+  if (box && box.nodeType === 1 && !boxes.includes(box)) boxes.push(box);
+  // Anything the reader has typed SINCE the press is not ours to clear.
+  if (boxes.some((el) => {
+    const held = readBox(el).trim();
+    return held && held !== text;
+  })) {
+    return false;
+  }
+  state.replyDrafts[bound] = "";
+  state.replyNav.delete(bound);
+  // The mirror is keyed on the thread, never on a node: it is cleared whether or not a box is still on the page.
+  forgetReplyDraft(bound);
+  for (const el of boxes) writeBox(el, "");
+  return true;
+}
+
 // Typing state inside a card, so a rebuild can put it back. Row events arrive every few seconds for a
 // fast-polling row, and the detail row is rebuilt on each one — without this, a half-typed reply was
 // thrown away mid-sentence and the cursor went with it.
@@ -4385,11 +4425,9 @@ async function queueReplyFromBox(thread) {
   state.replyPress.set(thread, true);
   paintQueueWait(thread);
   try {
-    state.replyDrafts[thread] = "";
-    if (box) {
-      writeBox(box, "");
-      clearBoxDraft(box);
-    } else clearBoxDraft(`reply:${thread}`);
+    // The press's own text went out as a held reply: one clear covers the map, the mirror and the box - keyed on
+    // the thread the BOX is bound to - before queueReply rebuilds the card.
+    clearSentDraft(String((box && box.dataset.reply) || thread || ""), text, box);
     queueReply(thread, text, files);
     // queueReply rebuilt the card, and the rebuild draws the closed face from this same predicate. The wait is
     // what makes the window real: a second press from a double click, a held key or a stale node lands inside it
@@ -5365,6 +5403,9 @@ function rememberAddAgentCaret(input) {
 
 async function sendReply(thread, preset = null, presetAttachments = null, { heldId = null } = {}) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  // The thread the BOX is bound to, resolved once: the draft stores below are keyed on this, never on a name
+  // the send path happens to hold a moment later.
+  const bound = String((box && box.dataset.reply) || thread || "");
   // The one place a box's text is read. A chip serializes back to the text it swallowed, IN PLACE: quotes
   // the reader put around it and the prose on either side arrive in the order they are on screen.
   const typed = String(preset ?? (box ? readBox(box) : "")).trim();
@@ -5399,23 +5440,12 @@ async function sendReply(thread, preset = null, presetAttachments = null, { held
         });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    state.replyDrafts[thread] = "";
-    if (!held) clearAttachments(thread);
-    // A sent reply ends the history walk: the next Up starts from the newest prompt again.
-    state.replyNav.delete(thread);
-    state.justSent.set(thread, { text: typed, at: Date.now() });
-    // The captured node may already have been replaced by a repaint that landed while the POST was in flight,
-    // so clear the box that is on the page now, not the one this function started with. A queued reply must not
-    // wipe something the reader has since typed, hence the preset guard.
-    const live = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    if (live && (preset == null || !readBox(live).trim() || readBox(live).trim() === typed)) {
-      writeBox(live, "");
-      clearBoxDraft(live);
-    }
-    if (box && box !== live && (preset == null || !readBox(box).trim())) {
-      writeBox(box, "");
-      clearBoxDraft(box);
-    }
+    // ONE clear, once the post is ACCEPTED and BEFORE the response's repaint - the map, the paste-chip mirror
+    // for the thread the box is bound to, and every box for it - so nothing between the two can put the words
+    // back (the landing repaint is exactly when the box is rebuilt). A box holding something the reader typed
+    // since is left alone, with its draft and its chips.
+    clearSentDraft(bound, typed, box);
+    if (!held) clearAttachments(bound);
     updateJob(d.job, { scroll: true });
     if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
@@ -5495,12 +5525,8 @@ async function steerTurn(thread, id, text, pressed = null) {
         // read BEFORE the box is cleared and held ON the entry: the drain sends those, not whatever is staged by then,
         // and the text stays the reader's words (the block would be a second copy of the paths).
         const files = attachmentsFor(thread);
-        state.replyDrafts[thread] = "";
         const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-        if (box) {
-          writeBox(box, "");
-          clearBoxDraft(box);
-        }
+        clearSentDraft(String((box && box.dataset.reply) || thread || ""), typed, box);
         queueReply(thread, typed, files);
         // After the repaint queueReply causes: it replaces the card, and the old warnline with it.
         const heldWarn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
@@ -5522,14 +5548,10 @@ async function steerTurn(thread, id, text, pressed = null) {
       return false;
     }
     // The text went into the LIVE turn, so clear the draft: leaving it would invite sending the same
-    // instruction twice, once as a steer and once as the next turn.
-    state.replyDrafts[thread] = "";
-    clearAttachments(thread);
+    // instruction twice, once as a steer and once as the next turn. One clear, keyed on the box's own thread.
     const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    if (box) {
-      writeBox(box, "");
-      clearBoxDraft(box);
-    }
+    clearSentDraft(String((box && box.dataset.reply) || thread || ""), typed, box);
+    clearAttachments(thread);
     if (warn) {
       // A steer only lands at a tool boundary, and `delegate_task` is one call that can run for minutes: say what
       // it is waiting for, and what happens if the wait outlasts the turn.
