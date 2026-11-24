@@ -176,8 +176,9 @@ import { SEARCH_PATH, createSearchRoutes } from "./routes/assistant-search.js";
 // The second header search (routes/hot-agent-search.js): the turns the reader wrote to worker agents, across every
 // tree. Its prefix shares nothing with the assistant search's, and its module owns what is eligible there.
 import { HOT_AGENT_SEARCH_PATH, createHotAgentSearchRoutes } from "./routes/hot-agent-search.js";
-// The header's Clarify popup: every question the panel has asked, and how each settled (routes/clarify-history.js).
-import { CLARIFY_HISTORY_PATH, createClarifyHistoryRoutes } from "./routes/clarify-history.js";
+// The header's Clarify popup: every question the panel has asked, how each settled, and the reader's re-ask of one
+// they missed (routes/clarify-history.js).
+import { CLARIFY_PATH, createClarifyHistoryRoutes } from "./routes/clarify-history.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, BOARD_PATH, createStateRoutes } from "./routes/state.js";
@@ -2173,9 +2174,10 @@ const PREFIX_MOUNTS = [
   // what a row may be and what the query means.
   { prefix: HOT_AGENT_SEARCH_PATH, handles: createHotAgentSearchRoutes({ jobs, assistant, sendJson }) },
   // The header's Clarify history (routes/clarify-history.js): one read over every question the panel has asked the
-  // reader, answered or not. The store is Jobs's own (lib/clarify-history.js) and the assistant roster is what names
-  // the asker, so both travel in; the module owns the page shape and the honest total.
-  { prefix: CLARIFY_HISTORY_PATH, handles: createClarifyHistoryRoutes({ jobs, nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null, sendJson }) },
+  // reader, answered or not, and the one write that re-asks a question the reader missed. The store is Jobs's own
+  // (lib/clarify-history.js), the assistant roster is what names the asker, and the send is `sendClarifyReask` below -
+  // the same thread-send path a reply takes - so the module owns the page shape, the refusals and the honest total.
+  { prefix: CLARIFY_PATH, handles: createClarifyHistoryRoutes({ jobs, nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null, sendJson, readBody, authorised, config, sendReask: sendClarifyReask }) },
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },
@@ -2814,6 +2816,44 @@ async function startThreadReply({ thread = "", text = "", displayPrompt = null, 
     log(`queue resume link failed for ${first.thread}: ${String((e && e.message) || e)}`);
   }
   return { status: 202, body: { job } };
+}
+
+// ---- the reader's re-ask of a clarify question they missed ----------------------------------------------------------
+// The popup's Re-ask button sends ONE message into the thread that asked, and this is the send. It goes through the
+// panel's own thread-send path and through no other: `startThreadReply` for a worker (the same acceptance a reply
+// takes - the same tree guard, the same `tree_busy` fence, the same card), and the assistant's own route for an
+// assistant's thread (which is what `/api/assistant/say` calls, because that turn needs the scratchpad and the board
+// digest). Nothing here starts a fresh session: the whole point of the feature is that the asking thread still holds
+// the context the question came out of.
+//
+// The refusal shapes are the callers' own: `{ok:false, code, error}` plus the HTTP status when the path produced one,
+// so the route can answer a conflict for a busy thread and a not-found for a thread that is gone.
+async function sendClarifyReask({ entry = null, text = "", thread = "" } = {}) {
+  const said = String(text || "");
+  const on = String(thread || entry?.thread || "").trim();
+  if (!said || !on) return { ok: false, code: "nothing_to_send", error: "there was nothing to send" };
+  const origin = {
+    kind: "clarify-reask",
+    by: "reader",
+    clarifyKey: entry?.key ? String(entry.key) : null,
+    seq: Number(entry?.seq) || null,
+  };
+  if (assistant && typeof assistant.isAssistantThread === "function" && assistant.isAssistantThread(on)) {
+    try {
+      const job = await assistant.say(said, { assistantId: entry?.assistantId || undefined, origin });
+      return { ok: true, job, at: new Date().toISOString() };
+    } catch (e) {
+      return { ok: false, code: (e && e.code) || null, error: String((e && e.message) || e) };
+    }
+  }
+  const out = await startThreadReply({ thread: on, text: said, origin });
+  if (out.status >= 200 && out.status < 300) return { ok: true, job: out.body?.job || null, at: new Date().toISOString() };
+  return {
+    ok: false,
+    status: out.status,
+    code: out.body?.code || null,
+    error: String(out.body?.error || `the panel answered HTTP ${out.status}`),
+  };
 }
 
 // ---- the page's held reply, made durable ---------------------------------------------------------------

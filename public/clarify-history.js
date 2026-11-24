@@ -18,6 +18,15 @@
 // colour rather than green) while the question box itself is centred and ringed. A question from a previous turn is
 // therefore opened as that turn, not merely as that agent.
 //
+// A MISSED ROW ALSO CARRIES THE RE-ASK. A row whose state is `closed` (the card timed out, was cancelled or went away
+// with no answer) draws one extra button: one press sends "Can you please re-ask this clarify question if it is still
+// valid?" and the question quoted IN FULL - from the STORED record on the server, never from this popup's
+// 400-character line - into the SAME thread, and lands the reader on the new turn where the answer will appear. There
+// is no second confirm: the press is the decision. The button is not drawn on an answered, replied or still-open row,
+// and once the reader has re-asked a question the store's record replaces it with "re-asked 2m ago", so the same item
+// cannot be sent twice. The refusals a press can meet (already re-asked, a live run on the thread, a session that is
+// gone) come back as the panel's own sentence in the banner.
+//
 // REACHED BY KEYBOARD, SPACE AND POINTER. The button is a real button; the popup is a listbox whose rows are buttons
 // with a roving tabindex, so Up/Down step one row per press, Home/End go to the ends, Enter or Space opens the row
 // under the caret, and Escape closes and hands the caret back to the button. A press outside closes it. It scrolls
@@ -47,6 +56,7 @@ const clarifyHist = {
   pendingTick: null, // the slow count tick, independent of the popup being open
   pendingOnce: null, // the debounced read after a job frame
   folds: new Set(),  // the seqs whose attempts the reader has opened, kept across the 5s repaint
+  reasking: new Set(), // the seqs whose re-ask is in flight, so a repaint under the press cannot send twice
 };
 
 // The popup's place and size: LAYOUT lengths are written as styles, but every number read back from the page
@@ -112,6 +122,14 @@ function clarifyHistoryPopEl() {
     const t = e.target;
     if (t.closest?.("#ch-close")) return clarifyHistoryClose({ focus: true });
     if (t.closest?.("#ch-more")) return clarifyHistoryShowAll();
+    // The RE-ASK press is a press of its own, and it comes before the row's: the button sits INSIDE the row, and a
+    // press on it must send the message, not merely open the turn the row is about.
+    const ra = t.closest?.(".ch-reask");
+    if (ra) {
+      e.preventDefault();
+      if (!ra.disabled) void clarifyHistoryReask(Number(ra.dataset.seq), ra);
+      return;
+    }
     // The fold inside a row comes first: pressing "2 attempts" must not also open the question's turn.
     const fold = t.closest?.(".ch-attempt-toggle");
     if (fold) {
@@ -226,6 +244,13 @@ function clarifyHistoryRowHtml(entry, index) {
     );
   }
   if (state === "closed") {
+    // A MISSED question is the one row that may be asked again, and the record decides which half it draws: NO button
+    // once the reader has re-asked it (the store's one-send record), so the double press cannot even be offered.
+    const reask = entry.reask && typeof entry.reask === "object" ? entry.reask : null;
+    const busy = clarifyHist.reasking.has(Number(entry.seq) || 0);
+    const ask = reask
+      ? `<span class="ch-reask-note mono" title="the panel sent one re-ask of this question into the thread that asked it; a second press sends nothing">↻ re-asked${reask.at ? ` ${chEsc(C.ageText({ askedAt: reask.at }))}` : ""}${reask.jobId ? ` · turn ${chEsc(reask.jobId)}` : ""}</span>`
+      : `<button type="button" class="ch-reask" data-seq="${Number(entry.seq) || 0}"${busy ? " disabled" : ""} title="ask this question again, in the thread that asked it - one press sends the full question and its choices, no second confirm">${busy ? "sending…" : "↻ Re-ask this question"}</button>`;
     return chRowShell(
       entry,
       index,
@@ -233,6 +258,7 @@ function clarifyHistoryRowHtml(entry, index) {
       `
         <span class="ch-mark ch-mark-closed">✕ ${chEsc(C.closedLine(entry))}</span>
         <span class="ch-q">${chEsc(question)}</span>
+        ${ask}
         ${meta}`,
     );
   }
@@ -451,6 +477,10 @@ function clarifyHistoryKeydown(e) {
     return clarifyHistoryClose({ focus: true });
   }
   if (!rows.length) return;
+  // A press on the row's own Re-ask button belongs to that BUTTON: the browser turns Enter/Space into a click, and the
+  // row handling below would swallow it - which is how a keyboard reader could never re-ask anything. Escape and the
+  // arrow/Home/End keys still reach the popup above this line.
+  if (e.target?.closest?.(".ch-reask")) return;
   const on = rows.indexOf(document.activeElement);
   let next = null;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -643,6 +673,127 @@ function clarifyHistoryLandSoon(entry, thread) {
       clarifyHist.landTick = null;
     }
   }, 150);
+}
+
+// ---- the re-ask: one press, one message, and the reader lands where the answer will appear -------------------------
+/**
+ * The press on a CLOSED row's Re-ask button.
+ *
+ * ONE press, no second confirm: the message is posted as it is, and the server's own thread-send path starts the turn.
+ * The body is the reader's line plus the question quoted from the STORED record (the server builds it from
+ * `entry.question` and `entry.choices`), never from this popup's 400-character line - the trap this feature is judged
+ * on. Three refusals come back as sentences rather than silence: an item already re-asked, a thread that holds a live
+ * run, and a session that is gone.
+ *
+ * The page guards the double press twice: `clarifyHist.reasking` makes a second press a no-op before a round trip is
+ * started, and the durable record in the store answers the press that a repaint put back.
+ */
+async function clarifyHistoryReask(seq, btn = null) {
+  const key = Number(seq) || 0;
+  const entry = clarifyHist.entries.find((e) => Number(e.seq) === key);
+  if (!entry || !key) return false;
+  if (clarifyHist.reasking.has(key)) return false;
+  clarifyHist.reasking.add(key);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "sending…";
+  }
+  try {
+    const res = await apiFetch("/api/clarify/reask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seq: key }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body?.ok !== true) {
+      // The refusal IS the answer: the panel's own sentence, where the reader is looking, and the row repainted from
+      // the store when the refusal names a record (so the button cannot stand there offering the same send again).
+      if (typeof showBanner === "function") showBanner(String(body?.error || `the re-ask was refused (HTTP ${res.status})`));
+      if (body?.already || body?.code === "already_reasked") void clarifyHistoryFetch();
+      return false;
+    }
+    clarifyHistoryClose();
+    const thread = String(body.thread || entry.thread || "");
+    const job = body.job && typeof body.job === "object" ? body.job : null;
+    clarifyHistoryReaskLand(thread, job);
+    if (typeof showNote === "function") {
+      showNote(`re-asked in ${thread}${job?.id ? ` - turn ${job.id}` : ""}: the answer will appear in that turn.`);
+    }
+    void clarifyHistoryFetch();
+    return true;
+  } catch (e) {
+    if (typeof showBanner === "function") showBanner(`the re-ask did not reach the panel: ${String((e && e.message) || e)}`);
+    return false;
+  } finally {
+    clarifyHist.reasking.delete(key);
+    if (btn && btn.isConnected) {
+      btn.disabled = false;
+      btn.textContent = "↻ Re-ask this question";
+    }
+  }
+}
+
+/**
+ * Land the reader where the answer will appear: the agent that asked is opened, the NEW turn is made the current page,
+ * and the turn is scrolled to and ringed. The card itself is not drawn here - the run's own `clarify.request` reaches
+ * `updateJob` and paints the question box through the panel's ONE pending path, which is the point of sending into the
+ * asking thread rather than starting a new session.
+ *
+ * The card mounts a frame or two after the press (the row's detail is fetched, the turns are drawn), so this is a short
+ * watchdog over the settling: it acts only on what is missing, focuses once (a second focus would fold the turn under
+ * the reader) and rings once per node.
+ */
+function clarifyHistoryReaskLand(thread, job = null) {
+  const on = String(thread || "");
+  const turnId = job?.id ? String(job.id) : null;
+  if (!on) return false;
+  const assistant = typeof assistantSessionFor === "function" ? assistantSessionFor(on) : null;
+  if (assistant) {
+    if (typeof window.__assistantShowThread === "function") window.__assistantShowThread(on);
+  } else if (typeof hotRowFor === "function" && typeof hotOpenPath === "function") {
+    const row = hotRowFor(on);
+    if (row) hotOpenPath(row);
+  }
+  if (state.collapsedJobs?.has(on)) state.collapsedJobs.delete(on);
+  if (job && typeof updateJob === "function") updateJob(job, { scroll: false });
+  if (typeof renderConversation === "function") renderConversation(on);
+  let focused = false;
+  const tick = () => {
+    const card = document.querySelector(`.job[data-thread="${CSS.escape(on)}"]`);
+    if (!card) {
+      if (typeof renderJobs === "function" && !document.querySelector(`.job[data-thread="${CSS.escape(on)}"]`)) renderJobs();
+      return false;
+    }
+    const turn = turnId ? card.querySelector(`.turn[data-turn="${CSS.escape(turnId)}"]`) : null;
+    if (!turn) return false;
+    if (!focused) {
+      focused = true;
+      // The page's own "the turn you are now in" move: it reveals the turn, folds what came before it and puts the
+      // thread's end on screen. The node it drew replaces the one just measured, so the scroll waits for the next pass.
+      if (turnId && typeof focusNewTurn === "function" && conversations().some((c) => c.thread === on)) {
+        focusNewTurn(on, turnId);
+        return true;
+      }
+    }
+    const r = turn.getBoundingClientRect();
+    if (Math.abs(r.top + r.height / 2 - window.innerHeight / 2) > 120) {
+      if (typeof programmaticScroll === "function") programmaticScroll();
+      turn.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    clarifyRung(turn);
+    return true;
+  };
+  tick();
+  clearInterval(clarifyHist.landTick);
+  const until = Date.now() + 3000;
+  clarifyHist.landTick = setInterval(() => {
+    tick();
+    if (Date.now() >= until) {
+      clearInterval(clarifyHist.landTick);
+      clarifyHist.landTick = null;
+    }
+  }, 150);
+  return true;
 }
 
 // ---- place and size, remembered ---------------------------------------------------------------------------------
