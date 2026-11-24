@@ -197,6 +197,13 @@ node tools/verify-clarify-pane.mjs
   <p>Also run, and green on this tree: <code>node tools/verify.mjs --only clarify</code> (8/8 gates, including the
   four older card gates and the clarify-history gate), and the unit tests that own this renderer and answer path
   (<code>node --test test/clarify-*.test.js test/turn-fold.test.js</code>, 101 assertions).</p>
+  <p><b>The full suite</b>, once, as the last step before the pull request: <code>npm test</code> - 3738 tests, 3715
+  passed, 23 failed. None of the 23 names a clarify question, a turn, this renderer or the answer path: they are
+  waves, initiatives, gateway permissions, the worktree assistant and naming, config paths, the junctioned
+  <code>node_modules</code> walk and the settings route. Run against a <code>git archive</code> of the base commit,
+  the same files fail with the same names - batch A 10 of 10 (74 passed on both trees), batch B 11 of 11 (57 passed on
+  both) - so this machine has carried them since before this branch.</p>
+  <p>The pull request is <b>#882</b> on this repo, open, with these proofs in its body.</p>
   <p>The gate is a LIVE GATE in the repo's runner (<code>tools/verify.mjs --list</code>) and is wired as
   <code>npm run verify:clarify-pane</code>.</p>
 
