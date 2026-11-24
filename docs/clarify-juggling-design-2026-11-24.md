@@ -1,6 +1,6 @@
 # Clarify juggling: the card is the end of every piece of work
 
-This page is a design, not a description. It says where a clarify card is raised today, what the panel can prove about it, and the exact text or code change that makes a four-direction card the default end of every piece of work. Nothing here changes agent behaviour: the only code that ships with it is the gitignore rule for the report page and the gate that would otherwise call an ignored page lost work. Section 6 lists what to build first.
+This page is a design, not a description. It says where a clarify card is raised today, what the panel can prove about it, and the exact text or code change that makes a four-direction card the default end of every piece of work. Nothing here changes agent behaviour: the only code that ships with it is the gitignore rule for the report page (user-wide and in the repo) and the gate that would otherwise call an ignored page lost work. Section 6 lists what to build first.
 
 Measured against `5997d923` (agent-worktree-gui 1.168.1, 2026-11-24), on the worktree branch `wtgui/read-queue-row-311-first-88efbf`. Every `file:line` below was printed in this tree at that commit; symbols are named where the claim is structural.
 
@@ -85,29 +85,38 @@ Measured in this tree:
 
 - `.gitignore` is 36 lines and carries no `*.secret.html` and no `*.secret.*` rule. The report the row asks for would be committed by any plain `git add docs/reports/...`.
 - `.git/info/exclude:14` in the parent clone carries `docs/reports/*.html`. That is this clone's local habit, shared by every worktree of it, and it is why `git status` never names a report that was written and not added. It is not a convention that travels: a fresh clone, another machine or another project does not carry it.
-- The machine's global exclude file is set: `core.excludesFile` is set to a file under the user's home (`<home>/.config/git/ignore`), and it already carries `*.secret.*`. That covers every repository on THIS machine, and no clone anywhere else.
+- The user-wide exclude file is set: `core.excludesFile` is `<home>/.config/git/ignore`, and it now carries `*.secret.html` under its own comment. That is the scope the reader asked for: git reads the file for every repository this user opens on this machine, whatever that repository's own `.gitignore` says. It does not travel to another machine or another account, which is why the repo line below remains.
 
 So the row's premise is right: there is no `*.secret.html` rule in the repo, and `docs/reports/*.html` in `info/exclude` is not it.
 
 ### 2.2 The rule
 
-One line in `.gitignore`, at the end, under its own comment:
+The rule is USER WIDE first, because `core.excludesFile` is the one setting git reads for every repository. One line, added to the file that setting names:
+
+```
+# A clarify card's reader-only page: local on this machine, in every repository.
+*.secret.html
+```
+
+On Windows there is no per-machine excludes file that every user shares without an administrator write, so "user or system wide" resolves to the user-wide file: it is the widest scope one person can set without changing another account's git. That answers the objection to a repo-only rule, which is project wide and nothing more.
+
+The same line also goes in the repo's `.gitignore`, at the end, under its own comment:
 
 ```
 # A reader-only page: local by design, never committed - any directory, every clone.
 *.secret.html
 ```
 
-Why the suffix and not the directory: a secret page may sit beside its evidence (`docs/reports/<round>/evidence.json`) or next to a design doc, and a rule tied to `docs/reports/` breaks the first time a page moves. The suffix is the only part of the name that means "this page is for the reader's eyes and not for the history", so the suffix is the rule. `*.secret.html` matches at any depth in any directory of this clone.
+That one is the RECORD, not the mechanism: it makes a fresh clone, a CI checkout and another person's machine behave the same, and it is the line a reviewer sees in the diff. Neither line is a security boundary; the page is private because it is never committed, not because it is hidden.
 
-"Everywhere" is two layers, and both are needed:
+Why the suffix and not the directory: a secret page may sit beside its evidence (`docs/reports/<round>/evidence.json`) or next to a design doc, and a rule tied to `docs/reports/` breaks the first time a page moves. The suffix is the only part of the name that means "this page is for the reader's eyes and not for the history", so the suffix is the rule. `*.secret.html` matches at any depth in any directory, in either scope.
 
 | layer | what it covers | where it lives | travels? |
 | --- | --- | --- | --- |
+| the user rule | every repository this user opens on this machine | `core.excludesFile` (`<home>/.config/git/ignore`) | with the user on this machine, not to another machine |
 | the repo rule | every clone, worktree and CI checkout of agent-worktree-gui | `.gitignore`, committed | yes |
-| the machine rule | every repository this machine touches | `core.excludesFile` (`<home>/.config/git/ignore`, already `*.secret.*`) | no, it is a machine setting |
 
-The fleet convention for other SEFL projects is the same one-line repo rule; a later row can have the panel check a project's `.gitignore` for `*.secret.html` at boot the way it already checks other project rules. Nothing in this design depends on the global file: the page is ignored on a machine that has only the repo rule.
+Both are set, and section 2.5 proves each alone: a scratch repository with no `.gitignore` at all hides the page through the user file, and a machine with no user file hides it through the repo line. A fleet-wide check (the panel reading `core.excludesFile` at boot and naming the missing line) is a next row, not this one: the panel must not rewrite a reader's git config on its own.
 
 ### 2.3 Where the page may be written
 
@@ -146,14 +155,16 @@ One measured nuance the implementation must state: a `.secret.html` page is invi
 
 ### 2.5 The proofs, as run
 
-Four checks were run on this tree, and the answers are quoted rather than summarised:
+Six checks were run on this tree, and the answers are quoted rather than summarised:
 
 | proof | the command | the answer |
 | --- | --- | --- |
-| the rule really ignores the page | `git check-ignore -v docs/reports/clarify-juggling-design-2026-11-24.secret.html` | `.gitignore:44:*.secret.html` - the committed rule, not the clone's `info/exclude` |
-| the rule travels alone | a scratch repo with only `*.secret.html` in its `.gitignore`, global excludes disabled | both the top-level and the nested secret page are absent from `git status`; `docs/reports/plain.html` is still `??` |
+| the USER-WIDE rule ignores the page | a scratch repository with no `.gitignore` at all: `git check-ignore -v docs/reports/card.secret.html` | `<home>/.config/git/ignore:9:*.secret.html`; with `core.excludesFile` disabled the same file reads `??` |
+| the REPO rule stands alone | a scratch repository with only `*.secret.html` in its `.gitignore`, user excludes disabled | the top-level and the nested secret page are absent from `git status`; `docs/reports/plain.html` is still `??` |
+| this tree's page is ignored | `git check-ignore -v docs/reports/clarify-juggling-design-2026-11-24.secret.html` | `.gitignore:44:*.secret.html` |
 | the card's link opens THIS file | `lib/clarify-links.js` `linksOf({label, path})` then `lib/open-url.js` `openFileWith` with a stub `spawn` | `{kind: "file"}`, then one argv element reading `file:///...clarify-juggling-design-2026-11-24.secret.html`, `via: "default browser"`, and no process started |
 | the page renders | headless Edge on the `file:///` URL, `--dump-dom` | exit 0, the `<title>` present and `checkChoices` found in the rendered DOM |
+| the view route is a chip, not the card link | `GET /api/reports/view` and `GET /api/reports` on this row | the view route serves the page (200, sandbox CSP); the list answers `count: 0`, tree source skipped |
 
 The card itself was drawn by the shipped renderer, not by hand: `questionPrompt` and `questionLinks` sliced out of `public/app.js`, the record's `links` through `linksOf`, and this is the anchor it produced for the report (the tree is shortened here; the run printed the absolute path):
 
@@ -226,6 +237,20 @@ const filed = this.fileAnsweredDirection(job, answerText, { by: "panel", origin:
 This beats the original split on the failure the reader actually worries about: work described in a card and answered by the reader is documented even if the assistant never wakes, even if its thread is busy, and even if the worker's tree is removed ten minutes later. It also keeps the deterministic half (the row) out of the probabilistic half (the assistant's memory).
 
 One rule the design does NOT add: the panel does not file a row for `Ask:`. The stop-and-ask kind is a request for a different question, not a piece of work, and a row that reads "ask again" is noise the assistant has to close.
+
+### 3.4 The wake guarantee, which is the reader's answer
+
+The contested question in section 6 was put to the reader on 2026-11-24 and answered: no worker files its own row, however urgent. The reader would rather upgrade the messaging so that a worker's message to an assistant ALWAYS wakes the assistant, with the watchdog alerting it to unread messages.
+
+That answer leaves the split in 3.3 intact and adds one mechanism, small in code because the queue already has the right shape: `lib/assistant/wakes.js` treats a worker's question as an EVENT, "one fact, no second chance, and never droppable", and only the rule's LEVEL decides whether the event becomes a turn. The `question` rule ships at `alert` (`lib/assistant/config.js:22`), so a worker's question lands in the digest and waits for a turn that may be hours away or never.
+
+Three changes, and where they land:
+
+1. `lib/assistant/config.js:22`: the `question` rule's default becomes `"wake"`. The event is already budget-exempt, and `Assistant#fired` starts the turn when the level is `wake` (`lib/assistant.js:4466`), so "a worker asks something" wakes the assistant that owns the row at the moment the alert fires instead of waiting for the next sweep.
+2. `lib/assistant.js` `fileAnsweredDirection` (section 3.3): the row it files also wakes its owner, `wake("[row] #N ...", null, "clarify-answer", { assistantId: owner })`, and a worker's proposal does the same. The queue coalesces it with anything else in the same 150 ms batch, so one answered card is one turn, not two.
+3. The watchdog the reader named: an unread counter on the assistant's record, raised by any message the assistant has not read (a filed row, a room message, a worker's proposal) and cleared when a turn that carries it is created. The sentry wakes ONCE per unread batch and then stops; a reminder per message would be the flood the coalescing exists to prevent.
+
+What would prove it took effect: `test/assistant-event-wakes.test.js` and `test/settle-wake.test.js` drive the queue directly, so a new case asserts that a worker's question (prose or parked) produces exactly one wake for the owning assistant with the question in its text, and that the assistant's next turn carries it; the unread counter gets its own case (two messages, one start, the counter cleared). Both are behaviour changes, so they belong to the row that implements section 3.3, not to this design: this section names the mechanism and the proof, and the reader's answer is what makes the mechanism the plan.
 
 ## 4. Waves: the current wave and the next ones
 
@@ -304,7 +329,7 @@ Proof: `tools/verify-clarify.mjs` reads the body POSTed to the stub Runs API and
 File: `lib/jobs.js`, `CLARIFY_LINKS_BRIEF` at :279. Add one sentence after the links example:
 
 ```
-A page the reader may need to look at twice is written as `docs/reports/<name>.secret.html` and linked with its ABSOLUTE path: the `*.secret.html` suffix is ignored by git, so the page is never committed, and the card opens it in the reader's browser tab.
+A page the reader may need to look at twice is written as `docs/reports/<name>.secret.html` and linked with its ABSOLUTE path: the `*.secret.html` suffix is ignored by git user-wide and in every clone (the rule in section 2.2), so the page is never committed, and the card opens it in the reader's browser tab.
 ```
 
 File: `lib/jobs.js`, `REPORT_BRIEF` at :298. Replace the third line:
@@ -395,9 +420,9 @@ The design is complete enough to build from. These are the four next directions,
 
 ### `Finish:` land the rule and the report mechanism, stop there
 
-This landing already carries the `.gitignore` line and the gate exemption. The next two commits add the design doc's own claims as tests: `*.secret.html` is ignored in a scratch repo, and `untrackedReports` does not call a secret page lost. Nothing else changes. The fleet keeps its current card behaviour, and the report page has a home that git will not commit.
+This landing carries the rule in BOTH scopes: the user-wide line in `core.excludesFile` (added on this machine, section 2.2) and the repo's `.gitignore` line, plus the gate exemption and its test. Nothing else changes. The fleet keeps its current card behaviour, and the report page has a home that no repository will commit.
 
-Cost: two commits, no behaviour change. Forecloses nothing.
+Cost: one machine setting and two small file changes, no behaviour change. Forecloses nothing.
 
 ### `Deeper:` build the seam check and the count
 
@@ -413,17 +438,22 @@ Cost: the seam in `deliverClarifyAnswer`, the driver's `ask` field and `"asked"`
 
 ### `Ask:` park the implementation and put the design to the assistants
 
-No code beyond this landing. The two role charters and the director's pass are asked to read this page and answer one question: is there a case where a worker's card must file its own row because no assistant is awake and the work is urgent? If the answer is no, the split in section 3 stands and the build order above is the plan. If it is yes, the exception is named before the seam is written, not after.
+Answered on 2026-11-24, and the answer is no. The reader would rather upgrade the messaging than let a worker file its own row: a worker's message to an assistant must always wake that assistant, with the watchdog alerting it to unread messages (section 3.4). The option stays here as the record of the question and its answer, not as a live choice; the build order is the three above it.
 
-Cost: a round trip with the reader, and the build waits. It is the right choice only if the recording rule is still contested after this page.
+Cost: the round trip already happened, and the answer is what makes section 3.4 the plan.
+
+### The decision, 2026-11-24
+
+The reader answered the closing card: continue down these four in the order this page recommends, with one change to the first. The ignore rule must be USER or SYSTEM wide for git, not a project's own `.gitignore` only, so `Finish:` now means the user-wide `core.excludesFile` line plus the repo line plus the report mechanism. `Ask:` is answered above, and `Deeper:` then `Route:` are the rows that follow this landing.
 
 ## Appendix A: measurements
 
 | what | how it was measured | result |
 | --- | --- | --- |
 | no secret rule in the repo | `grep -n "secret" .gitignore` and reading the 36 lines | no `*.secret.html`, no `*.secret.*` |
-| what ignores a secret page today | `git check-ignore -v docs/reports/<name>.secret.html` | `.git/info/exclude:14 docs/reports/*.html` (clone-local), nothing from `.gitignore` |
-| the machine's global rule | `git config --get core.excludesFile` and reading the file | a path under the user's home, and the file carries `*.secret.*` |
+| what ignored a secret page before this landing | `git check-ignore -v docs/reports/<name>.secret.html` | `.git/info/exclude:14 docs/reports/*.html` (clone-local), nothing from `.gitignore` |
+| the user-wide rule | `git config --get core.excludesFile` and reading the file | the file under the user's home now carries `*.secret.html` as well as `*.secret.*` |
+| the user rule alone ignores a page | a scratch repo with no `.gitignore`; `git status --porcelain --untracked-files=all` and `git check-ignore -v` | the secret page is hidden and the rule named is `<home>/.config/git/ignore:9:*.secret.html`; with `core.excludesFile` disabled the page reads `??` |
 | the gateway caps choices at four | reading `<HERMES_HOME>/hermes-agent/tools/clarify_tool.py` | `MAX_CHOICES = 4`, first choice marked `(Recommended)`, "Other" appended by the UI |
 | the panel copies choices verbatim | `lib/jobs.js:4889` | `.map(String)`, no repair |
 | the answer continues the asking thread | `lib/clarify-answer.js` `answerDelivery` | `resume` / `reply` / `fresh` / `refuse`, default `resume` |
