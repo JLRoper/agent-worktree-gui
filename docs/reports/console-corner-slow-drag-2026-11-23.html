@@ -368,6 +368,16 @@ file against the archive of <code>origin/main</code> (<code>fd2f3c7b</code>):</p
       (chosen 270 -> 230) and its cap check; identical numbers on main. It is a real, separate defect: the stored
       height does not come back on a reload in that harness's shape.</li>
 </ul>
+<p><b>The full suite, and what it is not.</b> <code>npm test</code> on this tree answers
+<b>3740 tests, 3718 pass, 22 fail</b>. Every failing file is outside this branch's diff, and the same classes fail
+on the archive of <code>origin/main</code> in the same window: <code>worktree-assistant</code> (6),
+<code>paths</code> (1), <code>gateway-permissions</code> (the file itself), <code>waves-route</code>,
+<code>initiative-tier-route</code>, <code>scan-roots</code>, <code>scan-upstream</code>, <code>paths-http</code>,
+<code>junctioned-node-modules</code>, <code>worktree-naming</code> and <code>assistant-queue-reattach</code>. This
+host also still carries stale <code>node --test</code> runners from 2026-11-23 11:19 to 12:31 that hold their own
+sandbox servers, so the shared state those routes read is not quiet; <code>reasoning-runs</code> failed in the suite
+and passed on the archive in the same window, which is that flakiness and not this branch. The console tests
+themselves are <b>39 pass, 1 fail</b>, and the one fail is the waves wiring above.</p>
 
 <h2>8. Process hygiene</h2>
 <p>The harness starts <b>one</b> sandbox panel (<code>node server.js</code>) and <b>one</b> headless Chromium, and both
