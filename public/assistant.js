@@ -7768,7 +7768,9 @@
       if (cons) {
         const drawn = el.getBoundingClientRect().height - d.box.height;
         const outH = consoleDragHeight(d.out.h, drawn, d.out.floor);
-        cons.style.height = cssPx(outH, z);
+        // Through the SAME one writer the console's own corner uses (setOutHeight, public/board/console.js): a
+        // second path that wrote `style.height` here is how this box ended up with two geometries.
+        if (typeof setOutHeight === "function") setOutHeight(cons, outH / (z || 1));
         // The cap with it: the sheet's open-turn rule says `max-height: none`, so a flex-grow on a later paint would
         // hand the console more than the drag did; pinning the cap keeps the number the drag wrote.
         cons.style.maxHeight = cssPx(outH, z);

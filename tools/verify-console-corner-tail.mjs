@@ -180,7 +180,7 @@ const PAGE_HELPERS = () => {
       h: +r.height.toFixed(1),
       top: +r.top.toFixed(1),
       scrollY: Math.round(window.scrollY),
-      inline: box.style.height,
+      inline: box.style.getPropertyValue("--out-h"),
       max: box.style.maxHeight,
       gripRight: +gr.right.toFixed(1),
       gripBottom: +gr.bottom.toFixed(1),
@@ -345,7 +345,7 @@ async function main() {
             const r = d.out.getBoundingClientRect();
             return {
               h: +Number(d.h).toFixed(1), min: d.min, cap: d.cap, from: +Number(d.from).toFixed(1), moved: d.moved,
-              top: +r.top.toFixed(1), innerH: window.innerHeight, inline: d.out.style.height,
+              top: +r.top.toFixed(1), innerH: window.innerHeight, inline: d.out.style.getPropertyValue("--out-h"),
               room: Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(window.innerHeight - r.top - 8)),
             };
           } catch (e) {
@@ -365,7 +365,7 @@ async function main() {
 
         await page.evaluate(() => renderAll());
         await page.waitForTimeout(160);
-        const rebuilt = await page.evaluate(() => ({ h: +document.querySelector('pre.job-out[data-out="corner-tail"]').getBoundingClientRect().height.toFixed(1), inline: document.querySelector('pre.job-out[data-out="corner-tail"]').style.height }));
+        const rebuilt = await page.evaluate(() => ({ h: +document.querySelector('pre.job-out[data-out="corner-tail"]').getBoundingClientRect().height.toFixed(1), inline: document.querySelector('pre.job-out[data-out="corner-tail"]').style.getPropertyValue("--out-h") }));
         numbers.rebuildHeightPx = rebuilt.h;
         check(near(rebuilt.h, released.h, 1), "the chosen height survives the board rebuild that follows", `${released.h}px -> ${rebuilt.h}px (${rebuilt.inline})`);
 

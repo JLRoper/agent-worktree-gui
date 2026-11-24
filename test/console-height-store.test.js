@@ -46,7 +46,25 @@ class Console {
     this.writes = [];
     const self = this;
     const values = {};
+    // The console's height is ONE variable now (`--out-h`, written by setOutHeight in public/board/console.js and
+    // resolved by the sheet's `height: var(--out-h, auto)`), so the model carries the two style methods the page
+    // calls and nothing else.
     this.style = new Proxy(values, {
+      get(target, prop) {
+        if (prop === "setProperty") {
+          return (name, value) => {
+            self.writes.push(`${String(name)}=${String(value)}`);
+            target[name] = String(value);
+          };
+        }
+        if (prop === "removeProperty") {
+          return (name) => {
+            self.writes.push(`${String(name)}=`);
+            delete target[name];
+          };
+        }
+        return target[prop];
+      },
       set(target, prop, value) {
         self.writes.push(`${String(prop)}=${String(value)}`);
         target[prop] = String(value);
@@ -57,9 +75,9 @@ class Console {
   get scrollHeight() {
     return this.content;
   }
-  // The inline height wins over the cap; without one the box is as tall as whatever the sheet allows.
+  // The console's height wins over the cap; without one the box is as tall as whatever the sheet allows.
   get clientHeight() {
-    const inline = parseFloat(this.style.height);
+    const inline = parseFloat(this.style["--out-h"]);
     const h = Number.isFinite(inline) ? inline : parseFloat(this.cap);
     return Math.min(Number.isFinite(h) ? h : this.content, this.content);
   }
@@ -105,6 +123,8 @@ vm.runInContext(
     grab("pruneOutHeights"),
     grab("consolePinned"),
     grab("setScroll"),
+    grab("setOutHeight"),
+    grab("clearOutHeight"),
     grab("applyStoredHeight"),
     grab("applyStoredHeights"),
     grab("applySubConsoleScrolls"),
@@ -129,7 +149,7 @@ test("a stored height survives a rebuild, above the cap, with the cap lifted off
 
   context.placeBuiltConsoles(root([box])); // a card built from nothing: a collapsed project expanded again
 
-  assert.equal(box.style.height, "420px", "the box is the height the reader dragged it to, not its 320 px cap");
+  assert.equal(box.style["--out-h"], "420px", "the box is the height the reader dragged it to, not its 320 px cap");
   assert.equal(box.style.maxHeight, "none", "and the cap that would clip it is lifted, exactly as the drag does");
   assert.equal(box.clientHeight, 420, "the box the reader left is the box that is drawn");
 });
@@ -140,7 +160,7 @@ test("the replace path applies it too (renderJobs and a rebuilt project detail g
 
   context.applyStoredScrolls(root([box]));
 
-  assert.equal(box.style.height, "490px");
+  assert.equal(box.style["--out-h"], "490px");
   assert.equal(box.style.maxHeight, "none");
 });
 
@@ -150,7 +170,7 @@ test("a below-cap height is kept exactly, and the cap is left where it was", () 
 
   context.placeBuiltConsoles(root([box]));
 
-  assert.equal(box.style.height, "260px", "the number the reader chose, to the pixel");
+  assert.equal(box.style["--out-h"], "260px", "the number the reader chose, to the pixel");
   assert.equal(box.style.maxHeight, undefined, "nothing to lift: 260 px is under the 320 px cap, and the sheet keeps it");
   assert.equal(box.clientHeight, 260);
 });
@@ -158,8 +178,8 @@ test("a below-cap height is kept exactly, and the cap is left where it was", () 
 test("a console nobody resized is left alone, so the cap still does its job", () => {
   const box = fresh();
   context.placeBuiltConsoles(root([box]));
-  assert.deepEqual(box.writes, ["scrollTop=680"], "one scroll to its newest line, no inline height and no lifted cap");
-  assert.equal(box.style.height, undefined);
+  assert.deepEqual(box.writes, ["scrollTop=680"], "one scroll to its newest line, no height written and no lifted cap");
+  assert.equal(box.style["--out-h"], undefined);
   assert.equal(box.style.maxHeight, undefined);
 });
 
@@ -172,7 +192,7 @@ test("the height goes on BEFORE the scroll is placed, so the reader's line is cl
 
   context.placeBuiltConsoles(root([box]));
 
-  assert.deepEqual(box.writes, ["height=420px", "maxHeight=none", "scrollTop=1200"], "height first, then the line");
+  assert.deepEqual(box.writes, ["--out-h=420px", "maxHeight=none", "scrollTop=1200"], "height first, then the line");
   assert.equal(box.max, 3580, "the parked line was clamped against a 420 px box, not a 320 px one");
 });
 

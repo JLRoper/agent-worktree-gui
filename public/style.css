@@ -1544,6 +1544,13 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
    time - see the guard in compensateAnchor, public/app.js - or the page scrolls under the gesture.) */
 body.is-out-gripping { user-select: none; cursor: nwse-resize; }
 body.is-out-gripping * { cursor: nwse-resize; }
+/* NO `overflow-anchor: none` FOR A GESTURE, and the omission is a decision with a measurement behind it. The
+   console's corner drag stands the PAGE's tail pin down (public/board/console.js cardBodyHeld) because that pin
+   jumps the transcript to its FOOT, which cancels a drag. The BROWSER's scroll anchor is the opposite: it holds the
+   reader's place, so a row landing in the turn ABOVE the console leaves the box's top edge - and the hand on its
+   corner - exactly where they were. Disabling it for the gesture was tried and measured in
+   tools/verify-console-corner-slow-drag.mjs's "above" case: the box's top edge moved 86.25px under a still hand and
+   the grip left the pointer by the same 86.25px. Leave this alone; the gate fails if it is added back. */
 /* The console has an 18px left tab (.job-cmd, .job-out, .job-foot). The wrapper takes the tab instead, so the two
    boxes line up exactly and the chip centred in the wrapper is centred in the console. */
 .out-wrap.out-tab { margin-left: 18px; }
@@ -1665,6 +1672,11 @@ body.is-out-gripping * { cursor: nwse-resize; }
 
 .job-out {
   margin: 0;
+  /* The console's height has ONE owner: `--out-h`, written only by setOutHeight (public/board/console.js) - the
+     corner gesture, the remembered height a rebuild restores, and the float's slack console drag all go through it.
+     Nothing else writes a height on this box, so a rewrite of what is INSIDE it cannot invent a second geometry.
+     Unset, `auto` is the sheet's own size (content, capped by max-height below). */
+  height: var(--out-h, auto);
   /* The max-height is the cap the console sits on before anyone resizes it. The corner grip (`.out-grip`) writes an
      explicit height instead, and lifts this cap while that height needs it - there is no `resize` here on purpose: a
      native handle belongs to the node it started on, and this panel replaces that node. See public/app.js's grip. */

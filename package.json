@@ -57,6 +57,7 @@
     "verify": "node tools/verify.mjs --list",
     "verify:all": "node tools/verify.mjs --all",
     "verify:console-render": "node tools/verify-console-render.mjs",
+    "verify:console-slow-drag": "node tools/verify-console-corner-slow-drag.mjs",
     "verify:console-fonts": "node tools/verify-console-fonts.mjs",
     "verify:stream-delta": "node tools/verify-stream-delta.mjs",
     "verify:thinking-stream": "node tools/verify-thinking-stream.mjs",
