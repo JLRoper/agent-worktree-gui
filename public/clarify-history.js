@@ -55,6 +55,7 @@ const clarifyHist = {
   pendingAt: 0,      // when that number was last read
   pendingTick: null, // the slow count tick, independent of the popup being open
   pendingOnce: null, // the debounced read after a job frame
+  fourDirections: null, // the route's count of cards that offered all four directions in the last week
   folds: new Set(),  // the seqs whose attempts the reader has opened, kept across the 5s repaint
   reasking: new Set(), // the seqs whose re-ask is in flight, so a repaint under the press cannot send twice
 };
@@ -98,6 +99,7 @@ function clarifyHistoryPopEl() {
       <span class="ch-count mono" id="ch-count"></span>
       <button id="ch-close" class="ch-close" type="button" title="close (Esc)" aria-label="close the clarify history">✕</button>
     </div>
+    <div class="ch-shapes mono" id="ch-shapes" hidden></div>
     <div class="ch-list" id="ch-list" role="listbox" aria-label="clarify questions, newest first"></div>
     <div class="ch-foot" id="ch-foot">
       <span class="ch-foot-text mono" id="ch-foot-text"></span>
@@ -305,6 +307,17 @@ function paintClarifyHistory() {
   more.hidden = !(held > shown && !(clarifyHist.error && !cap.total));
   if (!more.hidden) more.textContent = `show all ${held}`;
   count.textContent = clarifyHist.loading ? "reading…" : held ? `${held} question${held === 1 ? "" : "s"}` : "";
+  // The four-direction count: the denominator the rule needs. It is drawn from the ROUTE's summary (counted over every
+  // kept item, not the page this popup chose to draw), and it hides rather than printing a number it does not have.
+  const shapes = pop.querySelector("#ch-shapes");
+  if (shapes) {
+    const summary = clarifyHist.fourDirections;
+    shapes.hidden = !summary;
+    shapes.textContent = summary ? C.fourDirectionsText(summary) : "";
+    if (summary) {
+      shapes.title = `${summary.week} of ${summary.weekCards} card${summary.weekCards === 1 ? "" : "s"} asked in the last ${summary.days || 7} days offered Finish:, Deeper:, Route: and Ask: in that order. Every kept card: ${summary.all} of ${summary.allCards}.`;
+    }
+  }
   if (keep) {
     const again = list.querySelector(`.ch-row[data-seq="${CSS.escape(String(keep))}"]`);
     if (again && focused) again.focus({ preventScroll: true });
@@ -332,6 +345,7 @@ async function clarifyHistoryFetch() {
     clarifyHist.entries = rows;
     clarifyHist.total = Number(body.total) || rows.length;
     clarifyHist.kept = Number(body.kept) || rows.length;
+    clarifyHist.fourDirections = body.fourDirections && typeof body.fourDirections === "object" ? body.fourDirections : null;
     if (Number.isFinite(Number(body.outstanding))) setClarifyPending(Number(body.outstanding));
   } catch (e) {
     if (mine !== clarifyHist.seq) return;

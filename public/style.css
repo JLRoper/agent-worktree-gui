@@ -3371,6 +3371,12 @@ a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
    carries the box's own accent so it reads as part of the box rather than a warning. */
 .tq-again { display: inline-block; margin: 4px 0 0; font: 11px/1.4 var(--mono, var(--ui)); color: var(--q-accent); opacity: .9; }
 .tq-question { margin: 8px 0 9px; font: var(--q-size, 13px)/1.5 var(--ui); color: var(--q-question); white-space: pre-wrap; word-break: break-word; }
+/* The four-direction strip: one muted line under the question saying what shape the card has. It annotates and never
+   gates - the choices below it stay live whatever it says - so it takes the quiet note colour, and only a complete
+   card earns the accent. */
+.tq-shape { margin: -3px 0 9px; font: 10.5px/1.45 var(--mono, var(--ui)); color: var(--q-note); word-break: break-word; }
+.tq-shape::before { content: "◇ "; opacity: .75; }
+.tq-shape.is-complete { color: var(--q-accent); }
 /* The Links section: a reserved block between the question and its choices, one anchor per link. Same place on every
    card that has one, and absent entirely when a question carries none - an empty box would be a hole in the card.
    Colours are the box's OWN tint variables, so Settings > Display retints this block with the rest of the card. */
@@ -4500,6 +4506,18 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
   background: var(--violet);
 }
 .ch-pop .ch-title { font: 600 11.5px/1.4 var(--ui); color: #e7d6ff; }
+/* The four-direction count: one quiet violet line under the head, the rule's denominator. Hidden while the popup has
+   no summary to print, so an empty store never shows "0 of 0". */
+.ch-pop .ch-shapes {
+  flex: none;
+  padding: 4px 11px 5px;
+  border-bottom: 1px solid #2a2340;
+  background: #120f1d;
+  font: 9.5px/1.5 var(--mono); color: #a78ad6;
+  letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ch-pop .ch-shapes[hidden] { display: none; }
 .ch-pop .ch-count {
   flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
