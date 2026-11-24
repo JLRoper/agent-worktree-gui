@@ -719,8 +719,7 @@ next thing to touch it would delete through it.
 | Turn pager | `▲`/`▼` and `6–10 / 23` when a thread has more turns than fit on a page. The arrows are the collapse gesture: every turn on the page you leave folds. |
 | Thread name | The Hermes session id (or your label for it) — the thing a reply continues. |
 | `📌` | Pin this card: it keeps its screen position while cards above it grow. One pin at a time; clicking again releases it, and clearing the thread releases it too. |
-| `🧠` | Show this session's reasoning (see below). |
-| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with no burst to open — each run of calls is one **tool-usage group** (a rule above its rows and a rule below them, one row per call: the tool, the file and range or the command it was given, and how long it took), and each row opens the shut box that call returned. Per session, remembered in this browser — a card that never pressed it follows Settings → Agent cards → **Combined output**; off, the card is the separate thinking block and the condensed tool bursts it always was. |
+| `🧠` | Show this session's reasoning as dim rows of its console (see below). |
 | `✎` | Rename the session **in the panel only**. The Hermes thread id never changes. |
 | `⤢` | Maximize the card to the window (`Esc` closes). |
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
@@ -769,8 +768,8 @@ Each turn is an accordion inside the card:
   the collapse gesture: every turn on the page you just left folds, so going up and back down leaves the thread
   closed behind you. The one thing it does not touch is a starred turn's **pinned** copy above the page — that copy is
   on screen on every page, so it stays as you left it until you click it.
-- The open turn holds, in order: the thinking block (if on), the console, the subagent strip, and any approval or
-  question box for that turn.
+- The open turn holds, in order: the console (the reasoning rows are part of it while 🧠 is on), the subagent strip,
+  and any approval or question box for that turn.
 - Sending a reply draws the earlier turns the way **Settings → Agent cards → Previous turn on send** says: a
   **compact** summary — the last tool line, the answer's first lines, and one dim line saying what folded (the
   default); the turn **left as is**, its console still open above the new turn; or **minimized** to its one-line
@@ -868,9 +867,9 @@ filled in above it afterwards. The panel now reads the store again the moment a 
 everything behind it (in order, as one queue per card) until the thought is written, and lets the lot go together.
 Only the thoughts written since the last tool result count, so a card you open halfway through a turn does not wait
 on its backlog. It holds nothing when there is nothing to wait for: **Stream display speed** at `0`, reasoning
-switched off (🧠), a 🧠 block you have folded, a turn that is not running, or a tab in the background. The turn
+switched off (🧠), a turn that is not running, or a tab in the background. The turn
 ending releases whatever is held. A call with no thought in front of it is at most one store read (~50 ms) late.
-`node tools/verify-reasoning-first.mjs` measures it on a sandbox panel, in both the 🌊 stream and the 🧠 block.
+`node tools/verify-thinking-stream.mjs` measures the live stream, its mark and the settled reload on a sandbox panel.
 
 **Reasoning, skill output and the console each have a colour — and the console has ONE size for all of its text.**
 Settings → Display → **Thinking text**, **Skill output** and **Console text** each carry a colour picker. The colours
@@ -1127,7 +1126,6 @@ a restart):
 | Display | Compact answers | Tighter padding and gaps between the answer rows, so a question takes less room in a card. The type size is separate. |
 | Display | Typed answer box | Shows the free-text row under the choices. An open-ended question keeps it whatever this says, or there would be nothing to answer with. |
 | Cards | Show thinking | The default for cards' `🧠`; a card's own toggle wins. |
-| Cards | Combined output | The default for cards' `🌊`: on, a session that never pressed the button comes up as one stream (reasoning while `🧠` is on, the calls, and the agent's words, in the order they happened); off — the default — it is the separate thinking block and the condensed tool bursts. A card's own `🌊` wins. Saved in this browser. |
 | Cards | Jump to an opened result | Off by default: opening a folded tool output holds the console where it is, so the box unfolds under the header you pressed. On restores the old follow-the-growth behaviour, where the console slides down to the end of what was just opened. Saved in this browser. |
 | Cards | Collect subagent results | Hand a parent the results of children that outlived its turn, once per turn. |
 | Cards | Previous turn on send | What the turn you were reading becomes when you send a reply: **freeze a snippet** (the default — the last tool line, the answer it ended on, and what folded), **leave as is** (its console stays open above the new turn), or **minimize it** (folded to its one-line peek first). Saved in this browser. |

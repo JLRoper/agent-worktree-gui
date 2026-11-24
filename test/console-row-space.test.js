@@ -218,7 +218,9 @@ test("one variable carries the spacing to every console row, and the prompt box 
   }
   assert.ok(consoleBlock, "public/style.css still has the console's font rule");
   assert.match(consoleBlock, /line-height: var\(--con-row-space, 1\.5\)/, "the console's line-height is the one variable, with 1.5 as its fallback");
-  assert.match(css, /\.think-block \{[^}]*line-height: var\(--con-row-space, 1\.5\)/, "the reasoning block above a console follows the same variable");
+  // The reasoning row inherits that line box (it sets no size or leading of its own), and its four-line clip is
+  // COUNTED in that same variable, so a reader who widens the rows sees four wider lines rather than a fixed px box.
+  assert.match(css, /\.jl-think \.think-text \{[^}]*max-height: calc\(1em \* var\(--con-row-space, 1\.5\) \* 4\)/, "the reasoning row's clip follows the same variable");
   assert.match(css, /\.settings-preview\.sample-rows \{[^}]*var\(--con-row-space, 1\.5\)/, "the row's own preview is that same line box, not a drawing of it");
   // The prompt box keeps its own padding: the variable appears nowhere in a reply-box rule.
   for (const m of css.matchAll(/[^{}]*\.reply-box[^{}]*\{[^}]*\}/g)) {

@@ -563,7 +563,7 @@ Semantics, all verified against real runs:
   `skill_manage` — the longest thing a run hands the console at once) type out at Settings → Display →
   **Stream display speed**, like the agent's prose and its reasoning, and walk in at **Stream line rate**.
 - **A tool's output waits for the thought before it.** With **Stream display speed** on, a tool call and its output are
-  not written into the console until the reasoning in front of them has finished typing (`tools/verify-reasoning-first.mjs`).
+  not written into the console until the reasoning in front of them has finished typing (`tools/verify-thinking-stream.mjs`).
 - **Reasoning, skill output and the console have their own colour and size** (Settings → Display), and every
   reasoning section stands an empty line below whatever came before it (`tools/verify-text-styles.mjs`).
 - **Cancel** posts `/v1/runs/<id>/stop`; stopping is cooperative, so the card settles as `cancelled`

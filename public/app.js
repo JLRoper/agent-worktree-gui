@@ -76,8 +76,8 @@ window.WMApp.deliverables = {
 // The turn surface was cut out of this file into public/turns.js: the list a card pages through (conversations,
 // turnOrder, turnSeqOf), the fold book's three names (turnKey, turnIsOpen, toggleTurn), the origin chips and the
 // session-replaced chip, the head and the two ways a turn is drawn shut (turnHead, inlinePrompt, displayPrompt,
-// turnAttachmentsHtml, turnPeekLine, compactHtml, peekHtml, refreshTurnPeek), and the two display switches
-// (thinkingOn, setThinking, streamOn, setStreamMode and their defaults). That is step 4 of
+// turnAttachmentsHtml, turnPeekLine, compactHtml, peekHtml, refreshTurnPeek), and the display switch
+// (thinkingOn, setThinking and its default). That is step 4 of
 // docs/reports/module-map-2026-11-07.html's order of work, and it was a move, not a rewrite: nothing was renamed
 // and no call site changed. public/turns.js is a classic script the shell loads after charts.js and before this
 // one, so its top-level declarations are page-wide and every bare name here is the same binding it was before
@@ -92,7 +92,6 @@ window.WMApp.turns = {
   turnHead, inlinePrompt, displayPrompt, turnAttachmentsHtml, turnPeekLine, firstSentence, compactHtml, peekHtml,
   refreshTurnPeek,
   THINK_KEY, thinkDefault, thinkingOn, setThinking,
-  STREAM_KEY, SHOW_STREAM_KEY, showStreamButton, streamDefault, streamOn, setStreamMode,
 };
 
 // ---- the settings appliers live in public/settings.js, and are re-exported here ---------------------
@@ -3418,56 +3417,33 @@ setInterval(refreshSubagentRoster, 5000);
 
 // A card with thinking on reads its turns from the store: once for a finished turn, and again every few seconds while
 // one is still running (the store is the only live source - the stream's copy is a preview, and not delivered here).
+// A settled turn that still carries preview blocks is read ONCE more: that read is what replaces the live rows with
+// the store's recorded blocks, so each thought keeps one copy in the console.
 function sweepThinking() {
   for (const card of document.querySelectorAll(".job[data-thread]")) {
     const thread = card.dataset.thread;
-    // A card drawn as ONE stream wants the blocks too: they are lines of its console, not a block above it.
-    if (!thread || (!thinkingOn(thread) && !streamOn(thread))) continue;
+    if (!thread || !thinkingOn(thread)) continue;
     const conv = conversations().find((c) => c.thread === thread);
     if (!conv) continue;
     for (const turn of conv.turns) {
       const entry = state.thinkCache.get(turn.id);
       const live = turnLive(turn);
-      if (!entry || (live && Date.now() - (entry.at || 0) > 1000)) void loadThinking(turn, "");
-      // A block that was open because its turn was running folds once it is not - unless the reader opened it.
-      if (!live) {
-        const key = turnKey(turn, "");
-        const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
-        if (el && el.open && !thinkOpenFor(turn, key)) {
-          thinkAutoOpened.add(el);
-          el.open = false;
-        }
-      }
+      const staleLive = live && (!entry || Date.now() - (entry.at || 0) > 1000);
+      const needsSettle = !live && entry && (entry.blocks || []).some((b) => b && b.preview);
+      if (!entry || staleLive || needsSettle) void loadThinking(turn);
     }
   }
 }
 setInterval(sweepThinking, 500);
 
-// The block's own open/closed state belongs to the reader; a repaint puts it back.
-// `thinkAutoOpened` is armed two ways, and both are "the panel did it, not the reader": right before a script-fired
-// `el.open = ...` (sweepThinking's fold), and when a `<details open>` is INSERTED — an inserted open details fires a
-// toggle of its own (see armPlacedThink). A swallowed toggle is dropped from the set, so the reader's next press on
-// that node is theirs again.
-document.addEventListener(
-  "toggle",
-  (e) => {
-    const d = e.target;
-    if (!d || !d.matches || !d.matches("details.think")) return;
-    if (thinkAutoOpened.has(d)) {
-      thinkAutoOpened.delete(d);
-      return;
-    }
-    const key = d.dataset.thinkTurn;
-    if (d.open) {
-      state.thinkOpen.add(key);
-      state.thinkClosed.delete(key);
-    } else {
-      state.thinkOpen.delete(key);
-      state.thinkClosed.add(key);
-    }
-  },
-  true,
-);
+// A thinking row is a button: Enter and Space open and close it exactly like a press on it.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target && e.target.closest ? e.target.closest(".jl-think[data-think-row]") : null;
+  if (!row) return;
+  e.preventDefault();
+  row.click();
+});
 
 // ---- pipeline chip: the pipeline in force on this tree, and where in it -----------------------------------------
 // `lib/jobs.js` writes the record on every job row (`pipelineForJob`: `{id, stage, since, history[]}`) and
@@ -6370,10 +6346,6 @@ async function answerRemoteWrite(id, choice, btn) {
 // global default, and the press that flips it - live in public/turns.js with the turn head that draws them;
 // these hang off `state`, so they stay with the state it is built in.
 state.thinkCache = state.thinkCache || new Map(); // turn key -> { blocks, at }
-state.thinkOpen = state.thinkOpen || new Set(); // turn keys whose block is expanded
-state.thinkPinned = state.thinkPinned || new Map(); // block key -> false once the reader scrolls it up
-state.thinkScroll = state.thinkScroll || new Map(); // block key -> where the reader left it, for a rebuild to restore
-state.thinkClosed = state.thinkClosed || new Set(); // turn keys the reader folded on purpose
 state.thinkLoading = state.thinkLoading || new Set();
 
 // ---- a run of tool calls: tallied, or one line each (Settings > Agent cards) -------------------
@@ -6527,11 +6499,11 @@ watchMotion(document.documentElement);
 // The watch placedNodes() reads (see there): its own observer, so a lookup can take the records waiting for it
 // without taking the copy observer's.
 placedNodes.watch = (() => {
-  // The consoles (pre.job-out, .think-body, .sub-console: the 400 ms sweep, the stream, every line, every stream
-  // repaint), plus the other nodes a clock walked the page for: tr.detail (sweepStaleBoard, ~44 a minute), .tgrp (the
-  // 3 s tool-store refresh), .queue-ago (the 1 s queue clock, 49 ms a minute of native search on its own) and
-  // [data-q-clock] (the question clocks).
-  const kinds = ["pre.job-out", ".think-body", ".sub-console", "tr.detail", ".tgrp", ".queue-ago", "[data-q-clock]"];
+  // The consoles (pre.job-out, .sub-console: the 400 ms sweep, the stream, every line, every stream repaint), plus
+  // the other nodes a clock walked the page for: tr.detail (sweepStaleBoard, ~44 a minute), .tgrp (the 3 s tool-store
+  // refresh), .queue-ago (the 1 s queue clock, 49 ms a minute of native search on its own) and [data-q-clock] (the
+  // question clocks).
+  const kinds = ["pre.job-out", ".sub-console", "tr.detail", ".tgrp", ".queue-ago", "[data-q-clock]"];
   const w = { sets: new Map(kinds.map((k) => [k, new Set()])), any: kinds.join(", "), mo: null };
   w.mo = new MutationObserver((records) => {
     for (const r of records) for (const n of r.addedNodes) notePlaced(w, n);
@@ -10385,8 +10357,7 @@ $("job-prompt").addEventListener("input", () => updateSpawnNote());
 const CONSOLE_ZOOM_MIN = 7;
 const CONSOLE_ZOOM_MAX = 24;
 
-// The size in force on this card, read from the one variable rather than from whichever element the wheel was over
-// (a `.think-body` carries no font-size of its own — only the blocks inside it do).
+// The size in force on this card, read from the one variable rather than from whichever element the wheel was over.
 function cardConsoleSize(card) {
   const css = parseFloat(getComputedStyle(card).getPropertyValue("--term-size"));
   return Number.isFinite(css) ? css : 11.5;
@@ -10408,12 +10379,12 @@ function zoomConsole(zone, step) {
 // (capture on window) and stop it there, so neither the page's own listeners nor anything above them sees a
 // cancellable wheel: a passive listener anywhere in the path - the panel has one on document for pendingFocus -
 // can otherwise leave the browser free to run its zoom gesture.
-// The zones are one selector's worth: `.job-out` holds the agent's words, a tool's output and (in 🌊) its reasoning;
-// `.think-body` is the 🧠 block above the console. Any of them sizes the whole card, the same single step.
+// The zones are one selector's worth: `.job-out` holds the agent's words, a tool's output and its reasoning.
+// Any of them sizes the whole card, the same single step.
 const onConsoleWheel = (e) => {
   if (!e.ctrlKey) return;
   const target = e.target && e.target.closest ? e.target : null;
-  const zone = target ? target.closest(".job-out, .think-body") : null;
+  const zone = target ? target.closest(".job-out") : null;
   if (!zone) return;
   if (e.cancelable) e.preventDefault();
   e.stopPropagation();
@@ -10425,7 +10396,7 @@ for (const type of ["gesturestart", "gesturechange"]) {
   window.addEventListener(
     type,
     (e) => {
-      const zone = e.target && e.target.closest ? e.target.closest(".job-out, .think-body") : null;
+      const zone = e.target && e.target.closest ? e.target.closest(".job-out") : null;
       if (!zone) return;
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
@@ -11969,6 +11940,24 @@ document.addEventListener("click", async (e) => {
     void expandToolFold(foldRead);
     return;
   }
+  // A thinking row: clipped to a few lines in the console, a press opens the whole thought in place. A press that
+  // was the end of a drag-select is a selection, not a fold, exactly like the call rows below.
+  const thinkRow = e.target.closest?.(".jl-think[data-think-row]");
+  if (thinkRow) {
+    const picked = document.getSelection ? document.getSelection() : null;
+    if (picked && !picked.isCollapsed && picked.containsNode && picked.containsNode(thinkRow, true)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const lid = String(thinkRow.dataset.lid || "");
+    if (!lid) return;
+    const open = !thinkRow.classList.contains("is-open");
+    if (open) holdConsoleFor(thinkRow);
+    thinkRow.classList.toggle("is-open", open);
+    thinkRow.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) thinkOpenRows.add(lid);
+    else thinkOpenRows.delete(lid);
+    return;
+  }
   // A row of the stream's tool-usage group: the call's own line, and the handle for the box that call returned. The
   // box starts shut (a burst of five calls reads as five rows), so a press opens it in place — no rebuild, nothing
   // else on the card moving — and opening it also asks the session store for the result, because the live preview
@@ -12193,12 +12182,11 @@ document.addEventListener("click", async (e) => {
   if (toBottom) {
     e.preventDefault();
     e.stopPropagation();
-    const box = toBottom.closest(".out-wrap")?.querySelector("pre.job-out, .think-body");
+    const box = toBottom.closest(".out-wrap")?.querySelector("pre.job-out");
     if (box) {
       // Ask for the tail explicitly: the jump is the reader's, so the console must stop holding its old
       // position and follow the newest line again.
-      if (box.matches("pre.job-out")) pinConsole(box.dataset.out);
-      else state.thinkPinned.set(box.closest("details.think")?.dataset.thinkTurn || "", true);
+      pinConsole(box.dataset.out);
       setScroll(box, box.scrollHeight);
       // In the docked Chat pane (and a maximized card) the console cannot scroll: the card's session scroller does,
       // and the chip is drawn on the newest console for exactly this press. The reader's own jump re-pins it, so the
@@ -12227,15 +12215,6 @@ document.addEventListener("click", async (e) => {
     // The card the press came from travels with the choice, so the repaint lands under the pointer even when the same
     // thread is drawn somewhere else as well.
     setThinking(thread, !thinkingOn(thread), thinkBtn.closest(".job[data-thread]"));
-    return;
-  }
-  // The 🌊 beside it: the same press, a different choice — draw this card as one stream, or as it always was.
-  const streamBtn = e.target.closest("[data-stream-thread]");
-  if (streamBtn) {
-    e.preventDefault();
-    e.stopPropagation();
-    const thread = streamBtn.dataset.streamThread;
-    setStreamMode(thread, !streamOn(thread));
     return;
   }
   const subsCollect = e.target.closest("[data-subs-collect]");
@@ -12936,25 +12915,11 @@ document.addEventListener(
     // see it the moment they take the console over. A scroll the panel itself caused (a stick to the tail, a
     // restore) is skipped below - the chip is already off for it, and measuring there would put a box read back on
     // the per-line path that this report's cause 3 is about.
-    if (pre && pre.classList && (pre.classList.contains("job-out") || pre.classList.contains("think-body"))) {
+    if (pre && pre.classList && pre.classList.contains("job-out")) {
       // The panel's own stick scroll is not the reader taking the box over: the chip is already off (paintAtEnd said
       // so), and measuring the box here is what made every streamed line read geometry. A reader's scroll is still
       // answered the moment it happens, which is why this is not left to the 400 ms pass.
       if (!selfScrolled.has(pre) && !justPlaced(pre)) paintToBottom(pre);
-    }
-    if (pre && pre.classList && pre.classList.contains("think-body")) {
-      const key = pre.closest("details.think")?.dataset.thinkTurn || "";
-      if (selfScrolled.has(pre) || justPlaced(pre)) {
-        selfScrolled.delete(pre);
-        return;
-      }
-      if (readerInputHere(pre)) {
-        state.thinkPinned.set(key, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
-        // Kept for the next repaint: the block is replaced whenever its text is re-read, and this is where the
-        // reader was when they took it over.
-        state.thinkScroll.set(key, { top: pre.scrollTop });
-      }
-      return;
     }
     if (pre && pre.classList && pre.classList.contains("sub-console")) {
       const id = pre.dataset.subConsoleBox || "";
@@ -13030,14 +12995,6 @@ setInterval(() => {
     // at most twice a second, and only while somebody is actually reading back through a streaming turn.
     if (pre._chipDirty) paintToBottom(pre);
   }
-  for (const body of placedNodes(".think-body")) {
-    const grewSince = body._sweepGrow !== body._grow;
-    body._sweepGrow = body._grow;
-    if (grewSince) {
-      stickThinkBody(body);
-      paintAtEnd(body);
-    } else if (body._chipDirty) paintToBottom(body);
-  }
   for (const box of placedNodes(".sub-console")) stickSubConsole(box);
 }, 400);
 
@@ -13049,11 +13006,6 @@ document.addEventListener(
     if (pre && e.deltaY < 0) state.outPinned[pre.dataset.out] = false;
     const subBox = e.target && e.target.closest && e.target.closest(".sub-console");
     if (subBox && e.deltaY < 0) state.subConsolePinned.set(subBox.dataset.subConsoleBox || "", false);
-    const body = e.target && e.target.closest && e.target.closest(".think-body");
-    if (body && e.deltaY < 0) {
-      const key = body.closest("details.think")?.dataset.thinkTurn || "";
-      state.thinkPinned.set(key, false);
-    }
   },
   { capture: true, passive: true },
 );
@@ -19932,34 +19884,7 @@ $("show-thinking")?.addEventListener("change", (e) => {
     if (own === null) renderConversation(c.thread);
   }
 });
-// The 🌊 default. Same shape as the 🧠 row above: the switch is the answer for a card that never made one, and the
-// per-card button (its own `wtgui.stream.<thread>`) still wins — so only the cards with no key are repainted here.
-$("stream-default")?.addEventListener("change", (e) => {
-  try {
-    localStorage.setItem(STREAM_KEY, e.target.checked ? "1" : "0");
-  } catch {
-    /* private mode: the default just will not persist */
-  }
-  for (const c of conversations()) {
-    let own = null;
-    try {
-      own = localStorage.getItem(`${STREAM_KEY}.${c.thread}`);
-    } catch {
-      /* ignore */
-    }
-    if (own === null) renderConversation(c.thread);
-  }
-});
-// Whether the card draws the 🌊 at all — its own switch, its own key, saved the same way as the row above. Every card
-// is repainted (not just the ones with no per-session answer) because the button's PRESENCE changes, not its state.
-$("show-stream-button")?.addEventListener("change", (e) => {
-  try {
-    localStorage.setItem(SHOW_STREAM_KEY, e.target.checked ? "1" : "0");
-  } catch {
-    /* private mode: the default just will not persist */
-  }
-  for (const c of conversations()) renderConversation(c.thread);
-});
+// The 🌊 default is gone with the separate thinking pane: the one stream is the console, in every card.
 $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
@@ -20065,8 +19990,6 @@ applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
-if ($("stream-default")) $("stream-default").checked = streamDefault();
-if ($("show-stream-button")) $("show-stream-button").checked = showStreamButton();
 if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
 if ($("follow-opened")) $("follow-opened").checked = foldFollowsConsole();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();

@@ -30,7 +30,7 @@
 //                            turnStateText, turnSubagentsHtml, turnAttachmentsHtml, approvalPrompt, questionPrompt,
 //                            questionAnswered, approvalDecided, pipelineChipHtml, artifactRowsHtml
 //   the console land         captureScrolls, restoreScrolls, applyStoredScrolls, settleScrolls,
-//                            restoreThinkBodies, ensureToolStore, applyStoredHeight and the move bracket in
+//                            ensureToolStore, applyStoredHeight and the move bracket in
 //                            public/board/console.js; captureCardSelection, restoreCardSelection and selectionIn in
 //                            public/dom.js
 //   the card's own wiring    statsRowHtml, subagentsHtml, ghostTurnHtml, addAgentBarHtml, restoreReplyDraft,
@@ -55,13 +55,22 @@
 function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread || turn.id, taskLink = null) {
   const W = globalThis.wtStream;
   if (!W || typeof W.merge !== "function" || typeof W.pieces !== "function") return "";
-  // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
-  // trace of what the agent thought, exactly as in the condensed view.
-  const blocks = thinkingOn(thread) ? state.thinkCache.get(turn.id)?.blocks || [] : [];
+  // Reasoning joins the stream only while the 🧠 is on: with it off, the console draws no thinking row at all.
+  const thinking = thinkingOn(thread);
+  const shown = thinking ? lines : lines.filter((l) => l && l.kind !== "think");
+  const blocks = thinking ? state.thinkCache.get(turn.id)?.blocks || [] : [];
+  // A live thought is already IN the lines: appendJobLine put one preview row per reasoning segment there,
+  // in arrival order, and marked it `preview`. Merging the store's blocks beside those rows would draw the
+  // same thought twice, so a turn holding a preview is drawn from its record alone; the settled read takes
+  // the previews out and the store's blocks are merged by `at` (see dropThoughtPreviews).
+  const previews = shown.some((l) => l && l.preview && l.kind === "think");
   // Reasoning joins the console as lines keyed `think:<at>`; feeding them to the stream HERE, where the turn's own
-  // clock is at hand, is what makes lineHtml type them out exactly like prose.
-  if (blocks.length) for (const b of blocks) paceThinkBlock(turn, b);
-  const merged = W.merge(lines, blocks, { windowFull, hidePreviews: blocks.length > 0 });
+  // clock is at hand, is what makes lineHtml type them out exactly like prose. A live preview is never paced: its
+  // words arrive in chunks and a repaint must not replay them from the first one.
+  if (!previews) for (const b of blocks) if (!b || !b.preview) paceThinkBlock(turn, b);
+  const merged = previews
+    ? shown
+    : W.merge(shown, blocks.filter((b) => !b || !b.preview), { windowFull, hidePreviews: blocks.length > 0 });
   const storeSeen = new Map();
   const parts = [];
   let n = 0;
@@ -203,8 +212,9 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = n
   // window would otherwise open inside, so that burst is still a group with a head row and a remembered state.
   const lines = windowLines(all);
   const running = turnLive(turn);
-  // The 🌊: this card draws ONE stream, so the reasoning is not a block above the console — it is in it.
-  const stream = streamOn(thread) && Boolean(globalThis.wtStream);
+  // ONE stream, always: the card draws what the agent thought, said, called and got back in the order it
+  // happened. There is no separate thinking block over a console any more - the reasoning is rows of this one.
+  const stream = Boolean(globalThis.wtStream);
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
   const busy = running ? inflightToolIndex(lines) : -1;
@@ -214,7 +224,7 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = n
   const body = stream
     ? streamBodyHtml(turn, lines, lines.length < all.length, thread, taskLink)
     : condensedBodyHtml(turn, lines, busy, storeSeen, taskLink);
-  return (stream ? "" : thinkHtml(turn, copy, thread)) +
+  return (
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
     //
@@ -234,7 +244,8 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = n
     // of them.
     turnSubagentsHtml(turn, copy) +
     approvalPrompt(turn, copy) + approvalDecided(turn) +
-    questionPrompt(turn, copy) + questionAnswered(turn);
+    questionPrompt(turn, copy) + questionAnswered(turn)
+  );
 }
 
 // A task id in the assistant's transcript is a reference into that assistant's queue (public/queue-cards.js), and the
@@ -423,10 +434,7 @@ function conversationHtml(conv) {
   const cardActionsHtml =
     `<span class="job-actions">` +
     `<button class="btn-pin${state.anchorThread === thread ? " is-on" : ""}" data-pin-thread="${esc(thread)}" type="button" title="${state.anchorThread === thread ? "this card holds its place while anything above it grows — click to release" : "pin this card: hold its place on screen while other cards above it grow (one pin at a time)"}">\u{1F4CC}</button>` +
-    `<button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing this session's reasoning — open live while a turn runs, folded afterwards. click to hide it" : "show this session's reasoning: live and open while a turn runs, folded per turn afterwards (read from the session store)"}">🧠</button>` +
-    // The wave is drawn only while the Cards-tab switch is on: absent by default, and the switch owns that answer for
-    // every card (Settings > Wave button).
-    (showStreamButton() ? `<button class="btn-stream${streamOn(thread) ? " is-on" : ""}" data-stream-thread="${esc(thread)}" type="button" aria-pressed="${streamOn(thread) ? "true" : "false"}" title="${streamOn(thread) ? "this session is drawn as ONE stream — reasoning, tool calls, their output and the agent's own words in the order they happened, with no burst to open; each result is still the shut box it is everywhere else. click to go back to the separate thinking block and the condensed tool groups" : "draw this session as ONE stream: what the agent thought, said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else, so a call's output is one click away (reasoning joins it while 🧠 is on; subagents keep their own strip)"}">🌊</button>` : "") +
+    `<button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing this session's reasoning as rows of the console. click to hide them" : "show this session's reasoning as rows of the console, read from the session store"}">🧠</button>` +
     `<button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>` +
     `<button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>` +
     `</span>`;
@@ -752,7 +760,6 @@ function renderJobs() {
     }
     restoreScrolls($("jobs"), prevScrolls);
     applyStoredScrolls($("jobs"));
-    restoreThinkBodies($("jobs"));
     for (const c of listed) restoreReplyDraft(c.thread);
     // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
     // preventScroll, so a restore never drags the page to the box.
@@ -926,10 +933,6 @@ function conversationSignature(conv) {
     `e${queuedEditFor(conv.thread)?.at ?? ""}`,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
-    // Whether the head draws the wave button at all (Settings > Agent cards > Wave button): the switch changes the
-    // card's MARKUP, not its data, so without it here the card kept the head it was built with and the wave only
-    // appeared on some later unrelated rebuild.
-    showStreamButton() ? "w" : "-",
     isHomelessConv(conv) ? "h" : "-",
     approvals,
     runApprovals,
@@ -952,11 +955,6 @@ function conversationSignature(conv) {
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
     conv.turns.map((x) => `${x.origin ? `o${x.id}` : ""}${x.collected ? "c" : ""}`).join(""),
     thinkingOn(conv.thread) ? "t" : "-",
-    // …and the 🌊 beside it, for exactly that reason: `streamOn` decides which console renderer the card uses
-    // (`turnBody` draws one stream or the condensed groups), so without a term here a press writes its choice to
-    // localStorage, asks for a repaint, and the repaint concludes nothing changed — the card flips only when some
-    // unrelated event moves this signature.
-    streamOn(conv.thread) ? "s" : "-",
     // …and the tool-call shape for the same reason, one level up: `toolGroupsOn` decides whether a run of calls in
     // this card is the tallied group or one row each, so a press in Settings (which repaints every conversation)
     // would otherwise conclude nothing changed and leave the console in the shape it was drawn under.
@@ -1042,7 +1040,6 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   const fresh = holder.firstElementChild;
   fresh.dataset.sig = sig;
   el.replaceWith(fresh);
-  restoreThinkBodies(fresh);
   restoreTyping(fresh, typing);
   restoreCardSelection(heldSelection);
   if (window.scrollY !== pageY) {

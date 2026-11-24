@@ -441,10 +441,8 @@ async function browserPhase(pw) {
   const W = "[data-copy]";
   const CONSOLE = ".out-wrap.out-tab";
   const BURST = "pre.job-out .tgrp";
-  const THINK = "details.think";
   const BURST_BTN = `${BURST} > .copy-block`;
   const CONSOLE_BTN = `${CONSOLE} > .copy-block`;
-  const THINK_BTN = `${THINK} > summary > .copy-block`;
 
   const axNames = async () => {
     const { nodes } = await cdp.send("Accessibility.getFullAXTree");
@@ -472,18 +470,6 @@ async function browserPhase(pw) {
   await page.waitForTimeout(400);
   const leftState = await stateOf(CONSOLE);
   check("(a) leaving the pointer fades it out again", { visibility: leftState.visibility, opacity: leftState.opacity }, { visibility: "hidden", opacity: 0 });
-
-  // ================= (b) the thinking block ========================================================
-  console.log("\n== (b) hovering a thinking block ==");
-  check("(b) the reasoning block carries the copy attribute", await page.evaluate(() => document.querySelector("details.think")?.hasAttribute("data-copy")), true);
-  check("(b) it has exactly one copy button, and a folded block can still reach it (it lives in the summary)", await page.evaluate(() => [document.querySelectorAll("details.think > summary > .copy-block").length, document.querySelectorAll("details.think").length, document.querySelector("details.think").open]), [1, 1, false]);
-  await page.locator("details.think > summary").first().hover();
-  await page.waitForTimeout(320);
-  check("(b) hovering it reveals exactly one button on the page", (await visible()).filter((b) => b.visibility === "visible").length, 1);
-  check("(b) and it is the thinking block's own", (await visible()).find((b) => b.visibility === "visible")?.parent, "think");
-  await page.mouse.move(5, 5);
-  await page.waitForTimeout(400);
-  check("(b) leaving fades it out too", (await visible()).filter((b) => b.visibility === "visible").length, 0);
 
   // ================= (c) the tool burst: the call yes, the result lines no =========================
   console.log("\n== (c) hovering a tool burst ==");
@@ -530,17 +516,6 @@ async function browserPhase(pw) {
   check("(d) the console's clipboard read-back matches its visible text, line breaks and all", consoleClip.replace(/\r\n/g, "\n"), CONSOLE_FOLDED);
   check("(d) and no button label came with it", /⧉|copy this block|\d+ lines/.test(consoleClip), false);
 
-  // The thinking block: its own text, from the store.
-  await page.locator("details.think > summary").first().hover();
-  await page.waitForTimeout(260);
-  await page.evaluate(async () => {
-    document.querySelector("details.think > summary > .copy-block").click();
-    await new Promise((r) => setTimeout(r, 380));
-  });
-  const thinkClipClosed = await read();
-  check("(d) the folded thinking block copies its own folded text", thinkClipClosed.replace(/\r\n/g, "\n"), THINK_FOLDED);
-  check("(d) and the press did not toggle the block it copied from", await page.evaluate(() => document.querySelector("details.think").open), false);
-
   // ================= (e) folded copies folded, unfolded copies what it shows =======================
   console.log("\n== (e) what a folded block copies ==");
   const foldedBurstTextNow = await blockText(BURST);
@@ -552,18 +527,6 @@ async function browserPhase(pw) {
   note(`console with the burst open: ${JSON.stringify(consoleOpen)}`);
   check("(e) now the console's copy carries every result line it shows", RESULT_LINES.every((l) => consoleOpen.includes(l)), true);
   check("(e) and still starts with the same first line", consoleOpen.split("\n")[0], CONSOLE_TEXT);
-  check("(e) an unfolded thinking block copies its reasoning too", await (async () => {
-    await show({ openThink: true });
-    return (await blockText(THINK)) === THINK_OPEN;
-  })(), true);
-  check("(e) and the reasoning's line breaks survive the clipboard", await page.evaluate(async () => {
-    const btn = document.querySelector("details.think > summary > .copy-block");
-    btn.click();
-    await new Promise((r) => setTimeout(r, 380));
-    return navigator.clipboard.readText();
-  }).then((t) => t.replace(/\r\n/g, "\n")), THINK_OPEN);
-  await show({});
-  check("(e) a fresh folded thinking block is back to its folded text", await blockText(THINK), THINK_FOLDED);
 
   // ================= (f) the pinned copy ===========================================================
   console.log("\n== (f) the pinned copy of a console ==");
@@ -615,13 +578,6 @@ async function browserPhase(pw) {
   const coverBurst = await rects(BURST);
   ok("(g) the burst's button does not cover the call's own text", clear(coverBurst.button, coverBurst.firstLineText), JSON.stringify({ button: coverBurst.button, firstLineText: coverBurst.firstLineText }));
   ok("(g) nor the burst's fold chevron", clear(coverBurst.button, coverBurst.chevron), JSON.stringify({ button: coverBurst.button, chevron: coverBurst.chevron }));
-  await page.locator("details.think > summary").first().hover();
-  await page.waitForTimeout(320);
-  const coverThink = await rects(THINK);
-  ok("(g) the thinking button does not cover the title line (its chevron is at the left of the same line)", clear(coverThink.button, coverThink.firstLineText), JSON.stringify({ button: coverThink.button, firstLineText: coverThink.firstLineText }));
-  const consoleTop = (await rects(CONSOLE)).block.y;
-  ok("(g) and what a folded thinking block leaves below the button is empty space, not the console", coverThink.button.bottom <= consoleTop, `button bottom ${coverThink.button.bottom}, console top ${consoleTop}`);
-  ok("(g) the thinking button stays inside the block's own width", coverThink.button.x >= coverThink.block.x && coverThink.button.right <= coverThink.block.right, JSON.stringify({ block: coverThink.block, button: coverThink.button }));
 
   // ================= (h) nothing that worked before broke ==========================================
   console.log("\n== (h) the console's own behaviour is untouched ==");

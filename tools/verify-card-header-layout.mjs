@@ -13,8 +13,8 @@
 // The layout this pins, in BOTH states:
 //
 //   * row 1 (`.job-head`) carries its controls as ONE `.job-actions` block, pinned to the head's right edge with
-//     `margin-left: auto`, its own `flex-wrap: nowrap`, and a head that does not wrap it either (four controls with
-//     the Wave button switch off, which is the default; five with it on);
+//     `margin-left: auto`, its own `flex-wrap: nowrap`, and a head that does not wrap it either (four controls: pin,
+//     thinking, maximize and clear);
 //   * row 2 (`.job-cwd`) carries the session's name and then the pencil that renames it as its last two items, the
 //     name right-justified by `margin-left: auto`, so the pencil's right edge lines up under the head's right edge;
 //   * the name keeps its ellipsis and its `title`, and gives up width before the cwd path does;
@@ -171,7 +171,7 @@ const stateChecks = (f, tag) => {
     return;
   }
   const { head, cwd, name, pencil, block } = f;
-  check(f.controls === 4, `${tag}: the head's four controls are drawn (the wave is off by default)`, `${f.controls} (${f.controlsClasses.join(" ")})`);
+  check(f.controls === 4, `${tag}: the head's four controls are drawn`, `${f.controls} (${f.controlsClasses.join(" ")})`);
   check(f.hasCluster, `${tag}: the controls are ONE .job-actions cluster`, f.hasCluster ? f.blockParent : "no .job-actions block");
   check(f.blockInHead && !f.blockInCwd, `${tag}: the cluster lives in the head, not on the cwd row`, `${f.blockParent} in head ${f.blockInHead}, in cwd ${f.blockInCwd}`);
   check(

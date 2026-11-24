@@ -335,28 +335,23 @@ test("the hold is read BEFORE the move: a hold taken after it would read the 0 t
   assert.equal(b.consoles[0].scrollTop, 0, "a late hold restores the reader to the top: why callers hold first");
 });
 
-test("all three kinds of scroll box a card has are held, each under its own key", () => {
+test("the scroll boxes a card has are held, each under its own key", () => {
   reset();
   const out = consoleBox("o1");
-  const think = add(new El("details", { cls: "think", data: { thinkTurn: "t1" } }), new El("div", { cls: "think-body", box: { scrollHeight: 600, clientHeight: 200 } }));
   const sub = new El("div", { cls: "sub-console", data: { subConsoleBox: "s1" }, box: { scrollHeight: 500, clientHeight: 150 } });
   const flat = new El("pre", { cls: "job-out", data: { out: "o2" }, box: { scrollHeight: 100, clientHeight: 230 } }); // never overflowed
-  const card = add(new El("div", { cls: "job" }), out, think, sub, flat);
+  const card = add(new El("div", { cls: "job" }), out, sub, flat);
   const other = sectionOf("z");
   const root = new El("tbody");
   root.isRoot = true;
   add(root, card, other);
-  const thinkBody = think.children[0];
-  state.thinkPinned.set("t1", false); // the reader parked the thinking block on a line
-  thinkBody.scrollTop = 100;
   out.scrollTop = MAX;
   sub.scrollTop = 350;
   const held = holdScrolls(root);
-  assert.equal(held.length, 5, "the console, the thinking body, the sub-console, the short console and the neighbour");
+  assert.equal(held.length, 4, "the console, the sub-console, the short console and the neighbour");
   placeInOrder(root, [other, card]);
   releaseScrolls(held);
   assert.equal(out.scrollTop, MAX, "pinned console: newest line");
-  assert.equal(thinkBody.scrollTop, 100, "a thinking block the reader parked: their line");
   assert.equal(sub.scrollTop, 350, "pinned sub-console: newest line");
   assert.equal(flat.scrollTop, 0, "a box that never overflowed has nowhere to scroll and is left alone");
 });

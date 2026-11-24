@@ -1,9 +1,8 @@
 // Does ONE font size drive the console's normal output, its reasoning and a tool's output — and does Ctrl+wheel move
 // all three together, per card? Read off a real page.
 //
-//   node tools/verify-console-zoom.mjs                  # 🌊 one-stream console and the 🧠 block, headless (~60 s)
-//   node tools/verify-console-zoom.mjs --mode stream    # the 🌊 console only
-//   node tools/verify-console-zoom.mjs --mode think     # the 🧠 block above a condensed console only
+//   node tools/verify-console-zoom.mjs                  # the console's own rows, headless (~60 s)
+//   node tools/verify-console-zoom.mjs                   # the console (the only one there is now)
 //   node tools/verify-console-zoom.mjs --headed         # watch it
 //   node tools/verify-console-zoom.mjs --keep           # leave the sandbox behind for inspection
 //
@@ -50,11 +49,11 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const argv = process.argv.slice(2);
 const opt = (n, d = null) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : d);
-const MODE = opt("--mode", "both");
+const MODE = opt("--mode", "stream");
 const HEADED = argv.includes("--headed");
 const KEEP = argv.includes("--keep");
-if (!["stream", "think", "both"].includes(MODE)) {
-  console.log(`--mode must be stream, think or both, not ${MODE}`);
+if (!["stream", "both"].includes(MODE)) {
+  console.log(`--mode must be stream (the only console there is now) or both, not ${MODE}`);
   process.exit(2);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -192,8 +191,8 @@ function readSizes([a, b]) {
     const card = document.querySelector(`.job[data-thread="${thread}"]`);
     if (!card) return { ok: false };
     const con = card.querySelector("pre.job-out");
-    // Reasoning is the 🌊 stream's reasoning line, or the 🧠 block's own line: whichever this board drew.
-    const reasoning = card.querySelector("pre.job-out .jl-think, .think-body .think-block");
+    // Reasoning is the stream's own row: it is the only place reasoning is drawn.
+    const reasoning = card.querySelector("pre.job-out .jl-think");
     const tool = card.querySelector("pre.job-out .jl-tool-out");
     const prose = con ? con.querySelector(".jl-text") : null;
     return {
@@ -203,7 +202,7 @@ function readSizes([a, b]) {
       tool: px(tool),
       console: px(con),
       cardVar: card.style.getPropertyValue("--term-size") || null,
-      reasoningNode: reasoning ? (reasoning.closest(".think-body") ? "🧠 block" : "🌊 stream") : null,
+      reasoningNode: reasoning ? "console row" : null,
     };
   };
   return { a: read(a), b: read(b), rootVar: document.documentElement.style.getPropertyValue("--term-size") || null };
@@ -213,7 +212,7 @@ const selectorFor = (thread, what, mode) => {
   const card = `.job[data-thread="${thread}"]`;
   if (what === "console") return `${card} pre.job-out`;
   if (what === "tool") return `${card} pre.job-out .jl-tool-out`;
-  return mode === "think" ? `${card} .think-body .think-block` : `${card} pre.job-out .jl-think`;
+  return `${card} pre.job-out .jl-think`;
 };
 
 // The reader's gesture, through CDP: hover the text, hold Ctrl, one wheel notch. Playwright forwards the held
@@ -258,10 +257,6 @@ async function openRows(page, thread, mode) {
       if (!card) return;
       for (const box of card.querySelectorAll(".code-box")) {
         if (!box.classList.contains("is-open")) box.querySelector(".code-head")?.click();
-      }
-      if (m === "think") {
-        const d = card.querySelector("details.think");
-        if (d && !d.open) d.querySelector("summary")?.click();
       }
     },
     [thread, mode],
@@ -312,7 +307,6 @@ async function runMode(ctx, work, mode) {
         localStorage.setItem("wtgui.streamLines", "0");
         for (const t of threads) {
           localStorage.setItem(`wtgui.think.${t}`, "1");
-          if (m === "stream") localStorage.setItem(`wtgui.stream.${t}`, "1");
         }
       },
       { threads: THREADS, mode },
@@ -454,7 +448,7 @@ mkdirSync(profile, { recursive: true });
 const ctx = await pw.chromium.launchPersistentContext(profile, { headless: !HEADED, viewport: { width: 1280, height: 1000 } });
 let exit = 0;
 try {
-  const modes = MODE === "both" ? ["stream", "think"] : [MODE];
+  const modes = MODE === "both" ? ["stream"] : [MODE];
   for (const mode of modes) {
     console.log(`\n-- ${mode}: two cards, each with a thought, a terminal call and prose; the wheel is driven on card A`);
     const cap = await runMode(ctx, work, mode);

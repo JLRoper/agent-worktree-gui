@@ -19,7 +19,7 @@ await import("../public/core/type-stream.js");
 const { createDrawStream } = globalThis.wtType;
 
 const code = sliceBetween(readSource("public/board/console.js"), "// ---- reasoning first", "// ---- console row text");
-// `thinkingOn`, `streamOn`, `thinkOpenFor` and `turnLive` are app.js's answers, read from inside a function body in
+// `thinkingOn` and `turnLive` are app.js's answers, read from inside a function body in
 // the page; here they are handed in, so the toggle is a value this file can switch mid-run.
 const make = new Function(
   "state",
@@ -28,8 +28,6 @@ const make = new Function(
   "consoleFoldNote",
   "loadThinkingAfter",
   "thinkingOn",
-  "streamOn",
-  "thinkOpenFor",
   "turnLive",
   `${code}\nreturn { paceThinkBlock, typedText, typedShown };`,
 );

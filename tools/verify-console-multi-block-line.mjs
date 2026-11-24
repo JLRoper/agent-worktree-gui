@@ -96,8 +96,6 @@ const PAGE = `<!doctype html>
   window.refreshTurnPeek = () => {};
   window.refreshJobPreview = () => {};
   window.updateJobFoot = () => {};
-  // settings.js's one-stream-per-turn switch: this fixture draws a single turn as one stream.
-  window.streamOn = () => true;
   // board-scaffold.js's liveness rule, and app.js's jobLines(): the fixture only ever holds one running turn.
   window.turnLive = (job) => Boolean(job && job.status === "running");
   window.jobLines = (id) => window.state.jobLines.get(String(id)) || [];

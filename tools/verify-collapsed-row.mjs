@@ -156,7 +156,7 @@ const frame = (page, thread) =>
       path: path_ ? { ...R(path_), scrollW: path_.scrollWidth, text: path_.textContent } : null,
       cwdButtons: inCwd.map(R),
       headButtons: inHead.map(R),
-      controls: inHead.filter((b) => ["btn-pin", "btn-think", "btn-stream", "btn-rename", "btn-max", "btn-clear-thread"].includes(b.className.split(" ")[0])).length,
+      controls: inHead.filter((b) => ["btn-pin", "btn-think", "btn-rename", "btn-max", "btn-clear-thread"].includes(b.className.split(" ")[0])).length,
       firstButton: first ? R(first) : null,
       firstButtonClass: first ? first.className.split(" ")[0] : null,
       overlaps: nameR ? [...inCwd, ...inHead].map(R).filter((b) => !(nameR.r <= b.l || b.r <= nameR.l || nameR.b <= b.t || b.b <= nameR.t)).length : null,
@@ -256,10 +256,10 @@ try {
           cwdLine: Boolean(j.querySelector(".job-cwd")),
           nameInHead: Boolean(name && head.contains(name)),
           clusterInHead: Boolean(j.querySelector(".job-actions") && head.contains(j.querySelector(".job-actions"))),
-          controls: head.querySelectorAll("button[data-pin-thread], button[data-think-thread], button[data-stream-thread], button[data-rename-thread], button[data-max-thread], button[data-clear-thread]").length,
+          controls: head.querySelectorAll("button[data-pin-thread], button[data-think-thread], button[data-rename-thread], button[data-max-thread], button[data-clear-thread]").length,
         };
       }, NO_CWD);
-      // Four head controls with the wave off (its switch is the default), plus the pencil that rides with the name.
+      // Four head controls, plus the pencil that rides with the name.
       check(
         noCwd.error === undefined && noCwd.collapsed && !noCwd.cwdLine && noCwd.nameInHead && noCwd.clusterInHead && noCwd.controls === 5,
         "a collapsed card with no cwd line keeps the name, the pencil and the head's controls together",

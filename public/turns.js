@@ -22,11 +22,9 @@
 //   shut forms                attachment paragraph it strips), turnAttachmentsHtml, and the two ways a turn is
 //                             drawn shut: the peek (turnPeekLine, firstSentence, peekHtml, refreshTurnPeek) and
 //                             the compact card (compactHtml).
-//   the two display           the thinking switch (THINK_KEY, thinkDefault, thinkingOn, setThinking) and the one-
-//   switches                  stream switch (STREAM_KEY, SHOW_STREAM_KEY, showStreamButton, streamDefault,
-//                             streamOn, setStreamMode). Both are a per-session answer over a global default, both
-//                             are read while a card renders, and neither does anything but write localStorage and
-//                             ask the one thread it changed to repaint.
+//   the display               the thinking switch (THINK_KEY, thinkDefault, thinkingOn, setThinking): a per-session
+//   switch                    answer over a global default, read while a card renders, and it does nothing but
+//                             write localStorage and ask the one thread it changed to repaint.
 //
 // WHAT IT REACHES OUT FOR (by name, at call time, exactly as before the move)
 //
@@ -464,55 +462,8 @@ function setThinking(thread, on, card = null) {
 }
 
 // ---- one stream ------------------------------------------------------------------------------
-// The 🌊 among the head's controls (while Settings > Agent cards > Wave button draws it): draw this session as ONE
-// stream — what the agent thought, said, called and got back, in the
-// order it happened, with no burst to open. What is NOT folded there is the run of calls itself: a result is still the
-// shut box it is in the condensed view (core/console-format.js), so the stream is one flow of what happened rather
-// than a wall of output. Per session like thinking, and with a global default like it too (Settings > Agent cards >
-// Combined output): a card that never pressed the button follows that switch, and a card that did keeps its answer.
-const STREAM_KEY = "wtgui.stream"; // global default, "1" when a card without its own answer should be drawn as one stream
-// Whether a card DRAWS the wave button at all is a separate answer from what the button does: Settings > Agent cards >
-// Wave button. Off by default — a card's head is the five controls that act on the card itself — and the answer is the
-// browser's, so it survives a reload. Each card reads it while it renders, so the switch is the only save path.
-const SHOW_STREAM_KEY = "wtgui.showStreamButton";
-
-function showStreamButton() {
-  try {
-    return localStorage.getItem(SHOW_STREAM_KEY) === "1";
-  } catch {
-    /* private mode: off, which is the default anyway */
-    return false;
-  }
-}
-
-function streamDefault() {
-  try {
-    return localStorage.getItem(STREAM_KEY) === "1";
-  } catch {
-    /* private mode: off, which is the default anyway */
-    return false;
-  }
-}
-
-// NOT `setStream`. That name is already core/sse.js's connection label (the ● live / offline pill, called from
-// there, from core/transport.js and from this file); it is a global in a classic script, so a function of the same
-// name here would replace it for every caller and the status pill would stop moving.
-function streamOn(thread) {
-  try {
-    const own = localStorage.getItem(`${STREAM_KEY}.${thread}`);
-    if (own === "1") return true;
-    if (own === "0") return false;
-  } catch {
-    /* private mode: fall through to the default */
-  }
-  return streamDefault();
-}
-
-function setStreamMode(thread, on) {
-  try {
-    localStorage.setItem(`${STREAM_KEY}.${thread}`, on ? "1" : "0");
-  } catch {
-    /* the choice just will not persist */
-  }
-  renderConversation(thread);
-}
+// A card draws ONE stream: what the agent thought, said, called and got back, in the order it happened,
+// with no burst to open. What is NOT folded there is the run of calls itself: a result is still the shut box
+// it is in the condensed view (core/console-format.js), so the stream is one flow of what happened rather
+// than a wall of output. There used to be a 🌊 button and two settings to choose this per session; the
+// reasoning pane it replaced is gone, so the stream IS the console and there is no choice left to store.
