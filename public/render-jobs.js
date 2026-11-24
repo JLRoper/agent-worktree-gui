@@ -243,8 +243,7 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = n
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
     turnSubagentsHtml(turn, copy) +
-    approvalPrompt(turn, copy) + approvalDecided(turn) +
-    questionPrompt(turn, copy) + questionAnswered(turn)
+    approvalPrompt(turn, copy) + approvalDecided(turn)
   );
 }
 
@@ -259,7 +258,14 @@ function conversationTaskLink(conv) {
   return typeof window.__assistantTaskLink === "function" ? window.__assistantTaskLink : null;
 }
 
-function turnBlock(conv, turn, index, copy = "", taskLink = null) {
+// The reader asked for ONE answer path and a card that does not vanish under them: a clarify question is not a detail
+// of an OPEN console. It is drawn by the turn BLOCK, in every shape the turn takes - open, folded, or frozen to a
+// snippet - because a question parked under a fold is exactly the row #277 defect: the header's badge went up, the
+// turn output said nothing, and the reader answered from the outline instead of the card.
+//
+// `ask` is that block, rendered once by `conversationHtml` for the turn and handed in: one question, one block, in the
+// one place the turn is drawn (the page copy, the pinned copy when the turn is off-page, or the card's off-page block).
+function turnBlock(conv, turn, index, copy = "", taskLink = null, ask = "") {
   const open = turnIsOpen(conv, turn, copy);
   const tkey = turnKey(turn, copy);
   // The rail down the turns' left edge is violet while a turn is executing, slate otherwise, so `is-running`
@@ -273,18 +279,18 @@ function turnBlock(conv, turn, index, copy = "", taskLink = null) {
   const cls = `turn${open ? "" : " folded"}${compact ? " compact" : ""}${running ? " is-running" : ""}${rang}`;
   if (compact) {
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
-      `${turnAttachmentsHtml(turn)}${compactHtml(turn, copy)}${subagentsCompactHtml(turn, copy)}</div>`;
+      `${turnAttachmentsHtml(turn)}${compactHtml(turn, copy)}${ask}${subagentsCompactHtml(turn, copy)}</div>`;
   }
   if (!open) {
     // Two rows: the head carries the request, the peek carries what the turn is doing or concluded - and a turn that
     // delegated something keeps saying so as it ages up the list, rather than handing its children to the newest turn.
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
-      `${peekHtml(turn)}${turnAttachmentsHtml(turn)}${subagentsCompactHtml(turn, copy)}</div>`;
+      `${peekHtml(turn)}${ask}${turnAttachmentsHtml(turn)}${subagentsCompactHtml(turn, copy)}</div>`;
   }
   return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy, true)}` +
     // The request stays on the head line whether the turn is open or folded: it is the turn's title either
     // way, and the open form used to drop it onto its own row, which pushed the transcript down for nothing.
-    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread, taskLink)}</div>`;
+    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread, taskLink)}${ask}</div>`;
 }
 
 function conversationHtml(conv) {
@@ -473,16 +479,34 @@ function conversationHtml(conv) {
   // disabled ends and this strip are three readings of ONE range; they used to be three copies of the same sums.
   const blocks = (() => {
     const r = wtTurnFold.range(turns.length, wtTurnFold.offset(state, thread, turns.length));
-    return { ...r, html: turns.slice(r.start, r.end).map((t, i) => turnBlock(conv, t, r.start + i, "", taskLink)).join("") };
+    return { ...r, html: "" }; // filled below, once the question's one place is known
   })();
   const pages = blocks.pages;
   // Starred turns are repeated above the page — still accordions, and still present in their own
   // page, so pinning never moves a turn out from under its history.
   const pinned = turns.filter((t) => state.pinnedTurns.has(t.id));
+  // ---- the question's ONE place ------------------------------------------------------------------------------------
+  // A clarify question is drawn exactly once per card, and never behind the pager or under a fold:
+  //   * its own turn is on the page  -> that turn block draws it;
+  //   * the turn is pinned instead   -> the pinned copy draws it (the page does not have it);
+  //   * the reader is on another page and the turn is not pinned -> the card draws an off-page block above the page,
+  //     naming the turn it came from, so the question is still in the turn output rather than only in the header.
+  // Measured on row #277: a parked turn the reader had folded drew no question at all, and the badge was the only cue.
+  const pageTurns = turns.slice(blocks.start, blocks.end);
+  const pageIds = new Set(pageTurns.map((t) => t.id));
+  const pinnedIds = new Set(pinned.map((t) => t.id));
+  const askFor = (t, copy = "") => questionPrompt(t, copy) + questionAnswered(t);
+  const away = turns.filter((t) => t.question && !t.questionDone && !pageIds.has(t.id) && !pinnedIds.has(t.id));
+  const awayHtml = away.length
+    ? `<div class="turn-question-away">${away
+        .map((t) => `<div class="tqa-head mono" title="this turn is on another page of this thread - the question is drawn here until it is answered">turn ${turnSeqOf(t)} of this thread · not on the page you are reading</div>${questionPrompt(t, "away")}`)
+        .join("")}</div>`
+    : "";
+  blocks.html = pageTurns.map((t, i) => turnBlock(conv, t, blocks.start + i, "", taskLink, askFor(t))).join("");
   const pinnedHtml = pinned.length
     ? `<div class="pinned-turns">
         <div class="pinned-head mono"><span>\u2605 pinned</span><span class="dimmer">${pinned.length} of ${turns.length}</span></div>
-        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN, taskLink)).join("")}
+        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN, taskLink, pageIds.has(t.id) ? "" : askFor(t, wtTurnFold.PIN))).join("")}
       </div>`
     : "";
   const pager = pages > 1
@@ -557,6 +581,7 @@ function conversationHtml(conv) {
     ${artSplit.files.length ? artifactsPopHtml(thread, artSplit.files, state.openArtifacts.get(thread)?.kind !== "url" ? state.openArtifacts.get(thread) : null, "file") : ""}
     ${artSplit.urls.length ? artifactsPopHtml(thread, artSplit.urls, state.openArtifacts.get(thread)?.kind === "url" ? state.openArtifacts.get(thread) : null, "url") : ""}
     <div class="job-body">
+      ${awayHtml}
       ${pinnedHtml}
       ${blocks.html}
       ${queued ? `<div class="ghost-turns">${queue
@@ -821,6 +846,12 @@ function paintAgentBadges() {
 function updateJob(j, { scroll = false } = {}) {
   const prev = state.jobs.get(j.id);
   const statusChanged = !prev || prev.status !== j.status;
+  // A question that has just arrived is a stop, not a line of output: the card can be pages down a long board, and
+  // the only thing that used to change was a badge in the header. `landClarifyQuestion` brings the box to the reader
+  // once per prompt, and only when it is not already on screen (public/app.js owns the scroll and the record).
+  const askedNow =
+    Boolean(j.question) &&
+    (!prev?.question || String(prev.question.requestId || "") !== String(j.question.requestId || "") || prev.question.question !== j.question.question);
   // A parked approval appearing or being answered changes what the ROW badge and the project chip say,
   // and neither follows a status change (a run stays "running" through both). Without this the row kept
   // advertising "awaiting approval" after the question was answered.
@@ -846,6 +877,11 @@ function updateJob(j, { scroll = false } = {}) {
     marchEnd(j.id);
   }
   renderConversation(j.thread || j.id, { scroll });
+  if (askedNow) {
+    // After the repaint, so the box that is landed on is the one this frame drew. The assistant's own card is in the
+    // float (its body is the scroller there), and the page-level helper reads whichever host holds it.
+    if (typeof landClarifyQuestion === "function") landClarifyQuestion(j.thread || j.id, j.question?.requestId || "");
+  }
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged || approvalChanged) {
     repaintAgentState();

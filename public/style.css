@@ -3407,6 +3407,21 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .turn-question-done { margin: 6px 0 2px 18px; padding: 3px 9px; font-size: 11px; color: var(--q-head); border-left: 2px solid var(--q-line); background: rgba(255,255,255,.05); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 :root.q-width-set .turn-question-done { margin: 6px auto 2px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .turn-question-done.is-quiet { color: var(--dimmer); }
+/* A question that closed unanswered is a TRACE, not a one-line shrug: the reason, what was asked and the choices it
+   offered stay on the card, dead. Same violet family as the live box so it reads as the question it was, with its
+   choices flat (spans, not buttons) - there is nothing left to press on a wait the gateway has given up on. */
+.turn-question-done.is-closed { margin: 8px 0 6px 18px; padding: 8px 11px; white-space: normal; overflow: visible; text-overflow: clip; border: 1px dashed var(--q-line); border-left: 2px solid var(--q-line); border-radius: 7px; background: rgba(255,255,255,.03); }
+:root.q-width-set .turn-question-done.is-closed { margin: 8px auto 6px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
+.tqd-head { font-size: 11px; color: #ff9c9c; letter-spacing: .01em; }
+.tqd-question { margin: 6px 0 6px; font: calc(var(--q-size, 13px) - 0.5px)/1.5 var(--ui); color: var(--q-question); opacity: .78; white-space: pre-wrap; word-break: break-word; }
+.tqd-choices { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 5px; }
+.tqd-choice { padding: 2px 8px; border: 1px dashed var(--q-choice-line); border-radius: 999px; color: var(--q-note); font: calc(var(--q-size, 13px) - 1.5px)/1.6 var(--ui); }
+.tqd-when { font-size: 10px; color: var(--q-note); opacity: .85; }
+/* A question whose turn sits on another page of the thread: drawn at the top of the card, naming the turn, rather
+   than left behind the pager where the reader would have to go looking for it. */
+.turn-question-away { margin: 0 0 4px; }
+.tqa-head { margin: 6px 0 0 18px; font-size: 10px; color: var(--q-note); letter-spacing: .02em; }
+:root.q-width-set .tqa-head { margin-left: auto; margin-right: auto; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .queue-note { font-size: 11px; color: #ffd479; }
 /* A reply is queued and waiting: ONE press put it in flight, so the box is closed and the button is off until the
    held reply goes out. The note beside them says why, and it is the same face a repaint draws from the queue. */
