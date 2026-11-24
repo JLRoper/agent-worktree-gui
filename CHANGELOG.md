@@ -4,16 +4,28 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.168.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.168.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-731 releases from v0.1.0 (2026-10-20) to v1.168.0 (2026-11-24), 2600 commits between the tags. Every release is anchored by an
+732 releases from v0.1.0 (2026-10-20) to v1.168.1 (2026-11-24), 2602 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.168.1 — 2026-11-24 · 2 commits
+
+[`0b8d666`](https://github.com/JLRoper/agent-worktree-gui/commit/0b8d66677cf96d69120af6bc0ec5fadc0e51bde6) · [compare v1.168.0...v1.168.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.168.0...v1.168.1)
+
+### Fixed
+
+- fix: a sent reply leaves no draft in any of the three stores it lives in ([`0b8d666`](https://github.com/JLRoper/agent-worktree-gui/commit/0b8d66677cf96d69120af6bc0ec5fadc0e51bde6))
+
+### Docs & tests
+
+- docs: render the changelog - 731 releases ([`144ca5e`](https://github.com/JLRoper/agent-worktree-gui/commit/144ca5ef7a91414b029c5af05143a00f66a54dd7))
 
 ## v1.168.0 — 2026-11-24 · 2 commits
 
