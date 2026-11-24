@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.166.13 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.166.14 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-728 releases from v0.1.0 (2026-10-20) to v1.166.13 (2026-11-24), 2588 commits between the tags. Every release is anchored by an
+729 releases from v0.1.0 (2026-10-20) to v1.166.14 (2026-11-24), 2595 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.166.14 — 2026-11-24 · 7 commits
+
+[`a177fb2`](https://github.com/JLRoper/agent-worktree-gui/commit/a177fb2def496f6f7a878ebf9c90c5717038187c) · [compare v1.166.13...v1.166.14](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.13...v1.166.14)
+
+### Performance
+
+- perf(waves): the evidence cache is keyed on the fact that decides each answer ([`4f08a6d`](https://github.com/JLRoper/agent-worktree-gui/commit/4f08a6d1866e207d08d12369b2352fa4becb5675))
+- perf(build): stop re-normalising every record for every row ([`a177fb2`](https://github.com/JLRoper/agent-worktree-gui/commit/a177fb2def496f6f7a878ebf9c90c5717038187c))
+
+### Docs & tests
+
+- docs: the row 295 report keeps no run log, so the pushed tree names no path on this machine ([`a89eda8`](https://github.com/JLRoper/agent-worktree-gui/commit/a89eda8768a53a97151c8daea0434540099bcfbc))
+- docs: render the changelog - 728 releases ([`ec999b8`](https://github.com/JLRoper/agent-worktree-gui/commit/ec999b8f816a2357c21f0b1a41a1e83f3ed705c2))
+- docs: the waves lane profile - the flame view, the keys, the budget and the state frame ([`5f3acf6`](https://github.com/JLRoper/agent-worktree-gui/commit/5f3acf631fcfd10707e2a8a7826e564d808a047c))
+
+### Other
+
+- chore: 1.166.13 - the version this landing carries ([`2107006`](https://github.com/JLRoper/agent-worktree-gui/commit/210700644d21e989e2b85fbed48a07ffd71fb419))
+- chore: allowlist the drive-letter fixture a main commit landed ([`fd6fd15`](https://github.com/JLRoper/agent-worktree-gui/commit/fd6fd15824da89d0b88ab7ff171080364e67eca3))
 
 ## v1.166.13 — 2026-11-24 · 3 commits
 
