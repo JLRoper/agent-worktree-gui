@@ -5210,6 +5210,17 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-head-btn:hover { background: transparent; }
 #as-initiatives .init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--tab-ink-3); text-underline-offset: 2px; }
 #as-initiatives .init-head-btn:active { transform: none; }
+/* THE OPEN HEAD IS THE FOLDED ROW'S GEOMETRY, DOWN TO THE PIXEL (row 295, ask 3). The name's row spans the card - the
+   grid below gives it both columns - and it pays the LEDGER ROW's insets, not the plate's: the folded row ends its
+   text box 8px from the card's right edge (--tab-s2, no border) while the plate's padding is 16px plus its 1px border,
+   so the row is given a negative right margin of exactly that difference. Same left edge, same right edge, same 18px
+   caret column and the same glyph slot and gap follow, so the title's AVAILABLE WIDTH is identical open and closed and
+   the same words break in both drawings. The Edit control lives on the facts row now: anything in this row's flow
+   shortens the title, and a title that wraps one word earlier on the open card is the defect this row is here to
+   remove. */
+#as-initiatives .init-card:not(.is-titlecard) .init-head { position: relative; margin-right: calc(var(--tab-s2) - var(--tab-s4) - 1px); }
+#as-initiatives .init-card:not(.is-titlecard) .init-head-btn { padding-right: 18px; }
+#as-initiatives .init-card:not(.is-titlecard) .init-head-btn .init-caret { position: absolute; right: 0; top: 2px; margin-left: 0; padding-left: 0; }
 #as-initiatives .init-title {
   flex: 0 1 auto;
   min-width: 0;
@@ -5313,10 +5324,24 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* THE CLAMP (row 295, ask 2): an expanded card's description is drawn to three lines and no further, and THE WHOLE TEXT
+   STAYS IN THE DOM - the clamp is a line box, not a text cut, so a browser find, a selection and a copy still reach
+   every word, and the control that unfolds it does not have to restore anything. 3 is the "few lines" the reader
+   asked for; the toggle beside the label is drawn only when the text really overflows it (assistant.js measures the
+   unclamped height in the same task it paints, before a frame is drawn). */
+#as-initiatives .init-desc.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
 #as-initiatives .init-card.is-titlecard .init-desc { margin: 0 0 var(--tab-s1); color: var(--tab-ink-2); }
 #as-initiatives .init-desc.is-empty { color: var(--tab-ink-3); font-style: italic; }
 #as-initiatives .init-descfold { margin-bottom: var(--tab-s3); }
-#as-initiatives .init-desc-head { margin-bottom: var(--tab-s1); }
+/* THE DESCRIPTION'S LABEL ROW: the word on the left, its show more / show less control on the right. */
+#as-initiatives .init-desc-head { display: flex; align-items: center; gap: var(--tab-s2); margin-bottom: var(--tab-s1); }
+#as-initiatives .init-desc-label { font-family: var(--tab-font-ui); font-size: 12px; font-weight: 600; color: var(--tab-ink); }
+#as-initiatives .init-desc-more { margin-left: auto; }
 #as-initiatives .init-dots { color: var(--tab-ink-2); }
 #as-initiatives .init-card.is-titlecard .init-chips { margin-bottom: 0; }
 
@@ -5348,6 +5373,9 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-chips .chip + .chip::before { content: "\00b7"; margin: 0 7px; color: var(--tab-ink-3); }
 #as-initiatives .init-chips .chip.is-zero { color: var(--tab-ink-3); border: 0; background: transparent; }
 #as-initiatives .init-chips .init-meta { flex: 0 0 auto; margin-left: auto; font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+/* EDIT RIDES THE FACTS ROW (row 295, ask 3): the name's row is the folded row's geometry and owes it every pixel of
+   the title's width, so the one control that used to sit beside the title moved here, at the row's right end. */
+#as-initiatives .init-chips .init-edit { margin-left: var(--tab-s2); }
 /* THE COUNTS STEP UP ON THE HOVER FILL. The row's hover raises the ground under the counts from --tab-row (#171c24)
    to --tab-hover (#1c2330), and ink-3 on that fill measures 4.50:1 - the AA floor and two steps below the preview
    beside it. Rest is left alone (ink-3 is the counts' own role); on hover the counts and the provenance take ink-2, so
@@ -5779,24 +5807,32 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 /* THE OWNER CHIP is the worktree column's `.owner-tag` (public/chart.css), unchanged: same font, box, border and
    colours, because the two chips say the same fact - which assistant owns this - and must read as one thing. */
 #as-initiatives .wave-member .wave-owner { flex: 0 0 auto; }
+/* THE REPORTS CHIP KEEPS THE RIGHT EDGE (row 295, ask 1). The owner and state chips moved left, to just after the id,
+   and the reports chip is the one control that stays at the bar's end - where a reading eye stops. In the wrapped
+   flex drawing the auto margin is what holds it there at every width; in the grid below its own last column does. */
+#as-initiatives .wave-member .wave-reports { margin-left: auto; }
 #as-initiatives .wave-mstate.is-queued { color: var(--tab-idle); border-color: var(--tab-idle-line); }
 #as-initiatives .wave-mstate.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
 #as-initiatives .wave-mstate.is-parked { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
 #as-initiatives .wave-mstate.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); background: transparent; }
 #as-initiatives .wave-mstate.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
-/* THE MANIFEST: at a pane that can hold it, a member is a row - 44px id, the title, a 150px project, the owner chip,
-   an 80px state, the reports chip - so two members compare down a column instead of wrapping into prose. The row is
-   the CARD'S full width: the 760px cap this rule used to carry is what made the bars stop short of the section. */
+/* THE MANIFEST: at a pane that can hold it, a member is a row - 44px id, the owner chip, an 80px state, the title, a
+   150px project, the reports chip - so two members compare down a column instead of wrapping into prose. The row is
+   the CARD'S full width: the 760px cap this rule used to carry is what made the bars stop short of the section.
+   THE COLUMN ORDER IS THE BAR'S (row 295, ask 1): `#<id> | owner | status | <name ...> | reports`, and the reports
+   chip stays the last column so it keeps the right edge. */
 @container (min-width: 900px) {
   #as-initiatives .wave-member {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 150px auto 80px auto;
+    grid-template-columns: 44px auto 80px minmax(0, 1fr) 150px auto;
     gap: var(--tab-s2);
     align-items: center;
     width: 100%;
   }
   #as-initiatives .wave-member .chip { justify-self: start; }
   #as-initiatives .wave-member .wave-owner { justify-self: start; }
+  /* The auto margin that holds the chip right in the wrapped drawing has nothing to do here: the last column does. */
+  #as-initiatives .wave-member .wave-reports { margin-left: 0; justify-self: start; }
 }
 #as-initiatives .wave-skipped { margin-top: var(--tab-s2); }
 #as-initiatives .wave-skip-row { overflow-wrap: anywhere; }
@@ -5873,8 +5909,10 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 @container (min-width: 1000px) {
   #as-initiatives .init-card:not(.is-titlecard) {
     display: grid;
+    /* THE NAME'S ROW IS ABOVE BOTH COLUMNS (row 295, ask 3): `head` spans the pair, and the words and the worktrees
+       stay side by side beneath it. */
     grid-template-columns: minmax(0, 66ch) minmax(320px, 1fr);
-    grid-template-areas: "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist";
+    grid-template-areas: "head head" "desc side" "chips side" "waves waves" "assist assist" "hist hist";
     column-gap: var(--tab-s5);
     align-items: start;
     justify-content: start;

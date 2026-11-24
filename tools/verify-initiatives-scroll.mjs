@@ -227,7 +227,7 @@ try {
             await folded.click();
           }
           for (let guard = 0; guard < COUNT * 3 + 6; guard += 1) {
-            const folded = page.locator('#as-initiatives [data-init-desc-fold][aria-expanded="false"]').first();
+            const folded = page.locator('#as-initiatives [data-init-desc-fold][aria-expanded="false"]:not([hidden])').first();
             if ((await folded.count()) === 0) break;
             await folded.click();
           }
@@ -274,10 +274,12 @@ try {
         const expanded = await page.evaluate(() => ({
           cards: document.querySelectorAll("#as-initiatives .init-card").length,
           heads: document.querySelectorAll('#as-initiatives .init-head-btn[aria-expanded="false"]').length,
-          descs: document.querySelectorAll('#as-initiatives [data-init-desc-fold][aria-expanded="false"]').length,
+          // Only the controls that are DRAWN count: a description that fits its three-line clamp has none, and it is
+          // already whole (row 295, ask 2 - the control is drawn only on overflow).
+          descs: document.querySelectorAll('#as-initiatives [data-init-desc-fold][aria-expanded="false"]:not([hidden])').length,
           titleCards: document.querySelectorAll("#as-initiatives .init-card.is-titlecard").length,
         }));
-        check("every initiative is expanded, descriptions whole", { heads: expanded.heads, descs: expanded.descs, titleCards: expanded.titleCards }, { heads: 0, descs: 0, titleCards: 0 });
+        check("every initiative is expanded, every drawn description whole", { heads: expanded.heads, descs: expanded.descs, titleCards: expanded.titleCards }, { heads: 0, descs: 0, titleCards: 0 });
         check("all of them are on the pane", expanded.cards, COUNT);
 
         const g = await geometry();

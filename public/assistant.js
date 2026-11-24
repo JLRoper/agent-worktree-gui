@@ -3483,12 +3483,13 @@
   const initTaskShown = new Map();
   // ONE OPEN STATE PER INITIATIVE, in two books because the card and its description fold separately: `initOpen`
   // holds the initiatives the reader has unfolded (every card starts as a title card: a title, a two-line preview
-  // and the counts), and `initDescClosed` holds the ones whose description the reader has folded back to that
-  // preview while the card stayed open. Absent is the default in each, so neither book has to grow an entry for a
-  // card nobody touched; both live as long as this tab does, which is what "remembered while the tab is open" means
-  // and why a reload starts folded again.
+  // and the counts), and `initDescMore` holds the ones whose description the reader has unfolded FROM the clamp its
+  // open card draws (row 295, ask 2: an expanded card shows three lines and a show more control beside the label, and
+  // this book is the reader's own "show less" press). Absent is the default in each, so neither book has to grow an
+  // entry for a card nobody touched; both live as long as this tab does, which is what "remembered while the tab is
+  // open" means and why a reload starts clamped again.
   const initOpen = new Set();
-  const initDescClosed = new Set();
+  const initDescMore = new Set();
   // THE READER'S THEME COLOUR PER INITIATIVE, in its own key and its own map: a card is a card, not a project box,
   // and an initiative id must never collide with a project name in one store. The RULE is the projects' own -
   // public/core/theme-hue.js, which app.js's three project-hue functions delegate to as well - so the chooser, the
@@ -3929,6 +3930,9 @@
   // this pass remembers.
   let descCtx = null;
   const descFull = new WeakMap(); // a folded body -> the whole description it was drawn from, for a re-cut at a new width
+  // The host whose clamp pass is waiting for its next frame, so a pane with no layout is measured once when it gets
+  // one instead of on every repaint (see paintInitDescriptions).
+  const descMeasuredFrame = new WeakSet();
 
   function initDotsWidth(el) {
     if (!descCtx && typeof document !== "undefined" && document.createElement) descCtx = document.createElement("canvas").getContext("2d");
@@ -3993,6 +3997,42 @@
   function paintInitDescriptions(host) {
     if (!host) return;
     for (const el of host.querySelectorAll("[data-init-desc-cut]")) paintInitDescription(el, descFull.has(el) ? descFull.get(el) : el.textContent);
+    let unlaid = false;
+    for (const row of host.querySelectorAll("[data-init-desc-row]")) {
+      if (paintInitDescClamp(row) === false) unlaid = true;
+    }
+    // A PANE THAT IS NOT ON SCREEN CANNOT BE MEASURED, and "show more" is drawn only when the text really overflows:
+    // guessing either way would be a control that lies. One frame later - the tab switch has already taken the pane's
+    // `hidden` class off by then - the same pass runs again against a real layout. The book keeps it to one frame per
+    // host, so a pane that never gets a layout costs one callback, not a loop.
+    if (unlaid && !descMeasuredFrame.has(host) && typeof requestAnimationFrame === "function") {
+      descMeasuredFrame.add(host);
+      requestAnimationFrame(() => {
+        descMeasuredFrame.delete(host);
+        if (host.isConnected) paintInitDescriptions(host);
+      });
+    }
+  }
+
+  // THE CLAMP'S ONE DECISION (row 295, ask 2): is the control drawn at all? The body is drawn clamped by CSS with the
+  // WHOLE text in it, so this is a measurement rather than a cut - the clamp is lifted for the length of one read,
+  // which is the natural height, and put straight back, in the same task and before a frame is drawn. Returns false
+  // when the body has no layout yet (the caller then retries next frame).
+  function paintInitDescClamp(row) {
+    const body = row.querySelector("[data-init-desc-body]");
+    const more = row.querySelector("[data-init-desc-more]");
+    if (!body || !more) return true;
+    // A body the reader unfolded is whole: there is nothing to measure, and the control's job is now "show less".
+    if (!body.classList.contains("is-clamped")) {
+      more.hidden = false;
+      return true;
+    }
+    if (!body.getClientRects().length) return false;
+    body.classList.remove("is-clamped");
+    const natural = body.scrollHeight;
+    body.classList.add("is-clamped");
+    more.hidden = natural <= body.clientHeight + 1;
+    return true;
   }
 
   function initCardHtml(init) {
@@ -4005,7 +4045,7 @@
     const open = initOpen.has(init.id);
     // A folded description is drawn as a body to be measured (`data-init-desc-cut`), never as text with an ellipsis
     // typed on: where line two stops is decided on the element, in paintInitDescription below.
-    const descOpen = open && !initDescClosed.has(init.id);
+    const descMore = open && initDescMore.has(init.id);
     const assistantsOpen = initAssistOpen.has(init.id);
     const historyOpen = initHistoryOpen.has(init.id);
     const history = Array.isArray(init.history) ? init.history : [];
@@ -4044,21 +4084,23 @@
           </div>
         </div>`
       : "";
-    // THE DESCRIPTION, IN ITS TWO DRAWINGS. Unfolded, it is the whole text - pre-wrap, so its paragraph breaks come
-    // through untouched. Folded, it is the first two lines with three dots where they stop, and its header says
-    // which way the press goes. A card folded back to its title shows the same preview with NO header: there is
-    // nothing inside a title card to fold, so that press belongs to the card itself.
+    // THE DESCRIPTION, IN ITS THREE DRAWINGS (row 295, ask 2). A card folded to its title shows the first two lines
+    // with three dots where they stop - the measured cut above, unchanged. An expanded card draws THE WHOLE TEXT and
+    // clamps it to three lines with CSS, with show more / show less beside the label: the clamp is a line box, so
+    // every word is still in the DOM to be found, selected and copied, and the control only lifts a rule. A
+    // description that fits the clamp gains no control at all - paintInitDescriptions measures it in the same task,
+    // before a frame is drawn, so the reader never sees a button that would do nothing.
     const descBody = desc
-      ? descOpen
-        ? `<p class="init-desc" data-init-desc-body="${esc(init.id)}">${esc(desc)}</p>`
+      ? open
+        ? `<p class="init-desc${descMore ? "" : " is-clamped"}" data-init-desc-body="${esc(init.id)}">${esc(desc)}</p>`
         : `<p class="init-desc is-cut" data-init-desc-body="${esc(init.id)}" data-init-desc-cut>${esc(desc)}</p>`
       : `<p class="init-desc is-empty">no description yet - Edit says what this piece of work is</p>`;
     const descHtml = desc && open
-      ? `<div class="init-descfold">
-          <button type="button" class="init-proj init-desc-head" data-init-desc-fold="${esc(init.id)}" aria-expanded="${descOpen ? "true" : "false"}" title="the description ${descOpen ? "is whole - fold it back to its first two lines" : "is folded to its first two lines - unfold it for the whole thing, paragraph breaks and all"}. Enter or Space folds it too, and the card's own state is not touched">
-            <span class="init-caret">${descOpen ? "▾" : "▸"}</span>
-            <span class="init-proj-name">Description</span>
-          </button>
+      ? `<div class="init-descfold" data-init-desc-row="${esc(init.id)}">
+          <div class="init-desc-head">
+            <span class="init-desc-label">Description</span>
+            <button type="button" class="init-mini init-desc-more" data-init-desc-fold="${esc(init.id)}" data-init-desc-more aria-expanded="${descMore ? "true" : "false"}" title="${descMore ? "clamp the description back to its first three lines - the card stays open, and the whole text stays in the page" : "show the whole description, paragraph breaks and all - the card stays open"}">${descMore ? "show less" : "show more"}</button>
+          </div>
           ${descBody}
         </div>`
       : descBody;
@@ -4078,13 +4120,15 @@
     // own colours because their colours ARE each wave's state.
     const initHue = initHues.get(String(init.id));
     return `<article class="as-group init-card${open ? "" : " is-titlecard"}${!open && route.dots.length ? " has-route" : ""}${initHue == null ? "" : " has-init-hue"}" data-init-card="${esc(init.id)}"${initHue == null ? "" : ` style="--init-hue:${Number(initHue)}"`}>
+      <!-- THE NAME'S ROW (row 295, ask 3): at a wide pane this row spans BOTH columns and sits above them, and nothing
+           else is in its flow - a control beside the title would take width from it and break the words one place
+           earlier than the folded row does. Edit therefore rides the facts row below. -->
       <div class="init-head">
         <button type="button" class="init-head-btn" data-init-card-toggle="${esc(init.id)}" aria-expanded="${open ? "true" : "false"}" title="this initiative ${open ? "is open - a press folds it back to its title card" : "is folded to its title card - a press unfolds it, and one open state is kept per initiative while the tab is open"}">
           ${glyphHtml}
           <span class="init-title">${esc(init.title)}</span>
           ${open ? `<span class="init-caret is-open" aria-hidden="true">▾</span>` : `<span class="init-caret" aria-hidden="true">▸</span>`}
         </button>
-        ${open ? `<button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
       </div>
       ${descHtml}
       <div class="init-chips">
@@ -4093,6 +4137,7 @@
         <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
         ${statusHtml}
         ${init.updatedAt ? `<span class="as-hint init-meta">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
+        ${open ? `<button type="button" class="init-mini init-edit" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
       </div>
       ${open
         ? `${editHtml}
@@ -4726,8 +4771,8 @@
       if (kind === "description") {
         const id = String(e.target.closest("[data-init-desc-fold]")?.dataset.initDescFold || "");
         if (!id) return;
-        if (initDescClosed.has(id)) initDescClosed.delete(id);
-        else initDescClosed.add(id);
+        if (initDescMore.has(id)) initDescMore.delete(id);
+        else initDescMore.add(id);
         renderAssistantInitiatives(true);
         return;
       }
