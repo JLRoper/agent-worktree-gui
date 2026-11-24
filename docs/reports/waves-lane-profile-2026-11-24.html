@@ -35,7 +35,7 @@
 <body>
 <main>
 <h1>The waves lane was waiting on git, not computing</h1>
-<p class="sub">agent-worktree-gui 1.166.10, branch <code>wtgui/read-queue-row-296-first-it-carries-the-868811</code>, cut from main at <code>4c256c79</code>. A profile of the sandbox panel, a cache keyed on the facts that decide each answer, and one budget for the whole fan-out. All line numbers are on this branch.</p>
+<p class="sub">agent-worktree-gui 1.166.13, branch <code>wtgui/read-queue-row-296-first-it-carries-the-868811</code>, on top of main at <code>c97b3b66</code> (1.166.12; a changelog render, <code>b2f020b0</code>, sits above it). A profile of the sandbox panel, a cache keyed on the facts that decide each answer, and one budget for the whole fan-out. All line numbers are on this branch.</p>
 
 <dl class="facts">
   <dt>queue row</dt><dd>#296 in assistant-3's queue (the reader's live-panel measurements)</dd>
@@ -127,7 +127,7 @@
 <p>The failure is fail-closed by construction: <code>readWaveGate</code> (lib/waves.js:939) answers <code>unknown</code> for a member whose evidence carries <code>error</code> or is missing, and unknown blocks a gate; it never becomes met. The budget is not a promise that every read finishes - it is the promise that a read finishes, tells you what it could not reach, and does not spend a timeout per member to do it.</p>
 
 <h2>6. GET /api/state: the 4.17 MB frame, and which part the board reads</h2>
-<p>Captured from the live panel today: <strong>4,167,696 bytes</strong> in one JSON body, 186 projects and 409 worktree rows. This is not changed by this branch - it is the second cost the row asked to have looked at - but the accounting is here so the next cut starts from facts.</p>
+<p>Captured from the live panel today: <strong>4,167,696 bytes</strong> in one JSON body, 186 projects and 409 worktree rows. This is not changed by this branch - it is the second cost the row asked to have looked at - but the accounting is here so the next cut starts from facts. The capture predates <code>c97b3b66</code>, the sibling landing that made the read stale-while-revalidate and the serialization sliced; that commit says its bytes are the same as <code>JSON.stringify</code>'s, and it caches the per-row TODO view rather than dropping fields, so the composition below is what the frame still carries. What that landing changes is the clock (polls of 5.9 s and 13 s became 48 to 219 ms), not the map.</p>
 <table>
   <tr><th>top-level key</th><th>bytes</th><th>share</th><th>what it is</th></tr>
   <tr><td><code>projects</code></td><td class="n">2,296,118</td><td class="n">55.1%</td><td>every project and its worktree rows (409 rows)</td></tr>
@@ -211,7 +211,7 @@ npm test                                                          run once befor
 7. count "event":"start" lines in the trace around each call, and read measure.json</pre>
 <p>The route's own answer carries the load-bearing numbers: <code>profile.phases.evidence</code>, <code>profile.operations["git.calls"]</code>, <code>landing.cache.hit</code>, <code>landing.cache.miss</code>, <code>ref.disk</code>, <code>evidence.skipped</code>, <code>evidence.timedOut</code>. A reader who only wants the before-and-after can run the same fixture against <code>git archive 4c256c79</code> and against this branch; that is how section 3 was made.</p>
 
-<p class="small">Written against branch <code>wtgui/read-queue-row-296-first-it-carries-the-868811</code> at version 1.166.10, on top of main at <code>4c256c79</code>. The report and the code it describes are in the same pull request.</p>
+<p class="small">Written against branch <code>wtgui/read-queue-row-296-first-it-carries-the-868811</code> at version 1.166.13, whose base is main at <code>c97b3b66</code>. The report and the code it describes are in the same pull request.</p>
 </main>
 </body>
 </html>
