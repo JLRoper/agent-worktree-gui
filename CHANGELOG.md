@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.163.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.164.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-712 releases from v0.1.0 (2026-10-20) to v1.163.0 (2026-11-23), 2525 commits between the tags. Every release is anchored by an
+713 releases from v0.1.0 (2026-10-20) to v1.164.0 (2026-11-23), 2529 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.164.0 — 2026-11-23 · 4 commits
+
+[`79baf61`](https://github.com/JLRoper/agent-worktree-gui/commit/79baf610878e28cb1c71e94f07800be53949638e) · [compare v1.163.0...v1.164.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.163.0...v1.164.0)
+
+### Added
+
+- feat(initiatives): the dots sit on the title, keep still on expand, and can carry a colour ([`c20a5e1`](https://github.com/JLRoper/agent-worktree-gui/commit/c20a5e1d0b1a90e6ab80cf9dd21893a31743370e))
+
+### Docs & tests
+
+- docs(reports): the suite's numbers, and where the pre-existing reds come from ([`28006e3`](https://github.com/JLRoper/agent-worktree-gui/commit/28006e343376660720b9bdb75f5a8c82b431cbdd))
+- docs: render the changelog - 712 releases ([`9e14dce`](https://github.com/JLRoper/agent-worktree-gui/commit/9e14dceadff7ad36015e4a7d3bc1cbba003a89e9))
+
+### Other
+
+- chore: 1.164.0 - the version this landing carries ([`79baf61`](https://github.com/JLRoper/agent-worktree-gui/commit/79baf610878e28cb1c71e94f07800be53949638e))
 
 ## v1.163.0 — 2026-11-23 · 6 commits
 
