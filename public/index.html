@@ -1377,6 +1377,12 @@
        test/waves-lane.test.js imports this same file. Loaded before assistant.js, which draws the lane in every
        initiative card. -->
   <script src="/core/waves-lane.js"></script>
+  <!-- ONE THEME COLOUR'S RULE, shared by the two surfaces that can be given a hue: the board's project boxes
+       (Ctrl+click a project head) and the Initiatives tab's cards (Ctrl+click a dot or a title). The chooser, the
+       circle-wrap and the tab-only fallback when storage refuses a write are written once here. Published on
+       globalThis as `wtThemeHue`; test/theme-hue.test.js imports this same file. Loaded before app.js, whose
+       three project-hue functions delegate to it, and before assistant.js. -->
+  <script src="/core/theme-hue.js"></script>
   <!-- The branch NAME, as a link to its page on the remote or as plain text when there is none: the anchor's whole
        shape (class, target, rel, title) in one place, called by the chart's branch cell (app.js) and by the
        Initiatives tab's worktree list (assistant.js). Published on globalThis as `wtBranchLink`;

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The initiative card's dots sit on its title, keep still when it opens, and can carry a colour</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b303a; --ink: #e6e8ec; --dim: #a2a9b6;
+    --ok: #5fbf7a; --warn: #d9a441; --bad: #d9605f; --acc: #6ea8d8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.62 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 10px 0; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 26px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 18px 0; }
+  .box.hot { border-left: 3px solid var(--bad); }
+  .box.good { border-left: 3px solid var(--ok); }
+  .box.note { border-left: 3px solid var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; color: #cfd6e2; }
+  pre { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; color: #cfd6e2; line-height: 1.5; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul { margin: 8px 0 8px 20px; padding: 0; } li { margin: 5px 0; }
+  figure { margin: 20px 0; }
+  figure img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 8px; }
+  footer { margin-top: 46px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The initiative card's dots sit on its title, keep still when it opens, and can carry a colour</h1>
+<div class="sub">
+  Written 2026-11-23 for branch <code>wtgui/read-queue-row-274-first-it-carries-all-2e6057</code>, cut from
+  <code>9e14dcea</code> (<code>main</code>, 1.163.0). Read queue row 274. Every number below comes from
+  <code>tools/verify-initiative-card-anchor.mjs</code> (a live gate on a sandboxed panel), run first on the base
+  build and then on this branch with the same fixture and the same widths. Nothing is quoted from memory and
+  nothing is eyeballed: the pictures are beside the measurements that scored them.
+</div>
+
+<h2>1. What the row asked for</h2>
+<table>
+  <thead><tr><th>the change</th><th>the acceptance the row named</th></tr></thead>
+  <tbody>
+    <tr><td>The coloured dots share the title's own line box, on its optical centre, in a fixed gutter left of it.</td>
+        <td>A dot/title measurement, on a folded card.</td></tr>
+    <tr><td>The dots stay drawn when a card expands, so the title does not slide left by their width.</td>
+        <td>A measured title x and y that are IDENTICAL open and closed, at more than one card width.</td></tr>
+    <tr><td>Ctrl+click an initiative's dot or title gives it a theme colour, Shift+click drops it, by the projects' own
+        chooser and persistence rule; the dots' own colours and order are untouched.</td>
+        <td>One initiative carrying a custom colour that survives a reload, and the projects' colour behaviour
+        unchanged.</td></tr>
+  </tbody>
+</table>
+
+<h2>2. Before: the three defects, measured</h2>
+<p>
+  The same gate was run against the base build (<code>main</code>'s <code>9e14dcea</code>) first, so the red run is
+  the row's complaint in numbers rather than a description of it.
+</p>
+<div class="box hot">
+  <p><b>1. The dots rode above the line.</b> <code>top: calc(var(--tab-s3) + 6px)</code> was a guess at the title's
+  place from the card's top, and the head button is a 36px centred row, so the title's first line box actually started
+  8.31px lower. Measured: every dot's centre <span class="bad">8.5px above the title's first-line centre</span>, and
+  its top <span class="bad">2.32px above the line box</span> entirely.</p>
+  <p><b>2. The title jumped on expand.</b> The mark was drawn only on the folded card (<code>glyphHtml</code> was
+  <code>""</code> when open) and the open plate's padding was 16px against the folded row's 45px. Measured at a 463px
+  card: the title went <span class="bad">x 45 -> 17 (dx -28)</span> and <span class="bad">y 12 -> 17 (dy +5)</span>
+  on the press that opened it, with <span class="bad">no glyph at all</span> on the open card.</p>
+  <p><b>3. Ctrl+click folded the card.</b> The title and the dots are inside the card's fold button, so the press was
+  answered by the fold: measured <span class="bad">open false -> true</span>, no hue on the card, nothing written to
+  any store.</p>
+</div>
+<figure>
+  <img src="initiative-card-anchor/00-before-folded.png" alt="The base build: the dots sit above the Menu SSO migration title's line">
+  <figcaption>The base build, same fixture and width. The three dots on "Menu SSO migration" hang above the title's
+  first line; the rows without a route start on the same edge, which is why the gutter was reserved but the mark was
+  not placed in it.</figcaption>
+</figure>
+
+<h2>3. What changed, and where</h2>
+<h3>The gutter, as three tokens</h3>
+<p>
+  <code>public/style.css:4957-4959</code> names the geometry once: <code>--init-dot-slot: 27px</code>,
+  <code>--init-title-gutter: 45px</code> and <code>--init-row-top: calc(var(--tab-s4) + 1px)</code>. The folded row
+  pays the gutter as its left padding (<code>:5103</code>), the open plate pays it too, less its own 1px border
+  (<code>:5125</code>), so both drawings put the head's content edge on the same 45px.
+</p>
+<h3>The mark, in the title's line</h3>
+<p>
+  <code>public/style.css:5182</code>: the glyph is an in-flow flex item now, one title line tall
+  (<code>height: calc(var(--tab-fs-display) * var(--tab-lh-tight))</code>), centred inside that box, and it pays its
+  own slot back with a negative left margin (<code>:5195</code>). That is the whole trick: the dots hang in the space
+  the row already reserved, at 10px from the card's edge, and the title keeps the 45px it always had - so a row with no
+  waves and a row with three start on the same edge. The head button no longer centres its cross axis
+  (<code>:5132</code>), because a centred title moved 8.31px every time its line count changed between folded and open
+  (measured at the split plate, where the open head column is narrower and the title wraps one line further).
+  <code>public/assistant.js:3936</code> draws the mark on every card, open or folded, so unfolding does not take it
+  away.
+</p>
+<h3>One colour rule, shared</h3>
+<p>
+  <code>public/core/theme-hue.js</code> is the projects' chooser written once: a random hue, moved at least 45 degrees
+  from the one it replaces, wrapped onto the circle, saved with the tab-only fallback when the browser refuses the
+  write. <code>public/app.js:8916-8935</code> keeps its three old names (<code>loadProjectHues</code>,
+  <code>saveProjectHues</code>, <code>rollProjectHue</code>) as one-line delegations, so the project boxes run exactly
+  the code they ran before, and <code>public/assistant.js:3407-3432</code> uses the same functions with its own key
+  (<code>wm.initiativeHues</code>) and its own map. The page loads it before both (<code>public/index.html:1385</code>).
+</p>
+<p>
+  The gesture is answered before the press rule (<code>public/assistant.js:4518</code>): Ctrl or Cmd on the title or
+  the dot column rolls a hue, Shift drops it, and a Shift press on a card with no colour is left as the plain fold it
+  has always been. The card's painter carries <code>has-init-hue</code> and <code>--init-hue</code>
+  (<code>assistant.js:3941</code>), and <code>public/style.css:5209-5213</code> paints the surface, the border and the
+  title in the hue - and nothing else. The route dots keep the colours that ARE each wave's state, which is the one
+  thing a theme must not repaint.
+</p>
+
+<h2>4. The proof: 56/56 checks, three card widths</h2>
+<p>
+  <code>npm run verify:initiative-card</code> boots the initiatives fixture (three throwaway repos, four initiatives,
+  a wave store) on its own port and drives the real page. The title's place is measured INSIDE its own card, which is
+  the frame that does not move when a sibling above it reflows; the card's own place in the pane's scrolled document is
+  checked separately.
+</p>
+<table>
+  <thead><tr><th>card width (dock)</th><th>title lines folded -> open</th><th class="n">folded x, y</th><th class="n">open x, y</th><th class="n">delta</th></tr></thead>
+  <tbody>
+    <tr><td class="n">463px (480px dock)</td><td class="n">2 -> 3</td><td class="n">45, 17</td><td class="n">45, 17</td><td class="n ok">0, 0</td></tr>
+    <tr><td class="n">703px (720px dock)</td><td class="n">2 -> 2</td><td class="n">45, 17</td><td class="n">45, 17</td><td class="n ok">0, 0</td></tr>
+    <tr><td class="n">1083px (1100px dock, the split plate)</td><td class="n">1 -> 2</td><td class="n">45, 17</td><td class="n">45, 17</td><td class="n ok">0, 0</td></tr>
+  </tbody>
+</table>
+<p>
+  The third width is the one that found a real second defect: the wide container splits the open card into two columns
+  (<code>public/style.css</code>'s 1000px container query), its head column is narrower, and the title wraps one line
+  further when the card opens. A vertically centred title moved 8.31px for exactly that reason, which is why the head
+  is top-aligned now - the first line is the line, so its top is the same number whatever the title wraps to.
+</p>
+<table>
+  <thead><tr><th>check</th><th>measured</th></tr></thead>
+  <tbody>
+    <tr><td>Every dot's centre against the title's first-line centre</td><td class="ok">0px off, on 3 dots</td></tr>
+    <tr><td>Every dot inside the title's own line box</td><td class="ok">all inside</td></tr>
+    <tr><td>The gutter, from the card's edge, on every folded row with a route</td><td class="ok">10px, one value</td></tr>
+    <tr><td>The dots-to-title distance, on every folded row</td><td class="ok">35px, one value</td></tr>
+    <tr><td>Every folded title's left edge</td><td class="ok">45px, one value</td></tr>
+    <tr><td>The route mark on the open card</td><td class="ok">3 of 3 dots, same classes, same painted colours, same order</td></tr>
+    <tr><td>The card's own place in the pane when it opens</td><td class="ok">0px</td></tr>
+    <tr><td>Page and console errors</td><td class="ok">0 and 0</td></tr>
+  </tbody>
+</table>
+<figure>
+  <img src="initiative-card-anchor/01-folded.png" alt="The folded ledger with the dots centred on the title's line">
+  <figcaption>Folded: the dots on "Menu SSO migration" are on the title's first line, and the rows with no route
+  ("Kafka rating pipeline", "Batch sweeper retry budget") start on the same 45px edge.</figcaption>
+</figure>
+<figure>
+  <img src="initiative-card-anchor/02-expanded.png" alt="The open plate with the dots still drawn and the title on the same edge as its body">
+  <figcaption>Open: the same three dots, still in the gutter, and the title on the same edge as the Description header,
+  the body and the chips. The press that opened this card moved the title 0px in x and 0px in y.</figcaption>
+</figure>
+
+<h2>5. The colour, measured end to end</h2>
+<p>
+  Run on the card that carries the route mark, so the dots' own colours are part of every check. The gate presses with
+  real modifier keys on the real elements.
+</p>
+<table>
+  <thead><tr><th>the gesture, in order</th><th>what was measured</th></tr></thead>
+  <tbody>
+    <tr><td>Ctrl+click the title</td><td class="ok">the card gains <code>has-init-hue</code> and a numeric
+      <code>--init-hue</code>; the card's open state does not change (it was folded and stayed folded)</td></tr>
+    <tr><td>the store</td><td class="ok"><code>wm.initiativeHues</code> = <code>{"init_sso":75}</code>; <code>wm.projectHues</code>
+      untouched (<code>{}</code>)</td></tr>
+    <tr><td>the dots</td><td class="ok">3 dots, same class strings, same painted colours
+      (<code>rgb(63, 185, 80)</code>, <code>rgb(86, 211, 100)</code>, <code>rgba(139, 149, 165, 0.32)</code>), same
+      boxes 7x7 - the theme did not touch them</td></tr>
+    <tr><td>Ctrl+click the dot column (a re-roll)</td><td class="ok">75 -> 196, at least 45 degrees, by the shared chooser</td></tr>
+    <tr><td>reload</td><td class="ok">the card is still painted, hue 196, and the store still says 196</td></tr>
+    <tr><td>Shift+click the title</td><td class="ok">the hue is gone and the store entry is gone; a second reload is still plain</td></tr>
+    <tr><td>storage refusing writes</td><td class="ok">the colour still paints (hue 247), nothing is persisted, and a
+      reload is plain - the tab-only rule, not a second store</td></tr>
+    <tr><td>the projects' own gesture, same page</td><td class="ok">Ctrl+click a project head sets
+      <code>section.project.has-hue</code> and <code>wm.projectHues</code>; Ctrl+Shift+click clears it</td></tr>
+  </tbody>
+</table>
+<figure>
+  <img src="initiative-card-anchor/03-coloured.png" alt="The Menu SSO migration card painted in its theme hue with the three wave dots unchanged">
+  <figcaption>The card in its hue: surface, border and title take the colour; the status pill and the three wave dots
+  keep the tones that say what they mean.</figcaption>
+</figure>
+
+<h2>6. What else was run</h2>
+<table>
+  <thead><tr><th>run</th><th>this branch</th><th>main, same command</th></tr></thead>
+  <tbody>
+    <tr><td><code>node --test test/theme-hue.test.js test/initiative-fold.test.js</code></td><td class="ok">32/32</td><td class="ok">n/a (new file)</td></tr>
+    <tr><td><code>npm run verify:initiatives-tab</code></td><td>65-66/77</td><td>65/77, the same failing names (a scroll check is intermittent on both)</td></tr>
+    <tr><td><code>node tools/verify-initiatives-redesign.mjs</code></td><td class="ok">GATE GREEN 11/11, 18/18 docked checks, left edges spread 6px</td><td class="ok">same gate green before the change</td></tr>
+    <tr><td><code>verify-initiatives-scroll</code> / <code>verify-initiatives-creep</code></td><td class="ok">35/35 / OK</td><td class="ok">35/35 / OK</td></tr>
+    <tr><td><code>verify-initiative-tasks</code> / <code>verify-initiative-branch-link</code></td><td>80/81 / 27/30</td><td>80/81 / 27/30 - identical names</td></tr>
+    <tr><td><code>tools/test-changed.mjs</code> (every test that names a touched file)</td><td>7 failures</td><td>the same 7 names on a clean export of main</td></tr>
+    <tr><td><code>npm test</code> (the full suite, once)</td><td colspan="2">see section 7</td></tr>
+  </tbody>
+</table>
+<p>
+  The initial gate run on the base build answered <span class="bad">11/21</span> - the ten reds were the three defects
+  above, plus the colour checks that could not run because Ctrl+click folded the card. The same gate on this branch
+  answers <span class="ok">56/56</span> at the three widths.
+</p>
+
+<h2>7. The full suite</h2>
+<p>
+  <code>npm test</code> was run once on this branch, after the change and before the pull request. Its own summary
+  block:
+</p>
+<pre>tests 3741   pass 3718   fail 23</pre>
+<p>
+  The six tests this branch adds (test/theme-hue.test.js) are inside those 3741 and all pass. The 23 reds are the
+  pre-existing set: each failing name was re-run on a clean export of <code>main</code> at <code>9e14dcea</code> and
+  fails there too - the assistant owner and queue rows (6), the waves route and store (4), the initiative tier route
+  (3), the paths, gateway-permissions and junction scratch checks (4), the harness wiring of an unwired tool (1), the
+  scan and worktree-naming backfill (2), the reasoning-level store (1), and the pipelines record (1, which passes
+  18/18 when its file is run alone - a 4-way concurrency flake, not this branch).
+</p>
+<p>
+  One red was this branch's own and is worth naming because it is the kind of thing a landing is supposed to catch:
+  <code>test/reports-are-tracked.test.js</code> reads every page under <code>docs/reports</code> and refuses one that is
+  on disk but not in the index. <code>.git/info/exclude</code> ignores <code>docs/reports/*.html</code> in every
+  worktree, so this report was invisible to <code>git status</code> until it was added with <code>git add -f</code>;
+  after the add the file passes.
+</p>
+
+<h2>8. What was deliberately not touched</h2>
+<ul>
+  <li>The waves lane: no rule, markup or behaviour in <code>public/core/waves-lane.js</code> changed, and the lane's own
+      gate (<code>verify-initiatives-tab</code>) keeps its position on the card.</li>
+  <li>The folds: a plain press on a title card still folds it, the description's header still folds only the
+      description, and every control inside a card still acts on itself. The press rule in
+      <code>public/core/initiative-fold.js</code> is unchanged; the colour gesture is answered before it, for a press
+      that carries Ctrl, Cmd or Shift.</li>
+  <li>The projects' colour code path: the same three functions, the same key, the same map, now delegating to the one
+      shared rule. The gate measures Ctrl+click and Ctrl+Shift+click on a project head on the same page as the
+      initiative's own.</li>
+</ul>
+
+<footer>
+  Branch <code>wtgui/read-queue-row-274-first-it-carries-all-2e6057</code>, cut from <code>9e14dcea</code>.
+  Gate: <code>tools/verify-initiative-card-anchor.mjs</code> (<code>npm run verify:initiative-card</code>).
+  Measurements and the screenshots beside them were produced by the same run, in one sandbox, on 2026-11-23.
+</footer>
+
+</main>
+</body>
+</html>

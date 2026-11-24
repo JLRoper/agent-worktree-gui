@@ -4949,6 +4949,15 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   --tab-chip-h: 20px;
   --tab-member: 26px;
 
+  /* the initiative card's title gutter: the dot column, one gap, then the title. A row pays the same 45px whether
+     or not it has a wave to draw, so every title in the ledger starts on one reading edge - and the OPEN plate pays
+     it too (its left padding is this, less its 1px border), which is what keeps the title on the same x when the
+     reader unfolds it. `--init-row-top` carries the plate's 1px top border as padding on the folded row, so the title
+     lands on the same y in both drawings. */
+  --init-dot-slot: 27px;
+  --init-title-gutter: 45px;
+  --init-row-top: calc(var(--tab-s4) + 1px);
+
   /* elevation: light from above - a top hairline and one soft shadow, never a glow. */
   --tab-e1: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.35);
   --tab-e2: 0 8px 24px rgba(0, 0, 0, 0.28);
@@ -5091,7 +5100,7 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 /* FOLDED IS A ROW ON THE GROUND, NOT A CARD: the list reads as one ledger, the title and its preview carry the
    identity, and the route mark and status word say where the work has got to before any card is opened. */
 #as-initiatives .init-card.is-titlecard {
-  padding: var(--tab-s3) var(--tab-s2) var(--tab-s3) 45px;
+  padding: var(--init-row-top) var(--tab-s2) var(--tab-s3) var(--init-title-gutter);
   border: 0;
   border-bottom: 1px solid var(--tab-line);
   border-radius: 0;
@@ -5108,9 +5117,12 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   background: var(--tab-surface);
   box-shadow: var(--tab-e1);
 }
-/* THE OPEN INITIATIVE IS THE PLATE. It lifts off the ledger with a surface, one radius and the elevation token. */
+/* THE OPEN INITIATIVE IS THE PLATE. It lifts off the ledger with a surface, one radius and the elevation token. Its
+   LEFT inset is the ledger's own title gutter, less the 1px border that the folded row does not have: the dots hang at
+   10px inside it and the title lands on the same 45px every folded row starts on, so a press that unfolds the card
+   does not move the title a pixel - and the plate's body, chips and sections keep sharing that one reading edge. */
 #as-initiatives .init-card:not(.is-titlecard) {
-  padding: var(--tab-s4);
+  padding: var(--tab-s4) var(--tab-s4) var(--tab-s4) calc(var(--init-title-gutter) - 1px);
   margin: var(--tab-s2) 0 var(--tab-s3);
   background: var(--tab-surface);
   border-color: var(--tab-line);
@@ -5122,6 +5134,10 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   min-width: 0;
   min-height: 36px;
   display: flex;
+  /* THE TITLE STARTS AT THE HEAD'S TOP, IN BOTH DRAWINGS. Centring it in the 36px row was a 8.3px jump every time the
+     title's own line count changed between folded and open (the split plate's head column is narrower, so the title
+     can wrap to one more line), and the reader asked for a measured x and y that do not move. The mark is a line tall
+     (see `.init-glyph` below), so it follows the FIRST line where this puts the text. */
   align-items: flex-start;
   gap: var(--tab-s2);
   margin: 0;
@@ -5134,7 +5150,8 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   text-align: left;
   cursor: pointer;
 }
-#as-initiatives .init-card.is-titlecard .init-head-btn { align-items: center; }
+/* A folded row and an open plate share the button's geometry: one rule, no per-state alignment (a centre here and a
+   top there is exactly the 8.3px the title used to jump by). */
 #as-initiatives .init-head-btn:hover { background: transparent; }
 #as-initiatives .init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--tab-ink-3); text-underline-offset: 2px; }
 #as-initiatives .init-head-btn:active { transform: none; }
@@ -5162,8 +5179,21 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
    paid the tax, its title would sit 37px right of every other (the review's measured 977 x3 and 1014) and the eye
    would read a ragged left edge exactly where the new mark arrived. */
 #as-initiatives .init-card.is-titlecard { position: relative; }
-#as-initiatives .init-glyph { flex: 0 0 27px; width: 27px; display: inline-flex; align-items: center; gap: 3px; padding-top: 6px; }
-#as-initiatives .init-card.is-titlecard .init-glyph { position: absolute; left: 10px; top: calc(var(--tab-s3) + 6px); padding-top: 0; }
+#as-initiatives .init-glyph {
+  flex: 0 0 var(--init-dot-slot);
+  width: var(--init-dot-slot);
+  /* ONE TITLE LINE BOX, so the dots are centred on the title's FIRST line whatever the title wraps to, and never on a
+     guessed offset from the card's top (the absolute `top: s3 + 6px` was 8.5px above the line). */
+  height: calc(var(--tab-fs-display) * var(--tab-lh-tight));
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  /* THE MARK PAYS ITS OWN SLOT BACK, so the dots hang in the gutter the row already reserved instead of pushing the
+     title right by it. The margin is the slot plus the flex gap: the title's x is the gutter's 45px whatever the mark
+     draws, and a row with no waves keeps the same reading edge as one with three. The same rule serves the open plate,
+     whose own left padding puts the head's content edge on that same 45px. */
+  margin-left: calc(-1 * (var(--init-dot-slot) + var(--tab-s2)));
+}
 #as-initiatives .init-glyph i { width: 7px; height: 7px; border-radius: 50%; background: var(--tab-idle); }
 #as-initiatives .init-glyph i.is-done { background: var(--tab-accent); }
 #as-initiatives .init-glyph i.is-running { background: var(--tab-run); }
@@ -5172,6 +5202,15 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-glyph i.is-abandoned { background: var(--tab-bad); }
 #as-initiatives .init-glyph i.is-empty, #as-initiatives .init-glyph i.is-unentered { background: var(--tab-idle-line); }
 #as-initiatives .init-glyph i.is-current { box-shadow: 0 0 0 2px var(--tab-line-strong); }
+/* THE INITIATIVE'S OWN THEME COLOUR, on the project boxes' rule (Ctrl+click its dot column or its title; the chooser
+   and the tab-only fallback are public/core/theme-hue.js). One hue on the card's own surfaces and its title, and
+   NOTHING that carries a state of its own: the route dots keep the colours that ARE each wave's state, and the status
+   pill and the chips keep their tones. A theme that recoloured the mark would make the mark lie. */
+#as-initiatives .init-card.has-init-hue { border-color: hsl(var(--init-hue) 40% 34%); background: hsl(var(--init-hue) 20% 10%); }
+#as-initiatives .init-card.is-titlecard.has-init-hue { border-bottom-color: hsl(var(--init-hue) 32% 26%); }
+#as-initiatives .init-card.is-titlecard.has-init-hue:hover { background: hsl(var(--init-hue) 26% 13%); }
+#as-initiatives .init-card.has-init-hue .init-title { color: hsl(var(--init-hue) 78% 82%); }
+#as-initiatives .init-card.has-init-hue .init-head-btn .init-caret { color: hsl(var(--init-hue) 55% 62%); }
 /* THE STATUS WORD: the current wave and its state, or the honest "no waves" / "waves unreadable". A pill, because it
    is the shortest answer the tab gives, and a word as well as a colour. */
 #as-initiatives .init-status {
@@ -5202,7 +5241,7 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 /* A folded row's chevron is a disclosure column at the row's right edge, not the end of the title's last line: the
    title box is as wide as the row, so a flowing chevron lands mid-row on a two-line title. */
 #as-initiatives .init-card.is-titlecard .init-head-btn { padding-right: 18px; }
-#as-initiatives .init-card.is-titlecard .init-caret { position: absolute; right: var(--tab-s2); top: calc(var(--tab-s3) + 2px); font-size: 11px; line-height: 1; }
+#as-initiatives .init-card.is-titlecard .init-caret { position: absolute; right: var(--tab-s2); top: calc(var(--init-row-top) + 2px); font-size: 11px; line-height: 1; }
 /* THE OPEN CARET IS A REAL GLYPH. A folded row ends its head with ▸ in the disclosure column; the open plate used to
    end with nothing at all, so the only evidence of the open state was the absence of the folded mark (and the test
    could only assert "not ▸ at the end"). The plate's head now draws ▾ at its own right edge, just before Edit, so the

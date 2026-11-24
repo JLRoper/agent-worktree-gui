@@ -8913,36 +8913,22 @@ function noteEventLife(thread) {
 // whatever the reader is looking at, and the page used to creep out from under them. This holds the viewport:
 // the element under the reading line stays under it while things above it grow.
 
+// THE PROJECT'S COLOUR RULE LIVES IN public/core/theme-hue.js, and these three are the names app.js has always
+// used for it. The Initiatives tab's cards asked for the same gesture, and two copies of a chooser is two answers
+// to "what does a re-roll do": the rule (a random hue, at least 45 degrees from the one it replaces, wrapped into
+// the circle) and the storage fallback (a write the browser refuses leaves the colour on this tab only) are
+// written once there, and each surface keeps only its own KEY and its own MAP.
 function loadProjectHues() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(PROJECT_HUE_KEY) || "{}");
-    const map = new Map();
-    for (const [name, hue] of Object.entries(raw || {})) {
-      const h = Number(hue);
-      if (Number.isFinite(h)) map.set(name, ((h % 360) + 360) % 360);
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
+  return wtThemeHue.load(PROJECT_HUE_KEY);
 }
 
 function saveProjectHues() {
-  try {
-    localStorage.setItem(PROJECT_HUE_KEY, JSON.stringify(Object.fromEntries(state.projectHues)));
-  } catch {
-    /* no storage: the colour lasts this tab only */
-  }
+  wtThemeHue.save(PROJECT_HUE_KEY, state.projectHues);
 }
 
 // A random hue that is not the one already there: re-rolling must change what you see.
 function rollProjectHue(name) {
-  const prev = state.projectHues.get(name);
-  let hue = Math.floor(Math.random() * 360);
-  if (prev != null && Math.abs(hue - prev) < 45) hue = (hue + 150) % 360;
-  state.projectHues.set(name, hue);
-  saveProjectHues();
-  return hue;
+  return wtThemeHue.roll(state.projectHues, PROJECT_HUE_KEY, name);
 }
 
 // The settings row says how many projects carry a colour right now, so "reset" is never a blind button.
