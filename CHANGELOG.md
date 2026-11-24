@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.166.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.166.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-720 releases from v0.1.0 (2026-10-20) to v1.166.3 (2026-11-24), 2558 commits between the tags. Every release is anchored by an
+721 releases from v0.1.0 (2026-10-20) to v1.166.4 (2026-11-24), 2562 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.166.4 — 2026-11-24 · 4 commits
+
+[`346e70c`](https://github.com/JLRoper/agent-worktree-gui/commit/346e70c22149becdd36650abfa593ec05b690750) · [compare v1.166.3...v1.166.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.3...v1.166.4)
+
+### Fixed
+
+- fix: a thinking row whose .think-text box is gone gets it back ([`13f966b`](https://github.com/JLRoper/agent-worktree-gui/commit/13f966b9058ff958c0fbc1ab9ecf956308848fbc))
+- fix: bound every task row in an initiative card by the card's width ([`346e70c`](https://github.com/JLRoper/agent-worktree-gui/commit/346e70c22149becdd36650abfa593ec05b690750))
+
+### Docs & tests
+
+- docs: render the changelog - 720 releases ([`e90764c`](https://github.com/JLRoper/agent-worktree-gui/commit/e90764ccae50a70dbdfa9580296308799d70dcf3))
+- docs: render the changelog - 720 releases ([`6c9d506`](https://github.com/JLRoper/agent-worktree-gui/commit/6c9d5069b4ae55c5dfac6ffd853da7a7c3c61e8a))
 
 ## v1.166.3 — 2026-11-24 · 3 commits
 
