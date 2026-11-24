@@ -764,7 +764,9 @@ window.WMApp.queueCards = function queueCards(deps) {
       ? `<div class="as-task-note" title="${esc(`STALE — ${t.staleWhy || "its thread has no live run"}`)}">STALE — ${esc(t.staleWhy || "its thread has no live run")}</div>`
       : t.conflict
         ? `<div class="as-task-note is-bad" title="${esc(`SKIPPED — ${t.skipped || "files in use by a running task"}`)}">SKIPPED — ${esc(t.skipped || "files in use by a running task")}</div>`
-        : t.state === "parked" && t.reason
+        : t.laneAllowed
+          ? `<div class="as-task-note" title="${esc(`OVERLAP ALLOWED by ${t.laneAllowed.allow?.by || "someone"} on ${(t.laneAllowed.files || []).join(", ")} (overlaps #${t.laneAllowed.holder?.id})`)}">OVERLAP ALLOWED by ${esc(t.laneAllowed.allow?.by || "someone")} on ${esc((t.laneAllowed.files || []).join(", "))}</div>`
+          : t.state === "parked" && t.reason
           ? `<div class="as-task-note" title="${esc(`parked — ${t.reason}`)}">parked — ${esc(t.reason)}</div>`
           : t.state === "queued" && t.reason
             ? `<div class="as-task-note" title="${esc(t.reason)}">${esc(t.reason)}</div>`

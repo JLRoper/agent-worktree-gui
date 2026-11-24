@@ -11,10 +11,13 @@
 //
 // READ ONLY, by construction and on purpose: this module reads the queue file, the job store and the scanned rows,
 // and nothing else. It starts nothing, writes nothing, cuts nothing and touches no state - the same restriction the
-// digest's read route lives under. `ok` is exactly "the cut would accept this", and the three checks it reports are
+// digest's read route lives under. `ok` is exactly "the cut would accept this", and the checks it reports are
 // the cut's own functions (lib/spawn-check.js), not a second opinion that could drift: the row check is
-// `Assistant#spawnTaskRefusal`'s body, the held-tree check is the lookup `jobs.create` refuses on, and the
-// unlanded-work note reads the row through `unfinishedTree`, the function the reuse recommendation decides with.
+// `Assistant#spawnTaskRefusal`'s body, the held-tree check is the lookup `jobs.create` refuses on, the unlanded-work
+// note reads the row through `unfinishedTree`, the function the reuse recommendation decides with, and the LANE
+// check is `laneRefusal` over `taskLaneHolders` - the same sentence the digest prints as `SKIP:` and the cut throws.
+// A lane a person explicitly allowed is a NOTE (`ok: true`, `code: "lane_allowed"`), naming who allowed it and which
+// file, because that is what the recorded exception is for.
 //
 // A tree is resolved by the cut's own resolver (`lib/spawn-target.js`), so a path, a worktree directory name and a
 // branch all mean here what they mean in a `SPAWN IN` line. A tree the resolver cannot find is answered as a

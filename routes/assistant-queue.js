@@ -10,7 +10,10 @@
 //   GET  /api/assistant/queue?assistantId=<id>   one assistant's queue, decorated and counted. With no id, every
 //                                                assistant's, in one read.
 //   POST /api/assistant/queue                     {assistantId?, action, ...} - add | edit | state | reassign |
-//                                                reorder | pipeline | pipeline-release | delete. `add` and `edit` take
+//                                                reorder | pipeline | pipeline-release | allow-overlap | delete.
+//                                                `allow-overlap` is the one recorded way past a lane refusal: it
+//                                                stores the file, the live holder row, who allowed it and why (see
+//                                                lib/spawn-check.js `laneRefusal`). `add` and `edit` take
 //                                                an optional `project` (the panel writes it at a cut, a script may post
 //                                                a path), and `edit` also takes `runId` - the gateway run (or panel job
 //                                                id) the row is on, so a row FILED after the fact can be read against
