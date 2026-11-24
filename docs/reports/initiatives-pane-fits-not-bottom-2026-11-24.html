@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A pane that exactly fits its box is not at the bottom</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>A pane that exactly fits its box is not at the bottom</h1>
+<p class="sub">agent-worktree-gui 1.165.2, queue row 278. One capture-time test in the Initiatives pane read <em>at the bottom</em> for a pane that merely fitted its box, so the first expansion that made it overflow jumped it to its END. Line numbers are this branch's files.</p>
+
+<dl class="facts">
+  <dt>the reader's measurement</dt><dd>845/845 became 1504/845, landed at scrollTop 659 - the card just opened, off the top of the view</dd>
+  <dt>the cause</dt><dd>public/assistant.js:4117 (before this change): <code>atBottom: scroller.scrollHeight - scroller.clientHeight - top &lt; 2</code></dd>
+  <dt>the fix</dt><dd>public/assistant.js:4123-4131 (capture carries <code>fits</code>), :4144 (a pane that did not overflow is pinned to its TOP)</dd>
+  <dt>proof</dt><dd>three cases x two pane widths, 379px and 639px, real Chromium, 36 checks, before and after</dd>
+  <dt>files changed</dt><dd>public/assistant.js, package.json (1.165.2)</dd>
+</dl>
+
+<h2>1. What the reader measured, and why the code agreed with it</h2>
+<p>With the Initiatives pane at its top and its content exactly filling the box, the first card's expansion grows the pane past its box. The pane then has to decide where its reader is, and it decides before the repaint, in <code>captureInitScroll</code>. The old test was the standard one:</p>
+<pre>atBottom: scroller.scrollHeight - scroller.clientHeight - top &lt; 2</pre>
+<p>For a pane at its top with no overflow that reads <code>0 - 0 &lt; 2</code> - <span class="no">true</span>. It is true for a reader parked on the last line of a long list too, and the two states are <em>numerically identical</em>: nothing in scrollTop, scrollHeight or clientHeight tells them apart, because when the content fits, the box's height is the content's height and scrollTop can only be 0. So the first branch of <code>restoreInitScroll</code> took the pane to <code>scrollHeight</code>, the browser clamped it to the new maximum, and the card the reader had just opened went off the top.</p>
+<div class="note">The missing number is not the position but the <em>slack</em> the pane had before the change. That is what the fix measures, and it is the one thing about the old state that the old test threw away.</div>
+
+<h2>2. The change</h2>
+<p>Two lines in the capture, one branch in the restore, and the comment that names the cause. Nothing else about the pane's scroll was touched: the card anchor, the top rule, the sub-pixel guard and the fallback to the old number are exactly as they were.</p>
+<pre>const slack = scroller.scrollHeight - scroller.clientHeight;
+const overflows = slack &gt; 1;
+return {
+  scroller,
+  top,
+  card: card ? { id: card.getAttribute("data-init-card"), dy: card.getBoundingClientRect().top - box.top } : null,
+  fits: !overflows,                       // did not overflow before the change: pinned to its TOP
+  atTop: top &lt;= 0.5,
+  atBottom: overflows &amp;&amp; slack - top &lt; 2, // a reader can only be at the bottom of a pane with slack
+};</pre>
+<p>In <code>restoreInitScroll</code> the bottom branch keeps its place (it is the state that must survive growth below the reader) and <code>fits</code> is answered next, before the anchor: a pane that never overflowed is on its first line, so the growth lands below what the reader is looking at and the pane stays at 0. The anchor branch is then reached only by a reader who really did scroll, which is the case it was built for.</p>
+
+<h2>3. The proof: three cases, two pane widths, before and after</h2>
+<p>A real panel, a real Chromium, a real Initiatives pane painted from <code>GET /api/initiatives</code>. The pane's two widths are the rail's own record (<code>wm.assistantWidth</code>), set before the page loads, so the two runs measure 379px and 639px of pane rather than the same width twice. Cards are opened with a DOM <code>.click()</code> on the fold button, never with a driver click, so nothing but the app moves the scroll. Every "top" below is the card's own <code>getBoundingClientRect().top</code> relative to the scroller's box - the reader's view.</p>
+
+<h3>Case A - the content exactly fills the box</h3>
+<table>
+  <tr><th>pane</th><th>before the press</th><th>after (before the fix)</th><th>after (with the fix)</th></tr>
+  <tr><td class="n">379px</td><td class="n">721/721, scrollTop 0</td><td class="n"><span class="no">1224/721, scrollTop 503</span><br>card top 254.8 -&gt; <span class="no">-248.2</span></td><td class="n"><span class="ok">1224/721, scrollTop 0</span><br>card top 254.8 -&gt; <span class="ok">254.8</span></td></tr>
+  <tr><td class="n">639px</td><td class="n">745/745, scrollTop 0</td><td class="n"><span class="no">1053/745, scrollTop 308</span><br>card top 219.1 -&gt; <span class="no">-88.9</span></td><td class="n"><span class="ok">1053/745, scrollTop 0</span><br>card top 219.1 -&gt; <span class="ok">219.1</span></td></tr>
+</table>
+<p>This is the reader's 845/845 -&gt; 1504/845, scrollTop 659 in miniature, at both widths: <code>scrollTop 503</code> and <code>308</code> are each the pane's whole new maximum, and the card's top goes negative by the same amount. With the fix the scroll never leaves 0 and the card's top is identical to a tenth of a pixel.</p>
+
+<h3>Case B - the reader genuinely at the bottom</h3>
+<table>
+  <tr><th>pane</th><th>before the press</th><th>after</th></tr>
+  <tr><td class="n">379px</td><td class="n">2041/721, scrollTop 1320 of 1320</td><td class="n"><span class="ok">2863/721, scrollTop 2142 of 2142</span>; the opened card's bottom 700.8 in 721</td></tr>
+  <tr><td class="n">639px</td><td class="n">1750/745, scrollTop 1005 of 1005</td><td class="n"><span class="ok">2458/745, scrollTop 1713 of 1713</span>; the opened card's bottom 725.2 in 745</td></tr>
+</table>
+<p>Unchanged by the fix, at both widths: a pane that had slack and a reader on its last line still follow the growth to the new bottom, and the card they opened ends inside the pane.</p>
+
+<h3>Case C - the reader mid-list</h3>
+<p>The scroll position is chosen from the cards' measured geometry: a place where one card is wholly above the view, one wholly below, and a row starts inside it. Both directions are pressed.</p>
+<table>
+  <tr><th>pane</th><th>press</th><th>result</th></tr>
+  <tr><td class="n">379px</td><td class="n">a card above the view</td><td class="n">anchor top -1 -&gt; <span class="ok">-0.9</span>; scrollTop +813 and content +813 - the growth above, taken out</td></tr>
+  <tr><td class="n">379px</td><td class="n">a card below the view</td><td class="n">scrollTop <span class="ok">1217 -&gt; 1217</span>; anchor top <span class="ok">-0.9 -&gt; -0.9</span></td></tr>
+  <tr><td class="n">639px</td><td class="n">a card above the view</td><td class="n">anchor top 125.1 -&gt; <span class="ok">125.2</span>; scrollTop +699 and content +699</td></tr>
+  <tr><td class="n">639px</td><td class="n">a card below the view</td><td class="n">scrollTop <span class="ok">1047 -&gt; 1047</span>; anchor top <span class="ok">125.2 -&gt; 125.2</span></td></tr>
+</table>
+<p>Nothing moves for the reader in either direction, at either width, and case C is identical before and after the fix - which is the point of measuring it: the change is scoped to the panes the old test swallowed.</p>
+
+<h3>The harness</h3>
+<p>One script, 36 checks, exit 0 at the fix and 4 failures at the parent (both A checks at both widths). It starts its own sandbox panel on a free port with no projects, an assistant disabled, an api server pointed at a dead port and the initiative tier at <code>none</code>, seeds 1 initiative for case A and 12 for B and C, opens the float, and measures. It lives in the run's scratch directory and is not committed: the row scoped the change to the two public files. The numbers above are copied from its two logs, <code>baseline.log</code> (4 FAIL) and <code>after.log</code> (ALL PASS).</p>
+
+<h2>4. public/app.js: the same test, a different question</h2>
+<p>The row named public/app.js too, so its three at-bottom tests were read one by one. All three are about an output console, whose content only ever arrives at its foot, and none of them is this defect:</p>
+<ul>
+  <li><code>public/app.js:10015</code> and <code>public/app.js:13016</code> - the record kept for a <code>pre.job-out</code> console across a card rebuild. A console that fits is one whose newest line is already on screen, so "fits means following the tail" is what the reader wants there, and <code>render-jobs.js:1091</code> uses it to follow. Making a fitting console stop following would leave the next streamed line below the fold - a regression, not this fix.</li>
+  <li><code>public/app.js:12981</code> - <code>state.subConsolePinned</code>, written only inside <code>readerInputHere(pre)</code>: a reader's own gesture, which a pane that fits cannot produce without a scroll.</li>
+  <li>The console's own fold rebuild - the console equivalent of this row - already carries an anchor: <code>public/board/console.js:2805-2808</code> re-measures the row it held and corrects by that offset, so an opened tool group does not need the at-bottom test at all.</li>
+</ul>
+<p>So public/app.js is unchanged. If the reader would rather the console's "fits" also stopped counting as "following", that is a different behaviour with a different cost, and it belongs in its own row.</p>
+
+<h2>5. What ran</h2>
+<table>
+  <tr><th>run</th><th>answer</th></tr>
+  <tr><td class="n">node --test test/initiatives-scroll-keep.test.js test/initiative-fold.test.js</td><td class="n"><span class="ok">30 pass, 0 fail</span> - the pane's own source-shape test, unchanged, still matches the capture and the restore</td></tr>
+  <tr><td class="n">node proof2.mjs (the harness above, 2 widths)</td><td class="n"><span class="no">4 FAIL at the parent</span> -&gt; <span class="ok">ALL PASS, 36 checks</span> at the fix</td></tr>
+  <tr><td class="n">npm test (full suite)</td><td class="n">SUITE_RESULT_PLACEHOLDER</td></tr>
+</table>
+
+<p class="small">Not landed: this branch is pushed and its pull request is open. The version it carries is 1.165.2.</p>
+</main>
+</body>
+</html>
