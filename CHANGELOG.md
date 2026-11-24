@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.166.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.166.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-718 releases from v0.1.0 (2026-10-20) to v1.166.0 (2026-11-23), 2549 commits between the tags. Every release is anchored by an
+719 releases from v0.1.0 (2026-10-20) to v1.166.1 (2026-11-24), 2555 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.166.1 — 2026-11-24 · 6 commits
+
+[`b17d415`](https://github.com/JLRoper/agent-worktree-gui/commit/b17d415fa87e9d2f85912b765db23bd940aa015e) · [compare v1.166.0...v1.166.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.0...v1.166.1)
+
+### Fixed
+
+- fix(initiatives): a failing read backs off to one request a minute ([`f15f5f9`](https://github.com/JLRoper/agent-worktree-gui/commit/f15f5f93cd0302363d14e4b01e3e54b3afc50319))
+
+### Docs & tests
+
+- docs: render the changelog - 718 releases ([`ad69507`](https://github.com/JLRoper/agent-worktree-gui/commit/ad6950769a7d828a163ab550961fcd2ea4054de3))
+- docs: row 279's report - 144 GETs in a failing window on the base, 4 on this branch ([`c20e67a`](https://github.com/JLRoper/agent-worktree-gui/commit/c20e67a481e3b340ccbc1e1c34c916e8c7d9f91a))
+
+### Other
+
+- The corner's gate reads the clipped console too, and proves its sandbox exits ([`a8138b4`](https://github.com/JLRoper/agent-worktree-gui/commit/a8138b4a3b4d77184dcb4e38310cdcaafe18f3f0))
+- The full suite's numbers, and why none of its 22 reds is this branch's ([`dc86f6b`](https://github.com/JLRoper/agent-worktree-gui/commit/dc86f6ba927ec44ddd0c3e234a6d03a7f835f53b))
+- chore: 1.166.1 - the version this landing carries ([`b17d415`](https://github.com/JLRoper/agent-worktree-gui/commit/b17d415fa87e9d2f85912b765db23bd940aa015e))
 
 ## v1.166.0 — 2026-11-23 · 5 commits
 
