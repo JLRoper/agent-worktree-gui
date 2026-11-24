@@ -155,6 +155,16 @@ Four checks were run on this tree, and the answers are quoted rather than summar
 | the card's link opens THIS file | `lib/clarify-links.js` `linksOf({label, path})` then `lib/open-url.js` `openFileWith` with a stub `spawn` | `{kind: "file"}`, then one argv element reading `file:///...clarify-juggling-design-2026-11-24.secret.html`, `via: "default browser"`, and no process started |
 | the page renders | headless Edge on the `file:///` URL, `--dump-dom` | exit 0, the `<title>` present and `checkChoices` found in the rendered DOM |
 
+The card itself was drawn by the shipped renderer, not by hand: `questionPrompt` and `questionLinks` sliced out of `public/app.js`, the record's `links` through `linksOf`, and this is the anchor it produced for the report (the tree is shortened here; the run printed the absolute path):
+
+```
+<a class="tq-link" href="#" data-open-file="<tree>/docs/reports/clarify-juggling-design-2026-11-24.secret.html"
+   title="open <tree>/docs/reports/clarify-juggling-design-2026-11-24.secret.html in Microsoft Edge">the report
+   <span class="tq-link-where mono"><tree>/docs/reports/clarify-juggling-design-2026-11-24.secret.html</span></a>
+```
+
+The four choices the same call drew were `Finish: land this design and the .gitignore rule, and stop there`, `Deeper: build the seam check (lib/clarify-shape.js) and the count first`, `Route: build the answer-to-row bridge and the wave ask first` and `Ask: park the build and put the design to the assistants`. That is the card this run ends on, and it is the four kinds section 1 asks for.
+
 The two negative results matter as much as the positives. `/api/reports?thread=<row>&task=311` answers `count: 0` with `skipped: [{source: "tree", why: "no .html report under docs/reports was added or changed on this branch"}]` - the page is right there and the git read cannot see it, which is why the card's link is the reliable path. And `GET /api/reports/view` on the same row DOES serve the page (200, the sandbox CSP), which is what keeps it a valid chip and not a valid card link.
 
 ### 2.6 What every secret page carries
