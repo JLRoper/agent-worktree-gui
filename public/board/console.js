@@ -137,6 +137,11 @@ function patchThinkRow(el, l) {
     if (box.innerHTML !== html) box.innerHTML = html;
   }
   el.dataset.ltext = text;
+  // The row's visible text IS this string now, so its own high-water mark has to say so: `_drawn` is what
+  // drawRowText appends from, and a row patched here while `_drawn` still named a LONGER text would take only the
+  // tail beyond that mark and lose every character between. A patch and a paint are two writers of one row, and
+  // they share one record of what is on screen.
+  el._drawn = text;
   const open = thinkOpenRows.has(lid);
   el.classList.toggle("is-open", open);
   el.setAttribute("aria-expanded", open ? "true" : "false");
@@ -1752,6 +1757,17 @@ function rowTakesTail(el, next) {
 function drawRowText(el, text) {
   const next = String(text ?? "");
   if (el._drawn === next) return false;
+  // A THINKING row keeps its own `.think-text` box: that box is what the four-line clip is on, and the live mark is
+  // its sibling. The row's innerHTML would flatten the box and the row would be drawn with no clip at all - a whole
+  // thought of italic over the console - and it would take the "still thinking" mark with it. So a paint writes the
+  // box, exactly where the row's own writer (patchThinkRow) writes it.
+  const think = el.dataset && el.dataset.thinkRow ? el.querySelector(":scope > .think-text") : null;
+  if (think) {
+    const html = linkifyText(next);
+    if (think.innerHTML !== html) think.innerHTML = html;
+    el._drawn = next;
+    return true;
+  }
   // A command card's prompt is drawn row by row like any other text, and the three dots that end its fold are cut into
   // one of those rows: the row has to be whole again BEFORE it is drawn, or the new words land after the dots and the
   // dots end up in the middle of a sentence. So the card is put back first (its own nodes, not a re-render), and the
@@ -2519,21 +2535,66 @@ function thinkingSessionFor(turn) {
 }
 
 // ---- reconcile thinking ----
-// Two writers describe the same thought. The run's own live preview grows under a stable `at` (the moment
-// its first delta arrived); the store records the finished block under a DIFFERENT `at` (the moment the
-// assistant message was written). While the turn runs the preview is what the reader is watching, so the
-// store's complete text is settled INTO the preview blocks it belongs to - matched oldest-first against the
-// tail of the store's list, because a tab that joined late holds only the newest thought - and the live row
-// keeps its identity instead of restarting from word 0. When the turn has SETTLED the store is the
-// transcript: its blocks replace the previews outright, and the preview rows come out of the console, so
-// one thought is drawn once.
+// Two writers describe the same thought, and they do not agree about how many pieces it has: the store keeps ONE
+// block per ASSISTANT MESSAGE, while the live stream draws ONE ROW per SEGMENT, cut at every tool boundary (row
+// #276). So a store block is the CONCATENATION of its segments' texts, and a preview row's words are a SLICE of it.
+//
+// The match is by TEXT, never by count. Matching from the tail by position was wrong the moment the two lists had
+// different lengths, which is every live turn: a block already written but not yet drawn (the store ahead of the
+// page) shifted every row onto its neighbour's words, and a preview with no partner was DROPPED - and a preview the
+// cache no longer holds is still on screen, so the next delta rebuilt that row from the delta alone
+// (growLiveThought) and it lost every word it had already drawn. That is row #285: a row that began mid-sentence
+// with the block's own first words missing. The counterweight to the old rule is why it was written - a tab that
+// joined late holds only the newest thoughts - and a slice match answers that too: the row is found by its own text
+// (or its tail, when it attached mid-block), wherever in the store's list it belongs.
+//
+// A row that cannot be placed keeps exactly what it already shows. Nothing is dropped, nothing is handed a
+// neighbour's words, and no row is ever rewritten shorter than what it drew.
 function reconcileThinking(prev, fresh, settled = false) {
   const previews = (prev || []).filter((b) => b && b.preview);
   if (!fresh.length) return prev; // an empty or failed read is not "nothing was thought"
   if (!previews.length || settled) return fresh;
-  const head = fresh.slice(0, Math.max(0, fresh.length - previews.length));
-  const tail = fresh.slice(-previews.length);
-  return [...head, ...tail.map((b, i) => ({ ...previews[i], text: String(b.text ?? ""), preview: true }))];
+  const out = [];
+  let bi = 0; // the store's blocks are consumed in order, and the cursor inside one only moves forward
+  let cursor = 0;
+  for (let i = 0; i < previews.length; i++) {
+    const p = previews[i];
+    const own = String(p.text ?? "");
+    if (!own) {
+      out.push(p);
+      continue;
+    }
+    let hit = null;
+    for (let k = bi; k < fresh.length && !hit; k++) {
+      const t = String(fresh[k].text ?? "");
+      const from = k === bi ? cursor : 0;
+      let at = t.indexOf(own, from);
+      // A row that attached mid-block holds the block's TAIL, not its start, so it is placed by that tail.
+      if (at < 0 && own.length >= 24) {
+        const tail = own.slice(-64);
+        const j = t.indexOf(tail, from);
+        if (j >= 0) at = j - (own.length - tail.length);
+      }
+      if (at >= 0) hit = { k, at, text: t };
+    }
+    if (!hit) {
+      out.push(p); // no block carries these words (yet): the row keeps them
+      continue;
+    }
+    // The row's slice runs to where the NEXT row's words begin in the same block, otherwise to the block's end -
+    // so two rows of one message never overlap, and together they spell the store's block exactly.
+    let end = hit.text.length;
+    const nextOwn = String(previews[i + 1]?.text ?? "");
+    if (nextOwn) {
+      const n = hit.text.indexOf(nextOwn, hit.at + own.length);
+      if (n >= 0) end = n;
+    }
+    bi = hit.k;
+    cursor = end;
+    const slice = hit.text.slice(Math.max(0, hit.at), end);
+    out.push({ ...p, text: slice || own, preview: true });
+  }
+  return out;
 }
 // ---- end reconcile thinking ----
 
@@ -3734,8 +3795,28 @@ function growLiveThought(turn, line) {
     entry.blocks.sort((a, b) => Number(a.at) - Number(b.at));
   }
   const base = Number(block.base) || 0;
-  if (from > 0 && base + String(block.text || "").length === from) block.text = String(block.text || "") + chunk;
-  else {
+  const had = String(block.text || "");
+  const end = base + had.length;
+  // A row NEVER loses a character it has already drawn. Four cases, and the one row #285 was is the third:
+  //  - the frame continues the row: append (the ordinary path);
+  //  - the row has nothing yet: it starts where this frame does (a tab that attached mid-block);
+  //  - the frame starts PAST the row's end (a frame no reader ever drew). The row keeps every word it has and adds
+  //    the new ones. The old rule replaced the text with the chunk here, so a row whose preview the store read had
+  //    just dropped (reconcileThinking) was rebuilt from a later delta alone and began mid-sentence, which is the
+  //    reader's screenshot. The store read fills the seam: reconcileThinking hands the row the block's own
+  //    characters for its slice;
+  //  - the frame rewrites the row from inside it (the wire resent a piece, or a trim moved the block): keep the words
+  //    BEFORE that offset and take the frame from there on. A frame that rewinds before the row's own start replaces
+  //    it, because nothing it holds belongs to that text any more.
+  if (from > 0 && from === end) block.text = had + chunk;
+  else if (!had) {
+    block.base = from; // nothing drawn yet: the row starts where this frame does
+    block.text = chunk;
+  } else if (from >= base && from < end) block.text = had.slice(0, from - base) + chunk;
+  else if (from > end) {
+    block.text = had + chunk;
+    block.gap = true;
+  } else {
     block.base = from;
     block.text = chunk;
   }

@@ -1742,6 +1742,12 @@ body.is-out-gripping * { cursor: nwse-resize; }
 .jl-think.think-row:focus-visible { outline: 1px solid #55407a; outline-offset: 1px; }
 .jl-think .think-text { display: block; max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
 .jl-think.think-row.is-open .think-text { max-height: none; }
+/* The clip is the ROW's too, for a row that has no .think-text box of its own (a painter that had to set the row's
+   own innerHTML - see drawRowText). The rule is the same one either way: four lines kept from the TOP, the bottom
+   cut, never the start, and the press releases it. A thought with no clip at all is a wall of italic over the
+   console, which is the other half of what this rule is for. */
+.jl-think.think-row:not(:has(> .think-text)) { max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
+.jl-think.think-row.is-open:not(:has(> .think-text)) { max-height: none; }
 /* ...and while the thought is still arriving, the row says so IN the console: a pulsing dot and the age since its
    first word, in the row's own top-right corner so it never pushes the words around. It appears with the first
    delta and is removed at the first tool or at the end of the turn (public/board/console.js). */
