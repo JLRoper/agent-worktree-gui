@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.165.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.165.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-715 releases from v0.1.0 (2026-10-20) to v1.165.0 (2026-11-23), 2535 commits between the tags. Every release is anchored by an
+716 releases from v0.1.0 (2026-10-20) to v1.165.1 (2026-11-23), 2539 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.165.1 — 2026-11-23 · 4 commits
+
+[`d9e9907`](https://github.com/JLRoper/agent-worktree-gui/commit/d9e99074a6065c501958c845f7d508d4a7533f44) · [compare v1.165.0...v1.165.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.165.0...v1.165.1)
+
+### Fixed
+
+- fix: fold the thinking dot's reduced-motion rule into the existing switch, and count six placed kinds ([`13a343f`](https://github.com/JLRoper/agent-worktree-gui/commit/13a343fe23cde3b305885b0716d49171fef59169))
+- fix: a clarify question is drawn in the turn output, in every fold, and a timed-out card keeps what it asked ([`c9b4aea`](https://github.com/JLRoper/agent-worktree-gui/commit/c9b4aea8d166200ad8b4ae146dfebfa77e4854a8))
+
+### Docs & tests
+
+- docs: render the changelog - 715 releases ([`8158027`](https://github.com/JLRoper/agent-worktree-gui/commit/8158027f68cf40d5213f6564c8d16cd9471af918))
+
+### Other
+
+- chore: 1.165.1 - the version this landing carries ([`d9e9907`](https://github.com/JLRoper/agent-worktree-gui/commit/d9e99074a6065c501958c845f7d508d4a7533f44))
 
 ## v1.165.0 — 2026-11-23 · 2 commits
 
