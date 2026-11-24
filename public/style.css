@@ -5737,7 +5737,9 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .wave-store-bad { margin: 0; }
 
 /* ---- 7. THE CAST BELOW THE ROUTE: assistants, tasks and history as disclosure rows ---------------- */
-#as-initiatives .init-assistfold, #as-initiatives .init-histfold { margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+/* `min-width: 0` because the wide plate makes this fold a GRID ITEM, and a grid item's automatic minimum is its
+   min-content - the same defect the task list had, one level up. */
+#as-initiatives .init-assistfold, #as-initiatives .init-histfold { min-width: 0; margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
 #as-initiatives .init-assists { margin: var(--tab-s1) 0 0 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
 #as-initiatives .init-assist { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); min-height: var(--tab-row-h); font-size: 12px; color: var(--tab-ink-2); }
 #as-initiatives .init-assist-btn {
@@ -5773,7 +5775,24 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-assist .init-proj.init-assist-fold { width: auto; flex: 0 0 auto; min-height: 28px; padding: var(--tab-s1) 6px; gap: var(--tab-s1); }
 #as-initiatives .init-assist-fold .init-proj-name { flex: 0 0 auto; }
 #as-initiatives .init-assist .init-counts { flex: 1 0 100%; }
-#as-initiatives .init-tasks { flex: 1 0 100%; margin: var(--tab-s1) 0 var(--tab-s1) 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+/* THE TASK LIST IS THE CARD'S WIDTH, NOT ITS ROWS'. A flex item's automatic minimum size is its min-content
+   width, and a compact card's title is ONE nowrap line, so `flex: 1 0 100%` with `min-width: auto` sized this list
+   to the longest title inside it: measured 1180px inside a 463px card, every row 1163px wide and running past the
+   card's content edge into the gutter. `flex-basis: 0` with `grow: 1` takes the line's free space AFTER the 6px
+   margin, and `min-width: 0` stops the min-content from setting the width at all. */
+#as-initiatives .init-tasks { flex: 1 1 0; min-width: 0; max-width: 100%; margin: var(--tab-s1) 0 var(--tab-s1) 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+/* EVERY ROW IS THE LIST'S WIDTH, AND NOTHING IN ONE ASKS FOR MORE. Belt to the rule above: the row and its flex
+   chain may not take a width from their own content, and the two fields that cannot wrap - the title and the
+   agent's thread - already ellipsize (public/core/task-card.css). The no-agent label is the one piece of plain text
+   on the row, so it is cut the same way rather than left to paint past the card. */
+#as-initiatives .init-tasks .as-task { min-width: 0; max-width: 100%; }
+#as-initiatives .init-tasks .as-task-main,
+#as-initiatives .init-tasks .as-task-body,
+#as-initiatives .init-tasks .as-task-head,
+#as-initiatives .init-tasks .as-task-facts { min-width: 0; max-width: 100%; }
+#as-initiatives .init-tasks .as-task-head > *,
+#as-initiatives .init-tasks .as-task-facts > * { min-width: 0; max-width: 100%; }
+#as-initiatives .init-tasks .as-task-agent.is-none { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #as-initiatives .init-task-none { padding: var(--tab-s1) 0; }
 #as-initiatives .init-history { margin: var(--tab-s1) 0 0 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
 #as-initiatives .init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--tab-s2); min-height: 28px; font-size: 12px; color: var(--tab-ink-2); }
