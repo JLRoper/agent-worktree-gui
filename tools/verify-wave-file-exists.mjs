@@ -175,11 +175,9 @@ try {
   console.log("\n== 2. Remove the member's tree (the cleanup), and read it again ==");
   git(projectDir, ["worktree", "remove", "--force", tree]);
   ok("the tree is gone from disk", bytes(path.join(tree, "docs", ARTEFACT)) === "", "the path is not readable");
-  // The evidence read is memoised for 30 s per member (server.js WAVE_EVIDENCE_TTL_MS), which is a reader's repaint
-  // budget rather than a wave's state: the fold re-runs on every read, and the read below is the one a reader sees
-  // once the memo expires.
-  note("waiting out the 30 s evidence memo, so the next read is a fresh one");
-  await new Promise((r) => setTimeout(r, 31_000));
+  // NO MEMO HAS TO EXPIRE ANY MORE. The tree half of the read is keyed on (tree, path, stamp) and answers absent only
+  // while the tree is there; a tree that is gone is a DIFFERENT key - the landing half, keyed on (clone, ref, path)
+  // and validated against the ref's tip - so the very next read is the landing read, with no wait.
   const read2 = await GET(`/api/waves?initiative=${initiativeId}`);
   const wave2 = laneOf(read2, waveId);
   check("the wave still reads done", wave2?.state, "done");
