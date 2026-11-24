@@ -690,6 +690,18 @@ thead th,
    `.settings-preview`, the class the search treats as belonging to the row above it. The only controls in here are
    the fold headings themselves — a skill is a file, and this window only reads it. */
 .skills-srcgroup { margin-top: 16px; }
+/* The tab's own bar, above the inventory: the window's one search, where the list it filters is. Ctrl+Shift+S
+   leaves the caret here; the ✕ and Esc both clear it, and the row is chrome - the filter walk never hides it. */
+.skills-search-row { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
+.skills-search-row input[type="search"] { flex: 1 1 auto; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); cursor: text; }
+.skills-search-row input[type="search"]::placeholder { color: var(--dimmer); }
+/* One clear control, not two: the ✕ answers Esc, so the browser's built-in one is hidden. */
+.skills-search-row input[type="search"]::-webkit-search-cancel-button { display: none; }
+.skills-search-row input[type="search"]:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.skills-search-row #btn-skills-search-clear[hidden] { display: none; }
+/* A query that answers no skill is a sentence, not an empty list under the folds. */
+.skills-nohits { margin-top: 8px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; font: 10.5px/1.45 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+.skills-nohits[hidden] { display: none; }
 .skills-fold { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0; padding: 1px 0; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; user-select: none; }
 .skills-fold:hover .skills-source-name, .skills-fold:hover .skills-cat-name { color: #e6e9ef; }
 .skills-fold:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }

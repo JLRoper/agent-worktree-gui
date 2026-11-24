@@ -1080,6 +1080,13 @@ disabled and platform-gated names resolved: a row it does not serve says `not se
 carries (a plugin's `plugin:skill`) gets its own Gateway row, and a gateway that cannot answer leaves every row
 `unverified` with its reason. Nothing in the tab edits a skill.
 
+The tab's own **search bar**, at its top, is the same search as the box in the window's head - one query, two
+controls: what you type in either is what the other holds, and both run the same filter. `Ctrl+Shift+S` opens Settings
+on this tab from anywhere in the panel and leaves the caret in the bar; a bar query never switches you to another tab
+(it filters the skills, and says `no skill matches "…"` under the bar when nothing answers), where the head box may
+still reveal a match elsewhere. `Esc` in the bar clears it and leaves the caret there; on an empty bar `Esc` closes
+Settings as it always does.
+
 The **Pipeline** tab edits what a worktree is for, one definition at a time: a dropdown selects it (`id — title`,
 with `kind` and the stage count), the form under it is that definition's title, kind, description, `next` and every
 stage's prompt and exit check, and **open the flow** draws it — stages left to right, each stage's exit check as a
@@ -1210,6 +1217,7 @@ does not price; no press can re-fetch it — `python tools/openrouter-prices.py`
 | `Ctrl+Enter` (⌘+Enter) | Reply box | **Steer turn** — send the text into the live turn. With no live turn to steer it means what `Enter` means. |
 | `Alt+Shift+A` | Anywhere | Switch the assistant's aggressive profile on or off. |
 | `Ctrl+,` | Anywhere | Settings. |
+| `Ctrl+Shift+S` | Anywhere the caret is not in a field | Settings → **Skills**, with the caret in the tab's own search bar. Does nothing while the caret is in an input, textarea or contenteditable - a capital `S` typed in a composer stays in the composer. |
 | `Esc` | In the Settings search box | Clear the search and put every group back as you had it. On an empty box it closes Settings. |
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |
 | `Ctrl+wheel` | Over a card's console text — its words, a tool's output or the reasoning | Size that card's console, all three kinds of text together; anywhere else it zooms the page. |

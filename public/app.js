@@ -15520,7 +15520,32 @@ function paintSettingsRows(nodes, query, matched) {
   return hits;
 }
 
-function paintSettingsSearch() {
+// The Skills tab's own bar, kept in step with the one query: its value always IS the window search's value, its
+// clear press shows only while there is something to clear, and a query no skill answers says so in a sentence
+// instead of leaving the groups empty. `read` is whether the inventory has answered yet - before it has, "no skill
+// matches" would be a claim this page cannot make.
+//
+// The two element ids are written as strings for the same reason the skills panel key below is: test/settings-tabs
+// slices this region out of app.js and runs it without the Skills tab's constants, where a bare identifier is a
+// ReferenceError in that harness rather than a wrong answer.
+function paintSkillsSearchState(query, hits) {
+  const bar = document.getElementById("skills-search");
+  if (!bar) return;
+  if (bar.value !== query) bar.value = query;
+  const clear = document.getElementById("btn-skills-search-clear");
+  if (clear) clear.hidden = !query;
+  // The no-hit SENTENCE is the Skills tab's own (paintSkillsNoHits): this region filters and toggles classes only, so
+  // a keystroke never writes words into the panel it is filtering. The call is guarded by name for the harness above,
+  // where the Skills tab's code is not part of the slice.
+  if (typeof paintSkillsNoHits === "function") paintSkillsNoHits(query, hits);
+}
+
+// ONE query, one filter, TWO controls. The Skills tab's own bar writes its text into the box in this window's head
+// and calls THIS painter, so there is no second filter that can disagree with the first; the bar is a handle on the
+// surviving path, not a rival to it. `scope` is the one thing the bar asks for differently: a query typed in the
+// Skills bar never yanks the reader off Skills to reveal a match on another tab - they stay where they typed, and
+// the no-hit sentence says when nothing there answers.
+function paintSettingsSearch({ scope = "window" } = {}) {
   const box = document.getElementById(SETTINGS_SEARCH_ID);
   const query = String((box && box.value) || "").trim().toLowerCase();
   const matched = [];
@@ -15545,15 +15570,18 @@ function paintSettingsSearch() {
   }
   paintSettingsTabCounts(counts, query);
   // A match in a tab the reader is not looking at is revealed: the first tab that answers is the one shown while
-  // the query is on, and the reader's own tab — never written by the search — comes back when the box clears.
+  // the query is on, and the reader's own tab (never written by the search) comes back when the box clears. The
+  // Skills bar's own query is the exception: it was typed ON Skills, so the reader stays there and reads the
+  // no-hit sentence rather than being thrown at whichever tab happens to answer a word they meant for a skill.
   const active = settingsTabButtons().find((tab) => tab.getAttribute("aria-selected") === "true");
   const first = [...counts].find(([, n]) => n > 0)?.[0] || null;
   if (!query) paintSettingsTab(settingsTabKey(), { save: false });
-  else if (first && (!active || !(counts.get(active.dataset.settingsTab) > 0))) {
+  else if (scope !== "skills" && first && (!active || !(counts.get(active.dataset.settingsTab) > 0))) {
     paintSettingsTab(first, { save: false });
   }
   const clear = document.getElementById(SETTINGS_SEARCH_CLEAR_ID);
   if (clear) clear.hidden = !query;
+  paintSkillsSearchState(query, counts.get("skills") || 0);
   paintSettingsSearchHighlight(matched, query);
 }
 
@@ -15652,6 +15680,10 @@ function initSettingsSearch() {
 //     and a group that DOES answer is opened for the duration of the query — a match must never be hidden behind a
 //     fold the reader closed earlier.
 const SKILLS_PANEL_ID = "settings-panel-skills";
+// The tab's own search bar, and the ✕ beside it. This bar is a second CONTROL over the window search's one query
+// (see paintSettingsSearch), never a second filter: it writes what it holds into #settings-search and repaints.
+const SKILLS_SEARCH_ID = "skills-search";
+const SKILLS_SEARCH_CLEAR_ID = "btn-skills-search-clear";
 const SKILLS_GROUPS_KEY = "wtgui.skillsGroups";
 // A source with more category groups than this starts with them CLOSED: a 25-category team repo is a wall of rows
 // to scroll past before the next source, while six still reads as one screen.
@@ -15874,7 +15906,11 @@ const skillsSetCount = (scope, selector, n) => {
 function paintSkillsSearch(query, matched) {
   const panel = document.getElementById(SKILLS_PANEL_ID);
   if (!panel) return 0;
-  const flat = [...panel.children].filter((node) => !node.classList || !node.classList.contains("skills-srcgroup"));
+  // The bar and the no-hit line are the tab's CHROME, not rows: the bar must stay on screen while a query is on, so
+  // it is never handed to the row walk that would hide it as "part of a row that did not answer".
+  const flat = [...panel.children].filter(
+    (node) => !node.classList || (!node.classList.contains("skills-srcgroup") && !node.dataset?.skillsChrome),
+  );
   let hits = paintSettingsRows(flat, query, matched);
   const folds = readSkillsFolds();
   for (const group of panel.querySelectorAll(".skills-srcgroup")) {
@@ -15897,6 +15933,85 @@ function paintSkillsSearch(query, matched) {
     hits += sourceHits;
   }
   return hits;
+}
+
+// A query with no answer is a SENTENCE, not an empty list under the folds: it says what was typed, where the filter
+// looked, and - before the inventory has answered - that nothing has been checked yet. This is the Skills tab's one
+// write in response to a query (the search region itself only toggles classes), and it is a plain line under the
+// bar so the words are where the reader is looking.
+function paintSkillsNoHits(query, hits) {
+  const none = document.getElementById("skills-no-hits");
+  if (!none) return;
+  none.hidden = !query || hits > 0;
+  if (none.hidden) {
+    none.textContent = "";
+    return;
+  }
+  none.textContent = skillsIndex
+    ? `no skill matches "${query}" - the filter reads skill names and descriptions, and the category and path each row shows`
+    : `the skills list is still being read - "${query}" has not been checked against it yet`;
+}
+
+// Ctrl+Shift+S lands here (public/assistant.js owns the chord): the general Settings surface, on the Skills tab,
+// with the caret in the tab's own bar. The window opens when it is closed and the tab is taken when the window is
+// already on another one - the same press a reader makes on the tab, so the choice is remembered like any other.
+function focusSkillsSearch() {
+  const panel = document.getElementById("settings");
+  if (!panel) return false;
+  if (panel.classList.contains("hidden")) toggleSettings(true);
+  const selected = settingsTabButtons().find((tab) => tab.getAttribute("aria-selected") === "true");
+  if (!selected || selected.dataset.settingsTab !== "skills") selectSettingsTab("skills");
+  const bar = document.getElementById(SKILLS_SEARCH_ID);
+  if (!bar) return false;
+  bar.focus();
+  // The caret goes to the END of whatever the one filter already holds: the chord is how a reader gets to the bar,
+  // and Esc - not a keystroke they did not mean - is what empties it.
+  try {
+    bar.setSelectionRange(bar.value.length, bar.value.length);
+  } catch {
+    /* a host that refuses the range still has the focus, which is the ask */
+  }
+  return true;
+}
+// public/assistant.js's keydown calls this by name on window.
+window.__openSkillsSearch = focusSkillsSearch;
+
+// The bar's one listener set, wired once at boot. Typing writes the ONE query into the window's head box and
+// repaints through the one painter, so the two controls cannot disagree; Escape clears both and leaves the caret
+// where it is, because dismissing a filter is not dismissing the window.
+function initSkillsSearch() {
+  const bar = document.getElementById(SKILLS_SEARCH_ID);
+  if (!bar || bar.dataset.skillsSearchWired === "1") return;
+  bar.dataset.skillsSearchWired = "1";
+  const repaint = () => {
+    const box = document.getElementById(SETTINGS_SEARCH_ID);
+    if (box && box.value !== bar.value) box.value = bar.value;
+    paintSettingsSearch({ scope: "skills" });
+  };
+  const clearBar = () => {
+    bar.value = "";
+    const box = document.getElementById(SETTINGS_SEARCH_ID);
+    if (box) box.value = "";
+    paintSettingsSearch({ scope: "skills" });
+    bar.focus();
+  };
+  bar.addEventListener("input", repaint);
+  bar.addEventListener("search", repaint); // the browser's own ✕ in a type=search box
+  bar.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    // An empty bar is not a filter: the page's own Esc (which closes Settings) is the reader's to use, exactly as it
+    // is on the window's search box. With text in it, the first Esc is about what was typed - clear, stay, keep the
+    // caret here - and stopPropagation keeps that Esc from also closing the window behind it.
+    if (!bar.value) return;
+    e.preventDefault();
+    e.stopPropagation();
+    clearBar();
+  });
+  const clear = document.getElementById(SKILLS_SEARCH_CLEAR_ID);
+  clear?.addEventListener("click", (e) => {
+    e.preventDefault();
+    clearBar();
+  });
 }
 
 // The whole tab, from one payload. Called on boot and whenever the panel opens on a stale read; a failure says why
@@ -18748,6 +18863,9 @@ $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
 // panel is never filtered by a query left in the DOM.
 initSettingsTabs();
 initSettingsSearch();
+// The Skills tab's own bar: wired here, with the rest of the window, so the caret Ctrl+Shift+S promises can be typed
+// into on the very first press - the bar is static markup and its one listener set costs nothing at boot.
+initSkillsSearch();
 // The skills inventory is filled before the tab is ever opened: the settings search counts the rows on EVERY tab, so
 // a Skills tab that only reads when it is selected would answer "no matches" for a skill the reader can plainly see
 // after one press. It is a filesystem walk on the server, not a page render.

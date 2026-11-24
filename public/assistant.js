@@ -8263,6 +8263,19 @@
       openHotSearch();
       return;
     }
+    // Ctrl+Shift+S is the Skills tab's key: from anywhere in the panel it opens Settings (or switches it to Skills
+    // when the window is on another tab) and puts the caret in the tab's own search bar. Matched on the key AND the
+    // code so a layout that reports either one still answers, and `!e.repeat` so a held chord lands one bar. The
+    // default is refused for the whole chord: without that the browser's own Save-As opens on top of the panel.
+    // A caret in an input, textarea or contenteditable is the reader WRITING - a capital S in a composer must never
+    // tab-jump - so the chord is swallowed there and does nothing else, exactly as it does nowhere else in that case.
+    if (!e.repeat && e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && (e.key === "s" || e.key === "S" || e.code === "KeyS")) {
+      e.preventDefault();
+      if (inTextField(e.target) || inTextField(document.activeElement)) return;
+      const open = window.__openSkillsSearch;
+      if (typeof open === "function") open();
+      return;
+    }
     // Ctrl+Q is the search box's own key: pressed anywhere in the open panel, the caret lands in the box with the
     // text it already holds SELECTED, so the first character typed replaces the last filter. It is reported handled
     // (preventDefault) rather than merely acted on - no browser default may also fire. A caret in a textarea or the
