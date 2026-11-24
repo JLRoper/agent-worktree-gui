@@ -76,3 +76,46 @@ test("text() stringifies once per generation and hands the same string to every 
   assert.equal(s.textMisses, 2);
   assert.equal(s.textHits, 1);
 });
+
+test("textAsync builds the same string in slices and hands it to every reader", async () => {
+  let builds = 0;
+  let slices = 0;
+  const cache = createSnapshotCache({
+    build: () => ({ n: ++builds }),
+    serialize: async (value) => {
+      slices += 1;
+      return JSON.stringify(value);
+    },
+  });
+  const first = await cache.textAsync();
+  const second = await cache.textAsync();
+  assert.equal(first, JSON.stringify({ n: 1 }));
+  assert.equal(second, first, "the second reader gets the built text, not a second build");
+  assert.equal(builds, 1);
+  assert.equal(slices, 1, "one serialization for the generation");
+  cache.invalidate();
+  assert.equal(cache.freshText(), null, "the text no longer describes the current generation");
+  assert.equal(cache.lastText(), first, "but the last text is still answerable while a rebuild runs");
+  const third = await cache.textAsync();
+  assert.equal(third, JSON.stringify({ n: 2 }));
+});
+
+test("two readers waiting on one generation share a single build", async () => {
+  let builds = 0;
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const cache = createSnapshotCache({
+    build: () => ({ n: ++builds }),
+    serialize: async (value) => {
+      await gate;
+      return JSON.stringify(value);
+    },
+  });
+  const a = cache.textAsync();
+  const b = cache.textAsync();
+  release();
+  const [first, second] = await Promise.all([a, b]);
+  assert.equal(first, second);
+  assert.equal(builds, 1, "one build for two readers");
+  assert.equal(cache.stats().textBuilding, false, "the in-flight marker is cleared");
+});

@@ -13,6 +13,7 @@ import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { logger, log, parseLevel } from "./lib/log.js";
 import { syncTiming } from "./lib/sync-timing.js";
+import { stringifyInChunks } from "./lib/json-chunks.js";
 import { createLoopLag, withActivity, markActivity, currentActivity, realMonotonicMs } from "./lib/loop-lag.js";
 import { PerformanceObserver } from "node:perf_hooks";
 import { Pool } from "./lib/pool.js";
@@ -902,12 +903,16 @@ const SLOW_REQUESTS_KEPT = 20;
 // snapshotBody is a hoisted function declaration, so it is safe to reference here.
 const snapshotCache = createSnapshotCache({
   build: () => syncTiming.measure("snapshot construction", snapshotBody),
+  // The stringify is the other half of the freeze (0.7s quiet, 3.5s loaded, measured 2026-11-24): built in slices so
+  // the loop keeps answering while the megabytes are written.
+  serialize: (value) => stringifyInChunks(value, { budgetMs: 8 }),
 });
 // The board frame's own cache, on the same invalidation. `/api/board` and the stream's first frame used to rebuild
 // and stringify 1.8 MB per request: 78ms with the loop free, 4.9s measured while a scan held it. `invalidateSnapshot`
 // bumps both generations, so the compact frame can never describe a state the full snapshot has already left.
 const boardCache = createSnapshotCache({
   build: () => syncTiming.measure("board construction", boardSnapshot),
+  serialize: (value) => stringifyInChunks(value, { budgetMs: 8 }),
 });
 function invalidateSnapshot() {
   snapshotCache.invalidate();
@@ -917,7 +922,35 @@ function invalidateSnapshot() {
 // The snapshot as TEXT, memoised by the cache's generation: /api/state and the stream's full frame read this instead
 // of stringifying the board themselves. A 3.6 MB `JSON.stringify` is 0.6-1.3s of this one event loop, and the object
 // cache never spared it - every poll and every connect paid it again.
+// A READER NEVER WAITS FOR THE BUILD. The current text is answered at once; when the board has moved, the LAST text
+// is answered and a chunked rebuild runs behind it, so a poll (which the page makes every few seconds anyway) costs
+// the same as a cache hit instead of 3.5s of construction plus 3.5s of stringify on the one event loop. The very first
+// read of a process has nothing to answer with and still builds inline.
+let snapshotRefreshTimer = null;
+function scheduleSnapshotRefresh() {
+  if (snapshotRefreshTimer) return;
+  snapshotRefreshTimer = setTimeout(() => {
+    snapshotRefreshTimer = null;
+    // Both frames are refreshed together: they share the invalidation, and the stream sends the board first.
+    void snapshotCache.textAsync().catch(() => {});
+    void boardCache.textAsync().catch(() => {});
+  }, 25);
+  if (typeof snapshotRefreshTimer.unref === "function") snapshotRefreshTimer.unref();
+}
 function snapshotText() {
+  const fresh = snapshotCache.freshText();
+  if (fresh !== null) return fresh;
+  const last = snapshotCache.lastText();
+  if (last !== null) {
+    scheduleSnapshotRefresh();
+    return last;
+  }
+  return syncTiming.measure("snapshot serialization", () => snapshotCache.text());
+}
+
+// THE WRITE PATH'S ANSWER, and it must be current: a push follows a change, and the delta it sends is measured against
+// this text. Serving it stale here would tell every tab that the change it just made is already in the state it holds.
+function snapshotTextFresh() {
   return syncTiming.measure("snapshot serialization", () => snapshotCache.text());
 }
 
@@ -936,6 +969,17 @@ function boardSnapshot() {
 }
 
 function boardText() {
+  const fresh = boardCache.freshText();
+  if (fresh !== null) return fresh;
+  const last = boardCache.lastText();
+  if (last !== null) {
+    scheduleSnapshotRefresh();
+    return last;
+  }
+  return syncTiming.measure("board serialization", () => boardCache.text());
+}
+
+function boardTextFresh() {
   return syncTiming.measure("board serialization", () => boardCache.text());
 }
 
@@ -987,7 +1031,7 @@ function broadcastSnapshot() {
   // always the megabytes, and it is what the guard below avoids.
   const snap = snapshot();
   if (!clients.size) return;
-  const text = snapshotText();
+  const text = snapshotTextFresh();
   // The state is byte-identical to the one every client already holds: there is nothing to say, and saying it would
   // cost a megabyte. (A write that changed nothing the board draws is common - a save of the same settings, a sweep
   // that found no change.)
@@ -1033,7 +1077,7 @@ function streamSnapshotFrameFor({ boardBody }) {
   // full frame would have sent. It costs the same stringify a classic attach has always paid (the board bytes are
   // already on the socket by now), and it is what keeps the first write after a page load from being answered with
   // "everything changed since the last push, which was hours ago".
-  lastPushedText = snapshotText();
+  lastPushedText = snapshotTextFresh();
   // The tab that just attached holds this state; when it is the only tab, the ledger can follow it - which is what
   // keeps the first write after a page load to the one row it touched. With another tab open the ledger stays where
   // the last push left it, because a delta must never run ahead of the tab that is behind.
