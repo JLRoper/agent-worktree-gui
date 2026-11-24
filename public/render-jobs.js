@@ -313,7 +313,13 @@ function conversationHtml(conv) {
   if (pendingSteer) {
     const key = `${thread}|${pendingSteer.at || 0}`;
     const seeded = state.seededSteer || (state.seededSteer = new Set());
-    if (!state.replyDrafts[thread] && !seeded.has(key)) {
+    // The same words can be BOTH the steer that came back and a reply this page has just sent (a steer refused at
+    // the boundary is held and sent as the next turn). A repaint must not hand back what a send has just consumed,
+    // so the seed stands down while `justSent` still holds this exact text - the card says "queued" instead of
+    // drawing the message a second time in the box.
+    const sent = state.justSent.get(thread);
+    const justSent = Boolean(sent && Date.now() - sent.at < 20000 && pendingSteer.text.trim() === sent.text);
+    if (!justSent && !state.replyDrafts[thread] && !seeded.has(key)) {
       seeded.add(key);
       state.replyDrafts[thread] = pendingSteer.text;
     }
