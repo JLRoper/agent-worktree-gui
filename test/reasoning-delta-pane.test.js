@@ -88,11 +88,17 @@ test("a tab that joined mid-block starts where it attached, then continues", () 
   assert.equal(t.state.thinkCache.get(t.turn.id).blocks[0].text, "later words and more");
 });
 
-test("a gap in the offsets replaces the block rather than inventing the missing words", () => {
+// A gap in the offsets is a frame this tab never drew (it attached mid-block, or a frame was lost). The words it HAS
+// are kept: replacing the block with the chunk is what made a row begin mid-sentence with its own first words
+// thrown away (row #285). The seam is filled by the store read, which hands the row the block's own characters.
+test("a gap in the offsets keeps every word the row already drew", () => {
   const t = loadLiveThought();
   t.growLiveThought(t.turn, frame(111, "abc", 0));
   t.growLiveThought(t.turn, frame(111, "ghij", 6));
-  assert.equal(t.state.thinkCache.get(t.turn.id).blocks[0].text, "ghij");
+  const block = t.state.thinkCache.get(t.turn.id).blocks[0];
+  assert.equal(block.text, "abcghij", "nothing drawn is dropped");
+  assert.equal(block.gap, true, "the hole is recorded, so a reader of the block knows it is not contiguous");
+  assert.equal(t.state.jobLines.get(t.turn.id)[0].text, "abcghij", "the row keeps its words too");
 });
 
 test("reasoning that resumes after a tool starts a NEW block and a NEW row", () => {
@@ -167,14 +173,50 @@ test("a settled turn takes the store's blocks and drops the previews", () => {
   assert.deepEqual(out, fresh, "the store is the transcript once the turn has settled");
 });
 
-test("previews pair with the LAST store blocks, so a late-joining tab settles into the newest thought", () => {
+// The store keeps ONE block per assistant message; the console draws ONE row per segment. A tab that joined late
+// holds the newest segment, and the read finds it by ITS OWN WORDS - never by counting from the tail, which is what
+// handed a row its neighbour's text and dropped the row that had no partner.
+test("a late-joining tab's preview is placed by its own words, and no stray block is drawn beside it", () => {
   const reconcile = loadReconcile();
   const prev = [{ at: 222, text: "second", live: true, preview: true }];
   const out = reconcile(prev, [{ at: 900, text: "first" }, { at: 901, text: "second" }]);
-  assert.equal(out.length, 2);
-  assert.equal(out[0].at, 900, "the store block this tab never saw stays a store block");
-  assert.equal(out[1].at, 222, "the preview keeps its lid");
-  assert.equal(out[1].text, "second");
+  assert.equal(out.length, 1, "one row: the preview, with no second copy of the block above it");
+  assert.equal(out[0].at, 222, "the preview keeps its lid");
+  assert.equal(out[0].text, "second", "and the store's own characters");
+  assert.equal(out[0].preview, true);
+});
+
+test("a row the store has no partner for KEEPS its words instead of being dropped", () => {
+  const reconcile = loadReconcile();
+  const prev = [
+    { at: 111, text: "first thought", live: false, preview: true },
+    { at: 222, text: "second thought, still arriving", live: true, preview: true },
+  ];
+  // Message 2 is not written yet, so the store holds message 1's block and nothing else - the state every live turn
+  // passes through. The second row must survive it: a dropped preview is still on screen, and the next delta used to
+  // rebuild it from that delta alone (growLiveThought), which is row #285's row that began mid-sentence.
+  const out = reconcile(prev, [{ at: 900, text: "first thought" }]);
+  assert.equal(out.length, 2, "both rows survive the read");
+  assert.equal(out[0].text, "first thought", "the first row takes the store's text");
+  assert.equal(out[1].at, 222, "the live row keeps its lid");
+  assert.equal(out[1].text, "second thought, still arriving", "and every word it had already drawn");
+});
+
+test("two segments of ONE block each take their own slice, and together they spell the block", () => {
+  const reconcile = loadReconcile();
+  const block = "Findings so far: the toolset is wired.\n\nMaybe the panel excludes delegate_task?";
+  const cut = block.indexOf("Maybe");
+  const prev = [
+    { at: 111, text: block.slice(0, cut), live: false, preview: true },
+    { at: 222, text: block.slice(cut), live: true, preview: true },
+  ];
+  const out = reconcile(prev, [{ at: 900, text: block }]);
+  assert.equal(out.length, 2, "two rows, one block");
+  assert.equal(out[0].text, block.slice(0, cut), "the first row is the block's first slice");
+  assert.equal(out[1].text, block.slice(cut), "the second row is the block's second slice");
+  assert.equal(out[0].text + out[1].text, block, "nothing doubled, nothing lost");
+  assert.equal(out[0].at, 111, "each row keeps its own lid");
+  assert.equal(out[1].at, 222);
 });
 
 // ---- the row's markup ------------------------------------------------------------------------
