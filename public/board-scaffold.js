@@ -133,6 +133,11 @@ const LIVE_STATUS = new Set(["running", "starting", "waiting", "waiting_for_appr
 function turnLive(t) {
   if (!t) return false;
   if (t.status && LIVE_STATUS.has(String(t.status))) return true;
+  // A run parked on a question is live for the same reason a parked approval is: the agent is inside the turn,
+  // waiting on the reader, not finished with it. It matters twice over here - the card's question block is drawn
+  // only for a live turn, so a status this list does not name (an `interrupted` turn whose stream was lost while the
+  // gateway still holds its prompt) would drop the question off the card entirely.
+  if (t.question && !t.questionDone) return true;
   return Boolean(t.approval && !t.approvalDone);
 }
 

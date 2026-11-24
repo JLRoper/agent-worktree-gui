@@ -2390,12 +2390,32 @@ function tickQuestionClocks() {
   }
 }
 
-// Once answered the box becomes one line: what the reader said, or the honest other case — the question
-// closed without this panel answering it (another surface, a stop, or the clarify timeout).
+// Once answered the box becomes one line: what the reader said. A question that closed WITHOUT this panel answering
+// it used to become one dim line - "question closed without an answer here" - with no question, no choices and no
+// reason: a vanish with a shrug, which is what a reader who never saw the card (queue rows #267 and #254 timed out
+// that way) found in its place. A closed record that still carries what was asked (lib/jobs.js `closeQuestion`) keeps
+// the question and its choices on the card, dead, with the reason and the clock: a trace the reader can act on later.
 function questionAnswered(turn) {
   const done = turn.questionDone;
   if (!done || turn.question) return "";
   const text = String(done.answer || "").trim();
+  if (!text && done.closed && String(done.question || "").trim()) {
+    const choices = Array.isArray(done.choices) ? done.choices.map(String).filter((c) => c.trim()) : [];
+    const why = String(done.why || "").trim();
+    const head = why === "timed out"
+      ? "✕ the gateway's window ran out before this was answered - nothing was sent"
+      : why && why !== "closed unanswered"
+        ? `✕ closed unanswered - ${why}`
+        : "✕ closed unanswered - nothing was sent";
+    const asked = done.askedAt ? ` · asked ${fmtClock(done.askedAt)}` : "";
+    const closed = done.at ? ` · closed ${fmtClock(done.at)}` : "";
+    return `<div class="turn-question-done is-closed" title="${esc(`${why || "closed unanswered"}${asked}${closed}`)}">
+    <div class="tqd-head mono">${esc(head)}</div>
+    <div class="tqd-question">${esc(String(done.question))}</div>
+    ${choices.length ? `<div class="tqd-choices">${choices.map((c) => `<span class="tqd-choice" title="this choice was offered and is no longer open">${esc(c.replace(RECOMMENDED_RE, "$1"))}</span>`).join("")}</div>` : ""}
+    <div class="tqd-when mono">${esc(`${asked}${closed}`.replace(/^ · /, ""))}</div>
+  </div>`;
+  }
   if (!text) return `<div class="turn-question-done mono is-quiet" title="the question was withdrawn with the turn, answered on another surface, or timed out">· question closed without an answer here</div>`;
   return `<div class="turn-question-done mono" title="${esc(text)}">✓ answered: ${esc(text.length > 220 ? `${text.slice(0, 220)}…` : text)}</div>`;
 }
@@ -2483,6 +2503,36 @@ async function answerRunQuestion(turnId, answer, requestId, box) {
   } finally {
     questionFlights.delete(key);
   }
+}
+
+// "21:03" - the clock a closed question's two stamps are read against. Local time, because the reader was there.
+function fmtClock(iso) {
+  const ms = Date.parse(String(iso || ""));
+  if (!Number.isFinite(ms)) return "";
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// A question that has just parked is brought to the reader: the card may be pages down a long board, the reader may
+// be reading another row, and a badge changing in the header is not the question arriving. ONE landing per prompt
+// (by the gateway's own request id), and only when the box is not already on screen - a landing that re-fires on every
+// frame would fight the reader's scroll for as long as the question stays open.
+const questionLanded = new Set();
+function landClarifyQuestion(turnId, requestId) {
+  const key = questionFlightKey(turnId, requestId);
+  if (questionLanded.has(key)) return false;
+  questionLanded.add(key);
+  const cards = questionCardsFor(turnId, requestId);
+  const box = [...cards][0] || null;
+  if (!box) return false;
+  const r = box.getBoundingClientRect();
+  if (r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight) return false; // already where the reader is looking
+  if (typeof programmaticScroll === "function") programmaticScroll();
+  box.scrollIntoView({ block: "center", behavior: "smooth" });
+  box.classList.add("jump");
+  setTimeout(() => box.classList.remove("jump"), 1600);
+  return true;
 }
 
 // Every deliverable this conversation produced — files and URLs — in the order they were delivered.
