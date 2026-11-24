@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.166.8 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.166.9 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-725 releases from v0.1.0 (2026-10-20) to v1.166.8 (2026-11-24), 2577 commits between the tags. Every release is anchored by an
+726 releases from v0.1.0 (2026-10-20) to v1.166.9 (2026-11-24), 2582 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.166.9 — 2026-11-24 · 5 commits
+
+[`d9cfde5`](https://github.com/JLRoper/agent-worktree-gui/commit/d9cfde5a07ceaaf0103513a6e25dade2993d4bcf) · [compare v1.166.8...v1.166.9](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.8...v1.166.9)
+
+### Fixed
+
+- fix: a SPAWN is refused when another live row holds one of its files ([`980dab8`](https://github.com/JLRoper/agent-worktree-gui/commit/980dab8c1221096803a0362c423907cafb1090a7))
+
+### Docs & tests
+
+- docs: row 286's report records the rebased base run and the unit suite ([`c145dd3`](https://github.com/JLRoper/agent-worktree-gui/commit/c145dd39a9873e79f8a31acd8ccf474ca29558df))
+- docs: render the changelog - 725 releases ([`e7d8e28`](https://github.com/JLRoper/agent-worktree-gui/commit/e7d8e2830304de8c69fc414d1c626e8916a33232))
+- docs: the lane report - the defect, the predicate, the four proofs and the exception ([`8a80a58`](https://github.com/JLRoper/agent-worktree-gui/commit/8a80a58813834677e3d7f04cdf7ffe835d74feb2))
+
+### Other
+
+- chore: 1.166.9 - the version this landing carries ([`d9cfde5`](https://github.com/JLRoper/agent-worktree-gui/commit/d9cfde5a07ceaaf0103513a6e25dade2993d4bcf))
 
 ## v1.166.8 — 2026-11-24 · 4 commits
 
