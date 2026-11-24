@@ -1,7 +1,7 @@
 {
-  "at": "2026-11-23T05:26:15.447Z",
-  "version": "1.157.10",
-  "home": "$SCRATCH/wag-initiatives-gate-28980",
+  "at": "2026-11-24T00:02:50.579Z",
+  "version": "1.163.0",
+  "home": "$SCRATCH/wag-initiatives-gate-55568",
   "baseline": {
     "passed": 4,
     "total": 16,
@@ -52,7 +52,7 @@
         "id": "spacing-4",
         "label": "padding, gaps and margins sit on a 4px scale",
         "ok": true,
-        "detail": "4 values, all multiples of 4"
+        "detail": "5 values, all multiples of 4"
       },
       {
         "id": "hit-targets",
@@ -70,7 +70,7 @@
         "id": "alignment",
         "label": "the card's text shares one left edge",
         "ok": true,
-        "detail": "left edges 986, 986, 986, 986, 986, 992 (spread 6px)"
+        "detail": "left edges 1014, 1014, 1014, 1014, 1014, 1020 (spread 6px)"
       },
       {
         "id": "folded-alignment",
@@ -106,13 +106,13 @@
         "id": "active",
         "label": "a pressed button paints a state beyond its own hover",
         "ok": true,
-        "detail": "pressed transform none, background rgb(16, 21, 28)"
+        "detail": "pressed transform none, background rgba(0, 0, 0, 0)"
       },
       {
         "id": "keyboard",
         "label": "a project fold opens from the keyboard",
         "ok": true,
-        "detail": "reached the fold after 7 Tab press(es), Enter changed its aria-expanded: yes"
+        "detail": "reached the fold after 8 Tab press(es), Enter changed its aria-expanded: yes"
       },
       {
         "id": "focus-persist",
@@ -138,15 +138,15 @@
   },
   "live": {
     "before": {
-      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       34580",
-      "pid": 34580,
+      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       51268",
+      "pid": 51268,
       "health": {
         "status": 200
       }
     },
     "after": {
-      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       34580",
-      "pid": 34580,
+      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       51268",
+      "pid": 51268,
       "health": {
         "status": 200
       }

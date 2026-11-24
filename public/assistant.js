@@ -3399,6 +3399,36 @@
   // and why a reload starts folded again.
   const initOpen = new Set();
   const initDescClosed = new Set();
+  // THE READER'S THEME COLOUR PER INITIATIVE, in its own key and its own map: a card is a card, not a project box,
+  // and an initiative id must never collide with a project name in one store. The RULE is the projects' own -
+  // public/core/theme-hue.js, which app.js's three project-hue functions delegate to as well - so the chooser, the
+  // 45-degree re-roll and the tab-only fallback when the browser refuses a write are the same code, not a second
+  // copy of it. `wm.initiativeHues` holds name -> hue, exactly as `wm.projectHues` does.
+  const INIT_HUE_KEY = "wm.initiativeHues";
+  const initHues = wtThemeHue.load(INIT_HUE_KEY);
+  function initHueSave() {
+    wtThemeHue.save(INIT_HUE_KEY, initHues);
+  }
+  function initHueRoll(id) {
+    return wtThemeHue.roll(initHues, INIT_HUE_KEY, id);
+  }
+  // The card that is on screen right now, painted in its hue (or taken out of it). The painter carries the same
+  // class and the same variable, so this only has to touch what is already drawn - a colour is not a reason to
+  // rebuild the ledger and lose the reader's place.
+  function paintInitHue(id) {
+    const card = document.querySelector(`#as-initiatives [data-init-card="${CSS.escape(String(id))}"]`);
+    const hue = initHues.get(String(id));
+    if (!card) return;
+    card.classList.toggle("has-init-hue", hue != null);
+    if (hue != null) card.style.setProperty("--init-hue", String(hue));
+    else card.style.removeProperty("--init-hue");
+  }
+  // The words the banner names a colour by: the title on the card, which is what the reader pressed, and the id only
+  // as a last resort (a card that has just been rebuilt by a poll mid-press).
+  function initTitleOf(id) {
+    const card = document.querySelector(`#as-initiatives [data-init-card="${CSS.escape(String(id))}"]`);
+    return String(card?.querySelector(".init-title")?.textContent || "").trim() || String(id);
+  }
   // The initiatives whose history is unfolded. Folded by default: the history is the evidence behind a removal, not
   // the first thing a card should spend its height on, and a card opened to read a title should not arrive with forty
   // lines of who did what.
@@ -3899,13 +3929,17 @@
     // state, and the status names the current station. The dots are aria-hidden because the status word says the same
     // fact in words - the tab never carries a state in colour alone.
     const route = wtInitiativeFold.routeGlyph(init, initDoc?.waveStatus || null);
-    // THE MARK'S SLOT IS RESERVED ON EVERY FOLDED ROW, even one with no route: the dots sit in a fixed 27px slot so
-    // every title in the ledger starts on the same left edge, whether or not that initiative has a wave to draw.
-    const glyphHtml = open
-      ? ""
-      : `<span class="init-glyph" aria-hidden="true"${route.dots.length ? ` title="${esc(route.title)}"` : ""}>${route.dots.map((d) => `<i class="${d.tone}${d.current ? " is-current" : ""}"></i>`).join("")}</span>`;
+    // THE MARK'S SLOT IS RESERVED ON EVERY CARD, OPEN OR FOLDED, and it is the same slot in both drawings: the dots
+    // sit in a fixed gutter left of the title (see public/style.css, the `--init-title-gutter` block), so the title
+    // does not move when the card opens and the reader does not lose the place they just clicked. Drawing the dots
+    // only on the title card is what made the title slide left by their width on the press that unfolded it.
+    const glyphHtml = `<span class="init-glyph" aria-hidden="true"${route.dots.length ? ` title="${esc(route.title)}"` : ""}>${route.dots.map((d) => `<i class="${d.tone}${d.current ? " is-current" : ""}"></i>`).join("")}</span>`;
     const statusHtml = `<span class="init-status ${route.tone}" data-init-status="${esc(init.id)}" title="${esc(route.title)}">${esc(route.label)}</span>`;
-    return `<article class="as-group init-card${open ? "" : " is-titlecard"}${!open && route.dots.length ? " has-route" : ""}" data-init-card="${esc(init.id)}">
+    // THE CARD'S THEME COLOUR (Ctrl+click its dot or its title, public/core/theme-hue.js): the class and the variable
+    // are carried by the markup so a repaint, a poll or a reload keeps the hue the reader chose; the dots keep their
+    // own colours because their colours ARE each wave's state.
+    const initHue = initHues.get(String(init.id));
+    return `<article class="as-group init-card${open ? "" : " is-titlecard"}${!open && route.dots.length ? " has-route" : ""}${initHue == null ? "" : " has-init-hue"}" data-init-card="${esc(init.id)}"${initHue == null ? "" : ` style="--init-hue:${Number(initHue)}"`}>
       <div class="init-head">
         <button type="button" class="init-head-btn" data-init-card-toggle="${esc(init.id)}" aria-expanded="${open ? "true" : "false"}" title="this initiative ${open ? "is open - a press folds it back to its title card" : "is folded to its title card - a press unfolds it, and one open state is kept per initiative while the tab is open"}">
           ${glyphHtml}
@@ -4481,6 +4515,29 @@
       const card = e.target && e.target.closest ? e.target.closest("[data-init-card]") : null;
       const head = card ? card.querySelector("[data-init-card-toggle]") : null;
       const cardOpen = String(head?.getAttribute("aria-expanded") || "") === "true";
+      // CTRL+CLICK A COLOUR, BEFORE THE PRESS RULE ANSWERS. The title and the dot column are both inside the card's
+      // fold button, so without this branch the projects' own gesture would fold the card instead of colouring it.
+      // Ctrl (or Cmd) rolls a hue onto THIS initiative by public/core/theme-hue.js - the same chooser and the same
+      // storage rule the project heads use - and Shift drops it, which is the projects' Ctrl+Shift+click. A Shift
+      // press on a card with no colour is left alone: it is the plain fold it has always been, because there is
+      // nothing to drop and a gesture that did nothing would read as a dead card.
+      const themeTarget = e.target && e.target.closest ? e.target.closest(".init-title, .init-glyph") : null;
+      const themeId = card ? String(card.dataset.initCard || "") : "";
+      if (themeTarget && themeId && (e.ctrlKey || e.metaKey || (e.shiftKey && initHues.has(themeId)))) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.shiftKey) {
+          initHues.delete(themeId);
+          initHueSave();
+          paintInitHue(themeId);
+          showBanner(`${initTitleOf(themeId)}: colour cleared`);
+        } else {
+          const hue = initHueRoll(themeId);
+          paintInitHue(themeId);
+          showBanner(`${initTitleOf(themeId)}: themed hue ${hue}° - Ctrl+click again for another, Shift+click to clear`);
+        }
+        return;
+      }
       const kind = wtInitiativeFold.press(e.target, { card, open: cardOpen });
       if (kind === "card") {
         const id = String(card?.dataset.initCard || "");

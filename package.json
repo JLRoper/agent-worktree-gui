@@ -72,6 +72,7 @@
     "verify:initiatives-scroll": "node tools/verify-initiatives-scroll.mjs",
     "verify:initiatives-creep": "node tools/verify-initiatives-creep.mjs",
     "verify:initiative-tasks": "node tools/verify-initiative-tasks.mjs",
+    "verify:initiative-card": "node tools/verify-initiative-card-anchor.mjs",
     "verify:initiative-tier": "node tools/verify-initiative-tier.mjs",
     "verify:initiative-branch-link": "node tools/verify-initiative-branch-link.mjs",
     "verify:task-refs": "node tools/verify-task-refs.mjs",
