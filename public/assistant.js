@@ -4193,6 +4193,14 @@
     // verbs, then what the store holds and who may change it. The one explanatory paragraph keeps its words exactly and
     // moves behind About, which is the whole of round A's first compression: the preamble said a lot before the first
     // initiative, and none of it is lost, it is one press away.
+    //
+    // THE READ DRAWS NOTHING WHILE IT IS IN FLIGHT, and that is a layout rule, not a wording choice. `.init-meta` is a
+    // flex COLUMN with a gap, so a node in it costs its own line box AND the gap whether or not it has a word: an
+    // in-flight hint here (this was `reading…`) grows the meta line by one line plus the gap for as long as the read
+    // takes, and every initiative card below it is pushed down and snaps back - measured at 16.67 px in both a 640 px
+    // and a 340 px dock, with the first card's top moving while the read was in flight. So the span is written ONLY
+    // when there is something a reader must see: `read failed: …`. A read that is merely in flight leaves the pane
+    // byte-identical to what it already drew, which is also what the `markup !== initMarkup` short-circuit above wants.
     host.dataset.density = initDense ? "compact" : "comfortable";
     const markup = `
       <div class="as-group init-shell">
@@ -4209,7 +4217,7 @@
         <div class="init-meta">
           ${storeLine}
           <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative and wave changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
-          <span class="as-hint init-read">${initLoading ? "reading…" : initErr ? `read failed: ${esc(initErr)}` : ""}</span>
+          ${initErr ? `<span class="as-hint init-read">read failed: ${esc(initErr)}</span>` : ""}
         </div>
         ${newForm}
       </div>
