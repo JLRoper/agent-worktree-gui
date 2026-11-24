@@ -3280,6 +3280,21 @@ a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
 /* Nobody answered: the gateway denied the command when its window ran out. Not green (approved), not red (denied
    by a person) — amber, the colour of the prompt that went unanswered. */
 .turn-approval-done.is-expired { color: #d8c79a; border-left-color: #6b4d16; background: rgba(107,77,22,.10); }
+/* An approval that expired is a TRACE, not a one-line shrug (queue row #286, and the same shape the question's own
+   timeout wears at `.turn-question-done.is-closed`): the reason, the command it asked to run and the choices it
+   offered stay on the card, dead. The flat spans are not buttons — the gateway has already denied this, so there is
+   nothing left to press, only something to read. */
+.turn-approval-done.is-trace { margin: 8px 2px 6px; padding: 8px 11px; white-space: normal; overflow: visible; text-overflow: clip; border: 1px dashed #6b4d16; border-left: 2px solid #6b4d16; border-radius: 7px; }
+.tad-head { font-size: 11px; color: #ffd479; letter-spacing: .01em; }
+.tad-why { margin-top: 4px; font-size: 10.5px; color: #c9b98f; }
+.tad-cmd { margin: 7px 0 6px; padding: 6px 8px; background: rgba(0,0,0,.35); border: 1px solid rgba(107,77,22,.4); border-radius: 5px; color: var(--text); font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+.tad-choices { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 5px; }
+.tad-choice { padding: 2px 8px; border: 1px dashed #6b4d16; border-radius: 999px; color: #c9b98f; font-size: 10.5px; }
+.tad-when { font-size: 10px; color: #b9a97f; opacity: .9; }
+/* The landing: an approval that has just parked is scrolled to, so it arrives where the reader is looking rather
+   than below the fold with only the dock's corner saying anything (row #286). Same flash the question's landing
+   wears, so two versions of "look here" never look like two different events. */
+.turn-approval.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
 /* The agent's own question: the approval box's place in the flow, in light purple instead of amber, and sized for
    sentences rather than a command. A choice is a full-width row so a long label wraps inside its own control
    instead of stretching the box; the typed "Other" answer and the send button share the row under them.
@@ -3445,6 +3460,11 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .turn-question-away { margin: 0 0 4px; }
 .tqa-head { margin: 6px 0 0 18px; font-size: 10px; color: var(--q-note); letter-spacing: .02em; }
 :root.q-width-set .tqa-head { margin-left: auto; margin-right: auto; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
+/* An approval whose turn sits on another page of the thread, drawn at the top of the card and naming the turn for
+   the same reason the question is (row #286): behind the pager it is a wait the reader can only find by walking the
+   pages. Amber, like the box it carries. */
+.turn-approval-away { margin: 0 0 4px; }
+.taa-head { margin: 6px 0 0 2px; font-size: 10px; color: #b9a97f; letter-spacing: .02em; }
 .queue-note { font-size: 11px; color: #ffd479; }
 /* A reply is queued and waiting: ONE press put it in flight, so the box is closed and the button is off until the
    held reply goes out. The note beside them says why, and it is the same face a repaint draws from the queue. */

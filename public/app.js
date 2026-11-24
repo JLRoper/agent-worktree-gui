@@ -2061,7 +2061,13 @@ function approvalUnanswerableNote() {
 }
 
 // Once answered the box collapses to one line: what was decided, about what. An approval nobody answered gets its
-// own line — the gateway denied the command when its window ran out, and "✓ approved" for that would be a lie.
+// own record — the gateway denied the command when its window ran out, and "✓ approved" for that would be a lie.
+//
+// WHAT WAS ASKED OUTLIVES THE WINDOW. The one line this used to leave named the command and nothing else, truncated at
+// 140 characters: a reader who came back after the window closed could not tell what had been offered, when it was
+// asked, or how long it waited. Row #277 gave a timed-out QUESTION its question, choices and reason back; row #286 is
+// the same rule on the other park, so an expired approval keeps the command it showed, the choices it offered and why
+// it closed, and offers no control on a wait that is over.
 function approvalDecided(turn) {
   const done = turn.approvalDone;
   if (!done || turn.approval) return "";
@@ -2074,7 +2080,20 @@ function approvalDecided(turn) {
         ? "the gateway had already let this request go (its window closed, another surface answered it, or the run was stopped)"
         : `no answer reached the gateway inside its waiting window${Number(done.waitedSeconds) ? ` (${fmtLeft(Number(done.waitedSeconds) * 1000)} unanswered)` : ""}`;
     const head = done.clicked ? "✕ your answer arrived too late" : "✕ not answered here";
-    return `<div class="turn-approval-done mono is-expired" title="${esc(why)}${done.command ? ` - ${esc(String(done.command))}` : ""}">${head}${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
+    // The choices the host allowed, by the names the box offered them under. A record written by an older panel build
+    // carries none, and then the block simply has no choice row rather than inventing two.
+    const choices = Array.isArray(done.choices) ? done.choices.map(String).filter((c) => c.trim()) : [];
+    const asked = done.askedAt ? `asked ${fmtClock(done.askedAt)}` : "";
+    const closed = done.at ? `closed ${fmtClock(done.at)}` : "";
+    const when = [asked, closed].filter(Boolean).join(" · ");
+    const tip = `${why}${done.command ? ` - ${String(done.command)}` : ""}`;
+    return `<div class="turn-approval-done is-expired is-trace" title="${esc(tip)}">
+    <div class="tad-head mono">${esc(head)}</div>
+    <div class="tad-why mono">${esc(why)}</div>
+    ${done.command ? `<pre class="tad-cmd mono">${esc(String(done.command))}</pre>` : ""}
+    ${choices.length ? `<div class="tad-choices">${choices.map((c) => `<span class="tad-choice" title="this choice was offered while the window was open, and can no longer be taken">${esc(APPROVAL_CHOICE_LABEL[c] || c)}</span>`).join("")}</div>` : ""}
+    ${when ? `<div class="tad-when mono">${esc(when)}</div>` : ""}
+  </div>`;
   }
   const denied = String(done.choice || "").toLowerCase() === "deny";
   const verb = denied ? "denied" : `approved ${done.choice || ""}`.trim();
@@ -2518,21 +2537,44 @@ function fmtClock(iso) {
 // be reading another row, and a badge changing in the header is not the question arriving. ONE landing per prompt
 // (by the gateway's own request id), and only when the box is not already on screen - a landing that re-fires on every
 // frame would fight the reader's scroll for as long as the question stays open.
-const questionLanded = new Set();
-function landClarifyQuestion(turnId, requestId) {
-  const key = questionFlightKey(turnId, requestId);
-  if (questionLanded.has(key)) return false;
-  questionLanded.add(key);
-  const cards = questionCardsFor(turnId, requestId);
-  const box = [...cards][0] || null;
-  if (!box) return false;
-  const r = box.getBoundingClientRect();
-  if (r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight) return false; // already where the reader is looking
+//
+// BOTH PARKS LAND THE SAME WAY. An approval is the same interruption as a question - the agent is stopped until the
+// reader answers - and it used to arrive below the fold with only the dock (a corner of the screen) showing it: row
+// #286's second finding. So the one-shot record, the on-screen test and the scroll live here, and each park supplies
+// the boxes it draws.
+const parkLanded = new Set();
+function landParkBlock(key, cards) {
+  if (parkLanded.has(key)) return false;
+  parkLanded.add(key);
+  const boxes = [...(cards || [])].filter((el) => el && el.isConnected);
+  if (!boxes.length) return false;
+  const onScreen = boxes.some((el) => {
+    const r = el.getBoundingClientRect();
+    return r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight;
+  });
+  if (onScreen) return false; // already where the reader is looking
+  const box = boxes[0];
   if (typeof programmaticScroll === "function") programmaticScroll();
   box.scrollIntoView({ block: "center", behavior: "smooth" });
   box.classList.add("jump");
   setTimeout(() => box.classList.remove("jump"), 1600);
   return true;
+}
+function landClarifyQuestion(turnId, requestId) {
+  return landParkBlock(`question:${questionFlightKey(turnId, requestId)}`, questionCardsFor(turnId, requestId));
+}
+// The approval's boxes carry the turn they belong to, not just the run: `data-approval-for` is `<turn id>` on the
+// page copy and `<turn id>@pin` on the pinned one, so both are found here and the one that is off screen is the one
+// scrolled to. A box with no buttons at all (an unanswerable request) is still landed on - it is a record the reader
+// must see, which is why this does not go through approvalCardsFor (that walks `[data-approve]`).
+function landApprovalBlock(turnId, requestId) {
+  const id = String(turnId || "");
+  if (!id) return false;
+  const key = `approval:${String(requestId || "").trim() || id}`;
+  const cards = document.querySelectorAll(
+    `.turn-approval[data-approval-for="${CSS.escape(id)}"], .turn-approval[data-approval-for="${CSS.escape(`${id}${wtTurnFold.PIN}`)}"]`,
+  );
+  return landParkBlock(key, cards);
 }
 
 // Every deliverable this conversation produced — files and URLs — in the order they were delivered.
