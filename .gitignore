@@ -34,3 +34,11 @@ config.7330.json
 # ignored, so a hand copy cannot come back as untracked source.
 public/docs/
 public/reviews/
+
+# A reader-only page: local by design, never committed - any directory, every clone.
+#
+# A .secret.html is the report a clarify card links: the evidence, the guidance and the drafted text
+# behind one decision, written for the reader's eyes and not for the history. The suffix is the whole
+# rule, so a page can sit beside its evidence and still be local; tools/reports-tracked.mjs exempts
+# the same suffix, because a page that is ignored on purpose is not a page a worktree lost.
+*.secret.html
