@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.168.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.169.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-732 releases from v0.1.0 (2026-10-20) to v1.168.1 (2026-11-24), 2602 commits between the tags. Every release is anchored by an
+733 releases from v0.1.0 (2026-10-20) to v1.169.0 (2026-11-24), 2606 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.169.0 — 2026-11-24 · 4 commits
+
+[`fbd47ad`](https://github.com/JLRoper/agent-worktree-gui/commit/fbd47adf075e714522b0787b825d1fc7a2121f90) · [compare v1.168.1...v1.169.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.168.1...v1.169.0)
+
+### Docs & tests
+
+- docs: render the changelog - 732 releases ([`5997d92`](https://github.com/JLRoper/agent-worktree-gui/commit/5997d92347dc24349e23ad3f5e1942549a10168a))
+
+### Other
+
+- Re-ask a clarify question you missed from the header popup ([`95a6326`](https://github.com/JLRoper/agent-worktree-gui/commit/95a6326c677fdc63047861b9982db882e59dd881))
+- Document the clarify popup's re-ask and the four refusals it can answer with ([`5115474`](https://github.com/JLRoper/agent-worktree-gui/commit/51154740d50cbb4b85cb995b9f898d442e01c1f6))
+- Bump to 1.169.0 for the clarify re-ask ([`fbd47ad`](https://github.com/JLRoper/agent-worktree-gui/commit/fbd47adf075e714522b0787b825d1fc7a2121f90))
 
 ## v1.168.1 — 2026-11-24 · 2 commits
 
