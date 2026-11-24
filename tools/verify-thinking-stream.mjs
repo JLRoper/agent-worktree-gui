@@ -181,7 +181,15 @@ const readConsole = (page, thread) =>
       liveMarks: out.querySelectorAll("[data-think-live]").length,
       pane: Boolean(card.querySelector("details.think, .think-body")),
       clip: text
-        ? { maxHeight: cs.maxHeight, clientHeight: text.clientHeight, scrollHeight: text.scrollHeight, overflowY: cs.overflowY }
+        ? {
+            maxHeight: cs.maxHeight,
+            clientHeight: text.clientHeight,
+            scrollHeight: text.scrollHeight,
+            overflowY: cs.overflowY,
+            ends: text.textContent.endsWith("...."),
+            source: first.dataset.ltext || "",
+            drawn: text.textContent,
+          }
         : null,
       open: Boolean(first?.classList.contains("is-open")),
       width: { client: out.clientWidth, scroll: out.scrollWidth },
@@ -347,13 +355,19 @@ const main = async () => {
       `first ${occurrences(two?.text || "", "First, read the fixture")}, second ${occurrences(two?.text || "", "The read came back")}`,
     );
 
-    // ---- dim, clipped, and a press opens it ----------------------------------------------------------------
-    check("the thinking row is clipped to a few lines", Boolean(two?.clip) && two.clip.overflowY === "hidden" && two.clip.clientHeight < two.clip.scrollHeight, two?.clip ? JSON.stringify(two.clip) : "no row");
+    // ---- dim, minimized, and a press opens it --------------------------------------------------------------
+    // A minimized row draws its first section (here: the whole long first paragraph, so the four-line lid cuts it)
+    // and marks the cut with four dots; the source is still the whole thought on data-ltext (queue row #292).
+    check(
+      "the thinking row draws its first section inside the four-line lid, marked with the four dots",
+      Boolean(two?.clip) && two.clip.overflowY === "hidden" && two.clip.ends === true && two.clip.source === THOUGHT_A && two.clip.clientHeight <= parseFloat(two.clip.maxHeight) + 1,
+      two?.clip ? JSON.stringify({ ends: two.clip.ends, source: two.clip.source === THOUGHT_A, clientHeight: two.clip.clientHeight, maxHeight: two.clip.maxHeight }) : "no row",
+    );
     check("the row's clip is finite at the console's leading", Boolean(two?.clip) && /px$/.test(two.clip.maxHeight) && parseFloat(two.clip.maxHeight) > 0, two?.clip ? two.clip.maxHeight : "no row");
     await page.click(`.job[data-thread="${thread}"] .jl-think .think-text`);
     const opened = await readConsole(page, thread);
     out.phases.opened = opened;
-    check("a press on the row opens the whole thought in place", opened.open === true, `open ${opened.open}`);
+    check("a press on the row opens the whole thought in place", opened.open === true && opened.clip && opened.clip.drawn === opened.clip.source && !opened.clip.drawn.endsWith("...."), `open ${opened.open}, same ${opened.clip ? opened.clip.drawn === opened.clip.source : false}`);
 
     // ---- the settled read: store blocks replace the previews, once each -------------------------------------
     // Wait for the run to settle in the page.
@@ -392,7 +406,7 @@ const main = async () => {
     const settled = await readConsole(page, thread);
     out.phases.settled = settled;
     check("the settled console keeps exactly two thinking rows", settled.thinkRows === 2, why(settled));
-    check("the live previews are gone, so no thought is drawn twice", settled.liveMarks === 0 && occurrences(settled.text, THOUGHT_A) === 1 && occurrences(settled.text, THOUGHT_B) === 1, `marks ${settled.liveMarks}, A ${occurrences(settled.text, THOUGHT_A)}, B ${occurrences(settled.text, THOUGHT_B)}`);
+    check("the live previews are gone, so no thought is drawn twice", settled.liveMarks === 0 && occurrences(settled.text, "First, read the fixture") === 1 && occurrences(settled.text, THOUGHT_B) === 1, `marks ${settled.liveMarks}, A ${occurrences(settled.text, "First, read the fixture")}, B ${occurrences(settled.text, THOUGHT_B)}`);
     const settledThink = order(settled.rows, (r) => r.think);
     const settledGroup = order(settled.rows, (r) => !r.think && /tgrp/.test(r.kind))[0];
     const settledText = settled.rows.findIndex((r) => r.text.includes(ANSWER));
@@ -441,8 +455,8 @@ const main = async () => {
     check("a settled reload reproduces both thoughts", Boolean(reloaded) && reloaded.thinkRows === 2, reloaded ? why(reloaded) : "none drawn");
     check(
       "…with one copy of each and no mark",
-      Boolean(reloaded) && reloaded.liveMarks === 0 && occurrences(reloaded.text, THOUGHT_A) === 1 && occurrences(reloaded.text, THOUGHT_B) === 1,
-      reloaded ? `marks ${reloaded.liveMarks}, A ${occurrences(reloaded.text, THOUGHT_A)}, B ${occurrences(reloaded.text, THOUGHT_B)}` : "none drawn",
+      Boolean(reloaded) && reloaded.liveMarks === 0 && occurrences(reloaded.text, "First, read the fixture") === 1 && occurrences(reloaded.text, THOUGHT_B) === 1,
+      reloaded ? `marks ${reloaded.liveMarks}, A ${occurrences(reloaded.text, "First, read the fixture")}, B ${occurrences(reloaded.text, THOUGHT_B)}` : "none drawn",
     );
 
     // ---- the narrow dock: the console is still readable ------------------------------------------------------
