@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The lane the digest prints is the lane the cut checks</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>The lane the digest prints is the lane the cut checks</h1>
+<p class="sub">agent-worktree-gui 1.166.9. One lane predicate in <code>lib/spawn-check.js</code>, answered by the pre-flight route and by the cut, and the sentence the digest prints as <code>SKIP:</code>. All line numbers are this branch's files at its base, <code>e7d8e283</code>.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#293 in assistant-3's queue</dd>
+  <dt>branch</dt><dd>wtgui/read-queue-row-293-first-it-carries-the-b5ac50</dd>
+  <dt>the defect</dt><dd>lib/assistant/queue.js:1503 <code>laneInfo</code>, the derived lane; lib/assistant.js:2577 <code>taskRowCheck</code>, the cut's row check</dd>
+  <dt>the predicate</dt><dd>lib/spawn-check.js:155 <code>liveRowHolders</code>, :226 <code>laneRefusal</code></dd>
+  <dt>the two callers</dt><dd>lib/assistant.js:2599 (pre-flight and cut, through <code>taskRowCheck</code>), lib/assistant/queue.js:1431 (the digest)</dd>
+  <dt>the exception</dt><dd>lib/assistant.js:2467 queue action <code>allow-overlap</code>; lib/assistant/queue.js:138 <code>normLaneAllows</code></dd>
+  <dt>the per-tree guard</dt><dd>lib/spawn-check.js:133 <code>heldTreeRefusal</code>, lib/jobs.js:3845 - unchanged</dd>
+  <dt>the proof</dt><dd>test/spawn-lane.test.js, 8 tests</dd>
+</dl>
+
+<h2>1. What was wrong</h2>
+<p>Two readers answered "may this row start?" and only one of them was asked at the cut. The digest's lane is <em>derived at read time</em> (<code>laneInfo</code>, lib/assistant/queue.js:1503): it groups open rows that claim the same file, names the lane after the file, and prints <code>waiting on #N</code> behind a live head. <code>decorateTasks</code> also set a <code>conflict</code> and a <code>skipped</code> sentence for a queued row whose files touched a running row's files (lib/assistant/queue.js, the block above :1431).</p>
+<p>The cut did not consult either. <code>Assistant#taskRowCheck</code> (lib/assistant.js:2577) ran <code>rowRefusal</code> - a refusal only when the ROW already has a live worker - and <code>jobs.create</code> ran <code>heldTreeRefusal</code> - a refusal only when a TREE already holds a live run (lib/jobs.js:3845). A shared file is neither. So <code>GET /api/assistant/spawn-check</code> answered <code>ok: true</code> for a row the digest was printing <code>SKIP:</code> for, and on 2026-11-24 two workers reached <code>public/style.css</code> because of it.</p>
+<p>There was a second half. The digest's conflict was computed against every <em>running</em> row, including a STALE one whose run had ended. The cut refuses only a live worker, so the same disagreement existed in the other direction: the digest said <code>SKIP</code> and the cut would have started the row.</p>
+
+<h2>2. The change: one predicate, two callers, one sentence</h2>
+<p><code>liveRowHolders</code> (lib/spawn-check.js:155) finds the rows a LIVE job is working whose files this row also claims. It takes a <code>liveness(row)</code> callback because the queue reads liveness from its run record and the cut reads it from the job store; both hand the result to the predicate rather than judging the overlap themselves. A row is a candidate only while it reads <code>running</code>, and only while its liveness answers <code>live: true</code> - a stale row holds nothing, which is what lets the row start once the holder settles.</p>
+<p><code>laneRefusal</code> (lib/spawn-check.js:226) is the ONE decision and the ONE sentence. Its refusal is shaped like <code>heldTreeRefusal</code>: it names the holder row, the file and this row, and its remedy names the job to wait for. The wiring is the part that makes drift impossible:</p>
+<table>
+  <tr><th>reader</th><th>how it reaches the predicate</th></tr>
+  <tr><td>the pre-flight route</td><td><code>routes/assistant-spawn-check.js:108</code> calls <code>assistant.spawnCheck</code> (lib/assistant.js:2661), which calls <code>taskRowCheck</code>, which calls <code>taskLaneCheck</code> (lib/assistant.js:2640)</td></tr>
+  <tr><td>the cut</td><td><code>startSpawn</code> calls <code>spawnTaskRefusal</code> (lib/assistant.js:7844), which calls the same <code>taskRowCheck</code> and throws <code>sentenceOf(check)</code>; the harvest pre-check at lib/assistant.js:6930 calls the same function before the line is carried out</td></tr>
+  <tr><td>the digest</td><td><code>decorateTasks</code> (lib/assistant/queue.js:1431) calls <code>liveRowHolders</code> and <code>laneRefusal</code> itself and sets <code>skipped = sentenceOf(lane)</code> (lib/assistant/queue.js:1452), printed as <code>SKIP: ${t.skipped}</code> (lib/assistant/queue.js:1665)</td></tr>
+</table>
+<p>Because the digest's <code>skipped</code> is built by the same function the cut throws, <code>SKIP: </code> followed by the cut's message is the digest's line, character for character. There is no second phrasing to drift.</p>
+
+<h2>3. The four proofs, with the real sentences</h2>
+<p>These are printed by the same fixture the test file drives, on this branch. The holder is row #1 (job <code>run_holder</code> on thread <code>t-holder</code>); the row is #2; both claim <code>public/style.css</code>.</p>
+
+<h3>1. the pre-flight refuses, naming holder, file and row</h3>
+<pre>PRE-FLIGHT ok: false code: file_busy
+PRE-FLIGHT reason: files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims public/style.css, so starting it would put two workers in that file
+PRE-FLIGHT remedy: wait for job run_holder to end and land #2, or record an explicit overlap first (queue action allow-overlap, which stores who allowed it and the file)</pre>
+
+<h3>2. a SPAWN attempted anyway is refused by the cut in the same words</h3>
+<pre>CUT: files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims public/style.css, so starting it would put two workers in that file. wait for job run_holder to end and land #2, or record an explicit overlap first (queue action allow-overlap, which stores who allowed it and the file).
+DIGEST SKIP == CUT: true</pre>
+<p>The test calls the real <code>startSpawn</code> with a recording spawner. It rejects with <code>code: "spawn-task"</code> and exactly the pre-flight's <code>reason + ". " + remedy + "."</code>; the spawner is never called and the row stays <code>queued</code> (test/spawn-lane.test.js, "a SPAWN attempted anyway is refused by the cut in the same words, and nothing is cut").</p>
+
+<h3>3. a row on a DIFFERENT file still starts</h3>
+<pre>DIFFERENT FILE ok: true checks: []
+DIFFERENT FILE digest: - ○ #3 queued · a different file · thread (none) · tree (none) · PR none · files lib/other.js</pre>
+<p>The test then drives <code>startSpawn</code> for #3, the spawner is called once, and the row is linked to the run (<code>thread t-new-1</code>). The lane is about a file, not about an assistant or a project.</p>
+
+<h3>4. after the holder settles the row starts normally</h3>
+<pre>HOLDER SETTLED ok: true checks: []
+HOLDER SETTLED digest: - ○ #2 queued · the same rule, next · thread (none) · tree (none) · PR none · files public/style.css · lane public/style.css after #1</pre>
+<p>The holder's job is marked <code>done</code>; its row still reads <code>running</code> (the panel never rewrites a row on a read), so it reads STALE and holds nothing. The pre-flight answers <code>ok: true</code> and the cut reaches the spawner.</p>
+
+<h3>5. the digest's wording and the refusal's wording agree</h3>
+<pre>DIGEST: - ○ #2 queued · the same rule, next · thread (none) · tree (none) · PR none · files public/style.css · SKIP: files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims public/style.css, so starting it would put two workers in that file. wait for job run_holder to end and land #2, or record an explicit overlap first (queue action allow-overlap, which stores who allowed it and the file). · waiting on #1 (lane public/style.css)</pre>
+<p>The digest's <code>SKIP:</code> is <code>sentenceOf</code> of the same check the cut throws, so the test's assertion is a substring test against the cut's own message, not a regex for a phrase that happens to match.</p>
+
+<h2>4. The exception: one holder, one file, one person</h2>
+<p>An overlap is refused unless someone explicitly recorded an exception. <code>POST /api/assistant/queue</code> with <code>action: "allow-overlap"</code> (lib/assistant.js:2467) resolves the LIVE holder from the same <code>taskLaneHolders</code> the cut reads and writes one entry on the row:</p>
+<pre>[{"file":"public/style.css","holder":1,"by":"reader","at":"2026-11-24T12:24:50.308Z","reason":"both rows are one edit to the same rule"}]</pre>
+<p>The exception is a NOTE, never a refusal: the pre-flight answers <code>ok: true</code> with <code>code: "lane_allowed"</code>, the row starts, and the cut journals the decision (<code>spawn-overlap</code>). The digest and the queue card say who lifted the rule and for which file:</p>
+<pre>ALLOWED PRE-FLIGHT reason: files in use by #1 (job run_holder on thread t-holder, running) - the overlap with #2 on public/style.css was allowed by reader at 2026-11-24T12:24:50.308Z: both rows are one edit to the same rule
+ALLOWED DIGEST: - ○ #2 queued · the same rule, next · thread (none) · tree (none) · PR none · files public/style.css · LANE ALLOWED by reader on public/style.css (overlaps #1)</pre>
+<p>It is deliberately narrow: it names the holder it was decided about and the file. A second live holder on the same file is still refused (test "an exception covers ONE holder and ONE file"), and the action refuses to store an exception when no live run holds the file - a licence for a run that is not there would apply to a later row nobody decided about. <code>clear: true</code> removes the record and the lane is back.</p>
+<p class="note">The queue action is the door, not a mute: the row's own record carries the decision, so a later reader can say who lifted the rule. The digest, the pre-flight and the journal all read that one record.</p>
+
+<h2>5. What did not change</h2>
+<p>The per-tree guard is exactly as it was: <code>heldTreeRefusal</code> (lib/spawn-check.js:133) is still what <code>lib/jobs.js:3845</code> refuses a second cut in a held tree with, and the lane check is a second check beside it. A SPAWN into a tree a live run holds is still <code>tree_busy</code>; the existing test/spawn-check.test.js case that compares that refusal with the cut byte for byte still passes.</p>
+<p>One behaviour changed on purpose: a STALE running row no longer produces a <code>SKIP</code> on a queued row. Its run has ended, the cut would start the row, and the old SKIP was the same disagreement from the other side. The running row's own line still says STALE with the reason, so the fact is not lost; the test that pinned the old behaviour now pins the new one (test/assistant-queue.test.js, "a STALE running task no longer blocks a queued one").</p>
+
+<h2>6. Tests run</h2>
+<ul>
+  <li><code>node --test test/spawn-lane.test.js</code>: 8 tests, all pass.</li>
+  <li><code>node --test test/spawn-check.test.js test/spawn-check-wiring.test.js test/assistant-queue.test.js test/assistant-queue-ui.test.js test/assistant-queue-pane.test.js test/assistant-queue-directive.test.js test/assistant-queue-reattach.test.js test/assistant-digest.test.js test/assistant-digest-route.test.js test/assistant-preamble.test.js test/queue-holds.test.js test/waves-lanes-join.test.js</code>: 185 tests, 184 pass. The one failure is <em>a press naming the checkout is REFUSED when git does not know the run's tree</em> in test/assistant-queue-reattach.test.js; it fails on the base commit <code>e7d8e283</code> too (checked from a <code>git archive</code> export of that commit), so it is not this branch's.</li>
+  <li><code>npm test</code> (the full suite, once, before the pull request): <strong>1604 tests passed</strong> and 7 failed before the run was stopped at 23 minutes. The 7 are not this branch's: every one reproduces on the base commit <code>e7d8e283</code> exported with <code>git archive</code>, or passes alone on this branch. They are <code>test/assistant-queue-reattach.test.js</code> (1), <code>test/gateway-permissions.test.js</code> (file error: it reads a <code>config.json</code> a worktree does not carry), <code>test/harness.test.js</code> (1: <code>tools/verify-wave-file-exists.mjs</code> has no npm script), <code>test/initiative-tier-route.test.js</code> (3), and <code>test/initiatives-route.test.js</code> (a file-level failure under load; it passes alone). That last file's server did not stop after its failure, which is what held the run open until it was killed; the kill is why there is no runner summary, and the count above is the passing lines the reporter had printed.</li>
+</ul>
+</main>
+</body>
+</html>
