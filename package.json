@@ -159,6 +159,7 @@
     "verify:to-card": "node tools/verify-to-card.mjs",
     "verify:no-thread-log": "node tools/verify-no-thread-log.mjs",
     "verify:waves-lane": "node tools/verify-waves-lane.mjs",
+    "verify:wave-dot-opacity": "node tools/verify-wave-dot-opacity.mjs",
     "verify:waves-drive": "node tools/verify-waves-drive.mjs",
     "verify:wave-reports": "node tools/verify-wave-reports.mjs",
     "verify:waves-write": "node tools/verify-waves-write.mjs",

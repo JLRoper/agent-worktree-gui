@@ -5498,7 +5498,8 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-wavefold .init-sechead .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; text-transform: none; letter-spacing: 0; }
 #as-initiatives .init-wave-note { order: 3; flex: 0 0 auto; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
 /* THE LINE. It runs behind every station, from the first to the last, in the emphasis hairline; a station paints its
-   own stretch in its state colour, so the route reads before a single word does. */
+   own stretch in its state colour, so the route reads before a single word does. "Behind every station" is a claim the
+   station has to keep: it sits ON the connector, so its disc has to be OPAQUE or the line reads straight through it. */
 #as-initiatives .init-waves { position: relative; display: flex; flex-direction: column; gap: 20px; padding-left: 24px; }
 #as-initiatives .init-waves::before { content: ""; position: absolute; left: 9px; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--tab-line-strong); }
 #as-initiatives .wave-row {
@@ -5520,7 +5521,9 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .wave-row[data-wave-state="empty"]::before,
 #as-initiatives .wave-row[data-wave-state="unentered"]::before { background: var(--tab-line-strong); }
 #as-initiatives .wave-row[data-wave-current="true"] { border-color: var(--tab-line-strong); background: linear-gradient(180deg, var(--tab-raised), var(--tab-row)); box-shadow: var(--tab-e1); }
-/* THE STATION MARKER: the wave's position sits ON the line, not at the left of a box. */
+/* THE STATION MARKER: the wave's position sits ON the line, not at the left of a box. Its fill is the opaque surface
+   the card is drawn on, and `z-index` is stated rather than left to tree order: the disc is what hides the connector
+   inside the ring, in every state. */
 #as-initiatives .wave-pos {
   position: absolute;
   left: -25px;
@@ -5538,13 +5541,24 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   font-size: 10.5px;
   line-height: 1;
   letter-spacing: 0;
+  z-index: 2;
 }
 #as-initiatives .wave-row[data-wave-state="running"] .wave-pos { border-color: var(--tab-run-line); color: var(--tab-run); }
 #as-initiatives .wave-row[data-wave-state="done"] .wave-pos { border-color: var(--tab-run-line); color: var(--tab-accent); }
 #as-initiatives .wave-row[data-wave-state="blocked"] .wave-pos,
 #as-initiatives .wave-row[data-wave-state="unknown"] .wave-pos { border-color: var(--tab-warn-line); color: var(--tab-warn); }
 #as-initiatives .wave-row[data-wave-state="abandoned"] .wave-pos { border-color: var(--tab-bad-line); color: var(--tab-bad); }
-#as-initiatives .wave-row[data-wave-current="true"] .wave-pos { border-width: 2px; border-color: var(--tab-run); color: var(--tab-ink); background: var(--tab-run-bg); }
+/* The current station's ring is the running green and its fill carries the running tint. The tint is a translucent
+   colour, so it is laid as an IMAGE OVER the opaque surface instead of standing in for the fill: the disc keeps the
+   exact colour it had, and nothing behind it - the connector - can show through. That is the whole fix: the line used
+   to run through this one station's middle while every other state's opaque disc hid it. */
+#as-initiatives .wave-row[data-wave-current="true"] .wave-pos {
+  border-width: 2px;
+  border-color: var(--tab-run);
+  color: var(--tab-ink);
+  background-color: var(--tab-surface);
+  background-image: linear-gradient(var(--tab-run-bg), var(--tab-run-bg));
+}
 #as-initiatives .wave-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); min-width: 0; }
 #as-initiatives .wave-title {
   flex: 0 1 auto;

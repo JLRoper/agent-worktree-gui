@@ -1,0 +1,3406 @@
+{
+  "at": "2026-11-24T08:44:32.105Z",
+  "branch": null,
+  "widths": [
+    {
+      "pane": "dock",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "rail": 480,
+      "paneWidth": 479
+    },
+    {
+      "pane": "wide",
+      "viewport": {
+        "width": 2200,
+        "height": 1000
+      },
+      "rail": 1100,
+      "paneWidth": 1099
+    }
+  ],
+  "dots": [
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "c-abandoned",
+      "position": "W1",
+      "state": "abandoned",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\01-dock-c-abandoned.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        255,
+        123,
+        114,
+        255
+      ],
+      "connectorBelow": [
+        255,
+        123,
+        114,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        104,
+        48,
+        50,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            111,
+            51,
+            53,
+            255
+          ],
+          "gap": 91
+        },
+        {
+          "at": "right",
+          "rgb": [
+            101,
+            47,
+            49,
+            255
+          ],
+          "gap": 81
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            255,
+            123,
+            114,
+            255
+          ],
+          "gap": 235
+        },
+        {
+          "at": "left",
+          "rgb": [
+            101,
+            47,
+            49,
+            255
+          ],
+          "gap": 81
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.73,
+      "ringVsTokenGap": 125,
+      "connectorToken": "#ff7b72",
+      "ringToken": "rgba(229, 83, 75, 0.4)",
+      "ringExpected": [
+        104,
+        48,
+        50
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-running-current",
+      "position": "W1",
+      "state": "running",
+      "current": true,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "linear-gradient(rgba(46, 160, 67, 0.14), rgba(46, 160, 67, 0.14))",
+      "zIndex": "2",
+      "border": 2,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\02-dock-b-running-current.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 2,
+      "innerEdge": 9,
+      "usable": 7.5,
+      "interiorRgb": [
+        24,
+        44,
+        39
+      ],
+      "stripeRows": [
+        {
+          "y": 14,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 15,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 16,
+          "range": 1,
+          "sidesRange": 1
+        }
+      ],
+      "stripeMaxRange": 1,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorBelow": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "right",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "left",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 7.63,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#56d364",
+      "ringToken": "#56d364",
+      "ringExpected": [
+        86,
+        211,
+        100
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-running-other",
+      "position": "W2",
+      "state": "running",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\03-dock-b-running-other.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorBelow": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        30,
+        81,
+        47,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            32,
+            87,
+            49,
+            255
+          ],
+          "gap": 62
+        },
+        {
+          "at": "right",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 186
+        },
+        {
+          "at": "left",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.91,
+      "ringVsTokenGap": 79,
+      "connectorToken": "#56d364",
+      "ringToken": "rgba(46, 160, 67, 0.42)",
+      "ringExpected": [
+        31,
+        82,
+        48
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 1
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-done",
+      "position": "W3",
+      "state": "done",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\04-dock-b-done.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorBelow": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        30,
+        81,
+        47,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            31,
+            86,
+            48,
+            255
+          ],
+          "gap": 61
+        },
+        {
+          "at": "right",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            63,
+            185,
+            80,
+            255
+          ],
+          "gap": 160
+        },
+        {
+          "at": "left",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.91,
+      "ringVsTokenGap": 79,
+      "connectorToken": "#3fb950",
+      "ringToken": "rgba(46, 160, 67, 0.42)",
+      "ringExpected": [
+        31,
+        82,
+        48
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 1
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-empty",
+      "position": "W4",
+      "state": "empty",
+      "current": false,
+      "surfaced": true,
+      "surfaceText": "W3 done, W4 has no members - file its tasks",
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\05-dock-b-empty.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 24,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 25,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 26,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 27,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 28,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 29,
+          "range": 0,
+          "sidesRange": 4
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        17
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorBelow": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            51,
+            62,
+            77,
+            255
+          ],
+          "gap": 43
+        },
+        {
+          "at": "right",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            53,
+            64,
+            79,
+            255
+          ],
+          "gap": 45
+        },
+        {
+          "at": "left",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.68,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#35404f",
+      "ringToken": "#35404f",
+      "ringExpected": [
+        53,
+        64,
+        79
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-unentered",
+      "position": "W5",
+      "state": "unentered",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\06-dock-b-unentered.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 23,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 24,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 25,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 26,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 27,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 28,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 29,
+          "range": 0,
+          "sidesRange": 4
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        18,
+        17,
+        16
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorBelow": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            51,
+            62,
+            77,
+            255
+          ],
+          "gap": 43
+        },
+        {
+          "at": "right",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            53,
+            64,
+            79,
+            255
+          ],
+          "gap": 45
+        },
+        {
+          "at": "left",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.68,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#35404f",
+      "ringToken": "#35404f",
+      "ringExpected": [
+        53,
+        64,
+        79
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-unknown",
+      "position": "W6",
+      "state": "unknown",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\07-dock-b-unknown.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        16,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorBelow": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        96,
+        76,
+        34,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            102,
+            81,
+            35,
+            255
+          ],
+          "gap": 82
+        },
+        {
+          "at": "right",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            227,
+            179,
+            65,
+            255
+          ],
+          "gap": 207
+        },
+        {
+          "at": "left",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 2.14,
+      "ringVsTokenGap": 114,
+      "connectorToken": "#e3b341",
+      "ringToken": "rgba(210, 153, 34, 0.4)",
+      "ringExpected": [
+        96,
+        76,
+        34
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-blocked",
+      "position": "W7",
+      "state": "blocked",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\08-dock-b-blocked.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        16,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorBelow": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        96,
+        76,
+        34,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            102,
+            81,
+            35,
+            255
+          ],
+          "gap": 82
+        },
+        {
+          "at": "right",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            227,
+            179,
+            65,
+            255
+          ],
+          "gap": 207
+        },
+        {
+          "at": "left",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 2.14,
+      "ringVsTokenGap": 114,
+      "connectorToken": "#e3b341",
+      "ringToken": "rgba(210, 153, 34, 0.4)",
+      "ringExpected": [
+        96,
+        76,
+        34
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "b-ready",
+      "position": "W8",
+      "state": "ready",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\09-dock-b-ready.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 23,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 24,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 25,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 26,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 27,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 28,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 29,
+          "range": 0,
+          "sidesRange": 4
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        18,
+        17,
+        16
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorBelow": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            57,
+            70,
+            86,
+            255
+          ],
+          "gap": 52
+        },
+        {
+          "at": "right",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            158,
+            203,
+            255,
+            255
+          ],
+          "gap": 221
+        },
+        {
+          "at": "left",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.68,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#9ecbff",
+      "ringToken": "#35404f",
+      "ringExpected": [
+        53,
+        64,
+        79
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "a-closed",
+      "position": "W1",
+      "state": "done",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\10-dock-a-closed.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorBelow": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        30,
+        81,
+        47,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            31,
+            86,
+            48,
+            255
+          ],
+          "gap": 61
+        },
+        {
+          "at": "right",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            63,
+            185,
+            80,
+            255
+          ],
+          "gap": 160
+        },
+        {
+          "at": "left",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.91,
+      "ringVsTokenGap": 79,
+      "connectorToken": "#3fb950",
+      "ringToken": "rgba(46, 160, 67, 0.42)",
+      "ringExpected": [
+        31,
+        82,
+        48
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 1
+    },
+    {
+      "pane": "dock",
+      "paneWidth": 479,
+      "waveId": "a-surfaced",
+      "position": "W2",
+      "state": "ready",
+      "current": true,
+      "surfaced": true,
+      "surfaceText": "W1 done, W2 ready - press to open",
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "linear-gradient(rgba(46, 160, 67, 0.14), rgba(46, 160, 67, 0.14))",
+      "zIndex": "2",
+      "border": 2,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\11-dock-a-surfaced.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 2,
+      "innerEdge": 9,
+      "usable": 7.5,
+      "interiorRgb": [
+        24,
+        44,
+        39
+      ],
+      "stripeRows": [
+        {
+          "y": 14,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 15,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 16,
+          "range": 1,
+          "sidesRange": 1
+        }
+      ],
+      "stripeMaxRange": 1,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorBelow": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "right",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            158,
+            203,
+            255,
+            255
+          ],
+          "gap": 216
+        },
+        {
+          "at": "left",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 7.63,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#9ecbff",
+      "ringToken": "#56d364",
+      "ringExpected": [
+        86,
+        211,
+        100
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "c-abandoned",
+      "position": "W1",
+      "state": "abandoned",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\12-wide-c-abandoned.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        16,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        255,
+        123,
+        114,
+        255
+      ],
+      "connectorBelow": [
+        255,
+        123,
+        114,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        104,
+        48,
+        50,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            111,
+            51,
+            53,
+            255
+          ],
+          "gap": 91
+        },
+        {
+          "at": "right",
+          "rgb": [
+            101,
+            47,
+            49,
+            255
+          ],
+          "gap": 81
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            255,
+            123,
+            114,
+            255
+          ],
+          "gap": 235
+        },
+        {
+          "at": "left",
+          "rgb": [
+            101,
+            47,
+            49,
+            255
+          ],
+          "gap": 81
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.73,
+      "ringVsTokenGap": 125,
+      "connectorToken": "#ff7b72",
+      "ringToken": "rgba(229, 83, 75, 0.4)",
+      "ringExpected": [
+        104,
+        48,
+        50
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-running-current",
+      "position": "W1",
+      "state": "running",
+      "current": true,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "linear-gradient(rgba(46, 160, 67, 0.14), rgba(46, 160, 67, 0.14))",
+      "zIndex": "2",
+      "border": 2,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\13-wide-b-running-current.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 2,
+      "innerEdge": 9,
+      "usable": 7.5,
+      "interiorRgb": [
+        24,
+        44,
+        39
+      ],
+      "stripeRows": [
+        {
+          "y": 14,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 15,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 16,
+          "range": 1,
+          "sidesRange": 1
+        }
+      ],
+      "stripeMaxRange": 1,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorBelow": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "right",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "left",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 7.63,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#56d364",
+      "ringToken": "#56d364",
+      "ringExpected": [
+        86,
+        211,
+        100
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-running-other",
+      "position": "W2",
+      "state": "running",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\14-wide-b-running-other.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorBelow": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        30,
+        81,
+        47,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            32,
+            87,
+            49,
+            255
+          ],
+          "gap": 62
+        },
+        {
+          "at": "right",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 186
+        },
+        {
+          "at": "left",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.91,
+      "ringVsTokenGap": 79,
+      "connectorToken": "#56d364",
+      "ringToken": "rgba(46, 160, 67, 0.42)",
+      "ringExpected": [
+        31,
+        82,
+        48
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 1
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-done",
+      "position": "W3",
+      "state": "done",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\15-wide-b-done.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorBelow": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        30,
+        81,
+        47,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            31,
+            86,
+            48,
+            255
+          ],
+          "gap": 61
+        },
+        {
+          "at": "right",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            63,
+            185,
+            80,
+            255
+          ],
+          "gap": 160
+        },
+        {
+          "at": "left",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.91,
+      "ringVsTokenGap": 79,
+      "connectorToken": "#3fb950",
+      "ringToken": "rgba(46, 160, 67, 0.42)",
+      "ringExpected": [
+        31,
+        82,
+        48
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 1
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-empty",
+      "position": "W4",
+      "state": "empty",
+      "current": false,
+      "surfaced": true,
+      "surfaceText": "W3 done, W4 has no members - file its tasks",
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\16-wide-b-empty.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 24,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 25,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 26,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 27,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 28,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 29,
+          "range": 0,
+          "sidesRange": 4
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        17
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorBelow": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            51,
+            62,
+            77,
+            255
+          ],
+          "gap": 43
+        },
+        {
+          "at": "right",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            53,
+            64,
+            79,
+            255
+          ],
+          "gap": 45
+        },
+        {
+          "at": "left",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.68,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#35404f",
+      "ringToken": "#35404f",
+      "ringExpected": [
+        53,
+        64,
+        79
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-unentered",
+      "position": "W5",
+      "state": "unentered",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\17-wide-b-unentered.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 23,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 24,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 25,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 26,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 27,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 28,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 29,
+          "range": 0,
+          "sidesRange": 4
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        18,
+        17,
+        16
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorBelow": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            51,
+            62,
+            77,
+            255
+          ],
+          "gap": 43
+        },
+        {
+          "at": "right",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            53,
+            64,
+            79,
+            255
+          ],
+          "gap": 45
+        },
+        {
+          "at": "left",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.68,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#35404f",
+      "ringToken": "#35404f",
+      "ringExpected": [
+        53,
+        64,
+        79
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-unknown",
+      "position": "W6",
+      "state": "unknown",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\18-wide-b-unknown.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        16,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorBelow": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        96,
+        76,
+        34,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            102,
+            81,
+            35,
+            255
+          ],
+          "gap": 82
+        },
+        {
+          "at": "right",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            227,
+            179,
+            65,
+            255
+          ],
+          "gap": 207
+        },
+        {
+          "at": "left",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 2.14,
+      "ringVsTokenGap": 114,
+      "connectorToken": "#e3b341",
+      "ringToken": "rgba(210, 153, 34, 0.4)",
+      "ringExpected": [
+        96,
+        76,
+        34
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-blocked",
+      "position": "W7",
+      "state": "blocked",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\19-wide-b-blocked.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        16,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorBelow": [
+        227,
+        179,
+        65,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        96,
+        76,
+        34,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            102,
+            81,
+            35,
+            255
+          ],
+          "gap": 82
+        },
+        {
+          "at": "right",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            227,
+            179,
+            65,
+            255
+          ],
+          "gap": 207
+        },
+        {
+          "at": "left",
+          "rgb": [
+            93,
+            74,
+            34,
+            255
+          ],
+          "gap": 73
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 2.14,
+      "ringVsTokenGap": 114,
+      "connectorToken": "#e3b341",
+      "ringToken": "rgba(210, 153, 34, 0.4)",
+      "ringExpected": [
+        96,
+        76,
+        34
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "b-ready",
+      "position": "W8",
+      "state": "ready",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\20-wide-b-ready.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 23,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 24,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 25,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 26,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 27,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 28,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 29,
+          "range": 0,
+          "sidesRange": 4
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        18,
+        17,
+        16
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 13,
+        "ly1": 26
+      },
+      "connectorAbove": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorBelow": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        53,
+        64,
+        79,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            57,
+            70,
+            86,
+            255
+          ],
+          "gap": 52
+        },
+        {
+          "at": "right",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            158,
+            203,
+            255,
+            255
+          ],
+          "gap": 221
+        },
+        {
+          "at": "left",
+          "rgb": [
+            49,
+            60,
+            74,
+            255
+          ],
+          "gap": 40
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.68,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#9ecbff",
+      "ringToken": "#35404f",
+      "ringExpected": [
+        53,
+        64,
+        79
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "a-closed",
+      "position": "W1",
+      "state": "done",
+      "current": false,
+      "surfaced": false,
+      "surfaceText": null,
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "none",
+      "zIndex": "2",
+      "border": 1,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\21-wide-a-closed.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 1,
+      "innerEdge": 10,
+      "usable": 8.5,
+      "interiorRgb": [
+        20,
+        25,
+        34
+      ],
+      "stripeRows": [
+        {
+          "y": 13,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 14,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 15,
+          "range": 0,
+          "sidesRange": 0
+        },
+        {
+          "y": 16,
+          "range": 0,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 0,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28,
+        29
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorBelow": [
+        63,
+        185,
+        80,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        30,
+        81,
+        47,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            31,
+            86,
+            48,
+            255
+          ],
+          "gap": 61
+        },
+        {
+          "at": "right",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            63,
+            185,
+            80,
+            255
+          ],
+          "gap": 160
+        },
+        {
+          "at": "left",
+          "rgb": [
+            29,
+            79,
+            46,
+            255
+          ],
+          "gap": 54
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 1.91,
+      "ringVsTokenGap": 79,
+      "connectorToken": "#3fb950",
+      "ringToken": "rgba(46, 160, 67, 0.42)",
+      "ringExpected": [
+        31,
+        82,
+        48
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 1
+    },
+    {
+      "pane": "wide",
+      "paneWidth": 1099,
+      "waveId": "a-surfaced",
+      "position": "W2",
+      "state": "ready",
+      "current": true,
+      "surfaced": true,
+      "surfaceText": "W1 done, W2 ready - press to open",
+      "background": "rgb(20, 25, 34)",
+      "backgroundImage": "linear-gradient(rgba(46, 160, 67, 0.14), rgba(46, 160, 67, 0.14))",
+      "zIndex": "2",
+      "border": 2,
+      "rasterScale": 1,
+      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\after\\shots\\22-wide-a-surfaced.png",
+      "centre": {
+        "x": 21,
+        "y": 21
+      },
+      "radius": 11,
+      "stroke": 2,
+      "innerEdge": 9,
+      "usable": 7.5,
+      "interiorRgb": [
+        24,
+        44,
+        39
+      ],
+      "stripeRows": [
+        {
+          "y": 14,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 15,
+          "range": 1,
+          "sidesRange": 1
+        },
+        {
+          "y": 16,
+          "range": 1,
+          "sidesRange": 0
+        }
+      ],
+      "stripeMaxRange": 1,
+      "stripePixels": 0,
+      "straySample": [],
+      "labelRows": [
+        20,
+        22,
+        19,
+        23,
+        18,
+        24,
+        17,
+        25,
+        26,
+        27,
+        28
+      ],
+      "labelBox": {
+        "lx0": 15,
+        "lx1": 27,
+        "ly0": 14,
+        "ly1": 27
+      },
+      "connectorAbove": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorBelow": [
+        158,
+        203,
+        255,
+        255
+      ],
+      "connectorGapAbove": 0,
+      "connectorGapBelow": 0,
+      "connectorAtBothEdges": true,
+      "ringRgb": [
+        86,
+        211,
+        100,
+        255
+      ],
+      "ringCardinals": [
+        {
+          "at": "top",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "right",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        },
+        {
+          "at": "bottom",
+          "rgb": [
+            158,
+            203,
+            255,
+            255
+          ],
+          "gap": 216
+        },
+        {
+          "at": "left",
+          "rgb": [
+            86,
+            211,
+            100,
+            255
+          ],
+          "gap": 167
+        }
+      ],
+      "ringComplete": true,
+      "ringContrast": 7.63,
+      "ringVsTokenGap": 0,
+      "connectorToken": "#9ecbff",
+      "ringToken": "#56d364",
+      "ringExpected": [
+        86,
+        211,
+        100
+      ],
+      "connectorGapToken": 0,
+      "ringGapToken": 0
+    }
+  ],
+  "failures": 0,
+  "checks": 219
+}
