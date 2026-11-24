@@ -55,4 +55,10 @@ question stays honestly missed until an answer exists.
   record, a direct second POST answers 409 `already_reasked` and starts no run; two concurrent POSTs on another item
   start one run; a live thread and a dead session are refused by name.
 - `node --test test/clarify-history-reask.test.js` - 14 tests, the guards and the byte-for-byte quote among them.
-- `npm test` - the full suite, once, before the PR.
+- The full suite, in two halves (the one runner stalls over all 442 files on this host): half A 1950 tests, 1939 pass,
+  11 fail; half B 1876 tests, 1861 pass, 15 fail (its third chunk printed its summary and then held the event loop, which
+  is the documented stall - the numbers are complete). Every failure is the pre-existing set this host has carried
+  (assistant role labels, initiatives/waves and settings routes, gateway permissions, the junctioned `node_modules`
+  walk, config/scratch paths, `verify-wave-file-exists.mjs` declaring itself a gate with no script), and the files this
+  change could plausibly touch - `project-open-route`, `reasoning-runs`, `rebase-route`, `project-rules`,
+  `project-turnover`, `refresh-row-route` - were re-run from a `git archive` of `origin/main` and fail there too.
