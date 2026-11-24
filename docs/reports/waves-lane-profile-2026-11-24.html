@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The waves lane was waiting on git, not computing: a profile, a keyed cache and one budget</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>The waves lane was waiting on git, not computing</h1>
+<p class="sub">agent-worktree-gui 1.166.10, branch <code>wtgui/read-queue-row-296-first-it-carries-the-868811</code>, cut from main at <code>4c256c79</code>. A profile of the sandbox panel, a cache keyed on the facts that decide each answer, and one budget for the whole fan-out. All line numbers are on this branch.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#296 in assistant-3's queue (the reader's live-panel measurements)</dd>
+  <dt>the lane</dt><dd>routes/waves.js:161 <code>laneView</code>, one GET per repaint</dd>
+  <dt>the seam</dt><dd>lib/wave-evidence.js:886 <code>collectWaveEvidence</code>; :327 <code>readLanding</code>; :499 <code>readMemberPath</code></dd>
+  <dt>the old memo</dt><dd>server.js <code>WAVE_EVIDENCE_TTL_MS</code> (30 s per member) - deleted, its key could not see a moved main</dd>
+  <dt>the new keys</dt><dd>(clone, sha, main ref) plus the ref's tip; (tree, path, stamp); (clone, ref, path) plus the tip</dd>
+  <dt>the budget</dt><dd>lib/wave-evidence.js:202 one 15 s budget for the whole answer, 6 members in flight</dd>
+  <dt>the tip read</dt><dd>lib/wave-evidence.js:144 <code>refTipOnDisk</code>, the ref files first, one <code>git rev-parse</code> when they cannot answer</dd>
+  <dt>the proof</dt><dd>test/wave-evidence-cache.test.js, 9 tests</dd>
+  <dt>the state frame</dt><dd>GET /api/state, 4,167,696 bytes, analysed in section 6</dd>
+</dl>
+
+<h2>1. What was measured, and on what</h2>
+<p>The reader's numbers came from the live panel: <code>GET /api/waves?initiative=...</code> answered 9.4 KB in 0.63 s, 2.80 s and 5.12 s on three consecutive warm calls, while <code>GET /api/initiatives</code> answered 212 KB in 0.42 s. That shape - a tiny answer with wildly variable latency - is a fan-out, not a payload. This report replaces the stopwatch with three instruments:</p>
+<ul>
+  <li>the panel's own phase clock: <code>?profile=1</code> on the waves route (routes/waves.js:276) wraps the read in lib/read-profile.js and answers <code>profile.phases</code>, <code>profile.operations</code> and the facts it read;</li>
+  <li><code>node --cpu-prof --cpu-prof-dir=...</code> on the sandbox panel, so the flame view covers the route and not just the test;</li>
+  <li><code>GIT_TRACE2_EVENT</code> on the panel's environment. Every git process writes an <code>"event":"start"</code> line, so the number of git subprocesses is counted from outside the code as well as by its own counter.</li>
+</ul>
+<p>The panel was booted from a sandbox state directory (a copy of the live stores, its own port, its own <code>dataDir</code>, <code>matrix.autoStart</code> off, fetch and refresh long) so nothing read or wrote the reader's board. The wave that was measured is a fixture: 8 task rows, each pointed at a <em>different</em> real worktree of this repository, folded under one wave whose exit gate is <code>main-moved</code>. That gate is the one check that makes every member's content be read against <code>origin/main</code>, so the fan-out is exercised on every call instead of being skipped as "no gate needs it".</p>
+<p>A tidier fixture would hide the defect: the six real initiatives on the live board currently have almost no evidence gates, which is why a warm read of them is fast today. The cost this row is about appears the moment a wave names a gate that reads content, and the fixture holds that condition still.</p>
+
+<h2>2. The flame view: no hot frame, and that is the finding</h2>
+<p>The CPU profile of the whole sandbox process, over a cold 9.8 s read, holds 97 samples. <span class="ok">54 of them are <code>(idle)</code></span>. The largest frame in the panel's own code is <code>pickTask</code> at lib/assistant/queue.js:756 with 3 samples; everything else that recurs is Node's module loader at boot. There is no hot JavaScript function because the time is not spent computing: it is spent waiting on child processes.</p>
+<table>
+  <tr><th>profile of the cold read</th><th>value</th><th>what it means</th></tr>
+  <tr><td>samples</td><td class="n">97</td><td>1 ms sampling over the run, CPU time only</td></tr>
+  <tr><td><code>(idle)</code></td><td class="n">54</td><td>more than half the wall clock, nothing running in the process</td></tr>
+  <tr><td>top panel frame</td><td class="n">pickTask, lib/assistant/queue.js:756, 3</td><td>queue folding, not the fan-out</td></tr>
+  <tr><td>route <code>evidence</code> phase</td><td class="n">8,985.7 ms</td><td>the wait the fan-out owns</td></tr>
+  <tr><td>git subprocesses, attributable</td><td class="n">28</td><td><code>profile.operations["git.calls"]</code> on the same read</td></tr>
+</table>
+<p>So the instrument that decides this row is <strong>the number of git subprocesses</strong>, and the second is the wait. A cache cannot make a spawn cheap; only not spawning can. That is why the change below is a key, a bound and a faster ref read, and not a data-structure optimisation.</p>
+<p class="note">Measurement conditions, stated plainly: the last sandbox run happened while this host's C: drive was 100 percent full (472 GB used, 326 MB free), which inflated wall-clock times (one <code>/api/state</code> read took 16 s). The route's own phase totals and the spawn counts are quoted as measured; the wall times in the table are what the socket answered, and they are noisy for that reason.</p>
+
+<h2>3. Three warm calls, before and after</h2>
+<p>The same 8-member wave, the same sandbox shape, the base build (main at <code>4c256c79</code>, version 1.166.9) against this branch. "Late" is one more call 31 s after the third warm call - past the old 30 s memo, which is the read a reader makes a minute later.</p>
+<table>
+  <tr><th>call</th><th>before: wall</th><th>before: route</th><th>before: git</th><th>after: wall</th><th>after: route</th><th>after: git</th><th>after: cache</th></tr>
+  <tr><td>cold (process start)</td><td class="n">5,090 ms</td><td class="n">5,071.6 ms</td><td class="n">42</td><td class="n">9,774 ms</td><td class="n">8,985.7 ms</td><td class="n">28 + 1 ref file</td><td class="n">8 misses</td></tr>
+  <tr><td>warm 1</td><td class="n">18 ms</td><td class="n">15.7 ms</td><td class="n">0</td><td class="n">260 ms</td><td class="n">249.3 ms</td><td class="n">0</td><td class="n">8 hits</td></tr>
+  <tr><td>warm 2</td><td class="n">30 ms</td><td class="n">12.5 ms</td><td class="n">0</td><td class="n">363 ms</td><td class="n">344.0 ms</td><td class="n">0</td><td class="n">8 hits</td></tr>
+  <tr><td>warm 3</td><td class="n">18 ms</td><td class="n">13.8 ms</td><td class="n">0</td><td class="n">196 ms</td><td class="n">124.7 ms</td><td class="n">0</td><td class="n">8 hits</td></tr>
+  <tr><td>late (31 s after warm 3)</td><td class="n">7,893 ms</td><td class="n">7,889.9 ms</td><td class="n">42</td><td class="n">1,306 ms</td><td class="n">27.8 ms</td><td class="n">0</td><td class="n">8 hits</td></tr>
+</table>
+<p>Read the two halves separately, because they answer different questions.</p>
+<ul>
+  <li><strong>The base build's warm calls are memo hits, and its late call is not.</strong> Its 30 s per-member memo (the deleted <code>WAVE_EVIDENCE_TTL_MS</code>) made three calls inside the window 12 to 16 ms of route work, and the first call after it paid the whole fan-out again: 7,890 ms and 42 git spawns for an answer of 13.8 KB. That is the reader's 2.80 s and 5.12 s: they were sampling a 30 s window, not a steady state.</li>
+  <li><strong>This branch's warm calls never leave the cache, and its late call is 28 ms.</strong> Three warm calls cost 249 + 344 + 125 = 718 ms of route work in total, every one of them 8 cache hits, 1 ref-file read and zero git processes. The late call is 27.8 ms of route work, also zero spawns. The spread between 125 and 344 ms is the queue fold (<code>phases.queues</code> 29 to 113 ms) and the event loop under a full disk, not the evidence read: <code>phases.evidence</code> is 4.5, 6.2 and 5.7 ms.</li>
+  <li><strong>The JSON is identical apart from the read's own timestamps.</strong> Comparing warm 1 against warm 3 recursively, with every <code>at</code> key and the <code>profile</code> block removed, there are <span class="ok">0 differences</span>: same waves, same members, same gate states, same sentences. The <code>at</code> keys are the read's own clock (the document, each member's evidence and each landing answer carry one), which is why they are the only thing that moves.</li>
+  <li><strong>The cold read is not the acceptance and it got no faster.</strong> 28 spawns against 42, but 8.99 s of route time against 5.07 s, because 8 members were read 6-wide on a host whose disk was full. Cold is bounded by the budget now (section 5) and is the one read a process pays; the row's complaint was the read <em>after</em> it.</li>
+</ul>
+<p>The independent counter agrees with the code's own: the before run's trace saw 53 and 56 git process starts around the cold and late calls (42 attributable to the route; the rest are the panel's own scan), and the after run saw 48 around the cold call and 0 around every warm and late call.</p>
+<p>The live panel shows the same shape in the other direction. <code>GET /api/initiatives</code> answers 211,877 bytes in 0.067 s from its own cache; the one live initiative with a <code>file-exists</code> gate answered <code>GET /api/waves</code> in 751 ms with <code>phases["member.files"] = 640.6</code> and 4 git calls - exactly the seam this branch caches. Its second read is a hit.</p>
+
+<h2>4. The cache: what each answer is keyed on, and when an entry dies</h2>
+<p>Two caches live in lib/wave-evidence.js, next to the reads that fill them, so every caller gets them: the waves route, the initiatives document, the wave driver and the tests. The invalidation rule is written at lib/wave-evidence.js:169 and repeated here because it is the load-bearing decision of this row.</p>
+<table>
+  <tr><th>read</th><th>key</th><th>validated against</th><th>why that is the deciding fact</th></tr>
+  <tr><td><code>readLanding</code> (a member's content on main)</td><td>clone + recorded sha + main ref</td><td>the main ref's tip sha, recorded on the entry as <code>mainSha</code></td><td>the sha is immutable content; the ref is whatever it names now. Nothing else can change the answer.</td></tr>
+  <tr><td><code>readMemberPath</code>, the tree half</td><td>tree + relative path</td><td>the stat's stamp: <code>mtimeMs:size:kind</code></td><td>a write, a touch, a delete or a replace changes the stamp and the answer is read again</td></tr>
+  <tr><td><code>readMemberPath</code>, the landing half (the tree is gone)</td><td>clone + resolved ref + relative path</td><td>the ref's tip sha</td><td>that read is <code>rev-parse</code> + <code>log -1</code> + <code>ls-tree</code>; its answer is decided by the tip exactly as a landing is</td></tr>
+</table>
+<h3>An entry dies when</h3>
+<ul>
+  <li><strong>the ref's tip is no longer the sha the entry compared against.</strong> This is the correctness device. A merge, a fetch or a local commit on main moves the tip, and the next read measures again instead of answering from the past.</li>
+  <li><strong>the key changes.</strong> A member whose recorded sha or whose pull request's head moved is a different key; the old entry is never consulted for the new content.</li>
+  <li><strong>it is older than 10 minutes</strong> (<code>WAVE_EVIDENCE_ENTRY_TTL_MS</code>, lib/wave-evidence.js:196). This is a memory bound and the pull request word's freshness window, never the landing rule. The PR state rides on a member's evidence and its own index has a 60 s TTL; an entry that outlived both would keep an OPEN pull request reading OPEN after it merged.</li>
+  <li><strong>the cache is full</strong> (600 entries): the oldest quarter is evicted, so one huge wave cannot throw away the whole board's answers.</li>
+</ul>
+<p><span class="no">An <code>unknown</code> answer is never stored.</span> Blindness is re-read on every call, so a git that comes back is noticed at once; a test proves it (section 7, test 5). A cached answer about a sha the clone has since pruned is still a true statement about main's content - the answer names the main sha it compared - and a fresh read of it would only add "and the sha is gone".</p>
+<h3>The tip is read out of the ref files, with git as the fallback</h3>
+<p>Every warm read has to know the tip, and <code>git rev-parse</code> costs a process: measured at 94 to 128 ms per call on this repository, and 28 to 42 of them was exactly the problem. A ref's value is also a file. <code>refTipOnDisk</code> (lib/wave-evidence.js:144) resolves the short name in git's own documented order - <code>&lt;name&gt;</code>, <code>refs/&lt;name&gt;</code>, <code>refs/tags/&lt;name&gt;</code>, <code>refs/heads/&lt;name&gt;</code>, <code>refs/remotes/&lt;name&gt;</code>, <code>refs/remotes/&lt;name&gt;/HEAD</code> - takes the first that exists, follows a symbolic ref up to three times, and reads both loose refs and <code>packed-refs</code> (cached by that file's mtime and size). A worktree's <code>.git</code> file is followed to its <code>gitdir</code> and <code>commondir</code>, so a member tree and the project checkout answer the same ref.</p>
+<p>Anything it cannot answer exactly - a candidate under <code>refs/tags/</code> (an annotated tag would need peeling), a directory that is not a repository, a ref no file names - returns null and <code>tipOf</code> (lib/wave-evidence.js:241) spawns the one <code>git rev-parse</code>. A ref update is atomic (git renames the new file over the old), so a reader sees the old value or the new one, never a torn one. The test compares the file answer against <code>git rev-parse</code> for a loose ref, a packed ref and a worktree (test 7).</p>
+<p>One tip read per <em>project</em> per request: every worktree of a repository shares one object store, so <code>tipScope</code> resolves the ref in the project checkout and the per-request <code>tips</code> map hands that one promise to every member. A wave of twelve worktrees pays one ref read, not twelve.</p>
+<h3>One behaviour is new: a member whose recorded sha IS the tip</h3>
+<p>The old read answered <code>unknown</code> for a member whose recorded commit was already main's tip, because the diff against its own base is empty ("the recorded sha changes no files against its own base"). That is a fact, not blindness: if the recorded sha equals the tip, its content <em>is</em> main's content. It is now <code>landed</code> by identity (lib/wave-evidence.js:262), which also makes it cacheable - before, such a member was re-read on every call forever, because unknown answers are not stored. The fixture happened to hold three of these and they were 10 of the 15 spawns on every warm read.</p>
+
+<h2>5. The fan-out: parallel, under one budget</h2>
+<p>The base build read members one at a time (the old comment said so: "promising a hundred git children at once would make the Initiatives tab the busiest thing on the box"), then a four-wide pool was added, each member still carrying its own 15 s timeout. A wave of sixteen members against a dead host was therefore sixteen timeouts, and a read that ran long could hold the route for minutes.</p>
+<table>
+  <tr><th>rule</th><th>value</th><th>where</th></tr>
+  <tr><td>members in flight</td><td class="n">6</td><td>lib/wave-evidence.js:203 <code>WAVE_EVIDENCE_CONCURRENCY</code></td></tr>
+  <tr><td>budget for the whole answer</td><td class="n">15,000 ms</td><td>lib/wave-evidence.js:202 <code>WAVE_EVIDENCE_BUDGET_MS</code> - the same ceiling one member used to be given, now spent by the wave</td></tr>
+  <tr><td>a member's own git call</td><td class="n">min(timeout, budget left)</td><td>lib/wave-evidence.js:952 - a call cannot outlive the answer's budget</td></tr>
+  <tr><td>a member that cannot start or finish</td><td class="n">error, not a guess</td><td><code>budgetEvidence</code>, lib/wave-evidence.js:853: <code>error</code> is the sentence a gate reports verbatim, and readWaveGate treats it as cannot tell</td></tr>
+</table>
+<p>The failure is fail-closed by construction: <code>readWaveGate</code> (lib/waves.js:939) answers <code>unknown</code> for a member whose evidence carries <code>error</code> or is missing, and unknown blocks a gate; it never becomes met. The budget is not a promise that every read finishes - it is the promise that a read finishes, tells you what it could not reach, and does not spend a timeout per member to do it.</p>
+
+<h2>6. GET /api/state: the 4.17 MB frame, and which part the board reads</h2>
+<p>Captured from the live panel today: <strong>4,167,696 bytes</strong> in one JSON body, 186 projects and 409 worktree rows. This is not changed by this branch - it is the second cost the row asked to have looked at - but the accounting is here so the next cut starts from facts.</p>
+<table>
+  <tr><th>top-level key</th><th>bytes</th><th>share</th><th>what it is</th></tr>
+  <tr><td><code>projects</code></td><td class="n">2,296,118</td><td class="n">55.1%</td><td>every project and its worktree rows (409 rows)</td></tr>
+  <tr><td><code>jobs</code></td><td class="n">1,492,494</td><td class="n">35.8%</td><td>92 job records: lines, tool timings, completions, prompts</td></tr>
+  <tr><td><code>assistant</code></td><td class="n">188,457</td><td class="n">4.5%</td><td>alerts, assistants, rules, watches, the journal</td></tr>
+  <tr><td><code>settings</code></td><td class="n">80,407</td><td class="n">1.9%</td><td>the Settings payload</td></tr>
+  <tr><td><code>hosts</code></td><td class="n">75,145</td><td class="n">1.8%</td><td>host records and what each project resolves to</td></tr>
+  <tr><td><code>spawn</code></td><td class="n">28,973</td><td class="n">0.7%</td><td>transport, default cwd, every project path</td></tr>
+  <tr><td>the rest</td><td class="n">6,102</td><td class="n">0.1%</td><td><code>skipped</code>, <code>paths</code>, <code>treeList</code>, <code>remoteWrites</code>, counters</td></tr>
+</table>
+<h3>Inside the rows</h3>
+<table>
+  <tr><th>row field</th><th>bytes</th><th>rows</th><th>does public/app.js read it?</th></tr>
+  <tr><td><code>todo</code></td><td class="n">1,069,280</td><td class="n">203</td><td>partly: the counts and the item list, and the item list only when a TODO is being edited (public/app.js:11858). The done items ride every frame.</td></tr>
+  <tr><td><code>collisions</code></td><td class="n">144,029</td><td class="n">30</td><td>yes (6 references)</td></tr>
+  <tr><td><code>sync</code></td><td class="n">84,020</td><td class="n">409</td><td>yes (4)</td></tr>
+  <tr><td><code>description</code></td><td class="n">77,886</td><td class="n">216</td><td>yes (7)</td></tr>
+  <tr><td><code>signals</code></td><td class="n">69,522</td><td class="n">409</td><td><span class="no">no reference</span></td></tr>
+  <tr><td><code>unmergedCommits</code></td><td class="n">58,730</td><td class="n">174</td><td><span class="no">no reference</span></td></tr>
+  <tr><td><code>review</code></td><td class="n">49,031</td><td class="n">69</td><td>yes (7)</td></tr>
+  <tr><td><code>named</code></td><td class="n">47,429</td><td class="n">102</td><td><span class="no">no reference</span></td></tr>
+  <tr><td><code>collisionHistory</code></td><td class="n">34,526</td><td class="n">5</td><td><span class="no">no reference</span></td></tr>
+  <tr><td><code>nameOffer</code></td><td class="n">18,769</td><td class="n">37</td><td><span class="no">no reference</span></td></tr>
+</table>
+<p>Across the 409 rows, <strong>311,679 bytes sit in 35 fields that <code>public/app.js</code> and <code>public/index.html</code> never name</strong> - <code>signals</code>, <code>unmergedCommits</code>, <code>named</code>, <code>collisionHistory</code>, <code>nameOffer</code>, <code>liveWhy</code>, <code>scannedAt</code>, <code>nextReadAt</code>, <code>branchBase</code> and smaller. The fields the board actually draws are the cheap ones: <code>path</code> (29 KB), <code>name</code> (14 KB), <code>branch</code> (9 KB), <code>verdict</code> (6 KB), <code>pr</code> (7 KB), <code>dirty</code> and <code>ahead</code> (under 1 KB together).</p>
+<h3>Inside the jobs</h3>
+<table>
+  <tr><th>job field</th><th>bytes</th><th>does the page read it from this frame?</th></tr>
+  <tr><td><code>toolTimings</code></td><td class="n">538,824</td><td><span class="no">no reference anywhere in public/</span> - it is written for the digest and the transcript</td></tr>
+  <tr><td><code>lines</code></td><td class="n">418,250</td><td>yes, for the live turn strip (public/app.js:612, :18157)</td></tr>
+  <tr><td><code>completion</code></td><td class="n">226,512</td><td><span class="no">no reference</span></td></tr>
+  <tr><td><code>stats</code></td><td class="n">43,576</td><td>yes (6)</td></tr>
+  <tr><td><code>prompt</code></td><td class="n">37,501</td><td>yes (12)</td></tr>
+</table>
+<p>So the frame is 4.17 MB, the board's own reading is dominated by the 409 rows and the live turn strip, and <strong>1,077 KB of it (25.8 percent) is carried for something else</strong>: 765 KB of <code>toolTimings</code> and <code>completion</code> that no page code names, plus 312 KB of row fields no page code names. The single biggest row field, <code>todo</code> at 1.07 MB, is read only as counts plus an item lookup while a TODO is edited. None of that is changed here; it is written down so the next cut has a map. The obvious candidates, in order: stop carrying <code>toolTimings</code> and <code>completion</code> in the snapshot (they belong to <code>/api/jobs</code>), then the 35 unread row fields, then <code>todo</code>'s done items.</p>
+
+<h2>7. Verification</h2>
+<p>The new file is test/wave-evidence-cache.test.js: 9 tests, real git in a temp repository, a git reader that counts its own spawns. The assertions that matter:</p>
+<table>
+  <tr><th>#</th><th>test</th><th>what it proves</th></tr>
+  <tr><td>1</td><td>the same sha against the same tip answers from the cache</td><td>second read has <code>cached: true</code> and <strong>0 git spawns</strong>; the answer is byte-identical to the measured one</td></tr>
+  <tr><td>2</td><td>a sha that moves is a different entry, and a main that moves re-reads and can flip the verdict</td><td>a new sha is measured (not cached); after a squash moves main under an unchanged member sha, the same key reads again and flips <code>not-landed</code> to <code>landed</code>; then an unmoved sha against the unmoved tip is a hit</td></tr>
+  <tr><td>3</td><td>a path in a tree is re-read when its stamp changes</td><td>a hit with no git at all, a touch is a miss, and a deleted file answers <code>absent</code> rather than the cached present</td></tr>
+  <tr><td>4</td><td>a path read out of main is re-read when main moves</td><td>present, hit with 0 spawns, then main removes the file and the tip moves: the answer follows</td></tr>
+  <tr><td>5</td><td>blindness is never cached</td><td>an unknown answer is re-read and is never marked <code>cached</code></td></tr>
+  <tr><td>6</td><td>a member whose recorded sha IS main's tip</td><td>landed by identity, then cached with no spawn</td></tr>
+  <tr><td>7</td><td>the ref tip from the ref files</td><td>equals <code>git rev-parse</code> for a loose ref, a packed ref and a worktree; null for an absent ref and a directory that is not a repo</td></tr>
+  <tr><td>8</td><td>members read in parallel</td><td>more than one member's git call is in flight at once</td></tr>
+  <tr><td>9</td><td>a spent budget answers cannot tell</td><td>every member is still answered, the skipped ones carry the budget sentence, the read returns inside a small multiple of the budget, and nothing past it is started</td></tr>
+</table>
+<p>Commands run, and their answers:</p>
+<pre>node --test test/wave-evidence-cache.test.js                      9 tests, 9 pass
+npm run test:module lib/wave-evidence.js                          77 tests, 77 pass
+node --test test/wave-evidence.test.js test/wave-evidence-scope.test.js
+                                                                  18 tests, 18 pass
+npm test                                                          run once before the pull request; totals in the PR body</pre>
+<p>The measurement harness is not committed: it seeds a fixture into a sandbox store and boots the tree's own <code>server.js</code> under <code>--cpu-prof</code>. Section 9 carries the recipe so it can be rebuilt in a minute.</p>
+
+<h2>8. What this does not fix</h2>
+<ul>
+  <li><strong>The cold read still pays the fan-out.</strong> The first read of a process, or the first read after a ref moves, measures every member: 5 git spawns each, 28 for the fixture. That is the honest cost of judging content, and the cache's job is that it is paid once.</li>
+  <li><strong>The queue fold is now the largest remaining phase of a warm read</strong> (<code>phases.queues</code> 29 to 113 ms). It reads four assistant queue files and builds a view per assistant on every request. A cache there is a separate decision, and a wrong one is easy: the queues are the facts a wave is folded from.</li>
+  <li><strong><code>/api/state</code> still carries 25.8 percent of bytes no page code reads</strong> (section 6). This branch does not change the frame. The report exists so the next cut does not have to re-measure it.</li>
+  <li><strong>The budget is a ceiling, not a target.</strong> A wave of forty members on a slow host will spend 15 s and answer cannot tell for the tail; that is deliberate (fail closed) and it is visible in the gate's sentence, but it is a real limit.</li>
+</ul>
+
+<h2>9. Reproduce</h2>
+<p>What the harness does, in order:</p>
+<pre>1. copy the live stores into a sandbox: initiatives.json, waves.json, assistants.json,
+   hosts.json, roles.json, todos.json, projects.json, tree-cache.json, labels.json and
+   every assistants/&lt;id&gt;/queue.json. Never the jobs store.
+2. write a config.json with its own port, dataDir = the sandbox, matrix.autoStart = false,
+   fetchSeconds and refreshSeconds long, and scanRoots left as the reader's.
+3. seed the fixture: N task rows (state running, project agent-worktree-gui, waveId wave-perf,
+   pipelineRun.assembly.commit = that worktree's HEAD) folded under
+   { id: "wave-perf", exitGate: { check: "main-moved", remote: "origin", main: "main" } }
+4. spawn: node --cpu-prof --cpu-prof-dir=&lt;prof&gt; server.js
+   with PANEL_CONFIG, HERMES_HOME, GIT_TRACE2_EVENT=&lt;trace&gt; and API_SERVER_KEY=""
+5. wait for /api/health and for rows on the board, then sleep 31 s so the base build's 30 s memo expires
+6. one cold GET /api/waves?initiative=init_perf&amp;profile=1, three warm ones, one more 31 s later
+7. count "event":"start" lines in the trace around each call, and read measure.json</pre>
+<p>The route's own answer carries the load-bearing numbers: <code>profile.phases.evidence</code>, <code>profile.operations["git.calls"]</code>, <code>landing.cache.hit</code>, <code>landing.cache.miss</code>, <code>ref.disk</code>, <code>evidence.skipped</code>, <code>evidence.timedOut</code>. A reader who only wants the before-and-after can run the same fixture against <code>git archive 4c256c79</code> and against this branch; that is how section 3 was made.</p>
+
+<p class="small">Written against branch <code>wtgui/read-queue-row-296-first-it-carries-the-868811</code> at version 1.166.10, on top of main at <code>4c256c79</code>. The report and the code it describes are in the same pull request.</p>
+</main>
+</body>
+</html>
