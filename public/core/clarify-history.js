@@ -144,6 +144,19 @@
     return `showing ${s} of ${t}`;
   }
 
+  /**
+   * The four-direction count the popup prints, from the route's `fourDirections` summary. It is the design's
+   * denominator: "N of M cards this week offered four directions". A week with no card asked says so rather than
+   * printing "0 of 0", which reads like a failure instead of an empty week.
+   */
+  function fourDirectionsText(summary) {
+    const s = summary && typeof summary === "object" ? summary : {};
+    const week = Math.max(0, Number(s.week) || 0);
+    const cards = Math.max(0, Number(s.weekCards) || 0);
+    if (!cards) return "four directions: no card asked this week";
+    return `four directions: ${week} of ${cards} card${cards === 1 ? "" : "s"} this week`;
+  }
+
   root.wtClarifyHistory = {
     RENDER_CAP,
     STATES,
@@ -159,5 +172,6 @@
     namesOf,
     capOf,
     footText,
+    fourDirectionsText,
   };
 })(typeof window !== "undefined" ? window : globalThis);
