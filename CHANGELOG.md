@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.166.3 — 2026-11-24 · 3 commits
 
-[`4eee222`](https://github.com/JLRoper/agent-worktree-gui/commit/4eee222d7d54c74df262191254ba1db52e9c7229) · [compare v1.166.1...v1.166.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.1...v1.166.3)
+[`a14a0ca`](https://github.com/JLRoper/agent-worktree-gui/commit/a14a0ca3e9d85b02d527c53f37cbf01ff715dcd7) · [compare v1.166.1...v1.166.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.1...v1.166.3)
 
 ### Fixed
 
-- fix: a thinking row never loses its own first words ([`386f271`](https://github.com/JLRoper/agent-worktree-gui/commit/386f2719a777e8c9f6e4aee4a769ebd1cf3f8bfe))
+- fix: a thinking row never loses its own first words ([`1df8759`](https://github.com/JLRoper/agent-worktree-gui/commit/1df87596fde4135b9d6759709cb3d438d7defb8d))
 
 ### Docs & tests
 
@@ -29,7 +29,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.166.3 - the version this landing carries ([`4eee222`](https://github.com/JLRoper/agent-worktree-gui/commit/4eee222d7d54c74df262191254ba1db52e9c7229))
+- chore: 1.166.3 - the version this landing carries ([`a14a0ca`](https://github.com/JLRoper/agent-worktree-gui/commit/a14a0ca3e9d85b02d527c53f37cbf01ff715dcd7))
 
 ## v1.166.1 — 2026-11-24 · 6 commits
 
