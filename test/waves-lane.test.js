@@ -571,3 +571,54 @@ test("the chip's state is per task, and closing one leaves the other's answer ca
   const html = lane.memberHtml(reportMember({ id: 5 }));
   assert.match(html, />reports<\/button>/, "a task nobody read yet says reports, not another task's count");
 });
+
+// ---- the bar's two presses, and who owns it (row 291) ---------------------------------------------------------------
+// The reader's three asks are one element's layout plus two behaviours. The WIDTH is a CSS question proved on the real
+// page (tools/verify-waves-lane.mjs measures every bar against its section at 1440 and 768, with no card scrollbar);
+// what THIS file proves is the markup the presses are wired from:
+//
+//   * a member whose read carries its owner draws ONE chip with the id, the task and the title on it, in the worktree
+//     column's own tag language, and the tag is the same string that column derives for the same assistant;
+//   * the bar names the owner and the task, and its title is a real button, so the pointer presses the row and the
+//     keyboard presses the title;
+//   * a member whose row names no owner draws no press and no chip, instead of a chip that would name a guess.
+const ownedMember = (over = {}) => ({
+  id: 309,
+  title: "the record of a long task title that has to wrap rather than widen the bar",
+  project: "agent-worktree-gui",
+  state: "done",
+  thread: "t-a",
+  assistantId: "assistant-3",
+  assistantName: "Assistant #3",
+  assistantLabel: "Manager 3",
+  ...over,
+});
+
+test("an owned member carries the owner chip as the worktree column draws it: the tag, the id and the task", () => {
+  const html = lane.memberHtml(ownedMember());
+  assert.match(html, /data-member-owner="assistant-3"/);
+  assert.match(html, /data-wave-open="assistant-3" data-wave-task="309"/);
+  assert.match(html, /class="owner-tag wave-owner" data-wave-owner="assistant-3" data-wave-task="309"/);
+  // The tag is derived exactly as public/app.js `ownerTagOf` derives the worktree column's: initials + number.
+  assert.match(html, /"owner-tag wave-owner"[^>]*>M3<\/button>/);
+  assert.equal(lane.ownerTagOf(ownedMember()), "M3");
+  assert.equal(lane.ownerTagOf({ assistantLabel: "Manager 12" }), "M12");
+  assert.equal(lane.ownerTagOf({ assistantName: "Assistant #3" }), "A3");
+  // The chip carries the sentence's own fields, never a lookup at press time.
+  assert.match(html, /data-wave-title="the record of a long task title that has to wrap rather than widen the bar"/);
+});
+
+test("the bar's title is a button for the keyboard and the row carries the same press for the pointer", () => {
+  const html = lane.memberHtml(ownedMember());
+  assert.match(html, /<button type="button" class="wave-member-title wave-open" data-wave-open="assistant-3" data-wave-task="309"/);
+  assert.match(html, /<div class="wave-member"[^>]*data-wave-open="assistant-3" data-wave-task="309"/);
+  // The title is the words it always drew, not a control the reader has to learn.
+  assert.match(html, />the record of a long task title that has to wrap rather than widen the bar<\/button>/);
+});
+
+test("a member whose row names no owner keeps its title as text and grows no chip", () => {
+  const html = lane.memberHtml(ownedMember({ assistantId: null, assistantName: null, assistantLabel: null }));
+  assert.doesNotMatch(html, /data-wave-open=/);
+  assert.doesNotMatch(html, /data-wave-owner=/);
+  assert.match(html, /<span class="wave-member-title">/);
+});

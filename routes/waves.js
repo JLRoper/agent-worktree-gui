@@ -44,6 +44,7 @@ import {
   WAVE_TITLE_MAX,
   WAVES_MAX,
   WAVES_VERSION,
+  taskWithOwner,
   waveEvidenceNeeds,
   waveFileExistsPaths,
   waveLane,
@@ -98,7 +99,11 @@ export function queueRows(assistant) {
     } catch {
       view = null; // its own pane reports the error; a wave read must not fail because one queue did
     }
-    for (const task of Array.isArray(view?.tasks) ? view.tasks : []) out.push(task);
+    // THE OWNER IS STAMPED HERE, where the queue is: the file's directory is the only place a task's assistant is
+    // known, and every assistant numbers its own tasks from one (lib/waves.js `taskWithOwner`). The role label is the
+    // one the worktree column's owner chip draws, read through the Assistant so a renamed role renames both chips.
+    const label = typeof assistant?.roleLabelOf === "function" ? assistant.roleLabelOf(rec) : "";
+    for (const task of Array.isArray(view?.tasks) ? view.tasks : []) out.push(taskWithOwner(task, rec, label));
   }
   return out;
 }

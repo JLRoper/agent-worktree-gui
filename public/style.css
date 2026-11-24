@@ -5493,14 +5493,14 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-empty .as-actions { margin-top: 0; }
 
 /* ---- 5. THE ROUTE: one line down the card, a station per wave ------------------------------------ */
-#as-initiatives .init-wavefold { margin: 0 0 var(--tab-s3); padding-top: var(--tab-s3); border-top: 1px solid var(--tab-line); }
+#as-initiatives .init-wavefold { margin: 0 0 var(--tab-s3); padding-top: var(--tab-s3); border-top: 1px solid var(--tab-line); min-width: 0; }
 #as-initiatives .init-wavefold .init-sechead { display: flex; align-items: center; gap: var(--tab-s2); }
 #as-initiatives .init-wavefold .init-sechead .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; text-transform: none; letter-spacing: 0; }
 #as-initiatives .init-wave-note { order: 3; flex: 0 0 auto; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
 /* THE LINE. It runs behind every station, from the first to the last, in the emphasis hairline; a station paints its
    own stretch in its state colour, so the route reads before a single word does. "Behind every station" is a claim the
    station has to keep: it sits ON the connector, so its disc has to be OPAQUE or the line reads straight through it. */
-#as-initiatives .init-waves { position: relative; display: flex; flex-direction: column; gap: 20px; padding-left: 24px; }
+#as-initiatives .init-waves { position: relative; display: flex; flex-direction: column; gap: 20px; padding-left: 24px; min-width: 0; }
 #as-initiatives .init-waves::before { content: ""; position: absolute; left: 9px; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--tab-line-strong); }
 #as-initiatives .wave-row {
   position: relative;
@@ -5706,14 +5706,20 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .wave-lane .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
 #as-initiatives .wave-lane-read { margin-left: var(--tab-s2); font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
 #as-initiatives .wave-lanes-bad { margin-bottom: var(--tab-s2); }
-#as-initiatives .wave-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--tab-s2); min-width: 0; }
+/* THE BAR IS ONE FULL-WIDTH ROW (row 291): every member of a wave fills its section's content width, at the docked pane
+   and at the wide float, so the left inset and the right edge are the same for all of them and a long title wraps
+   instead of widening the bar. `flex-direction: column` here is what makes the row fill: a wrapped flex row sizes each
+   item from its content, which is exactly the "ends where its text ends" defect the reader's screenshot showed. The
+   wide drawing below turns the same row into a grid, one column per fact. */
+#as-initiatives .wave-members { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--tab-s2); min-width: 0; }
 #as-initiatives .wave-lane .wave-members { display: flex; flex-direction: column; gap: var(--tab-s1); margin-top: 6px; }
 #as-initiatives .wave-member {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
-  max-width: 100%;
+  gap: 4px var(--tab-s2);
+  width: 100%;
+  max-width: none;
   min-width: 0;
   min-height: var(--tab-member);
   padding: 3px var(--tab-s2);
@@ -5723,27 +5729,49 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   font-size: var(--tab-fs-meta);
   line-height: 1.5;
 }
+/* THE MIN-CONTENT TRAP, one level down from the card: a flex item's automatic minimum is its min-content width, so a
+   long title would still widen the row past the card unless every link in the chain may shrink. The row can, its
+   children can, and the title is the one that takes the space the chips do not. */
+#as-initiatives .wave-member > * { min-width: 0; max-width: 100%; }
 #as-initiatives .wave-member-id { flex: 0 0 auto; font-family: var(--tab-font-mono); font-weight: 600; font-size: 11px; color: var(--tab-ink-3); font-variant-numeric: tabular-nums; }
-#as-initiatives .wave-member-title { min-width: 0; overflow-wrap: anywhere; color: var(--tab-ink-2); }
+#as-initiatives .wave-member-title { flex: 1 1 12ch; min-width: 0; overflow-wrap: anywhere; color: var(--tab-ink-2); }
+/* The title is the bar's KEYBOARD press (the row itself is pressed with the pointer): a button drawn as the words it
+   already drew, so the lane gains a way in for the tab key without gaining a control that looks like one. */
+#as-initiatives button.wave-member-title {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives button.wave-member-title:hover { color: var(--tab-ink); text-decoration: underline; text-underline-offset: 2px; }
+#as-initiatives button.wave-member-title:focus-visible { outline: var(--tab-ring); outline-offset: 1px; border-radius: var(--tab-r1); }
 #as-initiatives .wave-member-project { min-width: 0; overflow-wrap: anywhere; padding: 0 5px; border-radius: var(--tab-r1); background: var(--tab-raised); font-family: var(--tab-font-mono); font-size: 10px; color: var(--tab-ink-3); }
 #as-initiatives .wave-member .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
+/* THE OWNER CHIP is the worktree column's `.owner-tag` (public/chart.css), unchanged: same font, box, border and
+   colours, because the two chips say the same fact - which assistant owns this - and must read as one thing. */
+#as-initiatives .wave-member .wave-owner { flex: 0 0 auto; }
 #as-initiatives .wave-mstate.is-queued { color: var(--tab-idle); border-color: var(--tab-idle-line); }
 #as-initiatives .wave-mstate.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
 #as-initiatives .wave-mstate.is-parked { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
 #as-initiatives .wave-mstate.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); background: transparent; }
 #as-initiatives .wave-mstate.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
-/* THE MANIFEST: at a pane that can hold it, a member is a row - 44px id, the title, a 150px project, an 80px state -
-   so two members compare down a column instead of wrapping into prose. */
+/* THE MANIFEST: at a pane that can hold it, a member is a row - 44px id, the title, a 150px project, the owner chip,
+   an 80px state, the reports chip - so two members compare down a column instead of wrapping into prose. The row is
+   the CARD'S full width: the 760px cap this rule used to carry is what made the bars stop short of the section. */
 @container (min-width: 900px) {
   #as-initiatives .wave-member {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 150px 80px;
+    grid-template-columns: 44px minmax(0, 1fr) 150px auto 80px auto;
     gap: var(--tab-s2);
     align-items: center;
     width: 100%;
-    max-width: 760px;
   }
   #as-initiatives .wave-member .chip { justify-self: start; }
+  #as-initiatives .wave-member .wave-owner { justify-self: start; }
 }
 #as-initiatives .wave-skipped { margin-top: var(--tab-s2); }
 #as-initiatives .wave-skip-row { overflow-wrap: anywhere; }

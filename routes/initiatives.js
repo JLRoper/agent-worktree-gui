@@ -20,7 +20,7 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
-import { WAVE_GATE_CHOICES, waveEvidenceNeeds, waveFileExistsPaths, waveLane } from "../lib/waves.js";
+import { WAVE_GATE_CHOICES, taskWithOwner, waveEvidenceNeeds, waveFileExistsPaths, waveLane } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
@@ -84,7 +84,7 @@ function taskRowOf(task, nowMs, rowFor) {
  * The whole tab's document, built from the store plus the two things only the composition root knows: which project a
  * path belongs to, and what the board's row for it says. Pure enough to run over a fixture: every seam is a function.
  */
-export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null, evidenceFor = null, boardTasks = null }) {
+export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null, evidenceFor = null, boardTasks = null, ownerLabel = null }) {
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
   const level = initiativeTierInfo(tier);
@@ -96,7 +96,12 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       } catch {
         view = null; // a queue that cannot be read is an empty one for this tab; its own pane still reports the error
       }
-      return { rec, tasks: Array.isArray(view?.tasks) ? view.tasks : [] };
+      // THE OWNER IS STAMPED WHERE THE QUEUE IS READ (lib/waves.js `taskWithOwner`): every assistant numbers its own
+      // tasks from one, so a wave member can only name and open the right queue when its row carries the id. The
+      // label is the Assistant's own role label, the one the worktree column's owner chip draws, and the caller
+      // supplies it because this fold holds no Assistant.
+      const label = typeof ownerLabel === "function" ? ownerLabel(rec) : "";
+      return { rec, tasks: (Array.isArray(view?.tasks) ? view.tasks : []).map((task) => taskWithOwner(task, rec, label)) };
     }),
   );
   // Every assistant's rows, flattened once: a wave's members are the tasks that NAME it, from any project (decision
@@ -307,7 +312,7 @@ export function createInitiativesRoutes({
       } catch {
         view = null; // its own pane reports the error; a wave read must not fail because one queue did
       }
-      for (const task of Array.isArray(view?.tasks) ? view.tasks : []) out.push(task);
+      for (const task of Array.isArray(view?.tasks) ? view.tasks : []) out.push(taskWithOwner(task, rec, typeof assistant?.roleLabelOf === "function" ? assistant.roleLabelOf(rec) : ""));
     }
     return out;
   };
@@ -348,6 +353,7 @@ export function createInitiativesRoutes({
         rowFor,
         assistants: Array.isArray(assistant?.assistants) ? assistant.assistants : [],
         queueFor: (id) => (typeof assistant?.queueView === "function" ? assistant.queueView(id) : null),
+        ownerLabel: (rec) => (typeof assistant?.roleLabelOf === "function" ? assistant.roleLabelOf(rec) : ""),
         tier: tierOf(),
         waves,
         templateExists,

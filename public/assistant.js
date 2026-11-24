@@ -1847,6 +1847,10 @@
     syncSessionTabs();
     for (const rec of sessionRecords()) renderAssistantChat(rec.id);
     if (state.assistantOpen) renderAssistant();
+    // A reload asked for a task (`#task=<assistant>/<id>`, written by openTaskRef): now that the roster is here, take
+    // the reader to it through the same open path a press takes. A hash that names nobody is tried again on the next
+    // snapshot, never spent on a guess.
+    restoreTaskRef();
   }
 
   // The waiting spawn cards. `who` is the scope the caller speaks for: the float's header badge asks for the SELECTED
@@ -2444,9 +2448,55 @@
   // carrying the id centred in the pane with the chart's green pulse on it. The row may be outside the window the
   // pane draws, or in a queue this tab has never read - queueOpenTask widens the window or makes ONE read and
   // retries, and says so on the pane when the id is really not there. Nothing is sent.
+  //
+  // THE ADDRESS IS WRITTEN ON THE PRESS (row 291, ask 2). The queue's deep link was a function and nothing more: a
+  // reload lost where it had put the reader. `#task=<assistant>/<id>` is the smallest thing that survives one - the
+  // page reads it on its first paint that knows the roster (restoreTaskRef below) and takes this same path - and it is
+  // written with replaceState, so opening four tasks does not leave four entries in the reader's back history.
+  const TASK_HASH = "#task=";
+  const taskHashFor = (own, id) => `${TASK_HASH}${encodeURIComponent(own)}/${encodeURIComponent(id)}`;
+  function rememberTaskRef(own, id) {
+    try {
+      const next = taskHashFor(own, id);
+      if (window.location.hash !== next) window.history.replaceState(null, "", next);
+    } catch {
+      /* a page that cannot write its address still opens the task; only the reload is lost */
+    }
+  }
+  let taskHashTried = false;
+  function restoreTaskRef() {
+    if (taskHashTried) return;
+    const hash = String(window.location.hash || "");
+    const m = /^#task=([^/]+)\/([^/]+)$/.exec(hash);
+    if (!m) {
+      taskHashTried = true;
+      return;
+    }
+    let own = "";
+    let id = "";
+    try {
+      own = decodeURIComponent(m[1]);
+      id = decodeURIComponent(m[2]);
+    } catch {
+      taskHashTried = true;
+      return;
+    }
+    // The roster arrives with the first assistant snapshot: until it names the owner there is nothing to open, and
+    // the next snapshot calls this again rather than the address being spent on a guess.
+    if (!isAssistant(own)) return;
+    taskHashTried = true;
+    void openTaskRef(own, id);
+  }
   async function openTaskRef(assistantId, taskId) {
-    if (!showAssistantPane(assistantId, "queue")) return false;
-    return queueOpenTask(assistantId, taskId);
+    const own = String(assistantId || "").trim();
+    const id = String(taskId || "").trim();
+    if (!showAssistantPane(own, "queue")) {
+      showBanner(`task #${id || "?"} names ${own || "no assistant"}, which is not on the board any more - its queue cannot be opened`);
+      return false;
+    }
+    const landed = await queueOpenTask(own, id);
+    if (landed) rememberTaskRef(own, id);
+    return landed;
   }
 
   // The chart's owner column chip (M1, M2, A1): that assistant's Chat, with the reader's sentence already started
@@ -2462,6 +2512,47 @@
     if (!box) return false;
     const about = [at.project, at.worktree, at.branch].map((s) => String(s ?? "").trim()).filter(Boolean).join(" ");
     writeBox(box, `Regarding ${about}: `);
+    box.focus({ preventScroll: true });
+    setCaretOffset(box, readBox(box).length);
+    return document.activeElement === box;
+  }
+
+  // THE WAVE BAR'S OWNER CHIP (row 291, ask 3): that assistant's Chat, with the reader's question about ONE TASK
+  // already typed - "I have a question about #<id> <title>... " - the caret after it and the box focused, so the first
+  // keystroke continues the sentence. The same rule as the chart's chip above: NOTHING is sent, Enter stays the
+  // reader's to press, and an assistant with no turn yet is handed its intro box rather than an invented one.
+  //
+  // THE PREFILL IS KEPT AS A DRAFT. The composer already holds whatever the reader has typed until it is sent or
+  // cleared, and the page's repaints hand that text back (public/app.js restoreTyping, fed by state.replyDrafts); a
+  // chip that DISCARDED the sentence when the reader clicked away would throw away words they may have already added
+  // a line to, and an accidental press would leave them nothing to return to. Keeping it costs one draft they can
+  // select and delete, and the `input` event below is what makes it a draft rather than text a repaint would erase.
+  function openQuestionAbout(at) {
+    const own = String(at?.assistantId || "").trim();
+    if (!showAssistantPane(own, "chat")) {
+      showBanner(`that task is owned by ${own || "an assistant"}, which is not on the board any more - it has no composer to ask in`);
+      return false;
+    }
+    const rec = sessionById(own);
+    const thread = String(rec?.threadId || "");
+    const chat = hostFor(own, "chat");
+    // The box the assistant TYPES into: the thread's own reply box when it has a turn on screen, else its intro box.
+    const box =
+      (thread ? chat?.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`) : null) ||
+      chat?.querySelector(".reply-box[data-reply]") ||
+      as$(firstBoxId(own));
+    if (!box) return false;
+    const id = String(at?.taskId || "").trim();
+    const title = String(at?.title || "").replace(/\s+/g, " ").trim();
+    writeBox(box, `I have a question about #${id}${title ? ` ${title}` : ""}... `);
+    // The composer's own draft contract (public/app.js, the `input` listener on `.reply-box`): an input event puts the
+    // sentence in state.replyDrafts, so the transcript's next repaint draws it back instead of emptying the box.
+    try {
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    } catch {
+      /* a box with no window still holds the words */
+    }
+    box.scrollIntoView({ block: "center", behavior: "auto" });
     box.focus({ preventScroll: true });
     setCaretOffset(box, readBox(box).length);
     return document.activeElement === box;
@@ -8034,6 +8125,11 @@
   // worktree, the branch) and this opens that assistant's Chat with "Regarding <project> <worktree> <branch>: " in the
   // box, the caret at the end and the box focused. Nothing is sent.
   window.__assistantRegarding = openRegarding;
+  // The wave lane's bar and its owner chip (public/core/waves-lane.js, row 291): the bar opens a task in its owning
+  // assistant's queue (the same path a `#405` anchor takes, and the address survives a reload), and the chip asks that
+  // assistant about the task with the sentence already typed. Neither sends anything.
+  window.__assistantTaskRef = openTaskRef;
+  window.__assistantQuestionAbout = openQuestionAbout;
   // The task id in the transcript: app.js's renderer asks this for the assistant that owns an id while the console is
   // being built (public/render-jobs.js -> core/console-markdown.js). null means no one owner, and the words stay plain.
   window.__assistantTaskLink = taskOwnerOf;
