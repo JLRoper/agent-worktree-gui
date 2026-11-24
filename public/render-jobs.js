@@ -224,6 +224,8 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = n
   const body = stream
     ? streamBodyHtml(turn, lines, lines.length < all.length, thread, taskLink)
     : condensedBodyHtml(turn, lines, busy, storeSeen, taskLink);
+  // The body is the TURN'S, not the card's: the approval box and its record used to be the last two lines of this
+  // return, which is why a folded turn drew neither (row #286). They are drawn by turnBlock now, in every shape.
   return (
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
@@ -242,8 +244,7 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = n
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
-    turnSubagentsHtml(turn, copy) +
-    approvalPrompt(turn, copy) + approvalDecided(turn)
+    turnSubagentsHtml(turn, copy)
   );
 }
 
@@ -265,7 +266,12 @@ function conversationTaskLink(conv) {
 //
 // `ask` is that block, rendered once by `conversationHtml` for the turn and handed in: one question, one block, in the
 // one place the turn is drawn (the page copy, the pinned copy when the turn is off-page, or the card's off-page block).
-function turnBlock(conv, turn, index, copy = "", taskLink = null, ask = "") {
+//
+// `park` is the APPROVAL's block and follows the same rule for the same reason (row #286). It used to be the last
+// thing `turnBody` drew, and `turnBody` is called only for an open turn - so folding a turn that was waiting on a
+// flagged command took the box away with the console, and the dock was the one surface still showing it. Whatever
+// carries the console also carries the park: both blocks are the TURN's, not the open form's.
+function turnBlock(conv, turn, index, copy = "", taskLink = null, ask = "", park = "") {
   const open = turnIsOpen(conv, turn, copy);
   const tkey = turnKey(turn, copy);
   // The rail down the turns' left edge is violet while a turn is executing, slate otherwise, so `is-running`
@@ -279,18 +285,18 @@ function turnBlock(conv, turn, index, copy = "", taskLink = null, ask = "") {
   const cls = `turn${open ? "" : " folded"}${compact ? " compact" : ""}${running ? " is-running" : ""}${rang}`;
   if (compact) {
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
-      `${turnAttachmentsHtml(turn)}${compactHtml(turn, copy)}${ask}${subagentsCompactHtml(turn, copy)}</div>`;
+      `${turnAttachmentsHtml(turn)}${compactHtml(turn, copy)}${park}${ask}${subagentsCompactHtml(turn, copy)}</div>`;
   }
   if (!open) {
     // Two rows: the head carries the request, the peek carries what the turn is doing or concluded - and a turn that
     // delegated something keeps saying so as it ages up the list, rather than handing its children to the newest turn.
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
-      `${peekHtml(turn)}${ask}${turnAttachmentsHtml(turn)}${subagentsCompactHtml(turn, copy)}</div>`;
+      `${peekHtml(turn)}${park}${ask}${turnAttachmentsHtml(turn)}${subagentsCompactHtml(turn, copy)}</div>`;
   }
   return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy, true)}` +
     // The request stays on the head line whether the turn is open or folded: it is the turn's title either
     // way, and the open form used to drop it onto its own row, which pushed the transcript down for nothing.
-    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread, taskLink)}${ask}</div>`;
+    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread, taskLink)}${park}${ask}</div>`;
 }
 
 function conversationHtml(conv) {
@@ -502,11 +508,24 @@ function conversationHtml(conv) {
         .map((t) => `<div class="tqa-head mono" title="this turn is on another page of this thread - the question is drawn here until it is answered">turn ${turnSeqOf(t)} of this thread · not on the page you are reading</div>${questionPrompt(t, "away")}`)
         .join("")}</div>`
     : "";
-  blocks.html = pageTurns.map((t, i) => turnBlock(conv, t, blocks.start + i, "", taskLink, askFor(t))).join("");
+  // ---- the approval box's ONE place --------------------------------------------------------------------------------
+  // The same three cases, for the same reason, on the other park a turn can hold (row #286). The box and the record it
+  // leaves are drawn by the turn block in every shape, so this only decides WHICH block: the turn's own copy while the
+  // turn is on the page, the pinned copy when the turn is pinned and off the page, otherwise a block at the top of the
+  // card naming the turn. Only a park still WAITING is pulled up here: a decided record is a trace and stays with the
+  // turn it belongs to instead of following the reader across pages.
+  const parkFor = (t, copy = "") => approvalPrompt(t, copy) + approvalDecided(t);
+  const approvalsAway = turns.filter((t) => t.approval && !pageIds.has(t.id) && !pinnedIds.has(t.id));
+  const approvalsAwayHtml = approvalsAway.length
+    ? `<div class="turn-approval-away">${approvalsAway
+        .map((t) => `<div class="taa-head mono" title="this turn is on another page of this thread - the approval it is parked on is drawn here until it is answered">turn ${turnSeqOf(t)} of this thread · not on the page you are reading</div>${parkFor(t, "away")}`)
+        .join("")}</div>`
+    : "";
+  blocks.html = pageTurns.map((t, i) => turnBlock(conv, t, blocks.start + i, "", taskLink, askFor(t), parkFor(t))).join("");
   const pinnedHtml = pinned.length
     ? `<div class="pinned-turns">
         <div class="pinned-head mono"><span>\u2605 pinned</span><span class="dimmer">${pinned.length} of ${turns.length}</span></div>
-        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN, taskLink, pageIds.has(t.id) ? "" : askFor(t, wtTurnFold.PIN))).join("")}
+        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN, taskLink, pageIds.has(t.id) ? "" : askFor(t, wtTurnFold.PIN), pageIds.has(t.id) ? "" : parkFor(t, wtTurnFold.PIN))).join("")}
       </div>`
     : "";
   const pager = pages > 1
@@ -581,6 +600,7 @@ function conversationHtml(conv) {
     ${artSplit.files.length ? artifactsPopHtml(thread, artSplit.files, state.openArtifacts.get(thread)?.kind !== "url" ? state.openArtifacts.get(thread) : null, "file") : ""}
     ${artSplit.urls.length ? artifactsPopHtml(thread, artSplit.urls, state.openArtifacts.get(thread)?.kind === "url" ? state.openArtifacts.get(thread) : null, "url") : ""}
     <div class="job-body">
+      ${approvalsAwayHtml}
       ${awayHtml}
       ${pinnedHtml}
       ${blocks.html}
@@ -852,6 +872,13 @@ function updateJob(j, { scroll = false } = {}) {
   const askedNow =
     Boolean(j.question) &&
     (!prev?.question || String(prev.question.requestId || "") !== String(j.question.requestId || "") || prev.question.question !== j.question.question);
+  // An approval that has just parked is the same kind of arrival, and gets the same landing (row #286): the box is
+  // drawn by the turn block now, but it can still be pages down the board when the run stops.
+  const approvalAskedNow =
+    Boolean(j.approval) &&
+    (!prev?.approval ||
+      String(prev.approval.requestId || "") !== String(j.approval.requestId || "") ||
+      String(prev.approval.command || "") !== String(j.approval.command || ""));
   // A parked approval appearing or being answered changes what the ROW badge and the project chip say,
   // and neither follows a status change (a run stays "running" through both). Without this the row kept
   // advertising "awaiting approval" after the question was answered.
@@ -881,6 +908,11 @@ function updateJob(j, { scroll = false } = {}) {
     // After the repaint, so the box that is landed on is the one this frame drew. The assistant's own card is in the
     // float (its body is the scroller there), and the page-level helper reads whichever host holds it.
     if (typeof landClarifyQuestion === "function") landClarifyQuestion(j.thread || j.id, j.question?.requestId || "");
+  }
+  if (approvalAskedNow) {
+    // The same landing, after the same repaint: an approval the reader never scrolled to is a turn that times out
+    // while the amber box sits below the fold (row #286).
+    if (typeof landApprovalBlock === "function") landApprovalBlock(j.id, j.approval?.requestId || "");
   }
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged || approvalChanged) {
