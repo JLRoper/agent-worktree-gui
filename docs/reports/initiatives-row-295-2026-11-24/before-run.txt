@@ -1,0 +1,115 @@
+tree: C:\Users\roper\AppData\Local\Temp\wag\4a7abdcb\base
+home: C:\Users\roper\AppData\Local\Temp\wag-row295-26632
+shots: C:/Users/roper/AppData/Local/Temp/wag/4a7abdcb/shots-before
+PASS  the panel is on the docked frame through its own route: "docked"
+
+== dock 480 ==
+      init_kafka: head closed 410px / open 401px; available 392px / 323.72px; lines closed ["Kafka rating pipeline hardening across the consumer, the","retry topic and the DBA-signed verify pack"] open ["Kafka rating pipeline hardening across the","consumer, the retry topic and the DBA-signed","verify pack"]
+FAIL  at dock 480 the init_kafka name's row is the folded row's own width - 410 -> 401 at x 1174 / 1174
+FAIL  at dock 480 the init_kafka title is offered the same width open and closed - 392px -> 323.72px
+FAIL  at dock 480 the init_kafka title breaks at the same words open and closed - closed ["Kafka rating pipeline hardening across the consumer, the","retry topic and the DBA-signed verify pack"] open ["Kafka rating pipeline hardening across the","consumer, the retry topic and the DBA-signed","verify pack"]
+FAIL  at dock 480 the init_kafka title's rect is where it was, at the same font - x 1174->1174, 15.5px/19.375px -> 15.5px/19.375px, h 38.75->58.13
+FAIL  at dock 480 the open init_kafka name fills the row it is offered - title 323.72px of 323.72px offered, right edge 1497.72 vs row 1575 - 18
+PASS  at dock 480 the init_kafka card gains no horizontal scrollbar in either state: closed 463/463, open 461/461
+      init_release: head closed 410px / open 401px; available 392px / 323.72px; lines closed ["Quarter-end release readiness"] open ["Quarter-end release readiness"]
+FAIL  at dock 480 the init_release name's row is the folded row's own width - 410 -> 401 at x 1174 / 1174
+FAIL  at dock 480 the init_release title is offered the same width open and closed - 392px -> 323.72px
+PASS  at dock 480 the init_release title breaks at the same words open and closed: closed ["Quarter-end release readiness"] open ["Quarter-end release readiness"]
+PASS  at dock 480 the init_release title's rect is where it was, at the same font: x 1174->1174, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->19.38
+FAIL  at dock 480 the open init_release name fills the row it is offered - title 323.72px of 323.72px offered, right edge 1497.72 vs row 1575 - 18
+PASS  at dock 480 the init_release card gains no horizontal scrollbar in either state: closed 463/463, open 461/461
+      init_sso: head closed 410px / open 401px; available 392px / 323.72px; lines closed ["Menu SSO migration"] open ["Menu SSO migration"]
+FAIL  at dock 480 the init_sso name's row is the folded row's own width - 410 -> 401 at x 1174 / 1174
+FAIL  at dock 480 the init_sso title is offered the same width open and closed - 392px -> 323.72px
+PASS  at dock 480 the init_sso title breaks at the same words open and closed: closed ["Menu SSO migration"] open ["Menu SSO migration"]
+PASS  at dock 480 the init_sso title's rect is where it was, at the same font: x 1174->1174, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->19.38
+FAIL  at dock 480 the open init_sso name fills the row it is offered - title 323.72px of 323.72px offered, right edge 1497.72 vs row 1575 - 18
+PASS  at dock 480 the init_sso card gains no horizontal scrollbar in either state: closed 463/463, open 461/461
+      init_sweeper: head closed 410px / open 401px; available 392px / 323.72px; lines closed ["Batch sweeper retry budget"] open ["Batch sweeper retry budget"]
+FAIL  at dock 480 the init_sweeper name's row is the folded row's own width - 410 -> 401 at x 1174 / 1174
+FAIL  at dock 480 the init_sweeper title is offered the same width open and closed - 392px -> 323.72px
+PASS  at dock 480 the init_sweeper title breaks at the same words open and closed: closed ["Batch sweeper retry budget"] open ["Batch sweeper retry budget"]
+PASS  at dock 480 the init_sweeper title's rect is where it was, at the same font: x 1174->1174, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->19.38
+FAIL  at dock 480 the open init_sweeper name fills the row it is offered - title 323.72px of 323.72px offered, right edge 1497.72 vs row 1575 - 18
+PASS  at dock 480 the init_sweeper card gains no horizontal scrollbar in either state: closed 463/463, open 461/461
+      init_release: folded whole, drawn 280px of 280px needed, control "" hidden=true
+PASS  at dock 480 the init_release description's whole text is in the DOM, and findable on the page: 776 chars in the body, store 776, last words findable true
+FAIL  at dock 480 the init_release description fits its clamp, is drawn whole, and gains no control - 280px drawn of 280px needed, control hidden true 0px wide
+      init_kafka: folded whole, drawn 320px of 320px needed, control "" hidden=true
+PASS  at dock 480 the init_kafka description's whole text is in the DOM, and findable on the page: 706 chars in the body, store 706, last words findable true
+FAIL  at dock 480 the init_kafka description fits its clamp, is drawn whole, and gains no control - 320px drawn of 320px needed, control hidden true 0px wide
+      init_sweeper: folded whole, drawn 40px of 40px needed, control "" hidden=true
+PASS  at dock 480 the init_sweeper description's whole text is in the DOM, and findable on the page: 124 chars in the body, store 124, last words findable true
+FAIL  at dock 480 the init_sweeper description fits its clamp, is drawn whole, and gains no control - 40px drawn of 40px needed, control hidden true 0px wide
+      bars: #21 flex [id > title > project > owner > status > reports] 351/351px | #11 flex [id > title > project > owner > status] 324/324px | #13 flex [id > title > project > owner > status > reports] 324/324px
+PASS  at dock 480 the wave lane draws its task bars: 3 bars
+FAIL  at dock 480 every bar reads #id, owner, status, name, project, reports in the DOM - [["id","title","project","owner","status","reports"],["id","title","project","owner","status","reports"],["id","title","project","owner","status","reports"]]
+FAIL  at dock 480 every bar reads that way to the eye too - its first line, left to right - [["id","title","project","owner","status","reports"],["id","title","project","owner","status"],["id","title","project","owner","status","reports"]]
+FAIL  at dock 480 the owner and status chips sit left of the name - [["id@1220","title@1246","owner@1431","status@1463"],["id@1234","title@1260","owner@1460","status@1492"],["id@1234","title@1260","owner@1418","status@1450"]]
+FAIL  at dock 480 the reports chip keeps the bar's right edge - [{"id":"21","reports":1553,"content":1553},{"id":"11","reports":1280,"content":1540},{"id":"13","reports":1540,"content":1540}]
+PASS  at dock 480 every task bar is still its section's width (row 291): ["21:351/351","11:324/324","13:324/324"]
+PASS  at dock 480 no two items on one bar overlap: 2D rect intersection over every visible pair
+PASS  at dock 480 the card that holds the lane gains no horizontal scrollbar: ["21:461/461","11:461/461","13:461/461"]
+      shot C:\Users\roper\AppData\Local\Temp\wag\4a7abdcb\shots-before\dock-480.png
+PASS  the panel is on the floating frame through its own route: "floating"
+
+== wide float 1400 ==
+      init_kafka: head closed 1329px / open 498.09px; available 1311px / 420.81px; lines closed ["Kafka rating pipeline hardening across the consumer, the retry topic and the DBA-signed verify pack"] open ["Kafka rating pipeline hardening across the consumer, the","retry topic and the DBA-signed verify pack"]
+FAIL  at wide float 1400 the init_kafka name's row is the folded row's own width - 1329 -> 498.09 at x 62 / 62
+FAIL  at wide float 1400 the init_kafka title is offered the same width open and closed - 1311px -> 420.81px
+FAIL  at wide float 1400 the init_kafka title breaks at the same words open and closed - closed ["Kafka rating pipeline hardening across the consumer, the retry topic and the DBA-signed verify pack"] open ["Kafka rating pipeline hardening across the consumer, the","retry topic and the DBA-signed verify pack"]
+FAIL  at wide float 1400 the init_kafka title's rect is where it was, at the same font - x 62->62, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->38.75
+FAIL  at wide float 1400 the open init_kafka name fills the row it is offered - title 420.81px of 420.81px offered, right edge 482.81 vs row 560.09 - 18
+PASS  at wide float 1400 the init_kafka card gains no horizontal scrollbar in either state: closed 1382/1382, open 1380/1380
+FAIL  at wide float 1400 the init_kafka name's row sits above BOTH columns and reaches across them - head 62..560.09, desc 62..520.2, side 584.09..1382
+PASS  at wide float 1400 the init_kafka description and projects stay side by side beneath the name: areas "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist"
+      init_release: head closed 1329px / open 498.09px; available 1311px / 420.81px; lines closed ["Quarter-end release readiness"] open ["Quarter-end release readiness"]
+FAIL  at wide float 1400 the init_release name's row is the folded row's own width - 1329 -> 498.09 at x 62 / 62
+FAIL  at wide float 1400 the init_release title is offered the same width open and closed - 1311px -> 420.81px
+PASS  at wide float 1400 the init_release title breaks at the same words open and closed: closed ["Quarter-end release readiness"] open ["Quarter-end release readiness"]
+PASS  at wide float 1400 the init_release title's rect is where it was, at the same font: x 62->62, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->19.38
+FAIL  at wide float 1400 the open init_release name fills the row it is offered - title 420.81px of 420.81px offered, right edge 482.81 vs row 560.09 - 18
+PASS  at wide float 1400 the init_release card gains no horizontal scrollbar in either state: closed 1382/1382, open 1380/1380
+FAIL  at wide float 1400 the init_release name's row sits above BOTH columns and reaches across them - head 62..560.09, desc 62..520.2, side 584.09..1382
+PASS  at wide float 1400 the init_release description and projects stay side by side beneath the name: areas "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist"
+      init_sso: head closed 1329px / open 498.09px; available 1311px / 420.81px; lines closed ["Menu SSO migration"] open ["Menu SSO migration"]
+FAIL  at wide float 1400 the init_sso name's row is the folded row's own width - 1329 -> 498.09 at x 62 / 62
+FAIL  at wide float 1400 the init_sso title is offered the same width open and closed - 1311px -> 420.81px
+PASS  at wide float 1400 the init_sso title breaks at the same words open and closed: closed ["Menu SSO migration"] open ["Menu SSO migration"]
+PASS  at wide float 1400 the init_sso title's rect is where it was, at the same font: x 62->62, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->19.38
+FAIL  at wide float 1400 the open init_sso name fills the row it is offered - title 420.81px of 420.81px offered, right edge 482.81 vs row 560.09 - 18
+PASS  at wide float 1400 the init_sso card gains no horizontal scrollbar in either state: closed 1382/1382, open 1380/1380
+FAIL  at wide float 1400 the init_sso name's row sits above BOTH columns and reaches across them - head 62..560.09, desc 62..520.2, side 584.09..1382
+PASS  at wide float 1400 the init_sso description and projects stay side by side beneath the name: areas "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist"
+      init_sweeper: head closed 1329px / open 498.09px; available 1311px / 420.81px; lines closed ["Batch sweeper retry budget"] open ["Batch sweeper retry budget"]
+FAIL  at wide float 1400 the init_sweeper name's row is the folded row's own width - 1329 -> 498.09 at x 62 / 62
+FAIL  at wide float 1400 the init_sweeper title is offered the same width open and closed - 1311px -> 420.81px
+PASS  at wide float 1400 the init_sweeper title breaks at the same words open and closed: closed ["Batch sweeper retry budget"] open ["Batch sweeper retry budget"]
+PASS  at wide float 1400 the init_sweeper title's rect is where it was, at the same font: x 62->62, 15.5px/19.375px -> 15.5px/19.375px, h 19.38->19.38
+FAIL  at wide float 1400 the open init_sweeper name fills the row it is offered - title 420.81px of 420.81px offered, right edge 482.81 vs row 560.09 - 18
+PASS  at wide float 1400 the init_sweeper card gains no horizontal scrollbar in either state: closed 1382/1382, open 1380/1380
+FAIL  at wide float 1400 the init_sweeper name's row sits above BOTH columns and reaches across them - head 62..560.09, desc 62..520.2, side 584.09..1382
+PASS  at wide float 1400 the init_sweeper description and projects stay side by side beneath the name: areas "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist"
+      init_release: folded whole, drawn 260px of 260px needed, control "" hidden=true
+PASS  at wide float 1400 the init_release description's whole text is in the DOM, and findable on the page: 776 chars in the body, store 776, last words findable true
+FAIL  at wide float 1400 the init_release description fits its clamp, is drawn whole, and gains no control - 260px drawn of 260px needed, control hidden true 0px wide
+      init_kafka: folded whole, drawn 320px of 320px needed, control "" hidden=true
+PASS  at wide float 1400 the init_kafka description's whole text is in the DOM, and findable on the page: 706 chars in the body, store 706, last words findable true
+FAIL  at wide float 1400 the init_kafka description fits its clamp, is drawn whole, and gains no control - 320px drawn of 320px needed, control hidden true 0px wide
+      init_sweeper: folded whole, drawn 40px of 40px needed, control "" hidden=true
+PASS  at wide float 1400 the init_sweeper description's whole text is in the DOM, and findable on the page: 124 chars in the body, store 124, last words findable true
+FAIL  at wide float 1400 the init_sweeper description fits its clamp, is drawn whole, and gains no control - 40px drawn of 40px needed, control hidden true 0px wide
+      bars: #21 grid [id > title > project > owner > status > reports] 1270/1270px | #11 grid [id > title > project > owner > status > reports] 502/502px | #13 grid [id > title > project > owner > status > reports] 502/502px
+PASS  at wide float 1400 the wave lane draws its task bars: 3 bars
+FAIL  at wide float 1400 every bar reads #id, owner, status, name, project, reports in the DOM - [["id","title","project","owner","status","reports"],["id","title","project","owner","status","reports"],["id","title","project","owner","status","reports"]]
+FAIL  at wide float 1400 every bar reads that way to the eye too - its first line, left to right - [["id","title","project","owner","status","reports"],["id","title","project","owner","status","reports"],["id","title","project","owner","status","reports"]]
+FAIL  at wide float 1400 the owner and status chips sit left of the name - [["id@108","title@160","owner@1195","status@1226"],["id@122","title@174","owner@441","status@472"],["id@659","title@711","owner@978","status@1009"]]
+PASS  at wide float 1400 the reports chip keeps the bar's right edge: [{"id":"21","reports":1360,"content":1360},{"id":"11","reports":606,"content":606},{"id":"13","reports":1143,"content":1143}]
+PASS  at wide float 1400 every task bar is still its section's width (row 291): ["21:1270/1270","11:502/502","13:502/502"]
+PASS  at wide float 1400 no two items on one bar overlap: 2D rect intersection over every visible pair
+PASS  at wide float 1400 the card that holds the lane gains no horizontal scrollbar: ["21:1380/1380","11:1380/1380","13:1380/1380"]
+      shot C:\Users\roper\AppData\Local\Temp\wag\4a7abdcb\shots-before\wide-float-1400.png
+      the docked pane measured 672px
+PASS  no page errors and no console errors: 0 page, 0 console
+
+FAILED  42/87 checks passed; shots in C:/Users/roper/AppData/Local/Temp/wag/4a7abdcb/shots-before

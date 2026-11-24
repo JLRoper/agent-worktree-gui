@@ -91,8 +91,13 @@
   }
 
   /**
-   * One member: its id, its title, its project when it has one, its owner CHIP, the task's own state - or its named
-   * abandonment - and the reports chip, with the list behind it when the reader has unfolded it.
+   * One member: its id, its owner CHIP, its task's own state - or its named abandonment - its title, its project when
+   * it has one, then the reports chip on the right, with the list behind it when the reader has unfolded it.
+   *
+   * THE ORDER IS THE READER'S (row 295, ask 1): `#<id> | owner | status | <name ...>`, with the reports chip still at
+   * the right edge. The id leads, the two facts about WHO and WHERE it is come straight after it, and the words take
+   * the rest of the line; the project tag travels with the title because it names the same thing. Nothing else moved -
+   * the bar is still the section's full width and it still gains no scrollbar (row 291).
    *
    * THE BAR IS A PRESS (row 291, ask 2). `data-wave-open` names the owner and the task, so a press anywhere on the row
    * opens that task in the OWNING assistant's queue through the queue's own opener (`window.__assistantTaskRef`, the
@@ -129,7 +134,7 @@
     const why = [title, project ? `project ${project}` : "", ownName ? `owned by ${ownName}` : "", pipeline ? `pipeline ${pipeline}${member.pipelineFrom === "wave" ? " (the wave's template)" : ""}` : "", abandoned ? `abandoned: ${abandoned}` : ""]
       .filter(Boolean)
       .join(" - ");
-    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${own ? ` data-member-owner="${esc(own)}"` : ""}${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""}${openAttrs} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b>${titleEl}${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}${ownerChip}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
+    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${own ? ` data-member-owner="${esc(own)}"` : ""}${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""}${openAttrs} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b>${ownerChip}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${titleEl}${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
   }
 
   // ---- the reports chip: a task's .html reports, listed under its member row ----------------------------------------

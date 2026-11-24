@@ -236,10 +236,14 @@ const PAGE_FN = `(() => {
       target(".init-tree-name"),
       target(".init-assist-btn"),
       target(".init-assist-fold"),
-      target(".init-desc-head"),
+      target(".init-desc-more"),
       target(".init-form select"),
       target(".init-form .primary"),
-    ].filter(Boolean),
+      // A control that is deliberately NOT DRAWN is not a control the reader can hit: the description's show more is
+      // hidden when the text fits its clamp (row 295, ask 2), and measuring its 0x0 box as a hit target would fail the
+      // rubric on a correct layout. Drawn controls are still measured, and this gate's own case for the clamp asserts
+      // when the control IS drawn.
+    ].filter((t) => t && t.width > 0),
     left: {
       title: leftOf(".init-title"),
       description: leftOf(".init-desc"),

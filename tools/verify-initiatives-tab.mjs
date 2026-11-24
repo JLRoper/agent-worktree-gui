@@ -20,8 +20,9 @@
 //      store's bytes do not move while it waits. Allow once performs the move; Deny leaves the bytes identical and the
 //      chip in place.
 //   5. THE FOLDS: a card starts as its TITLE CARD - a title, a two-line preview of the description and the counts -
-//      and a press anywhere on the title unfolds it. Inside an open card the description folds on its own: its
-//      header, a button, gives Enter or Space, and the card's own state is not touched by it. A project is folded
+//      and a press anywhere on the title unfolds it. Inside an open card the description is CLAMPED to three lines
+//      (row 295, ask 2) with the whole text still in the DOM, and its show more / show less control - a button, so it
+//      gives Enter or Space - lifts the clamp; the card's own state is not touched by it. A project is folded
 //      until it is opened, worktrees only exist on expand, and the assistant detail rows are folded too. The preview
 //      is two line boxes of the card's own prose, cut on a word boundary, with three dots only when there is more
 //      text than those two lines.
@@ -425,6 +426,15 @@ try {
               descOpen: dhead?.getAttribute("aria-expanded") === "true",
               hasDescHeader: Boolean(dhead),
               descHeadTag: dhead?.tagName || "",
+              // THE CLAMP (row 295, ask 2): whether the control is drawn at all, what it says, and whether the body is
+              // the clamped drawing. `text` is the body's own textContent, so "the whole text is still in the DOM" is
+              // read from the DOM and not from the store.
+              descMore: dhead?.textContent.replace(/\s+/g, " ").trim() || "",
+              descMoreHidden: dhead ? dhead.hidden : null,
+              descMoreBox: dhead ? Math.round(dhead.getBoundingClientRect().height) : 0,
+              descClamped: Boolean(desc?.classList.contains("is-clamped")),
+              descHeight: desc ? Math.round(desc.getBoundingClientRect().height) : 0,
+              descLineHeight: desc ? Math.round(parseFloat(getComputedStyle(desc).lineHeight) || 0) : 0,
               projects: el.querySelectorAll(".init-project").length,
               trees: el.querySelectorAll(".init-tree").length,
               assistRows: el.querySelectorAll(".init-assist").length,
@@ -472,35 +482,46 @@ try {
         const opened = await cardState();
         ok("a press on the title card unfolds it, and the open head draws the open caret", opened.open === true && opened.caret === "▾" && opened.caretOpen === true && opened.headText.endsWith("▾") && opened.caretFs === "11px", `aria-expanded=${opened.open} caret=${JSON.stringify(opened.caret)} ${opened.caretFs} ${opened.headText}`);
         check("…its body is drawn: two project folds, no worktree rows yet, Edit present", { projects: opened.projects, trees: opened.trees, edit: opened.edit }, { projects: 2, trees: 0, edit: 1 });
-        ok("…and the description is whole, its own header saying so", opened.descOpen === true && opened.hasDescHeader && opened.descHeadTag === "BUTTON" && opened.dots === "", `desc aria-expanded=${opened.descOpen}`);
-        check("expanded, the description is the store's description, breaks and all", opened.text, storeDesc);
-        ok("…which is more lines than the preview drew", opened.lines > titleCard.lines, `${titleCard.lines} -> ${opened.lines} lines`);
-        await paneShot("card-open-description-whole");
-        await shot("card-open-description-whole-page");
+        // ROW 295, ASK 2: an expanded card opens CLAMPED, with show more drawn because this description overflows.
+        ok(
+          "…and the description is clamped to three lines, its show more control drawn because it overflows",
+          opened.descOpen === false && opened.descClamped === true && opened.descHeight === opened.descLineHeight * 3 && opened.descMore === "show more" && opened.descMoreHidden === false && opened.descMoreBox > 0 && opened.dots === "",
+          `clamped=${opened.descClamped} ${opened.descHeight}px / ${opened.descLineHeight}px per line, control ${JSON.stringify(opened.descMore)} hidden=${opened.descMoreHidden} ${opened.descMoreBox}px`,
+        );
+        check("…and THE WHOLE TEXT IS STILL IN THE DOM, not a cut copy of it", opened.text, storeDesc);
+        ok("…which is more lines than the preview drew", opened.lines > titleCard.lines, `${titleCard.lines} -> ${opened.lines} line boxes drawn`);
+        await paneShot("card-open-description-clamped");
+        await shot("card-open-description-clamped-page");
 
-        // ---- the description's own fold: the card stays open -----------------------------------------
+        // ---- show more: the clamp lifts, the card stays open -----------------------------------------
+        await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).click();
+        await waitDesc(true);
+        const descWhole = await cardState();
+        ok("pressing show more lifts only the clamp", descWhole.open === true && descWhole.descOpen === true && descWhole.descClamped === false, `card ${descWhole.open}, description whole ${descWhole.descOpen}, clamped ${descWhole.descClamped}`);
+        check("…the card's body is still drawn", descWhole.projects, 2);
+        ok("…the whole description is drawn, and the control now says show less", descWhole.descHeight > descWhole.descLineHeight * 3 && descWhole.descMore === "show less" && descWhole.descMoreHidden === false, `${descWhole.descHeight}px drawn, control ${JSON.stringify(descWhole.descMore)}`);
+        check("…and it is the store's text, breaks and all, before and after", [opened.text, descWhole.text], [storeDesc, storeDesc]);
+        await paneShot("card-open-description-whole");
+
         await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).click();
         await waitDesc(false);
-        const descFolded = await cardState();
-        ok("pressing the description's header folds only the description", descFolded.open === true && descFolded.descOpen === false, `card ${descFolded.open}, description ${descFolded.descOpen}`);
-        check("…the card's body is still drawn", descFolded.projects, 2);
-        check("…the description is back to its two lines", descFolded.lines, 2);
-        ok("…with the dots again", descFolded.dots === "...", JSON.stringify(descFolded.text.slice(-30)));
-        await paneShot("card-open-description-folded");
+        const descReclamped = await cardState();
+        ok("pressing show less clamps it again, and the card is still open", descReclamped.descOpen === false && descReclamped.descClamped === true && descReclamped.open === true && descReclamped.descMore === "show more", `desc ${descReclamped.descOpen}, card ${descReclamped.open}`);
+        await paneShot("card-open-description-reclamped");
 
-        // ---- a keyboard-only toggle: both headers are buttons, so Enter and Space are the browser's -----------------
+        // ---- a keyboard-only toggle: the control is a button, so Enter and Space are the browser's -----------------
         await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).focus();
         const focusedBefore = await page.evaluate(() => document.activeElement?.hasAttribute?.("data-init-desc-fold") || false);
-        ok("the description's header takes the keyboard's focus", focusedBefore);
+        ok("the description's show more control takes the keyboard's focus", focusedBefore);
         await page.keyboard.press("Enter");
         await waitDesc(true);
         const byEnter = await cardState();
-        ok("Enter on it unfolds the description, and leaves the card open", byEnter.descOpen === true && byEnter.open === true && byEnter.dots === "", `desc ${byEnter.descOpen}, card ${byEnter.open}`);
+        ok("Enter on it lifts the clamp, and leaves the card open", byEnter.descOpen === true && byEnter.descClamped === false && byEnter.open === true, `desc ${byEnter.descOpen}, card ${byEnter.open}`);
         await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).focus();
         await page.keyboard.press("Space");
         await waitDesc(false);
         const bySpace = await cardState();
-        ok("Space on it folds it again, and the card is still open", bySpace.descOpen === false && bySpace.open === true, `desc ${bySpace.descOpen}, card ${bySpace.open}`);
+        ok("Space on it clamps it again, and the card is still open", bySpace.descOpen === false && bySpace.descClamped === true && bySpace.open === true, `desc ${bySpace.descOpen}, card ${bySpace.open}`);
         await paneShot("keyboard-toggle");
         await page.locator(`[data-init-card="${initId}"] [data-init-card-toggle]`).focus();
         await page.keyboard.press("Enter");
@@ -512,7 +533,7 @@ try {
         await page.locator(`[data-init-card="${initId}"] .init-title`).click();
         await page.waitForSelector(`[data-init-card="${initId}"] .init-project`, { timeout: 15_000 });
         const remembered = await cardState();
-        ok("reopening the card remembers the description's fold", remembered.open === true && remembered.descOpen === false && remembered.lines === 2, `card ${remembered.open}, description ${remembered.descOpen}`);
+        ok("reopening the card remembers the clamp, which is the default it starts on", remembered.open === true && remembered.descOpen === false && remembered.descClamped === true && remembered.descHeight === remembered.descLineHeight * 3, `card ${remembered.open}, description whole ${remembered.descOpen}, drawn ${remembered.descHeight}px = ${remembered.descLineHeight * 3}px of clamp`);
 
         // ---- the folds inside the open card ----------------------------------------------------------
         check("two project folds, one per project, closed by default", remembered.projects, 2);
@@ -577,7 +598,10 @@ try {
         });
         check("a short description is drawn whole, with no dots", { text: shortCard.text, dots: shortCard.dots, lines: shortCard.lines }, { text: "One app at a time.", dots: "", lines: 1 });
         await paneShot("short-description-no-dots");
-        check("…and the long one beside it still ends on dots", (await cardState()).dots, "...");
+        // The clamp types no dots of its own: the browser draws the ellipsis on the third line, and the body keeps the
+        // whole text (row 295, ask 2). So "the long one beside it" is still clamped, and carries no `.init-dots` span.
+        const longAgain = await cardState();
+        check("…and the long one beside it is still clamped, with no typed dots", { dots: longAgain.dots, clamped: longAgain.descClamped }, { dots: "", clamped: true });
 
         // ---- 6. the link that scrolls and flashes --------------------------------------------------
         console.log("\n== the link to the row ==");
