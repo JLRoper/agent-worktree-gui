@@ -73,3 +73,28 @@ test("a subfolder page is compared as a repo-relative path", async (t) => {
   git(repo, "add", "-f", `${REPORT_DIR}/round/deep/page.html`);
   assert.deepEqual(untrackedReports(repo), [], "and tracked once it is added");
 });
+
+test("a secret page is local by design and is not called lost work", async (t) => {
+  // `*.secret.html` is the report a clarify card links (docs/clarify-juggling-design-2026-11-24.md). It is ignored on
+  // purpose, so a check that compared every .html on disk against the index would fail on the one page the convention
+  // tells every agent to write. The exemption is by suffix only: a plain page beside it is still reported.
+  const repo = await mkdtemp(path.join(os.tmpdir(), "wag-reports-secret-"));
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  git(repo, "init", "-q");
+  configureRepo(repo);
+  await mkdir(path.join(repo, REPORT_DIR), { recursive: true });
+  await writeFile(path.join(repo, REPORT_DIR, "card.secret.html"), "<!doctype html><title>card</title>\n", "utf8");
+  await writeFile(path.join(repo, REPORT_DIR, "plain.html"), "<!doctype html><title>plain</title>\n", "utf8");
+
+  // The page is really on disk, so the empty answer below is the exemption and not a folder the walk missed.
+  assert.ok(htmlOnDisk(repo).includes(`${REPORT_DIR}/card.secret.html`), "the secret page is on disk");
+  assert.deepEqual(untrackedReports(repo), [`${REPORT_DIR}/plain.html`], "only the plain page is called lost");
+
+  // A subfolder secret page is exempt too: the suffix is the rule, not the directory.
+  await mkdir(path.join(repo, REPORT_DIR, "round"), { recursive: true });
+  await writeFile(path.join(repo, REPORT_DIR, "round", "deep.secret.html"), "<!doctype html><title>deep</title>\n", "utf8");
+  assert.deepEqual(untrackedReports(repo), [`${REPORT_DIR}/plain.html`], "a nested secret page is exempt by suffix");
+
+  git(repo, "add", "-f", `${REPORT_DIR}/plain.html`);
+  assert.deepEqual(untrackedReports(repo), [], "the plain page still has to be added");
+});
