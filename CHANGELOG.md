@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.166.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.166.7 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-723 releases from v0.1.0 (2026-10-20) to v1.166.6 (2026-11-24), 2570 commits between the tags. Every release is anchored by an
+724 releases from v0.1.0 (2026-10-20) to v1.166.7 (2026-11-24), 2573 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.166.7 — 2026-11-24 · 3 commits
+
+[`0eec1e5`](https://github.com/JLRoper/agent-worktree-gui/commit/0eec1e5d6699a63aa240d930804c9ce5640a86d9) · [compare v1.166.6...v1.166.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.166.6...v1.166.7)
+
+### Fixed
+
+- fix: a minimized thinking row shows only its first paragraph, then four dots ([`1a132c0`](https://github.com/JLRoper/agent-worktree-gui/commit/1a132c0e0cb3d8fc37f10b376eadc52e99bb6e7c))
+
+### Docs & tests
+
+- docs: render the changelog - 723 releases ([`7ca1859`](https://github.com/JLRoper/agent-worktree-gui/commit/7ca18596c35d84efad348e3918401dcc01898576))
+
+### Other
+
+- chore: 1.166.7 - the version this landing carries ([`0eec1e5`](https://github.com/JLRoper/agent-worktree-gui/commit/0eec1e5d6699a63aa240d930804c9ce5640a86d9))
 
 ## v1.166.6 — 2026-11-24 · 5 commits
 
