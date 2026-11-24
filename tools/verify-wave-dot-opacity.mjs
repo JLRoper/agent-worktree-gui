@@ -793,7 +793,9 @@ async function main() {
                 zIndex: fresh.zIndex,
                 border: fresh.border,
                 rasterScale: scale,
-                shot: file,
+                // The shot's NAME, not its path: the run writes shots wherever --shots points, and a drive-letter path in
+                // a committed run names one machine's scratch folder and nothing a reader can open.
+                shot: file ? path.basename(file) : null,
                 ...analysis,
                 // The raw pixels of every sampled row are not shipped: the run's numbers are, and the shot beside them
                 // is what a reader re-samples.

@@ -36,7 +36,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\01-dock-c-abandoned.png",
+      "shot": "01-dock-c-abandoned.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -185,7 +185,7 @@
       "zIndex": "auto",
       "border": 2,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\02-dock-b-running-current.png",
+      "shot": "02-dock-b-running-current.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -389,7 +389,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\03-dock-b-running-other.png",
+      "shot": "03-dock-b-running-other.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -538,7 +538,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\04-dock-b-done.png",
+      "shot": "04-dock-b-done.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -687,7 +687,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\05-dock-b-empty.png",
+      "shot": "05-dock-b-empty.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -860,7 +860,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\06-dock-b-unentered.png",
+      "shot": "06-dock-b-unentered.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1033,7 +1033,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\07-dock-b-unknown.png",
+      "shot": "07-dock-b-unknown.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1178,7 +1178,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\08-dock-b-blocked.png",
+      "shot": "08-dock-b-blocked.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1323,7 +1323,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\09-dock-b-ready.png",
+      "shot": "09-dock-b-ready.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1496,7 +1496,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\10-dock-a-closed.png",
+      "shot": "10-dock-a-closed.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1645,7 +1645,7 @@
       "zIndex": "auto",
       "border": 2,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\11-dock-a-surfaced.png",
+      "shot": "11-dock-a-surfaced.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1849,7 +1849,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\12-wide-c-abandoned.png",
+      "shot": "12-wide-c-abandoned.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -1994,7 +1994,7 @@
       "zIndex": "auto",
       "border": 2,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\13-wide-b-running-current.png",
+      "shot": "13-wide-b-running-current.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -2198,7 +2198,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\14-wide-b-running-other.png",
+      "shot": "14-wide-b-running-other.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -2347,7 +2347,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\15-wide-b-done.png",
+      "shot": "15-wide-b-done.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -2496,7 +2496,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\16-wide-b-empty.png",
+      "shot": "16-wide-b-empty.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -2669,7 +2669,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\17-wide-b-unentered.png",
+      "shot": "17-wide-b-unentered.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -2842,7 +2842,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\18-wide-b-unknown.png",
+      "shot": "18-wide-b-unknown.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -2987,7 +2987,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\19-wide-b-blocked.png",
+      "shot": "19-wide-b-blocked.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -3132,7 +3132,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\20-wide-b-ready.png",
+      "shot": "20-wide-b-ready.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -3305,7 +3305,7 @@
       "zIndex": "auto",
       "border": 1,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\21-wide-a-closed.png",
+      "shot": "21-wide-a-closed.png",
       "centre": {
         "x": 21,
         "y": 21
@@ -3454,7 +3454,7 @@
       "zIndex": "auto",
       "border": 2,
       "rasterScale": 1,
-      "shot": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\1e2ebb9e\\before\\shots\\22-wide-a-surfaced.png",
+      "shot": "22-wide-a-surfaced.png",
       "centre": {
         "x": 21,
         "y": 21
