@@ -924,11 +924,24 @@
 
       <div class="settings-group" id="settings-panel-skills" data-settings-group="skills" role="tabpanel" aria-labelledby="settings-tab-skills" hidden>
 
+        <!-- The Skills tab's own bar, and the caret Ctrl+Shift+S puts in it. It is a second CONTROL over the
+             window's one search, not a second filter: what is typed here is written into the box in the panel's
+             head and the same painter runs, so the two can never disagree. `data-skills-chrome` keeps this row and
+             the no-hit line out of the flat walk the search does over the panel's children. -->
+        <div class="skills-search-row" data-skills-chrome="1">
+          <input id="skills-search" type="search" autocomplete="off" spellcheck="false" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" placeholder="filter skills by name or description" aria-label="filter the skills by name or description" title="Type to filter the skills below by name and description (the category and path each row shows are searched too). What you type here is what the search box in the window's head holds, so both are one filter. Esc clears it and keeps the caret here.">
+          <button type="button" id="btn-skills-search-clear" title="clear the skills filter (Esc)" hidden>✕</button>
+        </div>
+
         <div class="settings-row" id="skills-summary-row" title="Everything an agent started from this panel can load, read from the disk and from the gateway: every root Hermes reads skills from, grouped by source and then by the category the skill's directory gives it, one row per SKILL.md, and the gateway's own answer for what a run is actually served. Every heading folds and counts the skills under it; the folds are remembered in this browser. Read only — nothing here edits, disables or moves a skill.">
           <span>Absorbed skills <span class="settings-info">ⓘ</span></span>
           <span class="settings-unit mono" id="skills-summary">reading…</span>
         </div>
         <div class="settings-preview mono" id="skills-gateway">…</div>
+        <!-- A query that answers no skill says so here instead of leaving an empty list under the groups. Plain
+             text, not a styled banner: it is one sentence about what was typed, and the bar above it stays where
+             the reader is looking. -->
+        <div class="skills-nohits" id="skills-no-hits" data-skills-chrome="1" hidden></div>
       </div>
 
       <div class="settings-group" id="settings-panel-updates" data-settings-group="updates" role="tabpanel" aria-labelledby="settings-tab-updates" hidden>

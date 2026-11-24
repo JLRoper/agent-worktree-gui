@@ -330,8 +330,12 @@ try {
           rows,
           heads: [...panelEl.querySelectorAll(".skills-source")].map(text),
           sourcePaths: [...panelEl.querySelectorAll(".skills-source-path")].map(text),
-          buttons: [...panelEl.querySelectorAll("button")].map((b) => ({ cls: b.className || "", fold: b.hasAttribute("data-skills-fold-source") })),
-          inputs: panelEl.querySelectorAll("input, select, textarea").length,
+          buttons: [...panelEl.querySelectorAll("button")].map((b) => ({ id: b.id || "", cls: b.className || "", fold: b.hasAttribute("data-skills-fold-source") })),
+          inputs: [...panelEl.querySelectorAll("input, select, textarea")].map((n) => n.id || n.tagName),
+          bar: {
+            input: Boolean(document.getElementById("skills-search")),
+            placeholder: document.getElementById("skills-search")?.getAttribute("placeholder") || "",
+          },
           marks: panelEl.querySelectorAll("[data-skills-mark]").length,
           catHeads: panelEl.querySelectorAll(".skills-cathead").length,
         };
@@ -391,9 +395,14 @@ try {
         drawn.sourcePaths.find((p) => p.includes("team-skills")));
       check(drawn.sourcePaths.some((p) => /does not exist/.test(p)), "an unreadable source draws its reason on the heading line",
         drawn.sourcePaths.find((p) => /does not exist/.test(p)));
-      check(drawn.inputs === 0 && drawn.buttons.every((b) => b.fold),
-        "the only controls are the fold headings — the tab is otherwise read only",
-        `${drawn.buttons.length} buttons, ${drawn.buttons.filter((b) => !b.fold).length} not a fold, ${drawn.inputs} inputs`);
+      // The tab's one control that is not a fold is the search BAR: a filter over the rows, never an edit of them.
+      // Its input is the only field, and the one non-fold button is the ✕ that clears it.
+      check(drawn.inputs.length === 1 && drawn.inputs[0] === "skills-search" && drawn.bar.input
+        && drawn.buttons.every((b) => b.fold || b.id === "btn-skills-search-clear"),
+        "the only controls are the fold headings and the search bar - the tab is otherwise read only",
+        `${drawn.buttons.length} buttons, ${drawn.buttons.filter((b) => !b.fold).map((b) => b.id || b.cls).join(",") || "none"} not a fold, inputs ${JSON.stringify(drawn.inputs)}`);
+      check(/name/.test(drawn.bar.placeholder) && /description/.test(drawn.bar.placeholder),
+        "the bar's placeholder names what it searches", drawn.bar.placeholder);
       check(drawn.marks === 0, "an answered gateway puts no unknown mark on any row", `${drawn.marks} marks`);
       check(/^16 skills · \d+ sources/.test(drawn.summary) && /served/.test(drawn.summary), "the summary counts the rows", drawn.summary);
       check(drawn.gatewayLine.includes(gatewayUrl) && /\/v1\/skills/.test(drawn.gatewayLine),
