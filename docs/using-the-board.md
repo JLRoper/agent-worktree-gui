@@ -43,6 +43,29 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | **Hand-and-pen** (icon only, before 🙋 Human) | The **Hot Agent search** (`Ctrl+Shift+Q`): the turns you wrote to worker agents, newest first, across every project tree the panel has run one in — not one assistant's own transcript. A click opens the assistant panel if it was closed and hangs the list under this button; `Escape` closes it and hands the keyboard back here. Rows and keys: `docs/hot-agent-search-keys.md`. |
 | **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now**, **Fetch remotes** and **Live updates → Pause** live in it too, under Board. |
+| **? Clarify** | Every clarify question this panel has asked, newest first, with the ones still waiting counted on the button. A row press opens the turn that asked it; a **missed** row (the card timed out, was cancelled or went away unanswered) also carries **↻ Re-ask this question**. See below. |
+
+### The CLARIFY popup, and re-asking a question you missed
+
+The header's **? Clarify** button lists every question the panel has asked you, read from the persisted clarify store
+rather than from the live cards, so a question stays in the list after it settles and survives a restart. One row is
+one QUESTION, however many times it was asked (the fold behind `2 attempts` carries each ask with its own time), and
+the row's state says what happened: **unanswered** in full colour with its choices, **✓ answered** greyed with the
+answer you chose standing out of it, **↩ answered in a reply** when your own reply was the answer, and **✕ cancelled /
+timed out / closed unanswered** in the warning colour, never greyed as though you had answered it.
+
+A **missed** row carries one extra button: **↻ Re-ask this question**. One press sends the line `Can you please re-ask
+this clarify question if it is still valid?` and the question **quoted in full**  -  its own words, its newlines and the
+choices it offered, taken from the stored record rather than from the row's shortened display line  -  into the SAME
+thread that asked it. There is no second confirm: the press is the decision. The popup closes, that agent's card opens
+and the new turn is put on screen, so you land where the answer will appear; when the agent asks again the card arrives
+the ordinary way, as a question box on that turn.
+
+Four refusals are said in the banner rather than silently doing nothing: the question was answered (no button is drawn
+on an answered, replied or still-open row at all), the question was **already re-asked** (the record replaces the button
+with `↻ re-asked 2m ago · turn <id>`, and a second press - or a double click - sends nothing), the thread holds a
+**live run** (a second run on the same files is the one thing that must not happen), and the **session is gone** (a
+deleted agent or a thread this board no longer holds).
 
 ### The ACTIVE AGENTS bolt
 
