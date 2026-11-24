@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The initiatives meta line does not move while a read is in flight</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #181d26; --sunk: #13181f; --line: #262c37; --hair: #3c424d;
+    --text: #e6e9ef; --dim: #9aa4b2; --meta: #7c8798;
+    --ok: #7ee787; --wait: #f0c674; --bad: #ff9c94; --info: #9ecbff; --link: #7fb2e8;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 28px 120px; }
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 34px; }
+  .eyebrow { font: 600 11.5px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--meta); }
+  h1 { font-size: 33px; line-height: 1.18; letter-spacing: -.015em; margin: 14px 0 12px; font-weight: 650; }
+  .lede { font-size: 17px; line-height: 1.55; color: var(--dim); max-width: 80ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .meta b { color: var(--dim); font-weight: 600; }
+  h2 { font-size: 23px; line-height: 1.3; letter-spacing: -.01em; margin: 54px 0 6px; font-weight: 650; }
+  h2 .n { color: var(--meta); font: 600 13px/1 var(--mono); margin-right: 10px; vertical-align: 4px; }
+  h3 { font-size: 16.5px; line-height: 1.4; margin: 30px 0 6px; font-weight: 620; }
+  p { margin: 10px 0; max-width: 86ch; }
+  .kicker { color: var(--dim); max-width: 82ch; margin: 0 0 18px; }
+  ul, ol { max-width: 86ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 12.5px/1.5 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e2; }
+  pre { font: 12.5px/1.6 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #cfd6e2; }
+  pre code { background: none; border: 0; padding: 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(127,178,232,.3); }
+  a:hover { border-bottom-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); border-bottom-color: var(--hair); }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  tbody tr:hover td { background: rgba(255,255,255,.015); }
+  .note { border: 1px solid var(--hair); border-left: 3px solid var(--wait); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 24px 0 10px; }
+  .note h4 { margin: 0 0 8px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--wait); }
+  .note p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .verdict { border: 1px solid var(--hair); border-left: 3px solid var(--ok); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 24px 0 10px; }
+  .verdict h4 { margin: 0 0 8px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ok); }
+  .verdict p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .b { display: inline-block; font: 600 9.5px/1.55 var(--mono); letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 1px 8px; border: 1px solid; vertical-align: 1px; white-space: nowrap; }
+  .b.ok { color: var(--ok); border-color: rgba(126,231,135,.4); background: rgba(126,231,135,.08); }
+  .b.warn { color: var(--wait); border-color: rgba(240,198,116,.4); background: rgba(240,198,116,.08); }
+  .b.bad { color: var(--bad); border-color: rgba(255,156,148,.4); background: rgba(255,156,148,.08); }
+  .b.info { color: var(--info); border-color: rgba(158,203,255,.4); background: rgba(158,203,255,.08); }
+  footer { margin-top: 70px; border-top: 1px solid var(--line); padding-top: 18px; font: 12px/1.6 var(--mono); color: var(--meta); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">layout proof &middot; queue row 275 &middot; the Initiatives tab</div>
+  <h1>The initiatives meta line does not move while a read is in flight</h1>
+  <p class="lede">
+    Expanding an initiative re-reads the store. That read used to draw a hint (<code>reading&hellip;</code>) inside
+    the in-flow meta line, which cost one line box plus the column's gap and pushed every card below it down until
+    the read landed. This page is the measurement: the first card's top is identical before the read, while it is
+    parked in flight and after it settles, at a 660 px and a 340 px dock, and the string never enters the DOM at all.
+  </p>
+  <div class="meta">
+    <span><b>commit</b> d1b96cd1</span>
+    <span><b>base</b> origin/main 0d2c301b</span>
+    <span><b>gate</b> npm run verify:init-read-zero-shift</span>
+    <span><b>fixed tree</b> 34 of 34 checks pass</span>
+    <span><b>base tree</b> 20 of 34 fail</span>
+    <span><b>sandbox</b> fixture panel, own port and WAG_HOME</span>
+  </div>
+</header>
+
+<h2><span class="n">1</span>The mechanism, in two lines of code</h2>
+<p class="kicker">The row named the line and the mechanism: <code>public/assistant.js:4212</code> on the base, a span inside <code>.init-meta</code>.</p>
+
+<p>
+  <code>.init-meta</code> is a flex <b>column</b> with a gap (<code>public/style.css:5072</code>), so a node inside it
+  is a flex item: it is charged its own line box and the 8 px gap whether or not it holds a word. The base painted
+  that item unconditionally, and chose its text from the read's state:
+</p>
+<pre><code>&lt;span class="as-hint init-read"&gt;${initLoading ? "reading&hellip;" : initErr ? `read failed: ${esc(initErr)}` : ""}&lt;/span&gt;</code></pre>
+<p>
+  The render that draws the meta line also <b>starts</b> the read when the document is stale
+  (<code>public/assistant.js:4154</code>), and <code>loadInitiatives()</code> sets <code>initLoading = true</code>
+  before its first <code>await</code> - so the very same paint that begins a read is the paint that writes
+  <code>reading&hellip;</code> into the meta line. Every press that repaints the pane while a read is in flight does
+  the same. When the read settles the next paint removes the text and the cards snap back.
+</p>
+
+<h2><span class="n">2</span>The change</h2>
+<p>
+  The span is written only when there is something a reader must see. A read in flight leaves the markup identical
+  to what is already on screen, which is also what the <code>markup !== initMarkup</code> short-circuit wants:
+</p>
+<pre><code>${initErr ? `&lt;span class="as-hint init-read"&gt;read failed: ${esc(initErr)}&lt;/span&gt;` : ""}</code></pre>
+<p>
+  <code>read failed: &hellip;</code> keeps its text, its class and its place in the meta line. The stylesheet keeps a
+  second lock (<code>public/style.css:5092</code>) because an empty carrier would still be a flex item and still cost
+  the gap:
+</p>
+<pre><code>#as-initiatives .init-read:empty { display: none; }</code></pre>
+<div class="verdict">
+  <h4>Side effect worth naming</h4>
+  <p>
+    Even when idle, the base rendered that empty span and paid the gap: the meta line measured <b>103.75 px</b> at a
+    660 px dock on the base and <b>95.75 px</b> on the fix (8.00 px, exactly the column's gap), 121 px against 113 px
+    at 340 px. The fix is 8 px shorter at rest, not only steady while reading.
+  </p>
+</div>
+
+<h2><span class="n">3</span>The proof: the first card's top, three instants, two widths</h2>
+<p class="kicker">
+  <code>tools/verify-init-read-zero-shift.mjs</code> boots the initiatives fixture (real repositories, four initiatives,
+  real route), parks the pane's own <code>GET /api/initiatives</code> in the page's route so the in-flight sample is
+  held still, presses the first card's title, then releases it. The scroller is at its top, so the meta line and the
+  first card below it are both on screen - the reader's own scene.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Dock / pane</th><th>Instant</th><th>First card top</th><th>Card content offset</th><th>Meta line</th><th>Shift</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td class="num">660 / 659 px</td><td>before the read</td><td class="num">373.81 px</td><td class="num">219.13 px</td><td class="num">95.75 px</td><td class="num">-</td></tr>
+    <tr><td class="num">660 / 659 px</td><td>in flight (parked)</td><td class="num">373.81 px</td><td class="num">219.13 px</td><td class="num">95.75 px</td><td class="num">0.00 px</td></tr>
+    <tr><td class="num">660 / 659 px</td><td>still in flight (+1.2 s)</td><td class="num">373.81 px</td><td class="num">219.13 px</td><td class="num">95.75 px</td><td class="num">0.00 px</td></tr>
+    <tr><td class="num">660 / 659 px</td><td>after it settles</td><td class="num">373.81 px</td><td class="num">219.13 px</td><td class="num">95.75 px</td><td class="num">0.00 px</td></tr>
+    <tr><td class="num">340 / 339 px</td><td>before the read</td><td class="num">476.11 px</td><td class="num">269.13 px</td><td class="num">113.00 px</td><td class="num">-</td></tr>
+    <tr><td class="num">340 / 339 px</td><td>in flight (parked)</td><td class="num">476.11 px</td><td class="num">269.13 px</td><td class="num">113.00 px</td><td class="num">0.00 px</td></tr>
+    <tr><td class="num">340 / 339 px</td><td>still in flight (+1.2 s)</td><td class="num">476.11 px</td><td class="num">269.13 px</td><td class="num">113.00 px</td><td class="num">0.00 px</td></tr>
+    <tr><td class="num">340 / 339 px</td><td>after it settles</td><td class="num">476.11 px</td><td class="num">269.13 px</td><td class="num">113.00 px</td><td class="num">0.00 px</td></tr>
+  </tbody>
+</table>
+<p class="kicker">
+  The pane had real scrollback in both scenes (content 817 px in a 665 px box at 660; 952 px in a 613 px box at 340),
+  and the tier notice wrapped to <b>4 lines</b> at 660 and <b>5 lines</b> at 340 - the narrow dock is a wrap
+  condition, not a smaller copy of the wide one. The gate asserts all of that before it samples.
+</p>
+
+<h3>The same gate on the base, for the other direction</h3>
+<p>
+  A zero is only evidence if the instrument can see the event. The same harness run against an export of
+  <code>origin/main</code> (<code>git archive origin/main | tar -x -C &lt;dir&gt;</code>, <code>--root &lt;dir&gt;</code>)
+  fails <b>20 of 34</b> checks and produces the defect it exists for:
+</p>
+<table>
+  <thead>
+    <tr><th>Dock</th><th>Instant</th><th>First card top</th><th>Meta line</th><th><code>.init-read</code> text</th><th>Shift</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="num">660 px</td><td>before</td><td class="num">381.81 px</td><td class="num">103.75 px</td><td class="num">"" (empty span)</td><td class="num">-</td></tr>
+    <tr><td class="num">660 px</td><td>in flight</td><td class="num">398.48 px</td><td class="num">120.42 px</td><td class="num">reading&hellip;</td><td class="num">+16.67 px</td></tr>
+    <tr><td class="num">660 px</td><td>settled</td><td class="num">381.81 px</td><td class="num">103.75 px</td><td class="num">""</td><td class="num">0.00 px</td></tr>
+    <tr><td class="num">340 px</td><td>before</td><td class="num">484.11 px</td><td class="num">121.00 px</td><td class="num">"" (empty span)</td><td class="num">-</td></tr>
+    <tr><td class="num">340 px</td><td>in flight</td><td class="num">500.78 px</td><td class="num">137.67 px</td><td class="num">reading&hellip;</td><td class="num">+16.67 px</td></tr>
+    <tr><td class="num">340 px</td><td>settled</td><td class="num">484.11 px</td><td class="num">121.00 px</td><td class="num">""</td><td class="num">0.00 px</td></tr>
+  </tbody>
+</table>
+<p>
+  <b>16.67 px</b> is one line box at the meta line's 11.5 px / 1.45 rhythm - the height the cards were pushed down by
+  and then lost again when the read landed. That is the reader's "split second" as a number.
+</p>
+
+<h2><span class="n">4</span>The string never enters the DOM</h2>
+<p class="kicker">
+  A MutationObserver over <code>#as-initiatives</code> (<code>childList</code> + <code>characterData</code>, subtree)
+  reads the pane's text on every callback. Proven able to see the event before it reports a zero: the gate plants a
+  span holding <code>reading&hellip;</code> in the pane, requires the observer to record it, removes it and resets
+  the counters.
+</p>
+<table>
+  <thead><tr><th>Arm</th><th>Dock</th><th>Sensitivity check</th><th>Callbacks over the read</th><th>Sightings of <code>reading&hellip;</code></th></tr></thead>
+  <tbody>
+    <tr><td>fix</td><td class="num">660 px</td><td class="num">1 recorded</td><td class="num">1</td><td class="num">0</td></tr>
+    <tr><td>fix</td><td class="num">340 px</td><td class="num">1 recorded</td><td class="num">1</td><td class="num">0</td></tr>
+    <tr><td>base</td><td class="num">660 px</td><td class="num">1 recorded</td><td class="num">2</td><td class="num">1</td></tr>
+    <tr><td>base</td><td class="num">340 px</td><td class="num">1 recorded</td><td class="num">2</td><td class="num">1</td></tr>
+  </tbody>
+</table>
+<p>
+  The press is also proved to have repainted: a second observer watches the pane's <b>own</b> childList (one record
+  per <code>innerHTML</code> write), and the gate requires writes 0 &rarr; 1 across the press, the card's
+  <code>aria-expanded</code> false &rarr; true, and the route still parked at the moment of the sample. So the
+  measured instant is a real render during a real in-flight read, not a quiet frame.
+</p>
+
+<h2><span class="n">5</span>The failure still speaks, and the refresh control does not move</h2>
+<p>
+  The route answers 500 (after a 400 ms delay, so the pane is not made to spin) while the document is still on
+  screen. The meta line must carry the error, and it does, at both widths:
+</p>
+<table>
+  <thead><tr><th>Dock</th><th>Text</th><th>Height</th><th>Inside <code>.init-meta</code></th><th>Meta grew by</th></tr></thead>
+  <tbody>
+    <tr><td class="num">660 px</td><td><code>read failed: the store could not be read (forced by tools/verify-init-read-zero-shift.mjs)</code></td><td class="num">16.67 px = 1 line</td><td class="num">yes</td><td class="num">24.67 px</td></tr>
+    <tr><td class="num">340 px</td><td>the same sentence, wrapped</td><td class="num">33.34 px = 2 lines</td><td class="num">yes</td><td class="num">41.34 px</td></tr>
+  </tbody>
+</table>
+<p>
+  The Refresh button is read at the same three instants as the card: rect top, rect height and <code>disabled</code>.
+  All three are identical (top 207.06 px and 292.11 px, height 30 px, <code>disabled false</code>) - a read changes
+  neither its place nor its state, so there is nothing there that moves the meta line either.
+</p>
+
+<div class="note">
+  <h4>The base had a second defect here, and the fix removes it</h4>
+  <p>
+    On the base, a failing read could not show its error at all. <code>loadInitiatives()</code> leaves
+    <code>initReadAt</code> alone on failure, so the render that follows a failed read finds the document stale,
+    starts the next read (<code>initLoading = true</code>) and then prefers the loading branch over
+    <code>initErr</code>: <code>reading&hellip;</code> was painted where the error belonged. The base arm of this
+    gate shows exactly that - the forced failure's <code>.init-read</code> text reads <code>reading&hellip;</code>,
+    never <code>read failed:</code>. With no loading branch left, the error is what a failed read shows (section 5
+    above, measured on the fix).
+  </p>
+</div>
+
+<h2><span class="n">6</span>Reproduce</h2>
+<pre><code># the fix (this tree): every check, both widths
+npm run verify:init-read-zero-shift
+
+# the same gate against the code before the change (the failing-first arm)
+git archive origin/main | tar -x -C &lt;scratch&gt;/base
+node tools/verify-init-read-zero-shift.mjs --root &lt;scratch&gt;/base --home &lt;scratch&gt;/base-home
+
+# other dock widths, and the raw samples as JSON
+node tools/verify-init-read-zero-shift.mjs --widths 620,540,460,400 --json &lt;scratch&gt;/run.json</code></pre>
+<p class="kicker">
+  Sandbox only: the fixture's own <code>WAG_HOME</code> under the scratch directory, its own port, throwaway
+  repositories. The reader's board on 7331 is never touched.
+</p>
+
+<h2><span class="n">7</span>Found on the way, not changed here</h2>
+<ul>
+  <li>
+    <b>A pane that exactly fits its box is treated as "at the bottom".</b> <code>captureInitScroll</code> computes
+    <code>atBottom = scrollHeight - clientHeight - top &lt; 2</code> (<code>public/assistant.js:4118</code>), which is
+    true for a box with no scrollback; <code>restoreInitScroll</code> then writes <code>scrollTop =
+    scrollHeight</code> (<code>public/assistant.js:4125</code>) on the next paint. Measured while building this proof
+    at a 660 x 1000 dock: before the press the pane measured <code>scrollHeight === clientHeight</code> (845 / 845),
+    the fold took it to 1504 / 845, and the pane landed at <code>scrollTop 659</code> - the opened card's top left the
+    view. It is the same family (a repaint moving the reader) but a different writer, and the meta line is not in it.
+  </li>
+  <li>
+    <b>A persistently failing read retries with no backoff.</b> While the route answered 500 immediately, the pane
+    issued <b>114</b> <code>GET /api/initiatives</code> inside one sample window (counted in the route handler): the
+    <code>.finally()</code> repaint starts the next read because <code>initReadAt</code> never moves on failure. The
+    gate slows that to one read per 400 ms so its own measurement stays stable; the retry cadence itself is untouched
+    by this change.
+  </li>
+</ul>
+
+<footer>
+  Measured on the fixture panel from this tree, 2026-11-24. The base arm is an export of origin/main 0d2c301b;
+  the fix is d1b96cd1. Gate: <code>tools/verify-init-read-zero-shift.mjs</code>; source pins:
+  <code>test/initiatives-meta-read-hint.test.js</code>.
+</footer>
+
+</div>
+</body>
+</html>
