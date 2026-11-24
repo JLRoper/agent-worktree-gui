@@ -4109,12 +4109,26 @@
     // straddling card (an open fold on the card above the reader) its own top does not move, and the correction would
     // read as zero while every card below it shifted.
     const card = pick(true) || pick(false);
+    // A PANE THAT FITS ITS BOX IS NOT A PANE THE READER SCROLLED TO THE BOTTOM, and the numbers cannot tell the
+    // two apart: scrollTop 0 in a 845/845 pane reads exactly like a reader parked on the last line of one, and
+    // `scrollHeight - clientHeight - top < 2` is TRUE for both. The difference is whether there was anything to
+    // scroll at all, so the slack is measured HERE, before the change, and carried with the rest: only a pane that
+    // already had slack can be at its bottom, and a pane with none is pinned to its TOP - which is where its reader
+    // is looking, at the first card.
+    //
+    // Measured before this line existed (row 278, the Initiatives pane): at 845 of 845 the first card opened, the
+    // pane became 1504/845 and landed at scrollTop 659 - its END - pushing the card the reader had just opened off
+    // the top of the view. The same pane measured 721/721 -> 1224/721 at scrollTop 503, and 745/745 -> 1053/745 at
+    // scrollTop 308, at two rail widths.
+    const slack = scroller.scrollHeight - scroller.clientHeight;
+    const overflows = slack > 1;
     return {
       scroller,
       top,
       card: card ? { id: card.getAttribute("data-init-card"), dy: card.getBoundingClientRect().top - box.top } : null,
+      fits: !overflows,
       atTop: top <= 0.5,
-      atBottom: scroller.scrollHeight - scroller.clientHeight - top < 2,
+      atBottom: overflows && slack - top < 2,
     };
   }
   function restoreInitScroll(keep) {
@@ -4122,6 +4136,13 @@
     const { scroller } = keep;
     if (keep.atBottom) {
       scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+    // A pane that did not overflow before the change was never scrolled anywhere: its reader is at the top of its
+    // content, so the growth lands BELOW what they are reading and the pane stays on its first line. This is the
+    // branch row 278 is about - the old `atBottom` test swallowed these panes and took them to the end above.
+    if (keep.fits) {
+      scroller.scrollTop = 0;
       return;
     }
     if (keep.atTop) {
