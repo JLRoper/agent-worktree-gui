@@ -2190,6 +2190,11 @@ function stickSoon(el) {
     for (const out of batch) {
       if (!out.isConnected) continue;
       if (!consolePinned(out.dataset.out) && out._atBottom !== true) continue;
+      // The console's own tail stands down for the same reason the transcript's does: a gesture owns this box, and
+      // a scroll written inside it between two moves is the box moving under the hand. Guarded by `typeof` for the
+      // same reason stickSoon's body pin is: this region is READ OUT of the page on its own by
+      // test/console-tail-pin.test.js (a vm over the source), with no gesture in scope.
+      if (typeof consoleHeld === "function" && consoleHeld(out)) continue;
       // Nothing has been added since the last time this console was put on its newest line, so the height it would
       // read is the one it wrote: the frame after every growth is the one that has work, and a call that only asks
       // again (a repaint, a settle pass, the 400 ms repair) costs a comparison instead of a full layout. This is the
@@ -3336,6 +3341,8 @@ function settleScrolls(root) {
 
 function stickConsole(pre) {
   if (!pre || !pre.dataset || !consolePinned(pre.dataset.out)) return;
+  // A console a corner gesture is holding is sized and scrolled by the pointer for the length of the drag.
+  if (typeof consoleHeld === "function" && consoleHeld(pre)) return;
   const max = pre.scrollHeight - pre.clientHeight;
   if (max <= 0 || Math.abs(pre.scrollTop - max) <= 1) return;
   setScroll(pre, max);
@@ -3390,6 +3397,23 @@ function noteCardBodyScroll(body) {
   body._atBottom = body.scrollHeight - body.scrollTop - body.clientHeight <= CARD_TAIL_PX;
 }
 
+// Is a live corner gesture holding a console inside this transcript? A gesture moves the console's BOTTOM edge from
+// the pointer and freezes its TOP edge at the press; the page's tail pin scrolls the transcript to its FOOT, which
+// moves that top edge by exactly the height the drag wrote, so the two cancel and the grip's bottom edge stands still
+// under a hand that is travelling. That is the third recurrence of this defect, and it is not a timing bug to be
+// sampled before and after: measured per step in tools/verify-console-corner-slow-drag.mjs, 40 steps of 3px moved the
+// box's top by -120px and its height by +120px, with the grip's bottom edge on the same pixel for every one of the
+// 40 steps.
+//
+// This is the PAGE's pin only. The BROWSER's scroll anchoring is deliberately left ON during a gesture - it is the
+// loop that holds the reader's place when a row lands in the turn ABOVE, and the "above" case of the same gate
+// measures a still hand losing 86.25px of corner when it is disabled. Two loops, two different jobs: the foot is
+// this page's promise, the place is the browser's, and a gesture takes the first away and needs the second.
+// The pointer wins for the length of the gesture; the release puts a following transcript back on its foot.
+function cardBodyHeld(body) {
+  return typeof outGripHoldsCard === "function" && outGripHoldsCard(body);
+}
+
 const cardStickPending = new Set();
 let cardStickFrame = 0;
 
@@ -3399,6 +3423,7 @@ let cardStickFrame = 0;
 function stickCardBodySoon(el) {
   const body = cardBodyOf(el);
   if (!body || !cardBodyFollowing(body)) return;
+  if (typeof cardBodyHeld === "function" && cardBodyHeld(body)) return;
   cardStickPending.add(body);
   if (cardStickFrame) return;
   cardStickFrame = requestAnimationFrame(() => {
@@ -3407,8 +3432,11 @@ function stickCardBodySoon(el) {
     cardStickPending.clear();
     for (const b of batch) {
       if (!cardBodyFollowing(b)) continue;
-      // One read of the scrollport per body per frame, not one per row: the same cost the console pays. And, like the
-      // console, only a frame with something new in it: a body that did not grow cannot have left the reader's foot.
+      // A gesture that started after this body was queued still owns it: the queued frame must not move the top
+      // edge out from under the pointer.
+      if (typeof cardBodyHeld === "function" && cardBodyHeld(b)) continue;
+      // One read of the scrollport per body per frame, not one per row: the same cost the console pays. And, like
+      // the console, only a frame with something new in it: a body that did not grow cannot have left the reader's foot.
       if (b._stuckAt != null && b._stuckAt === b._grow) continue;
       const max = b.scrollHeight - b.clientHeight;
       if (max > 0 && b.scrollTop < max) setScroll(b, max);
@@ -3421,6 +3449,7 @@ function stickCardBodySoon(el) {
 // "go to the bottom" written before the paint can be clamped short of the height the card ends up with).
 function stickCardBody(body) {
   if (!isCardScrollport(body) || !cardBodyFollowing(body)) return;
+  if (typeof cardBodyHeld === "function" && cardBodyHeld(body)) return;
   const max = body.scrollHeight - body.clientHeight;
   if (max <= 0 || Math.abs(body.scrollTop - max) <= 1) return;
   setScroll(body, max);
@@ -3458,6 +3487,34 @@ function restoreScrolls(root, map) {
   }
 }
 
+// ---- one owner for a console's height ---------------------------------------------------------------------------
+// A console's height is ONE number with ONE writer and ONE reader. The writer is setOutHeight below; the reader is
+// the sheet's `.job-out { height: var(--out-h, auto) }`. Three paths used to write `style.height` on their own -
+// the corner gesture (public/app.js), the remembered height a rebuild puts back (applyStoredHeight below), and the
+// float's slack console drag (public/assistant.js) - and the gesture re-derived a fourth number from the drawn rect
+// on every move. That is how the same corner broke three times: a rewrite changed the body under the box, the
+// gesture kept its own idea of where the bottom was, and a second loop moved the box's top edge.
+//
+// What this forbids a future console rewrite from doing:
+//   * writing a height on a `.job-out` anywhere but through setOutHeight - no `style.height`, no second stored copy
+//     of "the height the reader chose". A new pane, a new body or a new stream shape changes WHAT is inside the box;
+//     it does not get to invent a second geometry.
+//   * re-pinning or re-scrolling the transcript (or the console's own tail) while a corner gesture is live. The
+//     gesture owns the box's rect for the length of the drag: its height from the pointer, its top edge from the
+//     press. There is one `consoleHeld`/`outGripHoldsCard` question, and every pin in this file asks it.
+function setOutHeight(out, px) {
+  if (!out || !out.style) return false;
+  const h = Math.round(Number(px));
+  if (!Number.isFinite(h) || h <= 0) return false;
+  out.style.setProperty("--out-h", `${h}px`);
+  return true;
+}
+
+// The console back to the sheet's own size: a press that never moved must leave no height behind.
+function clearOutHeight(out) {
+  if (out && out.style) out.style.removeProperty("--out-h");
+}
+
 // Put a console's remembered height back on a node that is NOT the one the reader dragged. `o` either came out of
 // conversationHtml (a card built from nothing: a collapsed project expanded again, a row that had no card to carry) or
 // replaced the box a rebuild threw away - and an inline style belongs to the element, so the number was gone with it.
@@ -3477,7 +3534,7 @@ function applyStoredHeight(o) {
   if (globalThis.consoleHeld?.(o)) return false;
   const h = Number(state.outHeights[o.dataset.out || ""]);
   if (!Number.isFinite(h) || h <= 0) return false;
-  o.style.height = `${h}px`;
+  if (!setOutHeight(o, h)) return false;
   const cap = parseFloat(getComputedStyle(o).maxHeight);
   if (Number.isFinite(cap) && h > cap) o.style.maxHeight = "none";
   return true;

@@ -10468,13 +10468,22 @@ for (const type of ["gesturestart", "gesturechange"]) {
 // it inside the `.out-box` that also holds the <pre>, and the sheet draws its ticks in the shape the float's corner
 // grip already has) plus a gesture that owns the number:
 //
-//   - every move measures the box's LIVE rect and adds the pointer's own travel since the previous move, so a box
-//     that moved for any reason still tracks the corner instead of accumulating error;
-//   - it writes an explicit pixel height, with the sheet's cap lifted off it for the length of the gesture;
+//   - the box's TOP edge is read ONCE, at the press, and the height of every move is the pointer expressed from that
+//     edge. The top is the one edge of this box no other loop may move while the pointer is down: the PAGE's tail
+//     pin is stood down for the length of the gesture (public/board/console.js cardBodyHeld), because it jumps the
+//     transcript to its foot and the foot cancels every pixel the drag writes. An arithmetic that grew "the drawn
+//     height plus this move's travel" is what let that pin cancel a drag silently: measured on the third recurrence,
+//     40 steps of 3px grew the box's height by 120px and moved its top by -120px, so the grip's bottom edge did not
+//     move at all. The BROWSER's scroll anchor is NOT stood down - it holds the reader's place when a row lands
+//     above, and the gate's "above" case measures the 86.25px of drift that comes of disabling it;
+//   - it writes an explicit pixel height through `setOutHeight` (the ONE writer of `--out-h`), with the sheet's cap
+//     lifted off it for the length of the gesture;
 //   - the min/max clamps are applied ONCE, on release. A clamp applied mid-gesture is a box that stops while the
 //     pointer keeps going, which is the jump in its other form;
 //   - while it runs, the repaint paths leave that console alone (`outDragging` / `outGripHoldsCard`): no re-pin, no
-//     text rebuild, no node replacement, so the corner is under the pointer for every pixel of the travel.
+//     text rebuild, no node replacement, so the corner is under the pointer for every pixel of the travel;
+//   - the release puts a transcript that was following its foot back on it, once: the drag moved the box's bottom,
+//     and a resize the reader asked for must not take the stream's follow away with it.
 //
 // The clamps read at release are the sheet's own `min-height`, and the ROOM the box has under its top edge in the
 // viewport. The room rather than the sheet's `max-height`, because the cap is what a console sits on when nobody has
@@ -10483,10 +10492,10 @@ for (const type of ["gesturestart", "gesturechange"]) {
 const OUT_GRIP_ROOM = 8; // px kept under the box at the viewport's bottom edge, so the grip is not on the very edge
 let outGripDrag = null;
 
-// The box the sheet drew this frame, plus the pointer's travel since the last one: the whole arithmetic of a step. A
-// negative ask is not a height, so it lands on 0 and the next move measures the drawn box again.
-function outGripStep(drawn, dy) {
-  const h = Number(drawn) + Number(dy);
+// The height a move asks for: the pointer, expressed from the top edge the press froze, plus the pixels of the grip
+// the hand landed inside. Negative is not a height, so it lands on 0 and the next move asks again from the same edge.
+function outGripStep(top, grab, clientY) {
+  const h = Number(clientY) + Number(grab) - Number(top);
   return Number.isFinite(h) && h > 0 ? h : 0;
 }
 
@@ -10533,12 +10542,22 @@ document.addEventListener(
     if (!out) return;
     const r = out.getBoundingClientRect();
     const cs = getComputedStyle(out);
+    // The transcript this console is drawn in, when it IS a scrollport (the docked Chat pane, a maximized card):
+    // its pin is what the gesture stands down, and its foot is what the release puts back. A body the sheet does
+    // not scroll (a row's card on the board) is never touched.
+    const bodyEl = out.closest(".job-body");
+    const scrollport = bodyEl && (bodyEl.closest(".job.maximized") || bodyEl.closest('[data-subpane="chat"]')) ? bodyEl : null;
     outGripDrag = {
       out,
       grip,
       box,
       pointer: e.pointerId,
       y: e.clientY,
+      // THE TWO NUMBERS THE WHOLE GESTURE IS: the top edge it may not let move, and where inside the grip the hand
+      // landed. The height of every move is `pointer + grab - top`, so the corner lands on the pointer whatever
+      // else reflowed, and nothing accumulates from one move to the next.
+      top: r.top,
+      grab: r.bottom - e.clientY,
       h: r.height,
       from: r.height,
       moved: false,
@@ -10546,9 +10565,11 @@ document.addEventListener(
       // moves nothing can put the box back exactly as it found it.
       min: parseFloat(cs.minHeight),
       cap: parseFloat(cs.maxHeight),
-      styleHeight: out.style.height,
+      hadVar: out.style.getPropertyValue("--out-h"),
       styleMax: out.style.maxHeight,
       styleMin: out.style.minHeight,
+      body: scrollport,
+      following: Boolean(scrollport && scrollport._atBottom !== false),
       deferred: false,
     };
     // The gesture keeps its own pointer, so a release outside the card still ends it. `touch-action: none` on the grip
@@ -10563,7 +10584,7 @@ document.addEventListener(
     // the pointer keeps going - a clamp applied mid-gesture is the corner walking away from the cursor, which is the
     // defect this gesture exists to end. The clamps are read back on the release (endOutGrip), and all three inline
     // values are restored if the press turns out to be a click.
-    out.style.height = `${r.height}px`;
+    setOutHeight(out, r.height);
     out.style.maxHeight = "none";
     out.style.minHeight = "0";
     box.classList.add("is-resizing");
@@ -10578,17 +10599,16 @@ window.addEventListener(
   (e) => {
     const d = outGripDrag;
     if (!d || e.pointerId !== d.pointer || !d.out.isConnected) return;
-    // THE LIVE RECT, every single move. The box on the page is what the reader sees, so it is what the pointer's
-    // travel is measured against: a reflow, a zoom, or a rebuild that slipped through cannot accumulate into a corner
-    // that drifts away from the cursor.
-    const drawn = d.out.getBoundingClientRect().height;
-    const h = outGripStep(drawn, e.clientY - d.y);
+    // THE TOP EDGE THE PRESS FROZE, not the drawn box: the height is where the pointer is, expressed from an edge
+    // no pin may move while the hand is down. See outGripStep and cardBodyHeld (public/board/console.js).
+    const h = outGripStep(d.top, d.grab, e.clientY);
     d.y = e.clientY;
     d.h = h;
     if (Math.abs(h - d.from) >= 1) d.moved = true;
-    // An explicit pixel height, with the sheet's cap lifted for the length of the gesture: `height` alone is clamped by
-    // `max-height`, and that clamp is the thing that used to walk the handle up the screen.
-    d.out.style.height = `${h}px`;
+    // An explicit pixel height through the ONE writer of `--out-h`, with the sheet's cap lifted for the length of the
+    // gesture: `--out-h` alone is clamped by `max-height`, and that clamp is the thing that used to walk the handle
+    // up the screen.
+    setOutHeight(d.out, h);
     d.out.style.maxHeight = "none";
   },
   true,
@@ -10609,7 +10629,8 @@ function endOutGrip(e) {
     if (!d.moved) {
       // A press that moved nothing is a press on the corner, not a resize: put back exactly what the sheet drew, so a
       // click here leaves neither a pinned height nor a lifted cap behind.
-      d.out.style.height = d.styleHeight;
+      if (d.hadVar) d.out.style.setProperty("--out-h", d.hadVar);
+      else clearOutHeight(d.out);
       d.out.style.maxHeight = d.styleMax;
       d.out.style.minHeight = d.styleMin;
     } else {
@@ -10620,7 +10641,7 @@ function endOutGrip(e) {
       const r = d.out.getBoundingClientRect();
       const room = Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(window.innerHeight - r.top - OUT_GRIP_ROOM));
       const h = outGripRelease(d.h, d.min, room);
-      d.out.style.height = `${h}px`;
+      setOutHeight(d.out, h);
       d.out.style.minHeight = d.styleMin;
       // Lifted whenever the height the reader chose is at or above the cap - and ALSO when the cap cannot be read,
       // which is the ordinary state of a box an earlier gesture already lifted (its computed max-height is "none" by
@@ -10629,6 +10650,14 @@ function endOutGrip(e) {
       // height is what the gesture decided; the cap exists only for a console nobody has resized.
       d.out.style.maxHeight = Number.isFinite(d.cap) && h <= d.cap ? "" : "none";
       rememberOutHeight(d.out.dataset.out, h);
+      // THE FOOT THE GESTURE TOOK AWAY. The drag moved the box's bottom, so a transcript that was following its newest
+      // line is now short of it by the travel - and would stop following the stream the reader is reading because of
+      // a resize they asked for. It goes back to the foot once, through setScroll, so the card's own pin reads the
+      // write as the panel's and keeps following.
+      if (d.body && d.following) {
+        setScroll(d.body, d.body.scrollHeight);
+        d.body._atBottom = true;
+      }
     }
   }
   // Whatever a repaint path wanted to draw while the pointer was down is drawn now, once.

@@ -1,18 +1,20 @@
-// The console's corner grip: one arithmetic, one release clamp, and the guards that keep the box still while the
-// pointer is down.
+// The console's corner grip: one arithmetic, one owner for the height, one release clamp, and the guards that keep
+// the box still while the pointer is down.
 //
 // The gesture itself is a page-level thing (a trusted pointer on a real box in public/app.js), and its gate is
-// `tools/verify-console-resize.mjs`: ten 20px moves each way with the grip's box held to the cursor. What this file
-// carries is the half a layout-free test can hold down:
+// `tools/verify-console-slow-drag.mjs` for the slow drag the reader reported and `tools/verify-console-resize.mjs`
+// for the settled card. What this file carries is the half a layout-free test can hold down:
 //
-//   the ARITHMETIC   outGripStep (the live rect plus the pointer's travel) and outGripRelease (the one clamp), driven
-//                    out of `public/app.js` in a VM just as console-height-store.test.js drives the height store
+//   the ARITHMETIC   outGripStep (the pointer expressed from the TOP edge the press froze) and outGripRelease (the one
+//                    clamp), driven out of `public/app.js` in a VM just as console-height-store.test.js drives the
+//                    height store. The old arithmetic - the drawn height plus this move's travel - is what let a
+//                    second loop cancel a drag while looking correct in the height alone.
 //   the SHAPE        the markup puts the grip in a `.out-box` with the console, the sheet has no `resize` handle left
-//                    on `.job-out`, the grip is a `touch-action: none` 18px nwse band, and the clamp is called ONCE,
-//                    on the release - a clamp on every move is the box stopping while the pointer keeps going
-//   the GUARDS       every path that could rebuild, re-pin or re-measure the console while the gesture runs asks the
-//                    gesture first, by name. Deleting one of these is a box that jumps under the reader's hand, and it
-//                    has to be a red test rather than a walk through the page.
+//                    on `.job-out`, its height resolves through `--out-h`, the grip is a `touch-action: none` 18px
+//                    nwse band, and the clamp is called ONCE, on the release
+//   the ONE OWNER    every path that sets a console's height calls setOutHeight; nothing writes `style.height` on a
+//                    `.job-out`; the transcript's tail pin (JS and the browser's scroll anchor) stands down for the
+//                    length of a gesture, by name, in one place each
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -39,21 +41,21 @@ vm.runInContext([grab(appSrc, "outGripStep"), grab(appSrc, "outGripRelease")].jo
 const { outGripStep, outGripRelease } = context;
 
 // ---- the arithmetic of one move -------------------------------------------------------------------------------
-test("a step is the box the sheet drew plus the pointer's own travel", () => {
-  assert.equal(outGripStep(230, -20), 210, "20px up from a 230px box");
-  assert.equal(outGripStep(210, -20), 190, "and again, from the box that is now on the page");
-  assert.equal(outGripStep(230, 20), 250, "20px down is 20px more console");
-  assert.equal(outGripStep("320", -20), 300, "a measured rect given as a string is still a number");
-  assert.equal(outGripStep(27.5, 0.5), 28, "sub-pixel travel is kept, not rounded away mid-gesture");
+test("a step is the pointer expressed from the top edge the press froze", () => {
+  assert.equal(outGripStep(100, 2, 122), 24, "the pointer 22px down a box whose top is at 100, 2px inside the grip");
+  assert.equal(outGripStep(100, 2, 102), 4, "still at the press: the same height the box had");
+  assert.equal(outGripStep(100, 2, 82), 0, "20px up from a box that was 2px tall is not a height");
+  assert.equal(outGripStep("100", "2", "122"), 24, "strings from a rect are still numbers");
+  assert.equal(outGripStep(100, 0.5, 130.5), 31, "sub-pixel travel is kept, not rounded away mid-gesture");
 });
 
 test("a step never asks for a negative height", () => {
   // A pointer dragged above the box's own top edge asks for less than nothing. That is not a height, and writing it
   // would be ignored by the browser - the box would then stop tracking while the pointer kept going. So it lands on 0
-  // and the next move measures the drawn box again.
-  assert.equal(outGripStep(12, -40), 0);
-  assert.equal(outGripStep(0, 0), 0);
-  assert.equal(outGripStep(NaN, -20), 0, "an unmeasurable box is not a height either");
+  // and the next move asks again from the same frozen edge.
+  assert.equal(outGripStep(200, 0, 190), 0);
+  assert.equal(outGripStep(0, 0, 0), 0);
+  assert.equal(outGripStep(NaN, 2, 120), 0, "an unmeasurable edge is not a height either");
 });
 
 // ---- the one clamp -------------------------------------------------------------------------------------------
@@ -106,14 +108,38 @@ test("the clamp is called once, at the release - never on a move", () => {
   assert.equal(appSrc.split("outGripStep(").length - 1, 2, "a step is written in one place too");
 });
 
-test("every move measures the box that is on the page", () => {
+test("the height is written through the one owner, and a move is the pointer from the frozen top", () => {
   const start = appSrc.indexOf('"pointermove"');
   assert.ok(start > 0, "the move handler is still there");
   const handler = appSrc.slice(start, appSrc.indexOf("function endOutGrip(", start));
-  assert.ok(handler.includes("getBoundingClientRect().height"), "the live rect, not a number remembered from the press");
-  assert.ok(handler.includes("outGripStep(drawn, e.clientY - d.y)"), "and the pointer's own travel against it");
-  assert.ok(handler.includes('style.height = `${h}px`'), "an explicit pixel height");
+  assert.ok(handler.includes("outGripStep(d.top, d.grab, e.clientY)"), "the press's top edge, not the drawn box");
+  assert.equal(handler.includes("getBoundingClientRect().height"), false, "no second measurement of the height per move");
+  assert.ok(handler.includes("setOutHeight(d.out, h)"), "written through the one writer of --out-h");
+  assert.equal(/\.out\.style\.height\s*=/.test(appSrc), false, "and never through style.height on the console");
   assert.ok(handler.includes('style.maxHeight = "none"'), "with the sheet's cap lifted off it");
+});
+
+test("the sheet resolves the console's height from the variable, and leaves the browser's anchor alone", () => {
+  const rule = css.match(/\n\.job-out \{[^}]*\}/);
+  assert.ok(rule, "the console's own rule");
+  assert.ok(rule[0].includes("height: var(--out-h, auto)"), "the height is the variable, with the sheet's auto as the fallback");
+  // A gesture must NOT disable scroll anchoring: it is the loop that holds the reader's place when a row lands in
+  // the turn above, and tools/verify-console-corner-slow-drag.mjs's "above" case measures the drift when it is off.
+  assert.equal(
+    /body\.is-out-gripping[^{]*\{[^}]*overflow-anchor/.test(css),
+    false,
+    "no overflow-anchor: none for a corner gesture - it moves the box under the hand",
+  );
+});
+
+test("one writer: no path sets a console's height except setOutHeight", () => {
+  // setOutHeight is the only place that writes the variable, and the three callers are the three paths that own the
+  // number: the gesture, the remembered height a rebuild restores, and the float's slack console drag.
+  assert.ok(grab(consoleSrc, "setOutHeight").includes('setProperty("--out-h"'), "the writer, in one place");
+  assert.ok(grab(consoleSrc, "applyStoredHeight").includes("setOutHeight(o, h)"), "a rebuilt console restores through it");
+  assert.ok(appSrc.includes("setOutHeight(out, r.height)") && appSrc.includes("setOutHeight(d.out, h)"), "the press and the release");
+  assert.ok(grab(appSrc, "endOutGrip").includes("setOutHeight(d.out, h)"), "the release clamps into the same variable");
+  assert.equal(/cons\.style\.height\s*=/.test(page("public/assistant.js")), false, "the float's console drag goes through it too");
 });
 
 // ---- the guards ----------------------------------------------------------------------------------------------
@@ -142,6 +168,8 @@ test("the gesture hands its own pointer the whole way", () => {
   const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
   assert.ok(press.includes("setPointerCapture(e.pointerId)"), "captured, so a release outside the card still ends it");
   assert.ok(press.includes("e.button !== 0"), "and only the primary button starts a resize");
-  assert.ok(press.includes('style.height = `${r.height}px`'), "the press pins the height it found");
-  assert.ok(grab(appSrc, "endOutGrip").includes("d.styleHeight"), "which a press that never moved puts back");
+  assert.ok(press.includes("top: r.top"), "the press freezes the box's top edge");
+  assert.ok(press.includes("grab: r.bottom - e.clientY"), "and where inside the grip the hand landed");
+  assert.ok(press.includes("setOutHeight(out, r.height)"), "the press pins the height it found, through the one writer");
+  assert.ok(grab(appSrc, "endOutGrip").includes("d.hadVar"), "which a press that never moved puts back");
 });

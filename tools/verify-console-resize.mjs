@@ -112,7 +112,7 @@ const measure = (page, thread) =>
     return {
       t: +r.top.toFixed(1), b: +r.bottom.toFixed(1), l: +r.left.toFixed(1), r: +r.right.toFixed(1),
       h: +r.height.toFixed(1),
-      max: cs.maxHeight, inlineH: pre.style.height, inlineMax: pre.style.maxHeight,
+      max: cs.maxHeight, inlineH: pre.style.getPropertyValue("--out-h"), inlineMax: pre.style.maxHeight,
       client: pre.clientHeight, scroll: pre.scrollHeight,
       probe: pre.dataset.probe || "",
       grip: g ? { b: +g.bottom.toFixed(1), r: +g.right.toFixed(1), w: +g.width.toFixed(1), h: +g.height.toFixed(1) } : null,
@@ -329,6 +329,7 @@ async function main() {
         const g1 = await grab(page, LONG);
         check(near(g1.after.h, g1.at.h), "pointerdown leaves the console the size it was", `h ${g1.at.h} -> ${g1.after.h}`);
         check(g1.after.inlineH === `${g1.at.h}px` && g1.after.max === "none",
+          // `--out-h` is the console height's one owner (public/board/console.js setOutHeight); this read is that variable.
           "the height it has is pinned as the gesture starts, and the cap lifted in the same breath",
           `inlineH=${g1.after.inlineH} max=${g1.after.max}`);
         check(near(g1.at.b, g1.at.grip.b) && near(g1.at.r, g1.at.grip.r),

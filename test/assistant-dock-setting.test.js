@@ -209,7 +209,8 @@ test("a corner drag's console height is monotonic in the frame's gain and stops 
 
   // And the gesture WRITES it, from the drawn frame - not from the pointer's arithmetic, and not left to the flex.
   assert.match(code, /const drawn = el\.getBoundingClientRect\(\)\.height - d\.box\.height;/, "the gain is the drawn frame's");
-  assert.match(code, /cons\.style\.height = cssPx\(/, "the console's height is written");
+  assert.match(code, /setOutHeight\(cons, outH \/ \(z \|\| 1\)\)/, "the console's height is written through the one owner");
+  assert.equal(/cons\.style\.height\s*=/.test(code), false, "and not on its own: a second writer is a second geometry");
   assert.match(code, /cons\.style\.maxHeight = cssPx\(/, "and its cap with it, or flex-grow hands it more than the drag did");
   assert.match(code, /rememberOutHeight\(cons\.dataset\.out/, "the size survives a rebuild through the console store");
 });
