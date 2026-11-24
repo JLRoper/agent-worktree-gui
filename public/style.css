@@ -5085,6 +5085,11 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 }
 #as-initiatives .init-tier b { color: var(--tab-ink); font-weight: 600; }
 #as-initiatives .init-read { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+/* ZERO HEIGHT WHEN THERE IS NOTHING TO SAY. The read's hint is written only for a failure now (the in-flight case draws
+   no node at all: public/assistant.js's meta line), and this is the second lock on the same door - an EMPTY span in
+   .init-meta is still a flex item in a column with a gap, so it would cost 8px and could take a line box from a later
+   change that puts a word here. `display: none` removes it from the column entirely. */
+#as-initiatives .init-read:empty { display: none; }
 #as-initiatives .init-about {
   margin: 0 0 var(--tab-s3);
   padding: var(--tab-s3) var(--tab-s4);
