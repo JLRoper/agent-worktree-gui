@@ -23,6 +23,11 @@
 // A box whose top moves while its height grows moves its bottom by the difference, so the grip's own bottom edge -
 // the thing the reader's hand is on - is the honest witness. Every step asserts the grip's bottom is on the pointer.
 //
+// Four shapes are driven, because the reader's console is not always one shape: SETTLED (nothing arrives while the hand
+// is down), LIVE (a paragraph streams into the console being resized), ABOVE (a row lands in the turn above, so content
+// grows on the other side of the reader's place), and CLIPPED (the console was already shrunk, so its content is taller
+// than the box, it scrolls inside itself, and its own tail pin has somewhere to write while the drag grows it back).
+//
 // The browser half needs a Playwright install (PANEL_PLAYWRIGHT_ROOT), exactly like every other harness in tools/.
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -223,6 +228,20 @@ const PAGE_HELPERS = () => {
       appendJobLine({ id, line: { kind: "text", mode: "set", lid: "p1", text, at: Date.now() } });
       return true;
     },
+    // A console the reader has ALREADY shrunk: its content is taller than the box, so the console scrolls inside
+    // itself and its own tail pin (stickConsole) has somewhere to write. Dragging this one back down is the reader
+    // revealing more of the turn they clipped - the case where the box has two scrolls to keep still.
+    shrink: (h) => {
+      const o = out();
+      if (!o) return null;
+      // The page's own writer where this tree has one (`--out-h`), and the older inline `height` where it does not:
+      // this harness is also run against an archive of main as a failing-first proof, and a fixture that threw there
+      // would prove nothing about the shape the reader reported.
+      if (typeof setOutHeight === "function") setOutHeight(o, h);
+      else o.style.height = `${Math.round(h)}px`;
+      o.scrollTop = o.scrollHeight;
+      return { h: +o.getBoundingClientRect().height.toFixed(1), ownMax: o.scrollHeight - o.clientHeight, ownTop: o.scrollTop };
+    },
     // A row landing in the TURN ABOVE the console: content growing above the reader's place rather than below it.
     // This is the shape that asks the BROWSER's scroll anchoring (not the JS pin) to keep its anchor still, and the
     // anchor it picks is above the console, so its adjustment moves the console's top edge under the hand.
@@ -283,7 +302,8 @@ async function settleFoot(page) {
 
 // One slow downward drag, one row per step. The pointer is moved BEFORE the read, so a row says what the page
 // drew for that step rather than what it had a moment earlier.
-async function slowDrag(page, { live = false, above = false } = {}) {
+async function slowDrag(page, { live = false, above = false, clipped = false } = {}) {
+  const shrink = clipped ? await page.evaluate(() => window.__D.shrink(300)) : null;
   const foot = await settleFoot(page);
   const press = await aim(page);
   await page.evaluate(() => window.__D.mark());
@@ -310,7 +330,7 @@ async function slowDrag(page, { live = false, above = false } = {}) {
   }
   await page.waitForTimeout(200);
   const released = await page.evaluate(() => window.__D.read());
-  return { press, foot, down, rows, released, aboveFed };
+  return { press, foot, down, rows, released, aboveFed, shrink };
 }
 
 const PROSE =
@@ -360,9 +380,10 @@ async function main() {
         });
         await page.waitForTimeout(200);
 
-        for (const scenario of ["settled", "live", "above"]) {
-          const live = scenario === "live";
+        for (const scenario of ["settled", "live", "above", "clipped"]) {
+          const live = scenario === "live" || scenario === "clipped";
           const above = scenario === "above";
+          const clipped = scenario === "clipped";
           if (scenario !== "settled") {
             // Re-press the same console from a settled state: the drag is the only thing that changed.
             await page.reload({ waitUntil: "domcontentloaded" });
@@ -372,7 +393,7 @@ async function main() {
             await page.evaluate(() => window.__D.mark());
             await openAllTurns(page);
           }
-          const run = await slowDrag(page, { live, above });
+          const run = await slowDrag(page, { live, above, clipped });
           trace.scenarios[scenario] = run;
           const pressGap = run.down ? run.down.gripBottom - run.press.y : 0;
           const want = (i) => +(run.press.y + i * STEP_PX).toFixed(1);
@@ -422,6 +443,13 @@ async function main() {
           if (!JSON_OUT) console.log(`\nTRACE ${key} (${STEPS} steps of ${STEP_PX}px, ${STEP_MS}ms apart)\n${table}\n`);
           if (key === "above") {
             check(run.aboveFed === STEPS, "above: the burst above the console really landed", `${run.aboveFed}/${STEPS} rows fed into the turn above`);
+          }
+          if (key === "clipped") {
+            check(
+              Boolean(run.shrink) && run.shrink.ownMax > 0,
+              "clipped: the console really has an internal scroll to keep still",
+              run.shrink ? `${run.shrink.h}px tall, ${run.shrink.ownMax}px of content below the fold` : "the console could not be shrunk",
+            );
           }
           check(Boolean(run.foot), `${key}: the press starts on the transcript's foot`, run.foot ? `${run.foot.short}px short of the foot` : "the foot could not be claimed");
           check(
@@ -477,6 +505,28 @@ async function main() {
     else console.log(`sandbox kept: ${dir}`);
   }
 
+  // THE SANDBOX'S OWN HYGIENE, asserted rather than assumed: `panel.stop()` is the only thing that kills the server
+  // this run started, and a gate that leaks a node process on every landing is a defect in the gate. Signal 0 is the
+  // "does this pid exist" question on both platforms, so this is the same check a reader runs by hand.
+  const pidAlive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (panel.pid && pidAlive(panel.pid)) {
+    try {
+      process.kill(panel.pid, "SIGKILL");
+    } catch {
+      /* it went away between the question and the kill */
+    }
+    check(false, "the sandbox panel this run started is gone", `pid ${panel.pid} was still alive after panel.stop() - killed`);
+  } else {
+    check(true, "the sandbox panel this run started is gone", `pid ${panel.pid} exited with the run`);
+  }
+
   if (TRACE) writeFileSync(path.resolve(TRACE), JSON.stringify(trace, null, 1), "utf8");
   if (TRACE) console.log(`trace: ${path.resolve(TRACE)}`);
   const failures = results.filter((r) => !r.ok).length;
@@ -484,7 +534,7 @@ async function main() {
   else {
     console.log(
       "NUMBERS " +
-        ["settled", "live", "above"]
+        ["settled", "live", "above", "clipped"]
           .map((k) => `${k} worst corner ${numbers[`${k}WorstCornerPx`]}px (top moved ${numbers[`${k}TopMovedPx`]}, pin moved ${numbers[`${k}PinMovedPx`]}, height +${numbers[`${k}HeightGrownPx`]})`)
           .join(" | "),
     );
