@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A failing initiatives read backs off to one request a minute</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #181d26; --sunk: #13181f; --line: #262c37; --hair: #3c424d;
+    --text: #e6e9ef; --dim: #9aa4b2; --meta: #7c8798;
+    --ok: #7ee787; --wait: #f0c674; --bad: #ff9c94; --info: #9ecbff; --link: #7fb2e8;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 28px 120px; }
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 34px; }
+  .eyebrow { font: 600 11.5px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--meta); }
+  h1 { font-size: 33px; line-height: 1.18; letter-spacing: -.015em; margin: 14px 0 12px; font-weight: 650; }
+  .lede { font-size: 17px; line-height: 1.55; color: var(--dim); max-width: 80ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .meta b { color: var(--dim); font-weight: 600; }
+  h2 { font-size: 23px; line-height: 1.3; letter-spacing: -.01em; margin: 54px 0 6px; font-weight: 650; }
+  h2 .n { color: var(--meta); font: 600 13px/1 var(--mono); margin-right: 10px; vertical-align: 4px; }
+  h3 { font-size: 16.5px; line-height: 1.4; margin: 30px 0 6px; font-weight: 620; }
+  p { margin: 10px 0; max-width: 86ch; }
+  .kicker { color: var(--dim); max-width: 82ch; margin: 0 0 18px; }
+  ul, ol { max-width: 86ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 12.5px/1.5 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e2; }
+  pre { font: 12.5px/1.6 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #cfd6e2; }
+  pre code { background: none; border: 0; padding: 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(127,178,232,.3); }
+  a:hover { border-bottom-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); border-bottom-color: var(--hair); }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  tbody tr:hover td { background: rgba(255,255,255,.015); }
+  .note { border: 1px solid var(--hair); border-left: 3px solid var(--wait); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 24px 0 10px; }
+  .note h4 { margin: 0 0 8px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--wait); }
+  .note p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .verdict { border: 1px solid var(--hair); border-left: 3px solid var(--ok); background: #151a22; border-radius: 8px; padding: 16px 18px; margin: 24px 0 10px; }
+  .verdict h4 { margin: 0 0 8px; font: 600 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ok); }
+  .verdict p { margin: 8px 0; max-width: 94ch; font-size: 14px; }
+  .b { display: inline-block; font: 600 9.5px/1.55 var(--mono); letter-spacing: .06em; text-transform: uppercase; border-radius: 999px; padding: 1px 8px; border: 1px solid; vertical-align: 1px; white-space: nowrap; }
+  .b.ok { color: var(--ok); border-color: rgba(126,231,135,.4); background: rgba(126,231,135,.08); }
+  .b.warn { color: var(--wait); border-color: rgba(240,198,116,.4); background: rgba(240,198,116,.08); }
+  .b.bad { color: var(--bad); border-color: rgba(255,156,148,.4); background: rgba(255,156,148,.08); }
+  .b.info { color: var(--info); border-color: rgba(158,203,255,.4); background: rgba(158,203,255,.08); }
+  .bars { margin: 20px 0 6px; }
+  .bar { display: grid; grid-template-columns: 148px 1fr 88px; gap: 14px; align-items: center; margin: 8px 0; font: 12.5px/1.4 var(--mono); color: var(--dim); }
+  .bar .track { display: block; height: 18px; background: #0c1015; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .bar .fill { display: block; height: 100%; }
+  .bar .fill.bad { background: linear-gradient(90deg, #b3524c, #ff9c94); }
+  .bar .fill.ok { background: linear-gradient(90deg, #3c8b46, #7ee787); }
+  .bar .v { text-align: right; color: var(--text); }
+  .cap { font: 11.5px/1.5 var(--mono); color: var(--meta); margin: 4px 0 0; }
+  footer { margin-top: 70px; border-top: 1px solid var(--line); padding-top: 18px; font: 12px/1.6 var(--mono); color: var(--meta); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">repaint cadence &middot; queue row 279 &middot; the Initiatives tab</div>
+  <h1>A failing initiatives read backs off to one request a minute</h1>
+  <p class="lede">
+    The pane's stale read is re-armed from its own render and from a four-second timer, and neither looked at whether
+    the last read FAILED. A broken store was therefore asked again on every repaint, and each failure's own repaint
+    started the next read: row 275's worker counted 114 <code>GET /api/initiatives</code> in one sample window. This
+    page is the measurement of the fix: the same instrument, the same forced failure, the same 62 s window, and the
+    same pane - 144 GETs on the base, 4 on the fix, with Refresh still answering at once and a recovered read back on
+    the ordinary four-second gap.
+  </p>
+  <div class="meta">
+    <span><b>fix commit</b> d1d60c00</span>
+    <span><b>base</b> origin/main ad695076 (1.166.0)</span>
+    <span><b>gate</b> npm run verify:initiatives-read-backoff</span>
+    <span><b>fix arm</b> 9 of 9 checks pass</span>
+    <span><b>base arm</b> 7 of 7 checks pass</span>
+    <span><b>zero-shift gate</b> 34 of 34 (re-run)</span>
+    <span><b>sandbox</b> fixture panel, own port and WAG_HOME</span>
+  </div>
+</header>
+
+<h2><span class="n">1</span>The loop, in three lines of code</h2>
+<p class="kicker">The row named the mechanism: the stale read is re-armed after every render, and a failure never moves the clock it is measured against.</p>
+
+<p>
+  <code>renderAssistantInitiatives</code> re-armed the read on the base
+  (<code>public/assistant.js:4173</code>, now <code>public/assistant.js:4231</code>):
+</p>
+<pre><code>if (!initDoc &amp;&amp; !initLoading &amp;&amp; !initErr) void loadInitiatives();
+else if (initDoc &amp;&amp; !initLoading &amp;&amp; Date.now() - initReadAt &gt; INIT_READ_GAP_MS) void loadInitiatives();</code></pre>
+<p>
+  <code>initReadAt</code> is written in exactly one place, the success branch of <code>loadInitiatives</code>. A
+  FAILED read leaves it where it was, so <code>Date.now() - initReadAt</code> stays above the four-second gap for the
+  rest of the failure, and the render's second branch is true on every repaint. The repaint is guaranteed: the read's
+  own <code>.finally()</code> calls <code>renderAssistantInitiatives()</code>
+  (<code>public/assistant.js:3579</code>). Read fails, repaint, read again - bounded only by the request's own
+  round trip, not by the gap. That is how one pane issued 114 GETs in a window while the store answered 500.
+</p>
+<p>
+  A failing read is also the expensive case: row 267's cut made a good read cheap (536 ms cold, 62 ms for a lane),
+  but the failing path never gets the fast answer, because there is no answer. The count is the whole cost.
+</p>
+
+<h2><span class="n">2</span>The wait, and the three places that check it</h2>
+<p class="kicker">The healthy gap is untouched: <code>INIT_READ_GAP_MS</code> is still 4000 (<code>public/assistant.js:3490</code>). The backoff is a floor over it and only exists after a failure.</p>
+
+<pre><code>const INIT_READ_GAP_MS = 4000;
+const INIT_BACKOFF_BASE_MS = 8000;   // the wait after the FIRST failure
+const INIT_BACKOFF_CAP_MS = 60000;   // the ceiling: a broken store costs one request a minute
+let initFailCount = 0;               // consecutive failed reads; 0 while the store answers
+let initRetryAt = 0;                 // no automatic read before this instant (0 = not backing off)
+let initRetryWaitMs = 0;             // the wait the last failure scheduled, drawn in the reason line
+
+function initBackoffMs(n) {
+  return Math.min(INIT_BACKOFF_CAP_MS, INIT_BACKOFF_BASE_MS * 2 ** Math.max(0, n - 1));
+}
+const initHeld = () =&gt; initRetryAt &gt; Date.now();</code></pre>
+<p class="cap">public/assistant.js:3490-3515. The doubling is the shape lib/held-replies.js already uses, with this pane's own ceiling.</p>
+
+<p>The wait is checked three times, because any one of the three alone is the loop again:</p>
+<table>
+  <thead><tr><th>Where</th><th>What it does</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td class="num">the read itself</td><td>An automatic attempt inside the wait returns without a request. <code>force</code> skips only this check.</td><td class="num">3546</td></tr>
+    <tr><td class="num">the render's stale read</td><td>The re-arm that caused the loop now also requires <code>!initHeld()</code>, so a repaint during the wait starts nothing.</td><td class="num">4231</td></tr>
+    <tr><td class="num">the timer</td><td>Re-arms at <code>max(gap, initRetryAt - now)</code>, so a held pane is asked when its wait ends, not four seconds after it.</td><td class="num">4075</td></tr>
+  </tbody>
+</table>
+
+<p>
+  A failure sets all three fields together (<code>public/assistant.js:3570-3572</code>), and a read that answers
+  clears them together (<code>public/assistant.js:3559-3561</code>) - so a recovery is back on the four-second gap on
+  the very next read, not slow for the rest of the session. A write's own document is the store answering too, so
+  <code>adoptInitiatives</code> clears them the same way (<code>public/assistant.js:3599-3601</code>).
+</p>
+
+<h3>What the reader sees</h3>
+<p>
+  The meta line keeps its prefix, its class and its place - <code>read failed: &lt;reason&gt;</code> is the text the
+  zero-shift gate asserts - and the failure now carries why the pane is waiting and which control does not wait:
+</p>
+<pre><code>&lt;span class="as-hint init-read"&gt;read failed: ${esc(initErr)}${esc(initRetryReason())}&lt;/span&gt;
+
+read failed: the store could not be read (forced by tools/verify-initiatives-read-backoff.mjs) - retrying in 8s; Refresh reads now</code></pre>
+<p class="cap">public/assistant.js:4297 and 3520-3523. A sentence about the schedule, not a countdown: it changes when the wait does, so the pane's markup stands still between attempts and a poll does not rebuild the list under the reader.</p>
+<p>
+  Refresh and <b>Try again</b> are the same control (<code>data-init-refresh</code>), and it now asks at once
+  (<code>public/assistant.js:4806-4815</code>): the press clears the document and calls
+  <code>loadInitiatives({ force: true })</code>. Every read that follows a write is forced for the same reason - the
+  write just proved the server answers (<code>public/assistant.js:4541, 4559, 4582, 4676, 4892</code>).
+</p>
+
+<h2><span class="n">3</span>The proof: the finding's own instrument, both arms</h2>
+<p class="kicker">
+  <code>tools/verify-initiatives-read-backoff.mjs</code> boots the initiatives fixture (real repositories, four
+  initiatives, the real route) and opens the pane in headless Chromium. Every <code>GET /api/initiatives</code> the
+  page makes is counted <b>in the page's route handler</b> - the same place row 275 counted the 114 - so a press of
+  Refresh, the pane's timer and the render's stale read all arrive through one counter. The route answers 500 for a
+  fixed 62 s window, and the same window is run against an export of the base (<code>git archive origin/main</code>).
+</p>
+
+<div class="bars">
+  <div class="bar"><span>origin/main ad695076</span><span class="track"><span class="fill bad" style="width:100%"></span></span><span class="v">144</span></div>
+  <div class="bar"><span>this branch d1d60c00</span><span class="track"><span class="fill ok" style="width:2.78%"></span></span><span class="v">4</span></div>
+</div>
+<p class="cap">GET /api/initiatives in one 62 s window of a store that never answers. 144 against 4 is 36 times fewer requests, and 4 a minute is the ceiling doing its job.</p>
+
+<table>
+  <thead><tr><th>Check, same instrument both arms</th><th>origin/main</th><th>this branch</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>the first failure still draws <code>read failed:</code> in the meta line</td>
+      <td><span class="b ok">pass</span> <span style="color:var(--dim)">at 3.3 s into the window</span></td>
+      <td><span class="b ok">pass</span> <span style="color:var(--dim)">at 3.8 s into the window</span></td>
+    </tr>
+    <tr>
+      <td>the line says why the pane is waiting and that Refresh does not</td>
+      <td><span class="b bad">absent</span> <span style="color:var(--dim)">no wait, no reason</span></td>
+      <td><span class="b ok">pass</span> <span style="color:var(--dim)">"retrying in 8s; Refresh reads now"</span></td>
+    </tr>
+    <tr>
+      <td>GETs in the 62 s window with the read forced to fail</td>
+      <td><span class="b bad">144</span> <span style="color:var(--dim)">a gap every 0.40 to 0.46 s</span></td>
+      <td><span class="b ok">4</span> <span style="color:var(--dim)">gaps 8.42 s, 16.42 s, 32.42 s</span></td>
+    </tr>
+    <tr>
+      <td>the pane is quiet while it waits</td>
+      <td><span class="b bad">5 GETs in 2 s</span> <span style="color:var(--dim)">it never stops</span></td>
+      <td><span class="b ok">0 GETs in 2 s</span> <span style="color:var(--dim)">the line names the 60 s ceiling</span></td>
+    </tr>
+    <tr>
+      <td>Refresh retries at once, whatever the wait says</td>
+      <td><span class="b warn">not judged</span> <span style="color:var(--dim)">its press leaves the manual Try again state</span></td>
+      <td><span class="b ok">pass</span> <span style="color:var(--dim)">1 GET 31 ms after the press, wait named 60 s</span></td>
+    </tr>
+    <tr>
+      <td>a recovered read resumes the normal gap (16 s window)</td>
+      <td><span class="b ok">4 GETs</span> <span style="color:var(--dim)">gaps 4.01 to 4.02 s</span></td>
+      <td><span class="b ok">4 GETs</span> <span style="color:var(--dim)">gaps 4.01 to 4.03 s</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="kicker">
+  The base count is a browser loop racing a 400 ms hold, so it is a spread and not one number: four base runs across
+  the tips this row was cut from read 141, 142, 142 and 144, and 144 is the run on ad695076 that this page reports.
+  One of those runs also ended with its pane on 0 cards after the route had recovered and failed its own two recovery
+  checks; every re-run passed 7 of 7. The fix arm's 4 did not vary in any run, because it is a schedule rather than a
+  race.
+</p>
+
+<h3>The two windows that matter, as printed by the gate</h3>
+<pre><code># the fix arm
+PASS  a healthy pane reads at the normal gap before the failure: 4 GETs in 16000ms, gaps 4.04s, 4.11s, 4.03s
+PASS  the first forced failure still draws `read failed:` in the meta line: "read failed: the store could not be read
+      (forced by tools/verify-initiatives-read-backoff.mjs) - retrying in 8s; Refresh reads now" (3834ms into the window)
+      failing window: 4 GET /api/initiatives in 62000ms; gaps 8.42s, 16.42s, 32.42s
+PASS  the fix asks a failing store a handful of times, not a hundred in a window: 4 GETs in 62000ms
+PASS  the pane is really holding when the press is made: 0 GETs in 2000ms of waiting; the line names 60s
+PASS  Refresh retries at once regardless of the backoff: 1 GET(s) 31ms after the press, with the pane naming a 60s wait
+PASS  a recovered read resumes the normal gap (the backoff is cleared, not kept for the session):
+      4 GETs in 16000ms, gaps 4.03s, 4.01s, 4.03s
+
+# the base arm, same gate, --root &lt;export of origin/main&gt;
+PASS  the first forced failure still draws `read failed:` in the meta line (3295ms into the window)
+PASS  the base has no reason line and no wait
+      failing window: 144 GET /api/initiatives in 62000ms; gaps 0.41s, 0.40s, 0.41s ... (144 of them)
+PASS  the base retries with no backoff (a hundred in a window): 144 GETs in 62000ms
+PASS  the base is never quiet: it keeps asking while it waits for an answer: 5 GETs in 2000ms with nothing answered</code></pre>
+
+<div class="verdict">
+  <h4>What is proved</h4>
+  <p>
+    A broken store costs <b>4 requests in the first minute</b> instead of 144, the first failure still speaks, the
+    reason says what the wait is and that Refresh does not wait, the press answers in 31 ms while the pane is naming
+    a 60 s wait, and a recovered read is back on <b>4.0 s gaps in the same 16 s window</b> it measured before the
+    failure. The healthy path is identical on both arms (4 GETs per 16 s).
+  </p>
+</div>
+
+<h2><span class="n">4</span>Why the base arm is 144 and not the row's 114</h2>
+<p>
+  The count is the instrument's, and the instrument has a delay in it. Row 275 measured with an instant 500, which
+  lets the page loop as fast as the browser can round-trip; this gate holds each 500 for <b>400 ms</b>, the same delay
+  <code>tools/verify-init-read-zero-shift.mjs</code> uses so its own samples are not taken inside a spinning page.
+  The delay is identical in both arms, so the comparison is exact; the base's 144 in 62 s (about 2.3 a second) and the
+  finding's 114 in its window are the same loop at two sampling rates. The number that matters for the row is the one
+  a reader would suffer: 144 asks against a store that is already saying no.
+</p>
+
+<h2><span class="n">5</span>Reproduce</h2>
+<pre><code># the fix arm (this tree), ~2 minutes: 16 s healthy, 62 s failing, 16 s recovered
+npm run verify:initiatives-read-backoff
+
+# the base arm (the counter-example), from an export - no worktree, no checkout touched
+git archive origin/main | tar -x -C &lt;scratch&gt;/base
+node tools/verify-initiatives-read-backoff.mjs --root &lt;scratch&gt;/base --home &lt;scratch&gt;/base-home --json &lt;scratch&gt;/base.json
+
+# the source pins, and the gate that owns the same meta line
+node --test test/initiatives-read-backoff.test.js
+npm run verify:init-read-zero-shift</code></pre>
+<p class="kicker">
+  Sandbox only: the fixture's own WAG_HOME under scratch, its own port, throwaway repositories. The reader's board on
+  7331 is never touched. Without Playwright the gate says BROWSER-HALF-NOT-RUN and exits 2 rather than passing a half
+  that never ran.
+</p>
+
+<h2><span class="n">6</span>Found on the way, and changed with it</h2>
+<ul>
+  <li>
+    <b>The base stops retrying when it has no document.</b> Its press clears <code>initDoc</code>, a failing read then
+    leaves <code>initErr</code> set with no document, and the base's two re-arm branches both go false - the pane sits
+    in "could not read the initiatives" with a Try again button until the reader presses it. That is why the base arm
+    is not judged on the Refresh check. The fix makes that state ride the same wait as a pane with a map on screen
+    (<code>public/assistant.js:4231</code>), so the reason line's promise ("retrying in Ns") is true in both states.
+  </li>
+  <li>
+    <b>The reason line is drawn only with a failure.</b> The meta line's rule from row 275 stands: it may not draw
+    anything while a read is in flight, so the reason rides inside the <code>initErr</code> guard and an empty carrier
+    still costs nothing (<code>public/style.css:5099</code>). The zero-shift gate was re-run on this tree and passes
+    34 of 34 checks at 660 px and 340 px; its failure sample is now two and three line boxes tall instead of one and
+    two, and its whole-line-box assertion still holds.
+  </li>
+</ul>
+
+<footer>
+  Measured on the fixture panel, 2026-11-24, and re-measured after the rebase onto ad695076 (origin/main, 1.166.0).
+  Fix arm: this tree at the 1.166.1 landing (backoff commit d1d60c00). Base arm: an export of origin/main ad695076
+  (<code>git archive</code>). Gate: <code>tools/verify-initiatives-read-backoff.mjs</code>; source pins:
+  <code>test/initiatives-read-backoff.test.js</code>; raw samples: <code>fix.json</code> and <code>base.json</code> from
+  the same run.
+</footer>
+
+</div>
+</body>
+</html>
