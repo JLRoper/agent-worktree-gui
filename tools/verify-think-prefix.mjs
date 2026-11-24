@@ -188,7 +188,10 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  - ${detail}` : ""}`);
   return Boolean(ok);
 };
-const clip = (s, n = 72) => (String(s).length > n ? `${String(s).slice(0, n)}…` : String(s));
+const clip = (s, n = 72) => (String(s).length > n ? `${String(s).slice(0, n)}...` : String(s));
+// What a minimized row draws: the first section plus four dots. The SOURCE is on data-ltext; the dots are the row's
+// own mark that more is hidden, so every prefix comparison drops them first.
+const stripDots = (s) => (String(s).endsWith("....") ? String(s).slice(0, -4) : String(s));
 
 // Every drawn thought row, exactly as the DOM holds it, plus the box that clips it. `text` is the row's OWN words:
 // the `.think-text` span when it is there, the row's own text nodes when a paint has flattened it, and never the
@@ -210,7 +213,9 @@ const readRows = (page, thread) =>
       const cs = getComputedStyle(box);
       return {
         lid: row.dataset.lid || "",
+        source: row.dataset.ltext || "",
         text: own(row),
+        dots: row.querySelector(":scope > .think-text > .think-more") ? "...." : "",
         open: row.classList.contains("is-open"),
         scrollTop: box.scrollTop,
         scrollLeft: box.scrollLeft,
@@ -347,12 +352,14 @@ const main = async () => {
           let text = "";
           if (span) text = span.textContent;
           else for (const n of row.childNodes) if (n.nodeType === 3) text += n.data;
+          const source = row.dataset.ltext || "";
           const box = span || row;
           const prev = window.__rows[window.__rows.length - 1];
-          if (prev && prev.lid === (row.dataset.lid || "") && prev.text === text) continue;
+          if (prev && prev.lid === (row.dataset.lid || "") && prev.text === text && prev.source === source) continue;
           const cs = getComputedStyle(box);
           window.__rows.push({
             lid: row.dataset.lid || "",
+            source,
             text,
             open: row.classList.contains("is-open"),
             scrollTop: box.scrollTop,
@@ -383,9 +390,16 @@ const main = async () => {
     };
 
     // ---- 1: the first thought, whole, with nothing in the store yet ----------------------------------------
+    // The row's SOURCE is the whole thought (data-ltext); what it DRAWS while minimized is the first paragraph,
+    // cut at the blank line or by the four-line lid, plus the dots (queue row #292). A row that began mid-thought
+    // would still fail here: the drawn words must be a prefix of the source.
     gw.allow(STEP.A_DONE);
-    const rowA = await waitFor(async () => (await readRows(page, thread)).find((r) => r.text === THOUGHT_A));
-    check("the first thought is drawn whole, from its first character", Boolean(rowA), rowA ? clip(rowA.text, 48) : "not drawn");
+    const rowA = await waitFor(async () => (await readRows(page, thread)).find((r) => r.source === THOUGHT_A));
+    check(
+      "the first thought reaches the DOM whole, and the row draws it from its first character",
+      Boolean(rowA) && rowA.source === THOUGHT_A && THOUGHT_A.startsWith(stripDots(rowA.text)),
+      rowA ? clip(rowA.text, 48) : "not drawn",
+    );
     out.phases.rowA = rowA;
 
     // The store writes message 1's block now: stamped just before the call, which is what the real store does.
@@ -398,8 +412,8 @@ const main = async () => {
 
     // ---- 2: the thought that resumes after the call is its own row ----------------------------------------
     gw.allow(STEP.B_TWO);
-    const rowB = await waitFor(async () => (await readRows(page, thread)).find((r) => r.text === THOUGHT_B));
-    check("the thought that resumes after the call is a NEW row, complete", Boolean(rowB), rowB ? JSON.stringify(clip(rowB.text, 48)) : "not drawn");
+    const rowB = await waitFor(async () => (await readRows(page, thread)).find((r) => r.source === THOUGHT_B));
+    check("the thought that resumes after the call is a NEW row, complete", Boolean(rowB) && rowB.text === THOUGHT_B, rowB ? JSON.stringify(clip(rowB.text, 48)) : "not drawn");
     out.phases.rowB = rowB;
     const twoRows = await readRows(page, thread);
     check("two rows are on screen when the store still holds one block", twoRows.length === 2, `rows ${twoRows.length}`);
@@ -417,13 +431,15 @@ const main = async () => {
     out.phases.afterRead = afterRead.map((r) => ({ lid: r.lid, len: r.text.length, text: clip(r.text, 48) }));
     check(
       "a store read with one block does not take the live row's words away",
-      afterRead.length === 2 && afterRead.some((r) => r.text === THOUGHT_A) && afterRead.some((r) => r.text === THOUGHT_B),
+      afterRead.length === 2 &&
+        afterRead.some((r) => r.source === THOUGHT_A && THOUGHT_A.startsWith(stripDots(r.text))) &&
+        afterRead.some((r) => r.source === THOUGHT_B && r.text === THOUGHT_B),
       JSON.stringify(out.phases.afterRead),
     );
 
     // ---- 4: the same segment grows, and the row must keep everything it had -------------------------------
     gw.allow(SCRIPT.length);
-    const rowBGrown = await waitFor(async () => (await readRows(page, thread)).find((r) => r.text === THOUGHT_B + THOUGHT_B_MORE));
+    const rowBGrown = await waitFor(async () => (await readRows(page, thread)).find((r) => r.source === THOUGHT_B + THOUGHT_B_MORE));
     const nowRows = await readRows(page, thread);
     check("the row keeps its own first words as the thought grows", Boolean(rowBGrown), rowBGrown ? clip(rowBGrown.text, 60) : `took ${clip(nowRows.map((r) => r.text).join(" | "), 160)}`);
 
@@ -477,22 +493,25 @@ const main = async () => {
     const lastLen = new Map();
     for (const s of rowSamples) {
       const w = wireOf(s.lid);
-      if (!w.startsWith(s.text)) bad.push({ lid: s.lid, drawn: clip(s.text, 90), len: s.text.length, expected: clip(w, 90) });
-      if (!BLOCKS.some((b) => b.includes(s.text))) foreign.push({ lid: s.lid, drawn: clip(s.text, 90) });
+      // The row DRAWS its first section plus the dots; the prefix it must start with is that section, never a later
+      // slice of the thought and never a neighbour's words (queue row #285's rule, unchanged by #292's summary).
+      if (!w.startsWith(stripDots(s.text))) bad.push({ lid: s.lid, drawn: clip(s.text, 90), len: s.text.length, expected: clip(w, 90) });
+      if (!BLOCKS.some((b) => b.includes(stripDots(s.text)))) foreign.push({ lid: s.lid, drawn: clip(s.text, 90) });
       const prev = lastLen.get(s.lid);
-      if (prev != null && s.text.length < prev) shrink.push({ lid: s.lid, from: prev, to: s.text.length, drawn: clip(s.text, 60) });
-      lastLen.set(s.lid, s.text.length);
+      const mine = s.source.length;
+      if (prev != null && mine < prev) shrink.push({ lid: s.lid, from: prev, to: mine, drawn: clip(s.source, 60) });
+      lastLen.set(s.lid, mine);
     }
     out.phases.badSamples = bad.slice(0, 8);
     out.phases.shrunk = shrink.slice(0, 8);
     out.phases.foreign = foreign.slice(0, 8);
     check(
-      "every drawn thought row is a prefix of its own source, at every moment it is on screen",
+      "every drawn thought row starts at its own first words, at every moment it is on screen",
       bad.length === 0,
       bad.length ? `${bad.length} samples lost or reordered words, first: ${JSON.stringify(bad[0])}` : `${rowSamples.length} samples`,
     );
     check(
-      "no drawn row ever loses a character it had already drawn",
+      "no row ever loses a source character it had already recorded",
       shrink.length === 0,
       shrink.length ? `${shrink.length} shrinks, first: ${JSON.stringify(shrink[0])}` : `${rowSamples.length} samples`,
     );
@@ -504,10 +523,22 @@ const main = async () => {
     const heads = BLOCKS.map((b) => rowSamples.some((s) => s.text.startsWith(b[0]) && blockOf(s.lid) === b));
     check("the first character of every block reaches the DOM", heads.every(Boolean), JSON.stringify(heads));
 
-    // ---- (3) the clip is a bottom clip of four lines, never a start clip ----------------------------------
-    const clipSample = rowSamples.find((s) => s.text === THOUGHT_A) || rowSamples.find((s) => s.text.length > 200);
+    // ---- (3) the four-line lid is a BOTTOM bound, never a start clip --------------------------------------
+    // A long first section is cut by the lid at a word boundary and ends in the dots, and what it draws fits inside
+    // the same four lines the CSS clip has always declared. The first character of the row is still the thought's
+    // first character - that is the bottom-clip rule #285 landed, and the summary does not weaken it.
+    const clipSample = rowSamples.find((s) => s.source === THOUGHT_A) || rowSamples.filter((s) => s.source.length > 200).sort((a, b) => b.source.length - a.source.length)[0];
     out.phases.clipSample = clipSample;
-    check("the four-line clip hides the bottom of a long thought", Boolean(clipSample) && clipSample.overflowY === "hidden" && clipSample.clientHeight < clipSample.scrollHeight, clipSample ? JSON.stringify({ clientHeight: clipSample.clientHeight, scrollHeight: clipSample.scrollHeight, overflowY: clipSample.overflowY, maxHeight: clipSample.maxHeight }) : "no long row");
+    check(
+      "the four-line lid cuts a long thought and marks it with the four dots",
+      Boolean(clipSample) && clipSample.overflowY === "hidden" && clipSample.text.endsWith("....") && stripDots(clipSample.text).length < clipSample.source.length,
+      clipSample ? JSON.stringify({ drawn: stripDots(clipSample.text).length, source: clipSample.source.length, overflowY: clipSample.overflowY, maxHeight: clipSample.maxHeight }) : "no long row",
+    );
+    check(
+      "what the row draws fits the four lines the clip declares, so the dots are never under the cut",
+      Boolean(clipSample) && clipSample.scrollHeight <= clipSample.clientHeight + 1,
+      clipSample ? JSON.stringify({ clientHeight: clipSample.clientHeight, scrollHeight: clipSample.scrollHeight, maxHeight: clipSample.maxHeight }) : "no long row",
+    );
     check("the clip is not scrolled: no left clip and no start clip", Boolean(clipSample) && clipSample.scrollTop === 0 && clipSample.scrollLeft === 0, clipSample ? `scrollTop ${clipSample.scrollTop}, scrollLeft ${clipSample.scrollLeft}` : "no long row");
     const firstLine = await page.evaluate((t) => {
       const card = document.querySelector(`.job[data-thread="${CSS.escape(t)}"]`);
@@ -545,14 +576,19 @@ const main = async () => {
     }, jobId);
     await sleep(600);
     const settled = await readRows(page, thread);
-    out.phases.settled = settled.map((r) => ({ lid: r.lid, len: r.text.length, head: clip(r.text, 60) }));
+    out.phases.settled = settled.map((r) => ({ lid: r.lid, len: r.text.length, source: r.source.length, dots: Boolean(r.dots), head: clip(r.text, 60) }));
     const want = store.blocks.map((b) => b.text);
     check("the settled console draws one row per store block", settled.length === want.length, `rows ${settled.length}`);
-    const exact = want.every((w, i) => settled[i] && settled[i].text === w);
+    const exact = want.every((w, i) => settled[i] && settled[i].source === w);
     check(
-      "each settled row's drawn text equals its store block, character for character",
+      "each settled row's SOURCE equals its store block, character for character",
       exact,
-      exact ? "exact" : JSON.stringify(want.map((w, i) => ({ want: clip(w, 40), got: clip(settled[i]?.text || "", 40) }))),
+      exact ? "exact" : JSON.stringify(want.map((w, i) => ({ want: clip(w, 40), got: clip(settled[i]?.source || "", 40) }))),
+    );
+    check(
+      "each settled row draws its first section, with dots only where the block holds more",
+      settled.every((r) => (r.source === THOUGHT_A ? r.text.endsWith("....") && stripDots(r.text).length < r.source.length : r.text === r.source && !r.dots)),
+      JSON.stringify(settled.map((r) => ({ dots: Boolean(r.dots), same: stripDots(r.text) === r.source }))),
     );
 
     // ---- the press opens the whole thought ---------------------------------------------------------------
@@ -560,7 +596,11 @@ const main = async () => {
     await sleep(200);
     const opened = await readRows(page, thread);
     const anyOpen = opened.find((r) => r.open);
-    check("a press on the row opens the whole thought in place", Boolean(anyOpen) && anyOpen.scrollHeight <= anyOpen.clientHeight + 1, anyOpen ? JSON.stringify({ clientHeight: anyOpen.clientHeight, scrollHeight: anyOpen.scrollHeight }) : "no open row");
+    check(
+      "a press on the row opens the whole thought in place, with no dots",
+      Boolean(anyOpen) && anyOpen.text === anyOpen.source && !anyOpen.dots && anyOpen.scrollHeight <= anyOpen.clientHeight + 1,
+      anyOpen ? JSON.stringify({ same: anyOpen.text === anyOpen.source, dots: Boolean(anyOpen.dots), clientHeight: anyOpen.clientHeight, scrollHeight: anyOpen.scrollHeight }) : "no open row",
+    );
 
     if (out.errors.length) check("the page threw nothing", false, out.errors.join(" | "));
     else check("the page threw nothing", true);

@@ -62,6 +62,7 @@
     "verify:stream-delta": "node tools/verify-stream-delta.mjs",
     "verify:thinking-stream": "node tools/verify-thinking-stream.mjs",
     "verify:think-prefix": "node tools/verify-think-prefix.mjs",
+    "verify:think-paragraph": "node tools/verify-think-paragraph.mjs",
     "verify:agent-card-pin": "node tools/verify-agent-card-pin.mjs",
     "verify:flicker": "node tools/verify-console-flicker.mjs",
     "verify:gateway-wait": "node tools/verify-gateway-wait.mjs",

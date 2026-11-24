@@ -105,15 +105,171 @@ function waitLineHtml(l) {
 // `think:<at>`, so an append, a repaint and a store read all address the same node, and when the store
 // read replaces the previews it removes those rows rather than drawing the same thought twice.
 //
-// The row is DIM and clipped to a few lines (the CSS does the clipping, this markup carries the whole
-// thought so a copy and a search still see it); a press opens it in place. While thought is still
-// arriving the row carries its own "thinking" mark INSIDE the console output, with the age the card's
-// clock ticks from the block's `at` - a reader looking at the stream can tell a thought still being
-// written from one that has finished.
+// The row is DIM, and MINIMIZED it shows only the thought's FIRST SECTION - everything up to the first blank line -
+// ending in four dots whenever anything is hidden (queue row #292). A press opens it in place and shows every
+// paragraph with no dots. The markup carries the whole thought in `data-ltext` (a copy of the record still finds it);
+// what is DRAWN is the section, not the whole block. While thought is still arriving the row carries its own
+// "thinking" mark INSIDE the console output, with the age the card's clock ticks from the block's `at` - a reader
+// looking at the stream can tell a thought still being written from one that has finished.
 const thinkOpenRows = new Set(); // lid -> the reader opened this thought
 
 function thinkLid(at) {
   return `think:${Number(at) || 0}`;
+}
+
+// ---- a thought's first section, and the dots that say more is hidden ----------------------------------------------
+// The reader's rule: the delimiter is a BLANK LINE - two consecutive newlines, with spaces or tabs allowed on the
+// empty line - and the minimized row is the first section, not the first four lines of everything. The four-line lid
+// STAYS as a second bound for a first section that is itself longer than the clip, so the minimized form is whichever
+// ends first, and the lid cuts at a word boundary rather than inside a word.
+//
+// The dots are appended to the same text run (an inline span inside `.think-text`, never a block of its own), so they
+// cannot add a line, and a thought that is fully shown carries none.
+//
+// The shapes that would otherwise bite, and what each one does here:
+//   * CRLF ("p1", then a blank CRLF line, then "p2"): the CR belongs to the line terminator, so the blank line is blank.
+//   * a lone newline ("p1\np2"): one line break is not a blank line, so the section continues.
+//   * a blank line carrying spaces ("p1\n   \np2"): blank, so it delimits.
+//   * leading blank lines ("\n\np1"): skipped, so the first section is p1 and never an empty string.
+//   * trailing blank lines ("p1\n\n"): nothing is hidden after them, so the row carries no dots.
+//   * a blank line inside a fenced code block: NOT a delimiter. The section runs through the fence, so a cut can never
+//     show an opening fence with no close. A fence that never closes leaves the section running to the end of the
+//     thought, which is the only cut the parser can make without breaking it.
+const THINK_DOTS = "....";
+const THINK_FENCE_OPEN_RE = /^\s{0,3}(`{3,}|~{3,})/;
+const THINK_FENCE_CLOSE_RE = /^\s{0,3}(`{3,}|~{3,})\s*$/;
+
+// One line of `s` at `at`, and where the next one starts. A line ends at a newline, and a CR just before it belongs
+// to the terminator rather than to the content, so a CRLF blank line reads blank.
+function thinkLineAt(s, at) {
+  const nl = s.indexOf("\n", at);
+  const end = nl < 0 ? s.length : nl;
+  const text = s.slice(at, end);
+  return { start: at, end, text: text.endsWith("\r") ? text.slice(0, -1) : text };
+}
+
+// The thought's first section: `head` is everything from its first non-blank line to the first blank line outside a
+// fence (trailing whitespace dropped, so the dots sit on the last line of the paragraph), and `hidden` says whether
+// any non-blank text follows it.
+function thinkSection(text) {
+  const s = String(text ?? "");
+  let at = 0;
+  let start = -1;
+  let cut = -1;
+  let fence = "";
+  while (at <= s.length) {
+    const line = thinkLineAt(s, at);
+    const blank = !line.text.trim();
+    if (start < 0) {
+      if (blank) {
+        if (line.end >= s.length) break;
+        at = line.end + 1;
+        continue;
+      }
+      start = line.start;
+    }
+    if (fence) {
+      const close = THINK_FENCE_CLOSE_RE.exec(line.text);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = "";
+    } else if (blank) {
+      cut = line.start;
+      break;
+    } else {
+      const open = THINK_FENCE_OPEN_RE.exec(line.text);
+      if (open) fence = open[1];
+    }
+    if (line.end >= s.length) break;
+    at = line.end + 1;
+  }
+  if (start < 0) return { head: "", hidden: false };
+  const head = s.slice(start, cut < 0 ? s.length : cut).replace(/\s+$/, "");
+  const hidden = cut >= 0 && /\S/.test(s.slice(cut));
+  return { head, hidden };
+}
+
+// What the `.think-text` box draws: the visible words, then the dots inside the same run when anything is hidden.
+function thinkBoxHtml(head, dots) {
+  return linkifyText(head) + (dots ? `<span class="think-more">${THINK_DOTS}</span>` : "");
+}
+
+// The lid's height in px, read from the box's own `max-height` (a card's Ctrl+wheel zoom moves it with the console).
+function thinkLidPx(box) {
+  const h = parseFloat(getComputedStyle(box).maxHeight);
+  return Number.isFinite(h) && h > 0 ? h : 0;
+}
+
+// The largest word-boundary prefix of `head` that fits the four-line lid WITH the dots, or null when the whole thing
+// fits and nothing is hidden by the lid. Measured on the box itself, so the answer is this console's own width and
+// font. The cut is remembered against the exact prefix it cut: a thought only grows, so the four-line cut of its
+// first paragraph does not move as more words arrive, and a streaming row does not re-measure on every delta.
+function thinkLidCut(row, box, head, limit) {
+  const fits = (s) => {
+    box.textContent = s + THINK_DOTS;
+    return box.scrollHeight <= limit + 1;
+  };
+  const cached = row._thinkCut;
+  if (cached && cached.limit === limit && head.length >= cached.cut && head.slice(0, cached.cut) === cached.head) return cached.cut;
+  if (fits(head)) {
+    row._thinkCut = null;
+    return null;
+  }
+  let lo = 0;
+  let hi = head.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fits(head.slice(0, mid))) lo = mid;
+    else hi = mid - 1;
+  }
+  let shown = head.slice(0, lo);
+  let cut = shown.length;
+  while (cut > 0 && !/\s/.test(head[cut - 1])) cut -= 1;
+  shown = head.slice(0, cut).replace(/\s+$/, "");
+  if (!shown) {
+    // A first section with no break inside the lid - one very long token. Four lines of it cannot end in dots without
+    // cutting it, so the first word is shown whole even though it overflows; the never-cut-a-word rule wins.
+    const stop = head.search(/\s/);
+    shown = stop < 0 ? head : head.slice(0, stop);
+  }
+  row._thinkCut = { limit, cut: shown.length, head: shown };
+  return row._thinkCut.cut;
+}
+
+// Draw one row from the thought it holds: the whole thought when it is open, the first section plus dots when it is
+// minimized. `_drawn` stays the SOURCE text (that is what drawRowText's high-water mark compares), never the summary.
+function fitThinkRow(row) {
+  if (!row || !row.dataset || !row.dataset.thinkRow) return false;
+  const box = row.querySelector(":scope > .think-text");
+  if (!box) return false;
+  watchThinkOpen(row);
+  const full = String(row.dataset.ltext ?? "");
+  const open = row.classList.contains("is-open");
+  let shown = full;
+  let dots = false;
+  if (!open) {
+    const sec = thinkSection(full);
+    shown = sec.head;
+    dots = sec.hidden;
+    const limit = thinkLidPx(box);
+    // A row in a collapsed card has no width to measure yet; the sweep finishes it once it is on screen.
+    if (limit > 0 && box.getClientRects().length) {
+      const cut = thinkLidCut(row, box, shown, limit);
+      if (cut != null) {
+        shown = shown.slice(0, cut);
+        dots = true;
+      }
+    }
+  }
+  const html = thinkBoxHtml(shown, dots);
+  if (box.innerHTML !== html) box.innerHTML = html;
+  row._drawn = full;
+  return true;
+}
+
+// The sweep that finishes rows the draw could not measure: a card that was collapsed when the thought arrived, a
+// console that changed width, a zoom. It rewrites only a box whose words differ, so a settled row costs one compare.
+function sweepThinkLids() {
+  if (typeof document === "undefined" || document.hidden) return;
+  for (const row of document.querySelectorAll(".jl-think[data-think-row]")) fitThinkRow(row);
 }
 
 // The markup of one thinking row. `sep` is the stream's blank line above a piece (wtStream.pieces).
@@ -123,7 +279,9 @@ function thinkRowHtml(l, sep = "") {
   const live = Boolean(l.live);
   const open = thinkOpenRows.has(lid);
   const from = Number(l.at) || Date.now();
-  return `<div class="jl jl-think think-row${sep ? ` ${esc(sep)}` : ""}${open ? " is-open" : ""}" data-lid="${esc(lid)}" data-ltext="${esc(text)}" data-lkind="think" data-think-row="1" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}" title="${live ? "what the agent is thinking now" : "click to read the whole thought"}"><span class="think-text">${linkifyText(text)}</span>${live ? `<span class="think-live" data-think-live="1"><span class="think-dot" aria-hidden="true"></span>thinking <span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span></span>` : ""}</div>`;
+  const sec = open ? null : thinkSection(text);
+  const body = open ? linkifyText(text) : thinkBoxHtml(sec.head, sec.hidden);
+  return `<div class="jl jl-think think-row${sep ? ` ${esc(sep)}` : ""}${open ? " is-open" : ""}" data-lid="${esc(lid)}" data-ltext="${esc(text)}" data-lkind="think" data-think-row="1" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}" title="${live ? "what the agent is thinking now" : "click to read the whole thought"}"><span class="think-text">${body}</span>${live ? `<span class="think-live" data-think-live="1"><span class="think-dot" aria-hidden="true"></span>thinking <span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span></span>` : ""}</div>`;
 }
 
 // Patch a row whose thought grew, or whose thought stopped. The text and the mark are the only things
@@ -139,13 +297,9 @@ function patchThinkRow(el, l) {
     box.className = "think-text";
     el.insertBefore(box, el.firstChild);
   }
-  const html = linkifyText(text);
-  if (box.innerHTML !== html) box.innerHTML = html;
   el.dataset.ltext = text;
-  // The row's visible text IS this string now, so its own high-water mark has to say so: `_drawn` is what
-  // drawRowText appends from, and a row patched here while `_drawn` still named a LONGER text would take only the
-  // tail beyond that mark and lose every character between. A patch and a paint are two writers of one row, and
-  // they share one record of what is on screen.
+  // The row's high-water mark is the SOURCE, not the summary: `_drawn` is what drawRowText compares and appends from,
+  // and a patch and a paint are two writers of one row that must agree about what has already been drawn.
   el._drawn = text;
   const open = thinkOpenRows.has(lid);
   el.classList.toggle("is-open", open);
@@ -159,7 +313,29 @@ function patchThinkRow(el, l) {
     );
   } else if (!l.live && mark) mark.remove();
   el.title = l.live ? "what the agent is thinking now" : "click to read the whole thought";
+  fitThinkRow(el);
 }
+
+// The press that opens or closes a row lives in app.js (it also holds the console's place), and its handler can finish
+// after any listener this file adds - so the row's OWN class is the signal, not the event. A MutationObserver on the
+// row's class draws the new state the moment app.js has set it. One observer per row, attached by the first fit that
+// sees the row; a row in a collapsed card is attached by sweepThinkLids.
+const thinkOpenObserver =
+  typeof MutationObserver === "function"
+    ? new MutationObserver((entries) => {
+        for (const e of entries) fitThinkRow(e.target);
+      })
+    : null;
+
+function watchThinkOpen(row) {
+  if (thinkOpenObserver && !row._thinkWatched) {
+    thinkOpenObserver.observe(row, { attributes: true, attributeFilter: ["class"] });
+    row._thinkWatched = true;
+  }
+}
+
+if (typeof document !== "undefined" && document && typeof setInterval === "function") setInterval(sweepThinkLids, 1200);
+// ---- end a thought's first section ---------------------------------------------------------------------------------
 // ---- end reasoning rows ------------------------------------------------------------------------------
 
 // One console line. data-ltext/data-lkind carry the line itself rather than what it renders to, because a
@@ -1768,8 +1944,10 @@ function drawRowText(el, text) {
   // box, exactly where the row's own writer (patchThinkRow) writes it.
   const think = el.dataset && el.dataset.thinkRow ? el.querySelector(":scope > .think-text") : null;
   if (think) {
-    const html = linkifyText(next);
-    if (think.innerHTML !== html) think.innerHTML = html;
+    // The box draws the thought's FIRST SECTION plus dots while the row is minimized, and the whole thought while it
+    // is open (fitThinkRow owns that rule, and the lid's measured cut); a paint only hands it the source text.
+    el.dataset.ltext = next;
+    fitThinkRow(el);
     el._drawn = next;
     return true;
   }
@@ -2880,6 +3058,10 @@ function syncStreamConsole(out, body, stick) {
       if (Math.abs(off - keep.off) >= 2) setScroll(out, out.scrollTop + (off - keep.off));
     }
   }
+  // A think row this paint created (or patched) has to be measured on the page: its minimized form is the first
+  // section cut by the console's own four-line lid. Doing it here keeps a settled read from drawing a provisional,
+  // uncut section until the next sweep.
+  for (const row of out.querySelectorAll(".jl-think[data-think-row]")) fitThinkRow(row);
   // The rows this paint replaced include the open markdown block (if there was one): the next appended line must
   // start from the DOM that is actually there, never from a block node this page has just detached.
   out._md = null;
@@ -4027,6 +4209,9 @@ function drawJobLine(evt) {
         if (fresh) {
           out.appendChild(fresh);
           indexSubtree(out, fresh);
+          // The markup can only draw the section, not measure it: the lid's cut is this console's width, so it is
+          // taken now that the row is in the page (a row in a collapsed card is finished by sweepThinkLids).
+          fitThinkRow(fresh);
         }
       }
       grew(out);

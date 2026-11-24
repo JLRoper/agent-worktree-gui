@@ -1733,15 +1733,20 @@ body.is-out-gripping * { cursor: nwse-resize; }
    (italic, dim) so it still reads as thought and not as something the agent said out loud — and the console's one
    size, so a Ctrl+wheel over any of a card's text moves this line with the rest of it. */
 .jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--term-size); }
-/* A thinking row is CLIPPED to a few lines: the thought is how the agent got there, not what it produced, and a
-   100 kB block of it must not push the tool calls off the card. The whole text is still in the node (a copy and a
-   find see it); a press opens it in place, which is what the row's own title says. Four lines at the console's own
-   leading is the clip - a px height would fight a card's Ctrl+wheel zoom. */
+/* A thinking row is MINIMIZED, not merely clipped: it draws only the thought's first section - everything up to the
+   first blank line - and ends in four dots inside the same text run whenever anything is hidden (public/board/
+   console.js, fitThinkRow). The four-line clip below is the SECOND bound, for a first section that is itself longer
+   than the clip: the minimized form is whichever ends first, and the code cuts it at a word boundary. The rule stays
+   in CSS as the safety bound - a card in a collapsed console, a row drawn before its width is known, or a console
+   whose width changed under it - and it is a BOTTOM clip (four lines kept from the TOP), never a start clip. */
 .jl-think.think-row { position: relative; display: block; cursor: pointer; padding-right: 92px; border-radius: 2px; }
 .jl-think.think-row:hover { background: rgba(157, 180, 208, .05); }
 .jl-think.think-row:focus-visible { outline: 1px solid #55407a; outline-offset: 1px; }
 .jl-think .think-text { display: block; max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
 .jl-think.think-row.is-open .think-text { max-height: none; }
+/* The dots that say "more is hidden" are part of the thought's own text run: an inline span, so they never start a
+   line of their own, and they are absent whenever the row is fully shown. */
+.jl-think .think-more { white-space: nowrap; }
 /* The clip is the ROW's too, for a row that has no .think-text box of its own (a painter that had to set the row's
    own innerHTML - see drawRowText). The rule is the same one either way: four lines kept from the TOP, the bottom
    cut, never the start, and the press releases it. A thought with no clip at all is a wall of italic over the
