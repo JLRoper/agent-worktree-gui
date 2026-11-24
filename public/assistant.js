@@ -3488,9 +3488,39 @@
   // A read is not worth repeating on every 2 s snapshot, but it must not be stale either: four seconds is shorter
   // than the time it takes to open the tab, read a card and press Edit.
   const INIT_READ_GAP_MS = 4000;
+  // A READ THAT KEEPS FAILING WAITS LONGER EACH TIME. The stale read is re-armed from this pane's own render and from
+  // the timer below, and neither used to look at whether the last read FAILED: `initReadAt` never moves on a failure,
+  // so every render found the document older than the gap and started another read, and that read's own repaint
+  // started the next one. Measured on the base with the read forced to fail: 114 GET /api/initiatives inside one
+  // sample window. A failing read is the one path that never gets the fast answer, so it gets the pane's patience
+  // instead: the first retry waits twice the healthy gap, every further failure doubles the wait, and the ceiling is
+  // one request a minute. THE HEALTHY PATH IS UNTOUCHED - `INIT_READ_GAP_MS` is still the only cadence a working
+  // store sees - and a read that answers clears the count and the wait in the same breath, so a recovery is not slow
+  // for the rest of the session.
+  const INIT_BACKOFF_BASE_MS = 8000; // the wait after the FIRST failure
+  const INIT_BACKOFF_CAP_MS = 60000; // the ceiling: a broken store costs one request a minute
+  let initFailCount = 0; // consecutive failed reads; 0 while the store answers
+  let initRetryAt = 0; // no automatic read before this instant (0 = not backing off)
+  let initRetryWaitMs = 0; // the wait the last failure scheduled, drawn in the reason line
   const initKey = (p) => normPath(p).toLowerCase();
   const initById = (id) => (initDoc?.initiatives || []).find((i) => i.id === id) || null;
   const initBlocked = () => Boolean(initDoc && initDoc.readable === false);
+
+  // 8 s, 16 s, 32 s, 60 s, 60 s… - the doubling lib/held-replies.js uses, with this pane's own ceiling.
+  function initBackoffMs(n) {
+    return Math.min(INIT_BACKOFF_CAP_MS, INIT_BACKOFF_BASE_MS * 2 ** Math.max(0, n - 1));
+  }
+  // Held = the pane is waiting out a failure. The timer and the render both ask this before starting a read, so a
+  // broken store is asked once per wait and not once per repaint.
+  const initHeld = () => initRetryAt > Date.now();
+  // WHY THE PANE IS NOT TRYING RIGHT NOW, drawn beside the failure and nowhere else. Without it `read failed: …` and a
+  // pane that then sits still looks like a pane that has given up; the line names the wait and the one control that
+  // never waits. It is a sentence about the SCHEDULE, not a countdown: it changes when the wait does, so the pane's
+  // markup stands still between attempts and a poll does not rebuild the list under the reader.
+  function initRetryReason(control = "Refresh") {
+    if (!initRetryWaitMs) return "";
+    return ` - retrying in ${Math.round(initRetryWaitMs / 1000)}s; ${control} reads now`;
+  }
 
   function initNoteFor(id) {
     const n = initNotes.get(id);
@@ -3507,8 +3537,13 @@
     initNotes.set(id, { text: String(text || ""), bad, requestId: String(requestId || "") });
   }
 
-  function loadInitiatives() {
+  // `force` is the reader's own press (Refresh, Try again) or a read that follows a write: it never waits, whatever the
+  // backoff, and the attempt that comes out of it either clears the backoff (success) or extends it (another failure).
+  function loadInitiatives({ force = false } = {}) {
     if (initLoading) return Promise.resolve();
+    // THE BACKOFF GATE. An automatic read inside the wait does not go out at all, so a render every couple of seconds
+    // costs a comparison rather than a request against a store that is already failing.
+    if (!force && initHeld()) return Promise.resolve();
     initLoading = true;
     const seq = ++initSeq;
     return apiFetch("/api/initiatives", {}, { timeoutMs: 12000 })
@@ -3519,6 +3554,11 @@
         initDoc = d;
         initReadAt = Date.now();
         initErr = "";
+        // A GOOD READ CLEARS THE BACKOFF: the store answers again, so the pane goes back to the healthy gap at once
+        // instead of staying slow for the rest of the session, and the reason line goes with the wait.
+        initFailCount = 0;
+        initRetryAt = 0;
+        initRetryWaitMs = 0;
         initCacheWrite(d);
       })
       .catch((err) => {
@@ -3526,6 +3566,10 @@
         // A failed read says so and keeps the last document on screen: the tab is the only place the map exists, so
         // blanking it on one bad poll would look like the work was deleted.
         initErr = String((err && err.message) || err);
+        // …and it earns the pane a wait before the next attempt, doubling from the first failure to the ceiling.
+        initFailCount += 1;
+        initRetryWaitMs = initBackoffMs(initFailCount);
+        initRetryAt = Date.now() + initRetryWaitMs;
       })
       .finally(() => {
         if (seq !== initSeq) return;
@@ -3551,6 +3595,10 @@
     initDoc = { ...d, at: d.at || new Date().toISOString() };
     initReadAt = Date.now();
     initErr = "";
+    // The write's own document is the store answering, so it clears the read's backoff the same way a good read does.
+    initFailCount = 0;
+    initRetryAt = 0;
+    initRetryWaitMs = 0;
     initCacheWrite(initDoc);
   }
 
@@ -4022,11 +4070,14 @@
   let initTimer = null;
   function scheduleInitRefresh() {
     clearTimeout(initTimer);
+    // A held pane is asked when its wait ends, not four seconds after it: the gap is the healthy cadence, and the wait
+    // is a floor over it, so the retry a reader waits for is not late by a poll.
+    const wait = Math.max(INIT_READ_GAP_MS, initRetryAt - Date.now());
     initTimer = setTimeout(() => {
       if (state.assistantView.assistant !== "initiatives") return;
       if (initTyping()) return scheduleInitRefresh();
       void loadInitiatives();
-    }, INIT_READ_GAP_MS);
+    }, wait);
   }
 
   // FOCUS SURVIVES THE FOUR-SECOND REPAINT. The pane is rebuilt from a read on a timer, so a keyboard user who has
@@ -4170,12 +4221,18 @@
     // would take the sentence with it. The drafts above paint the words back when the render does run, and an action
     // the reader just pressed (force) paints at once - a button is never protected, only a box being typed in.
     if (!force && initTyping()) return;
-    if (!initDoc && !initLoading && !initErr) void loadInitiatives();
-    else if (initDoc && !initLoading && Date.now() - initReadAt > INIT_READ_GAP_MS) void loadInitiatives();
+    // THE STALE READ IS RE-ARMED HERE, AND IT IS GATED BY THE BACKOFF. A render that finds the pane held starts
+    // nothing: the failure already scheduled the next attempt, and this branch starting one on every repaint is the
+    // loop this pane was measured in (row 279). A healthy pane is unchanged - same gap, same read.
+    //
+    // ONE LINE, NOT TWO BRANCHES. `initReadAt` is 0 until a read answers, so "there is no document yet" is exactly
+    // "older than the gap", and a pane whose first read failed rides the same wait as one that had a map on screen:
+    // the reason line beside it promises a retry, and this is the line that makes the promise true.
+    if (!initLoading && !initHeld() && Date.now() - initReadAt > INIT_READ_GAP_MS) void loadInitiatives();
     if (!initDoc) {
       initMarkup = "";
       host.innerHTML = initErr
-        ? `<div class="as-empty">could not read the initiatives: ${esc(initErr)}</div><div class="as-actions"><button type="button" data-init-refresh>Try again</button></div>`
+        ? `<div class="as-empty">could not read the initiatives: ${esc(initErr)}${esc(initRetryReason("Try again"))}</div><div class="as-actions"><button type="button" data-init-refresh>Try again</button></div>`
         : `<div class="as-empty">reading the initiatives…</div>`;
       return;
     }
@@ -4237,7 +4294,7 @@
         <div class="init-meta">
           ${storeLine}
           <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative and wave changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
-          ${initErr ? `<span class="as-hint init-read">read failed: ${esc(initErr)}</span>` : ""}
+          ${initErr ? `<span class="as-hint init-read">read failed: ${esc(initErr)}${esc(initRetryReason())}</span>` : ""}
         </div>
         ${newForm}
       </div>
@@ -4481,7 +4538,7 @@
           : `${editing ? "saved" : "created"} wave "${d.wave?.title || title}" at W${d.wave?.position ?? "?"} - its state is folded from its members, not stored`,
         false,
       );
-      await loadInitiatives();
+      await loadInitiatives({ force: true });
     } catch (err) {
       f.error = String((err && err.message) || err);
     }
@@ -4499,7 +4556,7 @@
       initReadAt = 0;
       const order = (Array.isArray(d.order) ? d.order : []).map((w) => `W${w.position} ${w.id}`).join(", ");
       setInitNote(initiativeId, d.changed === false ? "the order is already that one" : `reordered - ${order}`, false);
-      await loadInitiatives();
+      await loadInitiatives({ force: true });
     } catch (err) {
       setInitNote(initiativeId, String((err && err.message) || err), true);
     }
@@ -4522,7 +4579,7 @@
         `deleted wave "${d.wave?.title || id}"${n ? ` - ${n} task row${n === 1 ? "" : "s"} still name it and now belong to no wave` : " - no task row named it"}`,
         false,
       );
-      await loadInitiatives();
+      await loadInitiatives({ force: true });
     } catch (err) {
       setInitNote(initiativeId, String((err && err.message) || err), true);
     }
@@ -4616,7 +4673,7 @@
         if (!wave) {
           setInitNote(initiativeId, "that wave is no longer in this read - refreshing the tab", true);
           initReadAt = 0;
-          void loadInitiatives().then(() => renderAssistantInitiatives(true));
+          void loadInitiatives({ force: true }).then(() => renderAssistantInitiatives(true));
           return;
         }
         if (el.dataset.waveEdit) openWaveForm(initiativeId, "edit", wave);
@@ -4747,9 +4804,13 @@
         return;
       }
       if (el.hasAttribute("data-init-refresh")) {
+        // THE READER'S RETRY NEVER WAITS. The backoff is the pane's patience with a store that is failing; a press is a
+        // person saying "now", so it bypasses the wait and asks at once, whether or not the pane is held. The table is
+        // cleared first so the press draws the reading placeholder rather than a map the read has not refreshed yet.
         initDoc = null;
         initErr = "";
         initReadAt = 0;
+        void loadInitiatives({ force: true });
         renderAssistantInitiatives(true);
         return;
       }
@@ -4828,7 +4889,7 @@
       const kind = String(e?.detail?.kind || "");
       if (kind !== "initiative" && kind !== "wave") return;
       initReadAt = 0;
-      if (state.assistantView.assistant === "initiatives") void loadInitiatives();
+      if (state.assistantView.assistant === "initiatives") void loadInitiatives({ force: true });
     });
   }
 

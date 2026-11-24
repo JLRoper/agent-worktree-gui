@@ -72,6 +72,7 @@
     "verify:initiatives-tab": "node tools/verify-initiatives-tab.mjs",
     "verify:initiatives-scroll": "node tools/verify-initiatives-scroll.mjs",
     "verify:initiatives-creep": "node tools/verify-initiatives-creep.mjs",
+    "verify:initiatives-read-backoff": "node tools/verify-initiatives-read-backoff.mjs",
     "verify:initiative-tasks": "node tools/verify-initiative-tasks.mjs",
     "verify:initiative-card": "node tools/verify-initiative-card-anchor.mjs",
     "verify:initiative-tier": "node tools/verify-initiative-tier.mjs",
