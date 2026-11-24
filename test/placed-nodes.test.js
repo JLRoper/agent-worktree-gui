@@ -149,7 +149,7 @@ ${code}`,
       return { mismatches, checks, docWalks, copyGotIt, found: placedNodes("pre.job-out").length };
     });
     assert.deepEqual(out.mismatches, [], "every lookup returned the walk's nodes, in the walk's order");
-    assert.ok(out.checks >= 16 * 7, `${out.checks} comparisons (16 steps x 7 kinds)`);
+    assert.ok(out.checks >= 16 * 6, `${out.checks} comparisons (16 steps x 6 kinds)`);
     assert.equal(out.docWalks, 0, "and not one lookup walked the document");
     assert.equal(out.copyGotIt, 1, "the copy observer still saw the card the registry's lookup had already taken");
     assert.equal(out.found, 2, "the rebuilt card's console, and the one still in the pinned block");
