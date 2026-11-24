@@ -268,3 +268,4 @@ docs/reports/email-multi-272-session-review-2026-11-09.html | 13 | record: the #
 docs/reports/held-reply-restart-2026-11-16.html | 1 | record: the 1.111.0 report quotes the scratch archive its run extracted, and this landing carries it, not rewrites it
 docs/landing-assistant-search-every-assistant-1.122.0-2026-11-19.md | 1 | record: the 1.122.0 landing note quotes the primary checkout its search measured in, and this landing carries that file, not rewrites it
 docs/landing-pick-reads-the-glued-shorthand-1.123.1-2026-11-19.md | 2 | record: the 1.123.1 landing note quotes the command that wrote the primary's uncommitted patch out of reach, and the note is a record of what ran, not a template
+test/json-chunks.test.js | 1 | record: the snapshot landing's fixture builds a board row's path from a drive letter plus a segment, so the path says where a row would be rather than where a reader can go; the file is on main and this branch only carries it
