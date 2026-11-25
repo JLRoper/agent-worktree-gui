@@ -303,8 +303,14 @@ ranked followers the gate proves.</p>
       test/console-tail-pin.test.js</code> - 41 pass, 0 fail. test/console-grip.test.js was updated to the new rules: the
       release writes no foot, the press stands the anchor down and records the offset, the chat pin and the in-place head
       paint ask the gesture, and a sized console does not grow into the slack.</li>
-  <li><code>npm run test:changed</code> and the full <code>npm test</code> sweep: see the landing PR for what they answered
-      on the final tree.</li>
+  <li><code>npm test</code>, once, on the final tree: <strong>cancelled at 21 minutes</strong> with 3,690 passing and 18
+      failing. One of the 18 was this tree's own: <code>test/reports-are-tracked.test.js</code> named this page as
+      "on disk and not in the index" (the clone's <code>.git/info/exclude</code> hides
+      <code>docs/reports/*.html</code>), and the page is now added with <code>-f</code> and the test passes. The other 17
+      reproduce on a clean <code>git archive</code> of <code>origin/main</code> in this same environment, file for file:
+      paths-http 1, harness 1, initiative-tier-route 3, junctioned-node-modules 1, project-rules 1, rebase-route 1, and
+      the release and reconcile families - the config.json a worktree does not have, the panel's own paths, and a
+      junctioned checkout. Nothing under <code>public/</code> is named by any of them.</li>
   <li><code>npm run land:check</code> - the changelog is current at 739 releases and the tree is clean.</li>
 </ul>
 
