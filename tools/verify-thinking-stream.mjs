@@ -23,7 +23,7 @@
 //
 // WHAT IS DRIVEN. A sandbox panel of its own on a spare port (tools/panel-testkit.mjs: own PANEL_CONFIG / HERMES_HOME
 // / jobs.json, no reader's store touched), with a stub Runs API playing a scripted turn over REAL SSE:
-// reasoning.delta x8 (one console line each), tool.started/terminal, tool.completed, reasoning.delta x2,
+// reasoning.delta x7 (one console line each), tool.started/terminal, tool.completed, reasoning.delta x2,
 // message.delta, run.completed - with one card rebuild forced in the middle of the live window. The card
 // is spawned through the panel's own POST /api/agents into a fixture repo, so the console is a real run drawn by the
 // page's own painters. /api/thinking is answered by this gate (the sandbox has no session store); the settled read is
@@ -58,7 +58,7 @@ const THOUGHT_B = "The read came back; the heading is what the answer needs.";
 const ANSWER = "The fixture's heading is Title and the body is one line.";
 
 // ---- a scripted turn over the real Runs SSE -----------------------------------------------------------
-// One event per 320 ms. The reasoning is EIGHT deltas - one console line each, so the row is over its four-line lid
+// One event per 320 ms. The reasoning is SEVEN deltas - one console line each, so the row is over its four-line lid
 // while the stream is still writing it - then a call and its result, then two more deltas, then the answer and the
 // terminal event. That is the shape a reasoning model produces: a thought, the call it led to, the next thought after
 // the result. Splitting the thought finer than four deltas is what gives the lid case in the middle of the live
@@ -236,6 +236,9 @@ const main = async () => {
     const gwPort = await gw.listen();
     sandbox = await startPanel({
       dir: work,
+      // Boot the checkout named by --root (a `git archive` of another commit) rather than the one beside this file:
+      // without this the base-tree run would quietly measure this tree and report the fix as a failure.
+      root: TREE,
       config: {
         scanRoots: roots,
         projects: [],
@@ -308,6 +311,38 @@ const main = async () => {
           lid.sampling = false;
           return lid.frames;
         };
+        lid.reset = () => {
+          lid.frames = [];
+        };
+        // The reader's press, sampled the same way: one sample per painted frame of the FIRST thinking row while it
+        // is open, so a delta or a card rebuild that closed it is counted rather than missed between two polls.
+        const opened = (window.__open = { frames: [], sampling: false, thread });
+        opened.measure = () => {
+          const r = document.querySelectorAll(`.job[data-thread="${CSS.escape(opened.thread)}"] pre.job-out .jl-think[data-think-row]`)[0];
+          const box = r?.querySelector(":scope > .think-text");
+          if (!r || !box) return null;
+          return {
+            open: r.classList.contains("is-open"),
+            aria: r.getAttribute("aria-expanded"),
+            drawn: box.textContent.length,
+            boxH: box.clientHeight,
+            boxSH: box.scrollHeight,
+          };
+        };
+        opened.start = () => {
+          opened.frames = [];
+          const tick = () => {
+            const m = opened.measure();
+            if (m) opened.frames.push({ t: Math.round(performance.now()), ...m });
+            if (opened.sampling) requestAnimationFrame(tick);
+          };
+          opened.sampling = true;
+          requestAnimationFrame(tick);
+        };
+        opened.stop = () => {
+          opened.sampling = false;
+          return opened.frames;
+        };
       },
       { thread },
     );
@@ -356,6 +391,40 @@ const main = async () => {
     const live = await readConsole(page, thread);
     out.phases.live = live;
     check("the mark is inside the thinking row, not a separate pane", live.found && live.liveMarks === 1 && live.thinkRows === 1, why(live));
+
+    // ---- a press opens the live row, and it stays open while the thought grows --------------------------
+    // The reader's press is the ONLY writer of `is-open`; a delta or a state frame must not close it (nor open a row
+    // they left folded, which the frame case below measures). One press here, one sample per painted frame through
+    // the next deltas and a card rebuild forced in the middle, then the press again to fold it for that case.
+    const thinkBox = `.job[data-thread="${thread}"] .jl-think .think-text`;
+    await page.click(thinkBox);
+    await page.evaluate(() => window.__open.start());
+    await sleep(600);
+    await page.evaluate((t) => {
+      const el = document.querySelector(`.job[data-thread="${CSS.escape(t)}"]`);
+      if (el) delete el.dataset.sig; // a signature is the card's own reason to repaint; a caller may not fake one
+      renderConversation(t);
+    }, thread);
+    await sleep(600);
+    const openFrames = await page.evaluate(() => window.__open.stop());
+    const openStats = {
+      frames: openFrames.length,
+      closed: openFrames.filter((f) => !f.open || f.aria !== "true").length,
+      first: openFrames.length ? openFrames[0].drawn : null,
+      last: openFrames.length ? openFrames[openFrames.length - 1].drawn : null,
+      peak: openFrames.length ? Math.max(...openFrames.map((f) => f.drawn)) : null,
+      peakBox: openFrames.length ? Math.max(...openFrames.map((f) => f.boxSH)) : null,
+    };
+    out.phases.openGrowth = openStats;
+    check(
+      "a press opens the live row, and it stays open while the thought grows through a card rebuild",
+      openStats.frames > 1 && openStats.closed === 0 && openStats.peak > openStats.first,
+      JSON.stringify(openStats),
+    );
+    // Fold it again: the frame case below is about a row the reader left folded. Its frames before this point were
+    // the open row's, so the folded sampler starts from here.
+    await page.click(thinkBox);
+    await page.evaluate(() => window.__lid.reset());
 
     // ---- it stops at the first tool, and the call is drawn after the thought ------------------------------
     const stop = Date.now();
