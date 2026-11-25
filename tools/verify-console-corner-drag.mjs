@@ -20,7 +20,14 @@
 // exactly the height the drag adds, the box's top travels the other way and `top + height` - the corner the hand is
 // on - stands still. So every case asserts THREE numbers, not one: the stored number, the rendered client size, and
 // the grip's own bottom edge against the pointer. A store-versus-render check alone passes this defect (delta 0 while
-// the hand runs 60 px past the corner), which is why the corner is read as well.
+// the hand runs 60 px past the corner), which is why the corner is read as well - at every step, and READ AGAIN IN THE
+// FRAME AFTER THE RELEASE, because the release's own foot write was a scroll of exactly the drag's travel and undid
+// every drag that had worked (row 316).
+//
+// A transcript on its foot has no offset room for a SHRINK, so below the height the press found the box cannot follow
+// and the scrollport's clamp takes the top edge down with it. That is a floor like the sheet's min-height: it is judged
+// by the size and store checks, not as a corner the gesture lost, and the floor is read where the press found it (how
+// far the transcript was from its foot).
 //
 // THE MATRIX. Two viewport widths (wide 1600, narrow 820 - the docked rail caps at half the window, so the console is
 // 463 px wide at one and 383 px at the other), and two starting sizes (small 140 px, large 460 px). At each: slow
