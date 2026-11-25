@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.169.8 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.170.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-740 releases from v0.1.0 (2026-10-20) to v1.169.8 (2026-11-24), 2634 commits between the tags. Every release is anchored by an
+741 releases from v0.1.0 (2026-10-20) to v1.170.0 (2026-11-24), 2641 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.170.0 — 2026-11-24 · 7 commits
+
+[`a915330`](https://github.com/JLRoper/agent-worktree-gui/commit/a9153308ce7c990ec939d58a5a530a26a9e2f179) · [compare v1.169.8...v1.170.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.169.8...v1.170.0)
+
+### Added
+
+- feat(initiatives): a note log per initiative, with links as one deduped row ([`1b32306`](https://github.com/JLRoper/agent-worktree-gui/commit/1b3230616217061af805c578e13ee5aa98f9d51b))
+
+### Docs & tests
+
+- docs: render the changelog - 740 releases ([`b08f252`](https://github.com/JLRoper/agent-worktree-gui/commit/b08f25205980f87288660c7c1b2325792000e701))
+- docs(report): what the focused set answered - 2,209 passing, 6 failing, 5 of them on main ([`67d4f10`](https://github.com/JLRoper/agent-worktree-gui/commit/67d4f100a5f55ccbb519fb69093e75fb27841470))
+- docs(report): the focused set was cancelled, not finished - say so ([`ce03a5c`](https://github.com/JLRoper/agent-worktree-gui/commit/ce03a5ccca79e415aab3c20bebee8c290c5e70b9))
+- docs: render the changelog - 740 releases ([`9ee5de8`](https://github.com/JLRoper/agent-worktree-gui/commit/9ee5de8dc8f6f1121a0aee475537430c946d5aaa))
+- docs: the note log's shape, and the reasons it has that shape ([`eeb87fe`](https://github.com/JLRoper/agent-worktree-gui/commit/eeb87fea39a7bb66151ef9ec704fa2b44ba00a06))
+
+### Other
+
+- chore: 1.170.0 - the version this landing carries ([`a915330`](https://github.com/JLRoper/agent-worktree-gui/commit/a9153308ce7c990ec939d58a5a530a26a9e2f179))
 
 ## v1.169.8 — 2026-11-24 · 6 commits
 
