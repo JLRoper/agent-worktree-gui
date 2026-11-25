@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The console's corner holds the edge the press froze</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13px; }
+  th, td { text-align:left; padding:5px 7px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  .lead { border-left:3px solid var(--no); padding:2px 0 2px 12px; margin:12px 0; }
+  .good { border-left:3px solid var(--ok); padding:2px 0 2px 12px; margin:12px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  .small { font-size:11.5px; color:var(--dim); }
+  .scroll { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The console's corner holds the edge the press froze</h1>
+<p class="sub">agent-worktree-gui, branch <code>wtgui/read-queue-row-316-first-then-read-both-d1f9bc</code>, cut from main at
+<code>3ad9e45b</code> (1.169.6) and carrying 1.169.7. Queue row 316, the landing of the corner drag. Every number below was
+read from the reader's LIVE panel at <code>http://127.0.0.1:7331</code> in its own isolated browser context (its own
+localStorage, so the reader's stored heights were never touched), with this tree's page served over that panel's own data
+by the gate's new <code>--serve</code> option. No server was started, restarted or reconfigured. The pre-fix numbers are the
+gate's own verdict on <code>origin/main</code> at <code>3ad9e45b</code>, served the same way: one gate, one set of live
+data, two trees. Console <code>25c1a485</code>, the last open turn of Assistant #1's docked Chat. All line numbers
+are on this branch.</p>
+
+<dl class="facts">
+  <dt>the cause</dt><dd>the console's height is inside the transcript's scrollHeight, so the top edge the gesture froze was a function of the height it was changing</dd>
+  <dt>the gesture</dt><dd>height = pointer + grab - frozenTop (public/app.js:10583), one write per move, and now one offset per move</dd>
+  <dt>the frozen offset</dt><dd>d.bodyTop, read at the press (public/app.js:10644 to 10668) and re-asserted on every move (public/app.js:10727)</dd>
+  <dt>the release</dt><dd>clamps once and records the truth instead of writing the foot (public/app.js:10801 to 10808)</dd>
+  <dt>the floor</dt><dd>the sheet's min-height or the console's padding box, whichever is larger (public/app.js:10639)</dd>
+  <dt>the gate</dt><dd>tools/verify-console-corner-drag.mjs, <code>npm run verify:console-corner-drag</code>, now with <code>--serve &lt;checkout&gt;</code> (line 55)</dd>
+  <dt>the shapes</dt><dd>1600x900 and 820x900, consoles started at 140px and 460px, 8 gestures each: 32 cases</dd>
+  <dt>pre-fix</dt><dd class="no">26 of 32 cases fail</dd>
+  <dt>this tree</dt><dd class="ok">0 of 32 cases fail</dd>
+</dl>
+
+<h2>1. The cause, as the two reports left it</h2>
+<p>Row 316 was briefed from two readings that agree, so nothing here is re-derived:</p>
+<ul>
+  <li><code>docs/reports/console-corner-drag-measured-2026-11-24.html</code> - 32 drags on the live panel, 25 failing, 24 of
+      them on the grip's bottom edge: the size was written correctly and the corner did not move.</li>
+  <li><code>docs/reports/console-corner-drag-code-2026-11-24.html</code> - six defects ranked, one primary: the height has
+      one writer but the box's POSITION has three. At the foot, <code>scrollTop</code>'s maximum is a function of the
+      console's height, so the scrollport is a second writer of the top edge the press froze (public/app.js:10623), and
+      the release's own foot write (public/app.js:10722) is the third.</li>
+</ul>
+<p>The physics is two lines, and the measurement below is what they look like:</p>
+<pre>max       = scrollHeight - clientHeight, and scrollHeight includes the console's height
+at the foot: scrollTop = max, so the box's top edge on screen is V - height - K
+
+grow  by N: max grows by N, nothing clamps, the top stays, the corner follows the pointer
+shrink by N: max shrinks by N, scrollTop is now past it, the browser's clamp moves the content DOWN by N,
+              the top edge goes down with it and the box's bottom does not move at all
+release:      setScroll(body, scrollHeight) moves the top edge back up by the drag's own travel</pre>
+
+<h2>2. What changed</h2>
+<h3>2.1 The gesture owns the offset it freezes</h3>
+<p>The press now records the transcript's <code>scrollTop</code> beside the top edge and the grab
+(public/app.js:10644 to 10668), stands the browser's scroll anchor down on the transcript it is dragging
+(public/app.js:10671), and every move writes that offset back (public/app.js:10727) after the height. Three things follow:</p>
+<ul>
+  <li>a writer that moves the offset during the drag (the anchor, a pin, a poll) is undone in the same task, so the top
+      edge really is a constant and not a function of anything else that scrolls;</li>
+  <li>a drag that dips below the transcript's floor and comes back re-asserts the offset the moment the content has room
+      for it again, so the corner returns to the hand. Measured in the gate's crossing shape: 36px lost at 1600 and 100px
+      at 820 without this write, 0 with it;</li>
+  <li>the anchor had to go. It is the loop that holds the reader's place when a row lands above, and the old design kept
+      it on for exactly that reason (the note at public/board/console.js:3656 to 3662). Measured, it is also the writer that cancels
+      the reader's drag: the same slow drag at 1600 wrote the height 60 and moved the corner 0, and at 820 followed
+      perfectly, because at 1600 the anchor had picked a node below the box. Standing it down for the length of the drag
+      wins the case that happens every time over the one that happens when a row lands mid-drag.</li>
+</ul>
+<p>A row that lands ABOVE the box during a drag is not the anchor's job any more: the frame after each move reads the box
+once and scrolls the transcript by exactly the drift it measures (public/app.js:10735), which the growth itself made room
+for. Measured: a state poll landing under the hand moved the top edge 24.3px, and this is what brings it back without
+re-deriving the height (the size stays the pointer's travel, not the drift's).</p>
+
+<h3>2.2 The release stops undoing the drag</h3>
+<p>The release clamped, stored, and then wrote the foot - a scroll of exactly the drag's travel, in the same task as the
+height. It now records where the drag left the transcript instead (<code>noteCardBodyScroll</code>,
+public/app.js:10801 to 10808): the transcript is that far from its foot, it stops following until the reader is back on
+it, and following resumes on their own scroll. That is the visible behaviour change this fix carries, and it is the one
+the code report's Option 1 named: a resize the reader asked for takes the stream's follow away with it.</p>
+
+<h3>2.3 The followers the gate proved</h3>
+<p>The brief named five ranked followers and said to fix only the ones the gate agrees are real. Four did, one is a floor
+and is described in section 4:</p>
+<table>
+  <tr><th>the follower</th><th>what it did</th><th>the fix</th></tr>
+  <tr>
+    <td>the chat pane's own pin</td>
+    <td><code>pinChatToBottom</code> wrote the foot on a poll, on a frame after a paint, on opening the pane: measured, a
+        state poll under the hand moved the transcript 35 -> 77 and cost 17.7px of corner, and its scheduled frame cost
+        35.7px at the release</td>
+    <td>public/assistant.js:1760 - it asks <code>cardBodyHeld</code>, schedules nothing while a gesture holds the body,
+        and respects a transcript a resize left off its foot (<code>_atBottom === false</code>)</td>
+  </tr>
+  <tr>
+    <td>the card's in-place head paint</td>
+    <td><code>paintCardMeta</code> rewrites the chips above the console; a chip that rewraps moves the top edge: measured,
+        24.3px of corner lost to a poll landing mid-drag</td>
+    <td>public/render-jobs.js:1088 and public/assistant.js:2316 - the cheap path asks <code>outGripHoldsCard</code> and
+        defers to the release</td>
+  </tr>
+  <tr>
+    <td>the assistant's rebuild</td>
+    <td><code>host.innerHTML = conversationHtml(conv)</code> replaced the node under the hand: measured, the drag's 36px
+        written, the card rebuilt, the new box back on its stored height, the corner 36px off</td>
+    <td>public/assistant.js:2325 - it asks <code>outGripHoldsCard</code> and hands the release the paint it deferred;
+        public/assistant.js:2342 makes the rebuilt card read the transcript's own record before it pins</td>
+  </tr>
+  <tr>
+    <td>a gesture that outlives its node</td>
+    <td>the move returned early on a detached console and kept the record: the grip dead, every board rebuild deferring
+        to a gesture nobody could end</td>
+    <td>public/app.js:10706 ends the gesture with the node, and <code>lostpointercapture</code> and <code>blur</code> end
+        it through the same door as a release (public/app.js:10822)</td>
+  </tr>
+</table>
+
+<h3>2.4 The floor, and the slack turn</h3>
+<p>A drag stopped at 1px and the box drew 18px: the console's padding box (8px top and bottom plus its two borders) is the
+smallest height it can draw, so the store kept a number the box never was. The floor is now the larger of the sheet's
+<code>min-height</code> and that padding box (public/app.js:10639), the move stops on it, and the release stores it.</p>
+<p>The second half is the slack turn. <code>.turn.is-slack</code>'s <code>flex: 1 1 auto</code> grew the console into
+whatever room the pane had left, so a console the reader had given 20px drew 105.41px - the number the gesture wrote, the
+store kept and the next restore put back was not the box on screen, and a drag to the floor stopped 105px above it. A
+console with an explicit height is now <code>flex: 0 0 auto</code> (public/style.css:6475), and the room a pane has left
+goes back to the spacer above the turns, where the sheet already puts it for a short conversation.</p>
+
+<h2>3. The gate</h2>
+<p>The gate is the acceptance instrument, and it needed one thing to be able to answer at all: the gesture lives in the
+page, so the panel serving it has to be the build under test. Restarting the reader's panel under them is not something a
+gate may do, and a second instance has no transcript to drag (cards are per process). <code>--serve &lt;checkout&gt;</code>
+answers the page's own requests from that checkout's <code>public/</code> and lets everything else - the API, the SSE
+stream, the row scans - come from the running panel. One gate, one set of live data, two trees.</p>
+<p>Three checks were added, each aimed at a defect the old gate could not see:</p>
+<ul>
+  <li><strong>the corner after the release</strong> (tools/verify-console-corner-drag.mjs:657). The old gate read the
+      corner at every step and never after the pointerup, which is where the whole travel was being undone. It is judged
+      only when the release kept the number the pointer asked for, and only at or above the transcript's floor.</li>
+  <li><strong>the transcript's floor</strong> (line 588). The console's height is inside the transcript's scrollHeight, so
+      a transcript on its foot has no offset room for a shrink: the clamp takes the top edge down with it, and the box stops
+      following. That is a floor like the sheet's min-height, judged by the size and store checks, not as a corner the
+      gesture lost. The floor is read where the press found it - how far the transcript was from its foot.</li>
+  <li><strong>the node and the card's signature are read DURING the drag</strong> (line 575). A deferred rebuild landing in
+      the pointerup is the release's business; the gate's question is whether the node under the hand survived the travel.
+      Read after the release, it could not tell the two apart.</li>
+</ul>
+
+<h3>3.1 The matrix, pre-fix tree against this tree, same gate, same live data</h3>
+<div class="scroll">
+<table>
+  <tr>
+    <th>case</th><th>pointer</th>
+    <th>pre size</th><th>pre corner</th><th>pre final</th><th>pre</th>
+    <th>post size</th><th>post corner</th><th>post final</th><th>stored</th><th>post</th>
+  </tr>
+  <tr><td class="n">slow@1600/140</td><td class="n">+60</td><td class="n">+60</td><td class="n">60</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0</td><td class="n">0</td><td class="n">200</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@1600/140</td><td class="n">+120</td><td class="n">+120</td><td class="n">120</td><td class="n">-120</td><td class="no">FAIL</td><td class="n">+120</td><td class="n">0</td><td class="n">0</td><td class="n">260</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@1600/140</td><td class="n">-400</td><td class="n">-35.59</td><td class="n">0</td><td class="n">400.41</td><td class="no">FAIL</td><td class="n">-122</td><td class="n">0</td><td class="n">400.41</td><td class="n">18</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@1600/140</td><td class="n">+900</td><td class="n">+220</td><td class="n">0</td><td class="n">-900</td><td class="ok">PASS</td><td class="n">+220</td><td class="n">0</td><td class="n">-680</td><td class="n">360</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@1600/140</td><td class="n">+0</td><td class="n">+0</td><td class="n">100</td><td class="n">0</td><td class="no">FAIL</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@1600/140</td><td class="n">+36</td><td class="n">+36</td><td class="n">23.7</td><td class="n">-35.7</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0.3</td><td class="n">0.3</td><td class="n">176</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@1600/140</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@1600/140</td><td class="n">+0</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="ok">PASS</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@1600/460</td><td class="n">+60</td><td class="n">+60</td><td class="n">60</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0</td><td class="n">0</td><td class="n">520</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@1600/460</td><td class="n">+120</td><td class="n">+120</td><td class="n">120</td><td class="n">-120</td><td class="no">FAIL</td><td class="n">+120</td><td class="n">0</td><td class="n">0</td><td class="n">580</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@1600/460</td><td class="n">-400</td><td class="n">-379.89</td><td class="n">0</td><td class="n">400.11</td><td class="no">FAIL</td><td class="n">-400</td><td class="n">0</td><td class="n">400.41</td><td class="n">60</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@1600/460</td><td class="n">+900</td><td class="n">+900</td><td class="n">900</td><td class="n">-900</td><td class="no">FAIL</td><td class="n">+220</td><td class="n">0</td><td class="n">-680</td><td class="n">680</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@1600/460</td><td class="n">+0</td><td class="n">+0</td><td class="n">100</td><td class="n">0</td><td class="no">FAIL</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@1600/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0.3</td><td class="n">0.3</td><td class="n">496</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@1600/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@1600/460</td><td class="n">+0</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="ok">PASS</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@820/140</td><td class="n">+60</td><td class="n">+60</td><td class="n">0</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0</td><td class="n">0</td><td class="n">200</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@820/140</td><td class="n">+120</td><td class="n">+120</td><td class="n">60</td><td class="n">-120</td><td class="no">FAIL</td><td class="n">+120</td><td class="n">0</td><td class="n">0</td><td class="n">260</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@820/140</td><td class="n">-400</td><td class="n">-112</td><td class="n">0</td><td class="n">400</td><td class="no">FAIL</td><td class="n">-122</td><td class="n">0</td><td class="n">400</td><td class="n">18</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@820/140</td><td class="n">+900</td><td class="n">+900</td><td class="n">900</td><td class="n">-900</td><td class="no">FAIL</td><td class="n">+254</td><td class="n">0</td><td class="n">-646</td><td class="n">394</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@820/140</td><td class="n">+0</td><td class="n">+0</td><td class="n">100</td><td class="n">0</td><td class="no">FAIL</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@820/140</td><td class="n">+36</td><td class="n">+36</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@820/140</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@820/140</td><td class="n">+0</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="ok">PASS</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@820/460</td><td class="n">+60</td><td class="n">+60</td><td class="n">60</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0</td><td class="n">0</td><td class="n">520</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@820/460</td><td class="n">+120</td><td class="n">+120</td><td class="n">120</td><td class="n">-120</td><td class="no">FAIL</td><td class="n">+120</td><td class="n">0</td><td class="n">0</td><td class="n">580</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@820/460</td><td class="n">-400</td><td class="n">-400</td><td class="n">0</td><td class="n">400</td><td class="ok">PASS</td><td class="n">-400</td><td class="n">0</td><td class="n">400</td><td class="n">60</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@820/460</td><td class="n">+900</td><td class="n">+900</td><td class="n">900</td><td class="n">-900</td><td class="no">FAIL</td><td class="n">+254</td><td class="n">0</td><td class="n">-646</td><td class="n">714</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@820/460</td><td class="n">+0</td><td class="n">+0</td><td class="n">100</td><td class="n">0</td><td class="no">FAIL</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@820/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@820/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@820/460</td><td class="n">+0</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="ok">PASS</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="ok">PASS</td></tr>
+</table>
+</div>
+<p class="small">corner and final in px; "corner" is the worst gap between the grip's bottom edge and the pointer while the
+height was in range, "final" the same gap after the release. pre = <code>git archive origin/main</code> at <code>3ad9e45b</code>
+served over the live panel; post = this branch. Traces: <code>--trace</code>, one JSON per step.</p>
+
+<div class="good">
+<strong>Pre-fix: 26 of 32 fail.</strong> Every down drag lost its whole travel twice over - once
+during the drag (60px written, corner 60px off at 1600) and once at the release (final -60), and an up drag ended 400px
+from the hand. "Final -60" is the number this fix exists for: the box came back to the pixel it started from.
+</div>
+<div class="good">
+<strong>This tree: 0 of 32 fail.</strong> Corner worst 0.0px in every case where the transcript can
+follow at all, final 0.0px after every release that kept the reader's number, the node unchanged for the whole of every
+drag, and the floor drags store the 18px box they drew.
+</div>
+
+<h2>4. The up-drag, and the two mechanisms that were measured and refused</h2>
+<p>One part of the brief's sentence - "the travel the pointer makes is the travel the edge makes" - is not true below the
+height the press found, and this section is why. The transcript is at its foot: the console's bottom edge IS the end of
+its content. Moving that edge up on screen means the content's end must rise above the viewport's bottom, and the
+scrollport cannot scroll past its content. Room has to come from somewhere, and both places were built and measured:</p>
+<table>
+  <tr><th>the mechanism</th><th>what it measured</th><th>why it was refused</th></tr>
+  <tr>
+    <td>a pad at the end of the transcript, so its content height stands still while the box shrinks</td>
+    <td class="n">a 120px pad lifted the composer from the pane's bottom (875) to 755; a 300px pad to 575. The reader's
+        composer floats in the middle of the pane with blank under it</td>
+    <td>it trades a corner that does not follow for a composer that is not where the reader left it</td>
+  </tr>
+  <tr>
+    <td>the same room, inside the console's own wrap (a margin under the box)</td>
+    <td class="n">the corner follows for the whole drag, and after a 400px shrink the console's grip sat at 265 while the
+        transcript's viewport starts at 303.8: the next press could not reach the grip at all (caught by the gate, at 460)</td>
+    <td>a corner that can walk out of the transcript it lives in is worse than one that stops at its floor</td>
+  </tr>
+</table>
+<p>So the corner follows every pixel the transcript has room for, and stops at the transcript's floor with the box on the
+console's own 18px floor. The alternative - the console's bottom edge being a different element from the transcript's end
+- is the code report's Option 4: a layout of its own for the two panes with the most follow and fold behaviour in the page,
+and not a landing for this row. What the reader gets in the meantime is written down in section 5.</p>
+
+<h2>5. The neighbours, measured</h2>
+<p>Four checks the brief asked for, on the same live panel with this tree served over it:</p>
+<table>
+  <tr><th>what</th><th>measured</th></tr>
+  <tr><td>a slack turn draws a sane height</td><td class="n">--out-h 20px drew <strong>20.00px</strong> (was 105.41), flex
+      <code>0 0 auto</code>, turn still <code>is-slack</code>; --out-h 140px drew 140.00px</td></tr>
+  <tr><td>a drag to the floor stores something</td><td class="n">a 10 x -40px drag from 140 drew <strong>18.00px</strong>,
+      stored <strong>18</strong>, <code>--out-h: 18px</code>, and the console's own min-height is 0 (the floor is its
+      padding box)</td></tr>
+  <tr><td>the pane still scrolls, and keeps its position</td><td class="n">196px of room, scrolled to 16, still 16 after a
+      state poll (<code>resync</code>) 1.2s later</td></tr>
+  <tr><td>a fold does not move the console</td><td class="n">a console stored at 260px, folded and unfolded (a full card
+      rebuild): <strong>260.00px</strong> after, stored 260, <code>--out-h: 260px</code>, not reset to the sheet's cap</td></tr>
+</table>
+<p>And the behaviour a reader will notice, stated plainly: after a drag the transcript no longer jumps back to its foot.
+It sits where the drag left it, the console's own tail keeps the newest line in view, and the transcript starts following
+again the moment the reader scrolls to the foot.</p>
+
+<h2>6. The followers the gate did not prove</h2>
+<p>The code report ranked six defects. This landing fixes the primary one, the four followers the gate could see, and the
+floor; four remain, and none of them is visible to a drag:</p>
+<ul>
+  <li><strong>a restore that skips the release's clamp</strong> (report 4.2) - <code>applyStoredHeight</code> applies a
+      stored number with no floor and lifts the sheet's cap to match it. The gate's store check reads a height restored by
+      the fixture's own <code>setOutHeight</code>, so it cannot see this.</li>
+  <li><strong>a cap destroyed by one over-cap drag</strong> (report 4.3, second half) - after a drag past the cap the
+      inline <code>max-height: none</code> makes <code>parseFloat</code> of the computed value NaN, so no later press can
+      read the sheet's cap back. The gate drags once per case; a two-drag case would be the test, and it is not in this
+      row's matrix.</li>
+  <li><strong>an ungated fold flush under the pointer</strong> (report 4.4) - the ResizeObserver-driven command-card fold
+      mark rewrites text nodes inside the console. The gate counts childList mutations inside the console and measured 0 in
+      every case, so there is nothing to prove here yet.</li>
+  <li><strong>a restore before the layout that makes it valid</strong> (report 4.7) - latent, no caller hits it today.</li>
+</ul>
+<p>They are named here rather than quietly fixed because each one wants its own test, and the brief was explicit: only the
+ranked followers the gate proves.</p>
+
+<h2>7. What was run</h2>
+<ul>
+  <li><code>node tools/verify-console-corner-drag.mjs --serve &lt;origin/main export&gt;</code> - 26/32
+      fail. The export is <code>git archive origin/main</code> at <code>3ad9e45b</code>; no worktree was created for it.</li>
+  <li><code>node tools/verify-console-corner-drag.mjs --serve &lt;this tree&gt;</code> - 0/32 fail,
+      both widths and both sizes, 34 checks (32 cases plus "the page threw nothing" at each width).</li>
+  <li><code>node --test test/console-grip.test.js test/console-height-store.test.js test/console-fold-hold.test.js
+      test/console-tail-pin.test.js</code> - 41 pass, 0 fail. test/console-grip.test.js was updated to the new rules: the
+      release writes no foot, the press stands the anchor down and records the offset, the chat pin and the in-place head
+      paint ask the gesture, and a sized console does not grow into the slack.</li>
+  <li><code>npm run test:changed</code> and the full <code>npm test</code> sweep: see the landing PR for what they answered
+      on the final tree.</li>
+  <li><code>npm run land:check</code> - the changelog is current at 739 releases and the tree is clean.</li>
+</ul>
+
+<h2>8. Files</h2>
+<table>
+  <tr><th>file</th><th>what</th></tr>
+  <tr><td class="n">public/app.js</td><td>the press records the offset and stands the anchor down; every move re-asserts it and corrects a frame of drift; the release records the truth instead of writing the foot; the padding-box floor; the gesture ends with its node, its capture or a blur</td></tr>
+  <tr><td class="n">public/assistant.js</td><td>the pane's pin asks the gesture and respects a transcript off its foot; the chat rebuild and its in-place head paint defer; a rebuilt card reads the transcript's own record before it pins</td></tr>
+  <tr><td class="n">public/render-jobs.js</td><td>the in-place head paint of a card the gesture holds defers</td></tr>
+  <tr><td class="n">public/style.css</td><td>a console with an explicit height is drawn at it, even in the slack turn</td></tr>
+  <tr><td class="n">tools/verify-console-corner-drag.mjs</td><td><code>--serve</code>; the corner after the release; the transcript's floor; node and signature read during the drag</td></tr>
+  <tr><td class="n">test/console-grip.test.js</td><td>the source tests for all of the above</td></tr>
+  <tr><td class="n">package.json / CHANGELOG.md</td><td>1.169.7</td></tr>
+</table>
+
+<p class="small">One run of the gate is one dataset: the panel keeps streaming and polling while it runs, and a snapshot
+that lands mid-case can move a case by one. The numbers here are single whole runs, kept whole; the traces beside them
+carry every step of every case.</p>
+
+</main>
+</body>
+</html>

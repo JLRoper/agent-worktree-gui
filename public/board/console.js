@@ -3653,11 +3653,14 @@ function noteCardBodyScroll(body) {
 // box's top by -120px and its height by +120px, with the grip's bottom edge on the same pixel for every one of the
 // 40 steps.
 //
-// This is the PAGE's pin only. The BROWSER's scroll anchoring is deliberately left ON during a gesture - it is the
-// loop that holds the reader's place when a row lands in the turn ABOVE, and the "above" case of the same gate
-// measures a still hand losing 86.25px of corner when it is disabled. Two loops, two different jobs: the foot is
-// this page's promise, the place is the browser's, and a gesture takes the first away and needs the second.
-// The pointer wins for the length of the gesture; the release puts a following transcript back on its foot.
+// This is the PAGE's pin. The BROWSER's scroll anchor is the same writer seen from the other side, and it is stood down
+// too, by the gesture itself, for the length of the drag (public/app.js's press): at the foot its compensation for a
+// taller box is a scrollTop write of exactly the height the drag added - measured on the live panel, the corner stood
+// still for a 60px drag at 1600 and followed at 820, and the anchor's choice of node was the difference. The offset the
+// press froze is re-asserted on every move, so whatever else writes it (a pin, a poll, the anchor before it was stood
+// down) is undone in the same frame, and a row landing above is corrected by the drift the gesture measures a frame
+// later. The release writes no foot: it records where the drag left the transcript
+// (noteCardBodyScroll), and following resumes on the reader's own scroll back to it.
 function cardBodyHeld(body) {
   return typeof outGripHoldsCard === "function" && outGripHoldsCard(body);
 }
