@@ -5,7 +5,7 @@
 // WHAT IT PROVES, in the order a reader meets it:
 //
 //   0. THE ORDER. In the header's control row the reader meets the assistant's own entry, then this control, then
-//      Human - in the DOM in that order, and in that order on screen with nothing else visible between them.
+//      Clarify - in the DOM in that order, and in that order on screen with nothing else visible between them.
 //   1. THE GLYPH IS DRAWN, NOT SET. The opener carries an inline SVG (a 16-unit viewBox at 15px) and no text at all,
 //      and it sits at the neighbours' size and weight: the same button height, border and radius, and a glyph within
 //      two pixels of the emoji height the labels beside it render.
@@ -120,7 +120,8 @@ try {
           const bar = document.querySelector(".topbar .controls");
           const opener = document.getElementById("ha-search-open");
           const assistantBtn = document.getElementById("btn-assistant");
-          const humanBtn = document.getElementById("btn-human");
+          const clarifyBtn = document.getElementById("btn-clarify");
+          const deliverBtn = document.getElementById("btn-deliver");
           const svg = opener ? opener.querySelector("svg") : null;
           const box = (el) => {
             const r = el.getBoundingClientRect();
@@ -129,7 +130,7 @@ try {
           const kids = bar ? [...bar.children] : [];
           const visible = [...(bar?.querySelectorAll("button") || [])].filter((b) => !b.hidden && b.offsetParent !== null);
           // The emoji labels' own line box: what "the size of its neighbours" means for a glyph set as type.
-          const label = humanBtn?.querySelector("#human-label");
+          const label = deliverBtn?.querySelector("#deliver-label");
           let emojiH = null;
           if (label && label.firstChild) {
             const range = document.createRange();
@@ -144,13 +145,13 @@ try {
           const pop = document.getElementById("ha-search-pop");
           const input = document.getElementById("ha-search-q");
           return {
-            domOrder: { assistant: kids.indexOf(assistantBtn), opener: kids.indexOf(opener), human: kids.indexOf(humanBtn) },
+            domOrder: { assistant: kids.indexOf(assistantBtn), opener: kids.indexOf(opener), clarify: kids.indexOf(clarifyBtn) },
             visibleIds: visible.map((b) => b.id || b.className),
             visibleBoxes: visible.map((b) => ({ id: b.id || b.className, ...box(b) })),
             opener: opener ? { ...box(opener), text: opener.textContent.trim(), aria: opener.getAttribute("aria-label"), title: opener.getAttribute("title"), expanded: opener.getAttribute("aria-expanded") } : null,
             svg: svg ? { vb: svg.getAttribute("viewBox"), ...box(svg), paths: svg.querySelectorAll("path,rect").length, stroked: [...svg.querySelectorAll("[stroke]")].length } : null,
             emojiH,
-            btnStyle: { opener: opener ? style(opener) : null, human: humanBtn ? style(humanBtn) : null, assistant: assistantBtn ? style(assistantBtn) : null },
+            btnStyle: { opener: opener ? style(opener) : null, clarify: clarifyBtn ? style(clarifyBtn) : null, assistant: assistantBtn ? style(assistantBtn) : null },
             heights: visible.map((b) => Math.round(b.getBoundingClientRect().height)),
             inAssistant: Boolean(document.getElementById("assistant")?.contains(opener)),
             turnSearch: Boolean(document.getElementById("as-search-q")),
@@ -169,24 +170,24 @@ try {
       // ---- 0. the order ----------------------------------------------------------------------------------------
       const first = await look();
       v.ok(
-        "the header carries the opener in the DOM between the assistant's entry and Human",
-        first.domOrder.assistant >= 0 && first.domOrder.opener === first.domOrder.assistant + 2 && first.domOrder.human === first.domOrder.opener + 1,
+        "the header carries the opener in the DOM between the assistant's entry and Clarify",
+        first.domOrder.assistant >= 0 && first.domOrder.opener === first.domOrder.assistant + 2 && first.domOrder.clarify === first.domOrder.opener + 1,
         JSON.stringify(first.domOrder),
       );
-      const three = ["btn-assistant", "ha-search-open", "btn-human"];
+      const three = ["btn-assistant", "ha-search-open", "btn-clarify"];
       const joined = three.join(",");
       const ats = three.map((id) => first.visibleIds.indexOf(id));
       v.ok("all three controls are visible", ats.every((i) => i >= 0), first.visibleIds.join(" "));
       v.ok(
-        "on screen they read assistant, then this one, then Human, with nothing visible between",
+        "on screen they read assistant, then this one, then Clarify, with nothing visible between",
         ats[0] >= 0 && ats[1] === ats[0] + 1 && ats[2] === ats[1] + 1,
         `visible row: ${first.visibleIds.join(" | ")} (${joined})`,
       );
       const xOf = (id) => first.visibleBoxes.find((b) => b.id === id)?.x ?? null;
       v.ok(
-        "the control sits to the LEFT of Human and to the right of the assistant's entry",
-        xOf("ha-search-open") > xOf("btn-assistant") && xOf("ha-search-open") < xOf("btn-human"),
-        `assistant ${xOf("btn-assistant")}px, opener ${xOf("ha-search-open")}px, human ${xOf("btn-human")}px`,
+        "the control sits to the LEFT of Clarify and to the right of the assistant's entry",
+        xOf("ha-search-open") > xOf("btn-assistant") && xOf("ha-search-open") < xOf("btn-clarify"),
+        `assistant ${xOf("btn-assistant")}px, opener ${xOf("ha-search-open")}px, clarify ${xOf("btn-clarify")}px`,
       );
       record.steps.push({ step: "order", ...first.domOrder, visible: first.visibleIds, boxes: first.visibleBoxes });
       await shoot("01-header-three-controls");
@@ -202,7 +203,7 @@ try {
       );
       v.ok(
         "the button is the neighbours' height, radius and border",
-        new Set(first.heights).size === 1 && first.btnStyle.opener.radius === first.btnStyle.human.radius && first.btnStyle.opener.border === first.btnStyle.human.border,
+        new Set(first.heights).size === 1 && first.btnStyle.opener.radius === first.btnStyle.clarify.radius && first.btnStyle.opener.border === first.btnStyle.clarify.border,
         `heights ${JSON.stringify(first.heights)}, radius ${first.btnStyle.opener.radius}, border ${first.btnStyle.opener.border}px`,
       );
       v.ok(
@@ -213,7 +214,7 @@ try {
       // A crisp copy of the same strip: the glyph is 16px, so this one picture is taken at 2x on a page of its own -
       // every other shot is exactly 1440x900 pixels, one per CSS pixel.
       const ctrl = first.visibleBoxes.find((b) => b.id === "btn-assistant");
-      const clip = { x: ctrl.x - 8, y: ctrl.y - 8, width: Math.max(240, xOf("btn-human") - ctrl.x + 120), height: ctrl.h + 16 };
+      const clip = { x: ctrl.x - 8, y: ctrl.y - 8, width: Math.max(240, xOf("btn-clarify") - ctrl.x + 120), height: ctrl.h + 16 };
       const zoomed = shot("02-glyph-closeup");
       await withPage(
         async ({ page: page2 }) => {

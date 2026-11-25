@@ -203,7 +203,7 @@ const verdict = await (async () => {
         // The sweep only measures a record once, and only after the scan has written the row's tip: ask it until the
         // evidence and the supersession are actually on the record, the same way the 10s clock would.
         // The page first: the sweep is asked for in-page, and a relative fetch has no base until the panel is open.
-        await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
+        await openPage(page, panel.base, { selector: "header.topbar #btn-review" });
         await rowsLoaded();
         let seen = null;
         let settled = false;

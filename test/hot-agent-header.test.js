@@ -4,13 +4,14 @@
 // note said it had moved to the header; nothing had, so the button sat in the rail and the note described a page that
 // did not exist. These two tests pin the page: the copy that moved, and the glyph it now wears.
 //
-// 1. THE ORDER. The header reads assistant search, then this one, then Clarify, Collisions, Permissions and Human -
+// 1. THE ORDER. The header reads assistant search, then this one, then Clarify, Collisions and Permissions -
 //    and it is the same order in the DOM and on screen. The DOM half is pinned here; the screen half is the browser
 //    gate's (tools/verify-hot-agent-header.mjs). Between the assistant's entry and this control sits one element,
 //    #btn-hot, which ships hidden and is drawn only while an agent is working and the General settings row is on - so
-//    the two are adjacent whenever that marker is absent. The four reader controls that follow the search opener are
+//    the two are adjacent whenever that marker is absent. The three reader controls that follow the search opener are
 //    named here in their order, because each one is a deliberate insertion and the slice below is what catches a
-//    control drifting to the wrong side of its neighbours.
+//    control drifting to the wrong side of its neighbours. The Human control that used to close that run is gone:
+//    the three remaining controls each own one of its kinds.
 // 2. THE GLYPH. A hand holding a pen, drawn inline as SVG in currentColor rather than typed as an emoji, at its
 //    neighbours' size (15px in a 16-unit viewBox), with the tooltip and the aria-label that name the chord and say
 //    what the corpus is. A glyph swapped back to a character, or a label that drops Ctrl+Shift+Q, changes these lines.
@@ -41,7 +42,7 @@ const opener = () => {
   return { tag: found[0], inner: found[1] };
 };
 
-test("the header reads assistant search, then the Hot Agent search, Clarify, Collisions, Permissions and Human - in that order", () => {
+test("the header reads assistant search, then the Hot Agent search, Clarify, Collisions and Permissions - in that order", () => {
   const row = controlsRow();
   const ids = [...row.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
   const at = (id) => ids.indexOf(id);
@@ -50,26 +51,26 @@ test("the header reads assistant search, then the Hot Agent search, Clarify, Col
   assert.ok(at("btn-clarify") >= 0, "Clarify is in the header's controls row");
   assert.ok(at("btn-collisions") >= 0, "Collisions is in the header's controls row");
   assert.ok(at("btn-permissions") >= 0, "Permissions is in the header's controls row");
-  assert.ok(at("btn-human") >= 0, "Human is in the header's controls row");
+  assert.equal(at("btn-human"), -1, "the Human control is gone from the header's controls row");
 
   assert.ok(at("btn-assistant") < at("ha-search-open"), "the assistant's entry comes before the Hot Agent search");
   assert.ok(at("ha-search-open") < at("btn-clarify"), "the Hot Agent search comes before Clarify");
   assert.ok(at("btn-clarify") < at("btn-collisions"), "Collisions sits beside Clarify, after it");
   assert.ok(at("btn-collisions") < at("btn-permissions"), "Permissions follows Collisions");
-  assert.ok(at("btn-permissions") < at("btn-human"), "Human is the last of the four reader controls");
+  assert.ok(at("btn-permissions") < at("btn-review"), "Permissions comes before the Review count");
   // One element between the assistant and the search opener, and it is the conditional Active marker (the control
   // whose id keeps the old word `hot`) - nothing else may be inserted there without this line changing. The slice
-  // from the opener to Human names every reader control that sits between them, in order: Clarify, Collisions (the
-  // pair history and the only place a waiting collision is ruled), Permissions, then Human.
+  // from the opener to Permissions names every reader control that sits between them, in order: Clarify, Collisions
+  // (the pair history and the only place a waiting collision is ruled), then Permissions.
   assert.deepEqual(
     ids.slice(at("btn-assistant"), at("ha-search-open") + 1),
     ["btn-assistant", "btn-hot", "ha-search-open"],
     "the only control between the assistant and this one is the Active marker, which ships hidden",
   );
   assert.deepEqual(
-    ids.slice(at("ha-search-open"), at("btn-human") + 1),
-    ["ha-search-open", "btn-clarify", "btn-collisions", "btn-permissions", "btn-human"],
-    "Clarify, Collisions and Permissions sit between the search opener and Human, in that order",
+    ids.slice(at("ha-search-open"), at("btn-permissions") + 1),
+    ["ha-search-open", "btn-clarify", "btn-collisions", "btn-permissions"],
+    "Clarify, Collisions and Permissions sit between the search opener and the rest, in that order",
   );
 
   // The marker really is conditional, or "adjacent" would be a claim about a page nobody sees.

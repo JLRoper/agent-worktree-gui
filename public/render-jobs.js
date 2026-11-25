@@ -34,8 +34,8 @@
 //                            public/board/console.js; captureCardSelection, restoreCardSelection and selectionIn in
 //                            public/dom.js
 //   the card's own wiring    statsRowHtml, subagentsHtml, ghostTurnHtml, addAgentBarHtml, restoreReplyDraft,
-//                            captureTyping, restoreTyping, applyPendingFocus (public/settings.js), humanRefocus,
-//                            paintHumanButton, reorderProjects (public/render-projects.js), fmtAgo, relTime
+//                            captureTyping, restoreTyping, applyPendingFocus (public/settings.js),
+//                            reorderProjects (public/render-projects.js), fmtAgo, relTime
 //
 // THE LOAD CONTRACT. public/index.html loads CLASSIC scripts, so the page is one global scope: a top-level
 // `function` here is a window property and a top-level `let` is a binding every other script reads by bare name.
@@ -942,9 +942,6 @@ function updateJob(j, { scroll = false } = {}) {
     }
     reorderProjects();
   }
-  // Every turn change lands here, so this is where the HUMAN count is kept honest without waiting for the page's
-  // clock: a question that arrived, or one the reader just answered, moves the number in the same repaint.
-  paintHumanButton();
   // …and the HOT AGENTS bolt, which is the same list read the other way: a turn starting makes it appear, a turn
   // ending takes it away, and neither should wait for the next tick.
   paintHotButton();
@@ -1156,7 +1153,4 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   // A repaint replaces the card node, and the node that held the caret is gone with it — so a spawn
   // that asked for the reply box puts the caret back here, once the new card is in the document.
   applyPendingFocus();
-  // …and a HUMAN hop whose row was still opening when it focused has the same problem: the box it landed on is
-  // replaced a moment later. Put the ring and the caret back, scoped to the thread and the beat that asked for it.
-  humanRefocus(thread);
 }

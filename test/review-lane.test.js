@@ -1,16 +1,17 @@
-// The REVIEW LANE's client half: one reading of `row.review`, the header count, the table filter, and the third kind
-// in the Human rotation.
+// The REVIEW LANE's client half: one reading of `row.review`, the header count and the table filter.
 //
-// The lane has four surfaces and they must agree:
+// The lane has three surfaces and they must agree:
 //
 //   1. the amber ▣ on the row and the ✓ Reviewed beside it (public/render-projects.js `reviewRowMarkHtml`);
 //   2. the result card under the row - summary, report anchor, next-step chips (public/board-scaffold.js);
-//   3. the header count that filters the table (public/app.js `paintReviewChip` / `tableHidesRow`);
-//   4. the Human rotation, where a review row is the THIRD KIND after permissions and clarify questions.
+//   3. the header count that filters the table (public/app.js `paintReviewChip` / `tableHidesRow`).
 //
-// This file pins the ARITHMETIC (public/core/review-lane.js) directly, and the wiring of those four surfaces by
-// slicing the files that draw them - the same approach test/clarify-reask.test.js takes for the rotation, because a
+// This file pins the ARITHMETIC (public/core/review-lane.js) directly, and the wiring of those three surfaces by
+// slicing the files that draw them - the same approach test/clarify-reask.test.js takes for a shared rule, because a
 // shared predicate that nothing calls is not a lane.
+//
+// THE COUNT IS THE HEADER'S ONLY ONE. The Human control that used to carry a second count of these rows is gone;
+// `#btn-review` is where a reader sees how many results are waiting, and its press filters the table to exactly them.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -59,18 +60,9 @@ test("count is over ROWS, so a stale entry for a gone tree cannot inflate the ba
   assert.equal(lane.count(rows.values()), 2);
   assert.equal(lane.count([]), 0);
   assert.equal(lane.count(null), 0);
-  // The rows the filter keeps are exactly the rows the count counted.
-  const kept = [...rows.values()].filter((r) => lane.keeps(r, true));
-  assert.equal(kept.length, lane.count(rows.values()));
-  assert.deepEqual(kept.map((r) => r.path), ["p/tree", "p/other"]);
-});
-
-test("the filter keeps everything when it is off, and exactly the lane when it is on", () => {
-  assert.equal(lane.keeps(reviewed(), false), true);
-  assert.equal(lane.keeps({ path: "x" }, false), true);
-  assert.equal(lane.keeps(reviewed(), true), false);
-  assert.equal(lane.keeps({ path: "x" }, true), false);
-  assert.equal(lane.keeps(row(), true), true);
+  // The rows the app's filter keeps are exactly the rows the count counted: `tableHidesRow` asks the same predicate.
+  const kept = [...rows.values()].filter((r) => !lane.awaiting(r));
+  assert.equal(rows.size - kept.length, lane.count(rows.values()));
 });
 
 test("since reads the delivery stamp, and an undated record sorts last rather than first", () => {
@@ -79,51 +71,11 @@ test("since reads the delivery stamp, and an undated record sorts last rather th
   assert.equal(lane.since({}), Number.MAX_SAFE_INTEGER);
 });
 
-// ---- 2. the rotation's order ----------------------------------------------------------------------------------
-
-const item = (kind, sinceMs, key) => ({ kind, sinceMs, key: key || `${kind}:${sinceMs}` });
-
-test("permissions step first, then clarify questions, then rows to review - oldest first inside each kind", () => {
-  const list = [
-    item("review", 300),
-    item("question", 500),
-    item("approval", 900),
-    item("review", 100),
-    item("write", 800),
-    item("question", 200),
-  ];
-  const sorted = lane.sortHuman(list);
-  assert.deepEqual(sorted.map((i) => `${i.kind}:${i.sinceMs}`), [
-    "write:800",
-    "approval:900",
-    "question:200",
-    "question:500",
-    "review:100",
-    "review:300",
-  ]);
-  // The caller's own list is untouched: a sort that reordered state.rows in place would move the table.
-  assert.equal(list[0].sinceMs, 300);
-});
-
-test("an undated item keeps its place at the end of its kind, and the sort is stable", () => {
-  const sorted = lane.sortHuman([item("review", undefined, "a"), item("review", 5, "b"), item("review", undefined, "c")]);
-  assert.deepEqual(sorted.map((i) => i.key), ["b", "a", "c"]);
-});
-
-// ---- 3. the badge and its title -------------------------------------------------------------------------------
-
-test("the badge is one total split by kind, and the title names each kind that has something in it", () => {
-  const list = [item("approval", 1), item("write", 2), item("question", 3), item("review", 4), item("review", 5), item("collision", 6)];
-  const b = lane.badge(list);
-  assert.deepEqual(b, { total: 6, permissions: 2, questions: 1, reviews: 2, collisions: 1 });
-  const title = lane.title(b);
-  assert.match(title, /2 permissions, 1 clarify question, 2 to review, 1 collision/);
-  // Zero is the quiet state: no badge, and the title says so rather than reading "0 permissions, 0 ...".
-  assert.match(lane.title(lane.badge([])), /nothing is waiting/);
-  assert.equal(lane.badge([]).total, 0);
-  // A kind that is on with nothing in it is not a clause either: the sentence says what is waiting, not what is not.
-  assert.match(lane.title([item("review", 1)]), /^1 to review - press H/);
-  assert.doesNotMatch(lane.title([item("review", 1)]), /0 /);
+test("the module exports the marker and count arithmetic, and no rotation arithmetic", () => {
+  assert.deepEqual(Object.keys(lane).sort(), ["awaiting", "awaitingCollisions", "collisionTitle", "count", "landOrderOf", "markerTitle", "since"]);
+  for (const gone of ["sortHuman", "badge", "split", "keepKinds", "kindKey", "rank", "title", "keeps", "collisions"]) {
+    assert.equal(lane[gone], undefined, `${gone} belonged to the removed rotation`);
+  }
 });
 
 test("the marker's tooltip names the summary, the report and the step count", () => {
@@ -135,13 +87,14 @@ test("the marker's tooltip names the summary, the report and the step count", ()
   assert.equal(lane.markerTitle({ path: "x" }), "");
 });
 
-// ---- 4. the four surfaces are wired ---------------------------------------------------------------------------
+// ---- 2. the surfaces are wired --------------------------------------------------------------------------------
 
 const app = read("public/app.js");
 const rowsSrc = read("public/render-projects.js");
 const scaffold = read("public/board-scaffold.js");
 const html = read("public/index.html");
 const settings = read("public/settings.js");
+const css = read("public/style.css");
 
 test("the header draws the count and the bulk press, and the page loads the lane's arithmetic", () => {
   assert.match(html, /id="btn-review"/);
@@ -152,6 +105,18 @@ test("the header draws the count and the bulk press, and the page loads the lane
   assert.match(paint, /wtReviewLane\.count\(state\.rows\.values\(\)\)/, "the count is over the rows, not the store");
   assert.match(paint, /badge\.hidden = n === 0/, "zero is the quiet state");
   assert.match(paint, /all\.hidden = !\(on && n > 0\)/, "the bulk press is offered only where it can act");
+});
+
+test("the Review control is the header's ONE count of these rows, and its copy says so", () => {
+  // The button's own title: it counts, it filters, and it does not promise a key that no longer exists.
+  const tag = html.match(/<button id="btn-review"[^>]*>/)[0];
+  assert.match(tag, /whose result you have not checked yet/, "the title says what it counts");
+  assert.match(tag, /filter the table to exactly those rows/, "the title says what the press does");
+  assert.doesNotMatch(tag, /Press H|press H|H steps/, "the H rotation is gone and no title may promise it");
+  assert.doesNotMatch(tag, /Human/, "and it does not point at a control that no longer exists");
+  // Nothing else in the page carries a count of the same rows.
+  assert.equal((html.match(/id="review-badge"/g) || []).length, 1, "one review count on the page");
+  assert.doesNotMatch(app, /paintHumanButton|humanQuestions|humanStep|reviewRotationRows/, "the rotation's code is gone");
 });
 
 test("the count filters the table, and the filter overrides the chart's hold and focus mode", () => {
@@ -180,7 +145,7 @@ test("the row carries an amber mark and a Reviewed press, distinct from the lock
   // is on (Settings > Board > Chart columns, "Reviewed"): a switched-off chip leaves no amber edge behind.
   assert.match(rowsSrc, /const reviewOn = reviewChipShown\(\);/);
   assert.match(rowsSrc, /reviewOn && typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
-  assert.match(read("public/style.css"), /tr\.row\.has-review \{/);
+  assert.match(css, /tr\.row\.has-review \{/);
 });
 
 test("with its switch off the chip is not rendered at all, and with it on the press is unchanged", () => {
@@ -224,27 +189,6 @@ test("the result card is drawn by the panel from the stored delivery: anchor thr
   assert.match(popup, /reviewBlockHtml\(row, key\)/);
   // The chip itself rides the row's name line: public/render-projects.js is where that is asserted.
   assert.ok(!scaffold.includes("${reviewBlockHtml(row, key)}"), "the card no longer costs the row a paragraph");
-});
-
-test("the rotation takes review rows as a THIRD kind, and drops one the moment it is not awaiting", () => {
-  const questions = sliceBetween(app, "function humanQuestions()", "// The header control: one red count");
-  assert.match(questions, /out\.push\(\.\.\.reviewRotationRows\(\)\)/);
-  assert.match(questions, /return wtReviewLane\.keepKinds\(wtReviewLane\.sortHuman\(\[\.\.\.out, \.\.\.dock\]\), humanKinds\(\)\)/);
-  const rotation = sliceBetween(app, "function reviewRotationRows()", "// The header control: one red count");
-  assert.match(rotation, /if \(!wtReviewLane\.awaiting\(row\)\) continue;/, "reviewed, archived or deleted rows never enter it");
-  assert.match(rotation, /kind: "review"/);
-  assert.match(rotation, /key: `review:\$\{keyOf\(row\.project, row\.path\)\}`/);
-  // H lands on it: the row opens, the card is centred and flashed, and Reviewed takes the caret.
-  const show = sliceBetween(app, "function humanShowReview(q)", "// The last step of every show path");
-  assert.match(app, /if \(q\.kind === "review"\) return humanShowReview\(q\);/);
-  assert.match(show, /hotOpenPath\(row\)/);
-  assert.match(show, /scrollIntoView/);
-  assert.match(show, /human-flash/);
-  assert.match(show, /\[data-review-done="\$\{CSS\.escape\(key\)\}"\]/);
-  // The badge total includes them and the title splits it three ways.
-  const paint = sliceBetween(app, "function paintHumanButton()", "// Open exactly the path to one question");
-  assert.match(paint, /wtReviewLane\.badge\(list\)/);
-  assert.match(paint, /wtReviewLane\.split\(counts, kinds\)/);
 });
 
 test("a press paints from the answer as well as from the snapshot, and a refused press stays pressable", () => {

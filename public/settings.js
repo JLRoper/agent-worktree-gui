@@ -134,7 +134,6 @@ function applyApprovalAnswered(turnId, requestId, choice) {
     renderConversation(thread);
     if (assistantSessionFor(thread) && typeof window.__assistantRenderChat === "function") window.__assistantRenderChat(thread);
   }
-  paintHumanButton();
 }
 
 function applyQLook(next = {}, { save = true } = {}) {
@@ -188,7 +187,6 @@ function applyQuestionAnswered(turnId, requestId, answer) {
     renderConversation(thread);
     if (assistantSessionFor(thread) && typeof window.__assistantRenderChat === "function") window.__assistantRenderChat(thread);
   }
-  paintHumanButton();
 }
 
 function applyPreviousTurnPlan(plan) {

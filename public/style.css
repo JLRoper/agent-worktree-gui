@@ -128,25 +128,11 @@ body.focus-mode .topbar {
 /* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
    swallows the browser's own zoom shortcuts */
 .zoom { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 1px; }
-/* HUMAN: every open permission and clarify question, wherever it is. Quiet until something is waiting; then the
-   red count and the red border are what say a human is needed. Red, not the amber a card flash uses: a stopped
-   agent is a state, a question is an interruption. */
-#btn-human { display: inline-flex; align-items: center; gap: 6px; }
-#btn-human.has-questions { border-color: #7a3138; background: #241012; color: #ffb3ad; }
-#btn-human.has-questions:hover { border-color: #a03c44; background: #2d1518; }
-#human-badge {
-  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
-  border-radius: 9px; background: #e5534b; color: #fff;
-  font: 700 10.5px/17px var(--ui); text-align: center;
-  box-shadow: 0 0 0 1px #e5534b55;
-}
-#human-badge[hidden] { display: none; }
-
 /* ACTIVE AGENTS (the control whose id, label span and badge keep the old word `hot`): the bolt that is drawn only
-   while an agent is working. It is the other half of the Human count read beside it - amber for an agent burning
-   right now, red on Human for one stopped until you answer - so the colour is the panel's own amber (#d29922 /
-   #f0c674), never the yellow lock's #ffb454 in a row's name line and never the turnover mark's blue-violet.
-   `is-hot` is the state, the way `has-questions` is Human's, and the button exists at all only while one agent is
+   while an agent is working. Amber is the panel's own amber (#d29922 / #f0c674), never the yellow lock's #ffb454 in
+   a row's name line and never the turnover mark's blue-violet, and it is the opposite of the counts beside it: a
+   permission or a clarify question is a run stopped, and this is an agent burning right now.
+   `is-hot` is the state, and the button exists at all only while one agent is
    working AND Settings > General has it switched on: zero is not a quiet control here, and neither is a reader who
    turned it off - both are no control (public/app.js paintHotButton, public/core/active-button.js). The `[hidden]`
    rule is explicit because this button's own display would otherwise beat the attribute and a dead bolt would sit in
@@ -182,20 +168,7 @@ body.focus-mode .topbar {
   box-shadow: 0 0 0 1px #3f9d6b55;
 }
 
-/* The question a HUMAN hop landed on: a red ring, on the prompt box itself, that dies back to the box's own
-   border. It rides beside the amber card ring HUMAN also draws, so "this agent" and "this box" are two different
-   marks and the eye goes to the box. */
-@keyframes humanflash {
-  0% { box-shadow: 0 0 0 3px #e5534bcc, 0 0 24px rgba(229, 83, 75, .22); border-color: #e5534b; }
-  70% { box-shadow: 0 0 0 2px #e5534b55, 0 0 10px rgba(229, 83, 75, .12); border-color: #b8433c; }
-  100% { box-shadow: 0 0 0 3px rgba(229, 83, 75, 0); }
-}
-.turn-approval.human-flash,
-.turn-question.human-flash,
-.approval.human-flash,
-#approval-list .turn-approval.human-flash { animation: humanflash var(--flash-ring, 1700ms) ease-out; }
-
-/* The whole card flashes amber when HUMAN lands on one of its questions, and fades back to the panel it always
+/* The whole card flashes amber when a header control lands on it, and fades back to the panel it always
    was. Amber, not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches
    the card's resting border and background, so it settles instead of snapping. */
 @keyframes hotflash {
@@ -4441,7 +4414,7 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .topbar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }
 
 /* ---- the header's Clarify control, and the history it opens ---------------------------------------------- */
-/* The fourth control: assistant entry, Hot Agent pen, Clarify, Human. Purple is the header's colour for the reader's
+/* The third control: assistant entry, Hot Agent pen, Clarify. Purple is the header's colour for the reader's
    own history (--violet), not a state of a run: a green flash means a sign of life and amber means a wait, and this
    list is neither. The glyph is a speech bubble with a question mark, drawn inline in currentColor so it takes the
    dim/hover/open states at the weight of the pen beside it. */
@@ -4456,7 +4429,7 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .topbar #btn-clarify:hover { color: #c9a8ff; border-color: var(--violet); background: #211931; }
 .topbar #btn-clarify[aria-expanded="true"] { color: #e7d6ff; border-color: var(--violet); background: #2a1f45; box-shadow: 0 0 0 1px rgba(163, 113, 247, .35) inset; }
 .topbar #btn-clarify:focus-visible { outline: 1px solid var(--violet); outline-offset: 1px; }
-/* THE COUNT, PURPLE. The same shape as Human's badge and the same painting code (public/app.js paintCountBadge), in
+/* THE COUNT, PURPLE. The same shape as the other header badges and the same painting code (public/app.js paintCountBadge), in
    the clarify surface's violet rather than the red that means "a run is stopped": zero hides the badge and leaves the
    button's normal colour, one or more keeps it on and highlights the button for as long as anything is unanswered. The
    count and the highlight clear the moment the last item is answered, cancelled or times out. */

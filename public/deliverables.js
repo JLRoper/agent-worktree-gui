@@ -36,7 +36,7 @@
 //   state, conversations,      the list's store read, the seen watermark, and the agent a row's other control
 //   renderConversation,        opens
 //   renderJobs, assistantSessionFor, hotRowFor, hotOpenPath, flashHotCard, scrollCardUnderBar, showBanner,
-//   toggleProject, humanTextEntry
+//   toggleProject, textEntryFocused
 //   $, esc, keyOf, tailPath,   the markup, the paths and the ages (core/dom-format.js)
 //   fmtAgo
 //   apiFetch                   GET /api/deliverables and POST /api/deliverables/open (core/transport.js)
@@ -79,7 +79,7 @@
 // WHAT THIS REACHES OUT FOR, by name at call time (all page globals): $, esc, tailPath, keyOf, fmtAgo
 // (core/dom-format.js), apiFetch (core/transport.js), wtTurnFold (core/turn-fold.js), state, conversations,
 // renderConversation, renderJobs, assistantSessionFor, hotRowFor, hotOpenPath, flashHotCard, scrollCardUnderBar,
-// showBanner, toggleProject and humanTextEntry (this file).
+// showBanner, toggleProject and textEntryFocused (this file).
 
 const DELIVER_DEFAULT_CAP = 200;
 const deliver = {

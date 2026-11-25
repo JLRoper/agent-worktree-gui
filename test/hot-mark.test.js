@@ -121,7 +121,7 @@ test("the tooltip names the agents and their trees, and says what the press does
   assert.match(text, /2 agents working right now/);
   assert.match(text, /the light \(hot-tree\)/, "an agent on a worktree row is named with its tree");
   assert.match(text, /Click to land on the next one/);
-  assert.match(text, /red Human count/, "the line between amber and red is said where the reader reads it");
+  assert.match(text, /Permissions and Clarify are where that is counted/, "the line between working and stopped is said where the reader reads it");
   assert.match(text, /not active/, "the parked-agent sentence uses the new word");
   assert.match(text, /Settings > General > "Show the Active agents button in the floating header" turns this button off/, "the tooltip names the row that can take the control out of the header");
   assert.match(mark.title([]), /nothing is working right now/);
@@ -131,13 +131,14 @@ test("the tooltip names the agents and their trees, and says what the press does
 
 // ---- 3. the surfaces that draw it ------------------------------------------------------------------------------
 
-test("the markup is a header control of the same family, immediately before Human", () => {
+test("the markup is a header control of the same family, immediately before the Hot Agent search", () => {
   const html = read("public/index.html");
   const header = html.match(/<header class="topbar">[\s\S]*?<\/header>/)[0];
   assert.match(header, /<button id="btn-hot" type="button" hidden[ >]/, "it ships hidden: zero is absent, not a dead bolt");
   const at = (needle) => header.indexOf(needle);
   assert.ok(at('id="btn-hot"') > 0, "#btn-hot is in the header");
-  assert.ok(at('id="btn-hot"') < at('id="btn-human"'), "the button sits before Human in the group");
+  assert.equal(at('id="btn-human"'), -1, "the Human control this used to sit before is gone");
+  assert.ok(at('id="btn-hot"') < at('id="ha-search-open"'), "the button sits before the Hot Agent search in the group");
   assert.ok(at('id="btn-assistant"') < at('id="btn-hot"'), "and after Assistant, in the same row");
   assert.match(header, /<span id="hot-label">⚡ Active<\/span>/, "one glyph, a space, Title Case - and the word is Active");
   assert.match(header, /<span id="hot-badge" hidden>0<\/span>/, "the count is its own pill, quiet at zero");
@@ -171,7 +172,7 @@ test("the painter reads the module, the count, the tooltip and the switch, and h
   const hotAgents = sliceBetween(app, "function hotAgents()", "function paintHotButton()");
   assert.match(hotAgents, /wtHotMark\.agents\(/, "the list is the module's");
   assert.match(hotAgents, /assistantSessionFor/, "an assistant's own turn is not a board agent");
-  assert.match(hotAgents, /humanAgentName\(/, "the name is the one the board already calls that agent");
+  assert.match(hotAgents, /agentNameOf\(/, "the name is the one the board already calls that agent");
 
   const paint = sliceBetween(app, "function paintHotButton()", "function hotStep()");
   assert.match(paint, /wtHotMark\.title\(/, "the tooltip is the module's wording");
@@ -180,7 +181,7 @@ test("the painter reads the module, the count, the tooltip and the switch, and h
   assert.match(paint, /Active agents - \$\{list\.length\} working right now/, "the aria-label says Active");
   assert.match(paint, /⚡ Active \$\{at \+ 1\}\/\$\{list\.length\}/, "the label steps with the new word");
   assert.match(paint, /classList\.toggle\("is-hot"/);
-  assert.match(paint, /const sig = /, "the paint is signature-guarded, like the Human count");
+  assert.match(paint, /const sig = /, "the paint is signature-guarded");
   assert.match(paint, /hot-label/);
   assert.match(paint, /hot-badge/);
 
@@ -200,7 +201,7 @@ test("the press lands on the next working agent through the board's own jump, an
   assert.match(app, /\$\("btn-hot"\)\?\.addEventListener\("click",[\s\S]{0,80}hotStep\(\)/, "the press is bound by id");
 });
 
-test("a turn starting or stopping repaints it, on the same seams the Human count uses", () => {
+test("a turn starting or stopping repaints it, on every seam a turn change passes through", () => {
   const scaffold = read("public/board-scaffold.js");
   const repaint = sliceBetween(scaffold, "function repaintAgentState()", "// The project header");
   assert.match(repaint, /paintHotButton\(\)/, "every turn change passes through repaintAgentState");
@@ -208,6 +209,6 @@ test("a turn starting or stopping repaints it, on the same seams the Human count
   assert.match(jobs, /paintHotButton\(\)/, "a job frame repaints it too");
   const app = read("public/app.js");
   const tick = sliceBetween(app, "function tickApprovals", "setInterval(tickApprovals");
-  assert.match(tick, /paintHumanButton\(\)/, "the 1 s clock still repaints Human");
+  assert.doesNotMatch(tick, /paintHumanButton/, "the 1 s clock no longer repaints a Human button: there is none");
   assert.match(tick, /paintHotButton\(\)/, "and the same clock repaints the bolt: a turn's own clock moves without a job frame");
 });

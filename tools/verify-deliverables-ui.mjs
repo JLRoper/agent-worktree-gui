@@ -319,10 +319,11 @@ try {
         top: btn ? Math.round(btn.getBoundingClientRect().top) : null,
       };
     });
-    const human = header.ids.indexOf("btn-human");
+    const perms = header.ids.indexOf("btn-permissions");
     const deliver = header.ids.indexOf("btn-deliver");
-    const collapse = header.ids.indexOf("btn-collapse-all");
-    ok("the header button sits between Human and Collapse all", human >= 0 && deliver === human + 1 && collapse === deliver + 1, header.ids.join(" "));
+    const review = header.ids.indexOf("btn-review");
+    ok("the header button sits between Permissions and the Review count", perms >= 0 && deliver === perms + 1 && review === deliver + 1, header.ids.join(" "));
+    eq("the removed Human control is not in the header", header.ids.includes("btn-human"), false);
     eq("the label is Title Case with its leading glyph, the way ✧ Assistant is", header.label, "📦 Deliverables");
     eq("the button says it is closed", header.expanded, "false");
 

@@ -272,9 +272,9 @@ const state = {
   // turn's own bytes; `consoleFocus` hides the tool rows and leaves the prose, the errors and the final message.
   consoleRaw: new Set(),
   consoleFocus: new Set(),
-  // HUMAN's amber ring on a card: held here, not only on the DOM node, because opening a project or a row
-  // repaints the card and a class added to the old element dies with it. The renderer re-applies it until the
-  // window closes. (The NOT-RUNNING rotation that first drew this ring is gone; HUMAN kept the ring.)
+  // The Active bolt's amber ring on a card: held here, not only on the DOM node, because opening a project or a
+  // row repaints the card and a class added to the old element dies with it. The renderer re-applies it until the
+  // window closes.
   hotFlash: { thread: null, until: 0 },
   hotFlashTimer: null,
   // The Hot Agent search's ring on ONE TURN: `{thread, id, until}`, held in state for the same reason hotFlash is -
@@ -282,19 +282,11 @@ const state = {
   // `turnBlock` re-applies this one until the window closes). flashHotCard says WHICH CARD; this says WHICH TURN.
   haHit: { thread: null, id: null, until: 0 },
   haHitTimer: null,
-  // HUMAN: the rotation through every OPEN permission and clarify question. `key` is the question last shown
-  // and `at` its place in that sample; `sig` is what was last painted on the button. The list itself is never
-  // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
-  human: { key: null, at: -1, sig: "", kinds: null },
-  humanFlashTimer: null,
   // The HOT AGENTS marker's rotation: the agent the last press landed on, and the list signature that press last
   // painted. The list itself is sampled on every paint (it is `state.jobs`, which the snapshot and every job frame
   // keep current), so a turn that ends between two presses can never leave a stale entry behind - only the key is
-  // remembered, the same way the Human rotation remembers its question.
+  // remembered.
   hot: { key: null, sig: "", on: null },
-  // The prompt a HUMAN hop just landed on, held for a beat so the repaint a row-opening causes puts the ring and
-  // the caret back instead of dropping them: { thread, turnId, kind, until }.
-  humanFocus: null,
   projects: new Map(),
   // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
   reorderTimer: null,
@@ -6389,10 +6381,6 @@ function tickApprovals() {
     card.classList.toggle("is-over", left <= 0);
     if (left <= 0) closeApprovalCard(box);
   }
-  // The HUMAN button's count is a live fact like the countdowns above: a question whose window just closed is no
-  // longer open, and a number that kept counting it would send the reader to a box that is over. One clock for
-  // both, so nothing else has to remember to repaint it.
-  paintHumanButton();
   // The CLARIFY count is the same kind of live fact, read off the history route on its own slow tick and repainted here
   // from the number it last read - so the badge and the purple highlight follow an answer, a cancel or a timeout on this
   // page's own clock, not on whichever frame happened to arrive.
@@ -12878,7 +12866,7 @@ function toggleFocusMode() {
 
 // The header's double-click, registered after the model readout's own listener above. It returns for anything that is
 // not the top bar, so the readout keeps its event and a single click on it stays a single click; inside the bar it
-// also leaves the bar's own controls alone, so Assistant/Settings/Human keep their double-clicks too.
+// also leaves the bar's own controls alone, so Assistant/Settings keep their double-clicks too.
 function onHeaderDoubleClick(e) {
   if (!e?.target?.closest) return;
   if (!e.target.closest(".topbar")) return;
@@ -13649,10 +13637,10 @@ document.addEventListener(
   { passive: false },
 );
 
-// ---- HUMAN's landing helpers (they outlived the NOT-RUNNING rotation) -------------------------
-// These three were board/hot.js. The NOT-RUNNING button and its rotation are gone; HUMAN still lands a question
-// by opening the same path (hotOpenPath), finds the row a thread lives in (hotRowFor) and rings the card amber
-// (flashHotCard, kept in state.hotFlash so a repaint re-applies it). Same code, one caller now.
+// ---- the header's landing helpers --------------------------------------------------------------
+// These three were board/hot.js. Every header popover that lands on a card uses them: open the path (hotOpenPath),
+// find the row a thread lives in (hotRowFor) and ring the card amber (flashHotCard, kept in state.hotFlash so a
+// repaint re-applies it).
 function hotRowFor(thread) {
   for (const row of state.rows.values()) {
     if (agentsFor(row).some((c) => c.thread === thread)) return row;
@@ -13704,291 +13692,14 @@ function flashHotCard(thread) {
   card.classList.add("hot-flash");
 }
 
-// ---- HUMAN (the question rotation) -----------------------------------------------------------
-// Every OPEN question on the board, in one rotation — a turn parked on a permission request, an agent parked on
-// its own `clarify` question, and the dock's own permission cards (a CLI approval, or the panel's remote-write
-// request). An agent can be RUNNING and still hold a question, which is why a rotation over stopped agents could
-// never reach them.
-//
-// THE LIST IS NEVER CACHED. It is rebuilt from live state on every press, so a question that was answered, timed
-// out, or whose turn ended is simply not in the next list. What IS remembered is the KEY of the question last
-// shown and the place it held: once that question is gone its old slot is where the entry after it now sits,
-// which is how a press lands on the NEXT question instead of starting over.
-// One question on one turn is open while its carrier is still there and the gateway is still holding it — the
-// same two tests `turnBody` and the card's own chips make, so the rotation can never offer a box that is not drawn.
-function humanOpenOnTurn(turn, kind) {
-  if (!turn || !turnLive(turn)) return false;
-  if (kind === "question") return Boolean(turn.question) && !turn.questionDone && approvalLive(turn.question);
-  return Boolean(turn.approval) && !turn.approvalDone && approvalLive(turn.approval);
-}
-
-// The name the reader knows an agent by: an assistant's own name, else the card's title, else the label, else the
-// thread id. An assistant's job carries the question it is parked on in its prompt, so its card title would name
-// what was asked rather than who is asking — `assistantSessionFor` is the one lookup that already knows that name.
-function humanAgentName(thread) {
-  const session = assistantSessionFor(thread);
-  if (session) return session.name || thread;
-  const job = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread);
-  return (job && (job.title || job.label)) || thread || "the dock";
-}
-
-// Every open question, in the order the board shows it: cards that are in the page in DOM order (the unattached
-// panel sits above the table, so it comes first), then the cards a folded project hides, newest thread first,
-// then the dock's own permission cards, soonest deadline first — the one the gateway refuses soonest is the one
-// to answer next. `deadline` is 0 for a question that carries no window; those sort last.
-//
-// An ASSISTANT's question is one of these. Its turn parks on the reader exactly like a worker's, and the one place
-// it was excluded was this list: an assistant's clarify prompt never entered the rotation, so the badge counted one
-// waiting question fewer than the board held. Its card lives in the float, which is fixed and has no position on
-// the table, so an assistant is deliberately NOT ranked below: it takes its place with the cards a folded project
-// hides, newest thread first.
-// The identity of one question in the rotation: its kind, the turn it is parked on, and the gateway's own
-// request id. That id is not decoration — a turn can carry a second approval after the first is answered, and
-// that is a different question with its own place.
-//
-// It is ALSO the reason asking again cannot become a second row. A re-ask is about the SAME prompt: the turn
-// does not change and neither does the request id, so the question keeps one key and the row already in the
-// list is the one the count moves on. The count (`reasks`) is deliberately NOT part of the key — a key that
-// counted the asks would be a new key every hour, which is exactly the pile-up this exists to prevent.
-function humanQuestionKey(kind, turnId, requestId) {
-  return `${kind}:${turnId}:${requestId || ""}`;
-}
-
-// ---- which kinds the Human button counts (Settings > Human) ----------------------------------------------------
-// THE READER'S FOUR SWITCHES. Permissions, clarify questions, review items and collisions are four different costs on a
-// reader's attention, and a reader who has stopped reading review results should not be counted down to by them. Each
-// switch is saved in this browser like every other settings row here, and each DEFAULTS ON, so a reader who never opens
-// the setting gets exactly the button this panel has always drawn.
-//
-// ONE OBJECT, READ BY BOTH HALVES. `humanQuestions` filters with it and `paintHumanButton` counts and names with it,
-// so the badge, the title and the H rotation cannot disagree about which kinds exist - the discipline the review
-// lane's own `sortHuman` already enforces for the order.
-const HUMAN_KINDS_KEY = "wtgui.humanKinds";
-// The four, in the rotation's own order, with the words a sentence uses for each. `noun` is singular ("no permission
-// is open"), `many` is what the "switched off" line names.
-const HUMAN_KIND_WORDS = {
-  permissions: { noun: "permission", many: "permissions" },
-  clarify: { noun: "clarify question", many: "clarify questions" },
-  review: { noun: "result to review", many: "review items" },
-  collisions: { noun: "collision", many: "collisions" },
-};
-const HUMAN_KIND_KEYS = ["permissions", "clarify", "review", "collisions"];
-
-// The switches, defaulting on. Read once from the browser and kept in state: this is asked on every paint and on
-// every press, and a localStorage read per repaint would be a read per second for a value that only the reader moves.
-function humanKinds() {
-  if (!state.human.kinds) state.human.kinds = loadHumanKinds();
-  return state.human.kinds;
-}
-
-function loadHumanKinds() {
-  const out = {};
-  for (const key of HUMAN_KIND_KEYS) out[key] = true;
-  try {
-    const raw = localStorage.getItem(HUMAN_KINDS_KEY);
-    const saved = raw ? JSON.parse(raw) : null;
-    // A stored value is honoured per key and only as a boolean: a file edited by hand into `"no"` is not a switch,
-    // and an unknown key is ignored rather than resurrected as a kind.
-    if (saved && typeof saved === "object") for (const key of HUMAN_KIND_KEYS) if (typeof saved[key] === "boolean") out[key] = saved[key];
-  } catch {
-    /* private mode, or a corrupt value: today's behaviour is every kind on */
-  }
-  return out;
-}
-
-function humanKindOn(kind) {
-  return humanKinds()[kind] !== false;
-}
-
-function humanAnyKindOn() {
-  const kinds = humanKinds();
-  return HUMAN_KIND_KEYS.some((key) => kinds[key] !== false);
-}
-
-// The kinds that are OFF, in the reader's words, for a sentence that has to stay honest as they change.
-function humanKindsOffWords(kinds = humanKinds()) {
-  return HUMAN_KIND_KEYS.filter((key) => kinds[key] === false).map((key) => HUMAN_KIND_WORDS[key].many);
-}
-
-// "review items are switched off in Settings" / "permissions and clarify questions are switched off in Settings",
-// ending in a full stop. Empty string when every kind is on, so a reader who never opened the setting reads exactly
-// the sentence this panel always wrote.
-function humanKindsOffSentence(kinds = humanKinds()) {
-  const off = humanKindsOffWords(kinds);
-  if (!off.length) return "";
-  const list = off.length === 1 ? off[0] : `${off.slice(0, -1).join(", ")} and ${off[off.length - 1]}`;
-  // Capitalised: every use is a sentence in its own right, after a full stop or on its own in the aria-label.
-  // Every name in `off` is plural ("permissions", "clarify questions", "review items"), so the verb is always "are".
-  const said = `${list} are switched off in Settings (Ctrl+,, Human).`;
-  return said.charAt(0).toUpperCase() + said.slice(1);
-}
-
-function setHumanKind(key, on) {
-  if (!HUMAN_KIND_KEYS.includes(key)) return;
-  const kinds = humanKinds();
-  kinds[key] = Boolean(on);
-  try {
-    localStorage.setItem(HUMAN_KINDS_KEY, JSON.stringify(kinds));
-  } catch {
-    /* private mode: the switches still apply for this page */
-  }
-  // A rotation parked on a kind the reader has just switched off is pointing at something this button no longer
-  // counts, so it is cleared rather than left to resume there if the kind comes back.
-  if (kinds[key] === false) {
-    state.human.key = null;
-    state.human.at = -1;
-  }
-  state.human.sig = "";
-  paintHumanKinds();
-  paintHumanButton();
-  showBanner(`Human: ${HUMAN_KIND_WORDS[key].many} ${kinds[key] ? "counted again" : "switched off"}`);
-}
-
-// The tab's own mirror: the four boxes and the line under them, so a switch that was saved in an earlier session is
-// drawn on rather than being something the reader has to discover by pressing the button.
-function paintHumanKinds() {
-  const kinds = humanKinds();
-  for (const key of HUMAN_KIND_KEYS) {
-    const box = $(`human-kind-${key}`);
-    if (box) box.checked = kinds[key] !== false;
-  }
-  const preview = $("human-kinds-preview");
-  if (!preview) return;
-  const off = humanKindsOffWords(kinds);
-  const on = HUMAN_KIND_KEYS.filter((key) => kinds[key] !== false).map((key) => HUMAN_KIND_WORDS[key].many);
-  preview.textContent = !off.length
-    ? "all four counted - badge, title and H"
-    : !on.length
-      ? "every kind off - no badge, and H does nothing"
-      : `${on.join(" and ")} counted - ${off.join(" and ")} off`;
-}
-
-function humanQuestions() {
-  const out = [];
-  const convs = conversations();
-  const rank = new Map(
-    [...document.querySelectorAll(".job[data-thread]")]
-      .filter((el) => !assistantSessionFor(el.dataset.thread))
-      .map((el, i) => [el.dataset.thread, i]),
-  );
-  const onScreen = convs.filter((c) => rank.has(c.thread)).sort((a, b) => rank.get(a.thread) - rank.get(b.thread));
-  const hidden = convs
-    .filter((c) => !rank.has(c.thread))
-    .sort((a, b) => (Date.parse(b.latest?.startedAt || "") || 0) - (Date.parse(a.latest?.startedAt || "") || 0));
-  for (const c of [...onScreen, ...hidden]) {
-    for (const t of c.turns) {
-      for (const kind of ["approval", "question"]) {
-        if (!humanOpenOnTurn(t, kind)) continue;
-        const ask = kind === "question" ? t.question : t.approval;
-        out.push({
-          kind,
-          // The request id, not just the turn: a turn can carry a second approval after the first is answered,
-          // and that is a different question with its own place in the rotation.
-          key: humanQuestionKey(kind, t.id, ask?.requestId),
-          // How often the panel has asked again about this same question (`lib/assistant.js` re-asks an hour
-          // after it parked, then hourly). It rides on the row for the count; it is not part of the key.
-          reasks: Math.max(0, Number(ask?.reasks) || 0),
-          thread: c.thread,
-          turnId: t.id,
-          agent: humanAgentName(c.thread),
-          deadline: Number(ask?.deadline) || 0,
-          // The rotation's second key: oldest first inside a kind (public/core/review-lane.js `sortHuman`). A turn
-          // that has been parked longest is the one most likely to be the thing that is stuck.
-          sinceMs: Date.parse(t.startedAt || "") || 0,
-        });
-      }
-    }
-  }
-  const dock = [
-    ...[...state.approvals.values()].filter(approvalLive).map((r) => ({
-      kind: "approval",
-      dock: true,
-      key: `dock:${r.id}`,
-      id: r.id,
-      thread: r.thread || null,
-      agent: approvalAgentName(r),
-      deadline: Number(r.deadline) || 0,
-      sinceMs: Number(r.receivedAt) || 0,
-    })),
-    ...[...state.rwPending.values()].filter(approvalLive).map((r) => ({
-      kind: "write",
-      dock: true,
-      key: `write:${r.id}`,
-      id: r.id,
-      thread: r.thread || null,
-      agent: baseNameOf(r.worktree || "") || r.project || "a worktree",
-      deadline: Number(r.deadline) || 0,
-      sinceMs: Number(r.receivedAt) || 0,
-    })),
-  ].sort((a, b) => (a.deadline > 0 ? a.deadline : Infinity) - (b.deadline > 0 ? b.deadline : Infinity));
-  // THE THIRD KIND: rows whose result nobody has checked yet (lib/review-inbox.js). They are read from state.rows,
-  // the same list the board draws, so a row that was archived or deleted is not in the rotation at all - and one that
-  // has just been reviewed stops being in it the moment the snapshot lands, because `awaiting` reads the stamp.
-  out.push(...reviewRotationRows());
-  // THE FOURTH KIND: live trees in this project that are touching the same work, one entry per pair. Filed last
-  // because a collision is the only kind where nothing has stopped - see review-lane.js's RANK.
-  out.push(...collisionRotationRows());
-  // Permissions first, then clarify questions, then rows to review, then collisions, oldest first inside each kind. The
-  // order is the lane's own (public/core/review-lane.js `sortHuman`), not this function's, so the count, the title and
-  // the rotation cannot disagree about which kind a row is.
-  //
-  // AND ONLY THE KINDS THE READER WATCHES (Settings > Human). The filter runs AFTER the sort, so switching a kind off
-  // takes its rows out and leaves every other row in exactly the order it was in - the rotation keeps permissions then
-  // clarify then review among whatever remains, which is what makes H's sequence predictable as the switches move.
-  return wtReviewLane.keepKinds(wtReviewLane.sortHuman([...out, ...dock]), humanKinds());
-}
-
-// The review lane's share of the rotation: one entry per row awaiting a check, keyed by the row so the rotation's
-// own memory (state.human.key) survives a repaint. `path` is what the landing path opens with.
-function reviewRotationRows() {
-  const out = [];
-  for (const row of state.rows.values()) {
-    if (!wtReviewLane.awaiting(row)) continue;
-    out.push({
-      kind: "review",
-      review: true,
-      key: `review:${keyOf(row.project, row.path)}`,
-      rowKey: keyOf(row.project, row.path),
-      project: row.project,
-      path: row.path,
-      agent: row.name || row.project,
-      deadline: 0,
-      sinceMs: wtReviewLane.since(row),
-    });
-  }
-  return out;
-}
-
-// The collision kind's share of the rotation: ONE entry per PAIR, not per row, because both rows carry the same pair
-// and the reader is being asked one question about it. `wtReviewLane.collisions` does the dedupe and the oldest-first
-// order, so the badge, this list and the marker cannot disagree about how many overlaps are waiting.
-function collisionRotationRows() {
-  const out = [];
-  for (const rec of wtReviewLane.collisions(state.rows.values())) {
-    out.push({
-      kind: "collision",
-      collision: rec,
-      key: `collision:${rec.key}`,
-      rowKey: keyOf(rec.project, rec.path),
-      project: rec.project,
-      path: rec.path,
-      // The counterpart, because that is who this is about: the item is two trees, and the one that is not the row is
-      // the name a reader needs.
-      agent: rec.other?.name || rec.otherTarget || "another tree",
-      deadline: 0,
-      sinceMs: Date.parse(rec.firstAt || "") || 0,
-    });
-  }
-  return out;
-}
-
 // ---- the header's REVIEW control ----------------------------------------------------------------------------
 // One count of the rows awaiting review, and the filter that shows exactly those rows. The count is read from
 // state.rows through public/core/review-lane.js, the same list the table draws, so the number and the rows it filters
 // to are the same number by construction: a delivery whose tree was archived or deleted is not a row, and is not
 // counted here whatever the store still holds.
 //
-// ZERO IS QUIET, the same rule the Human badge has: no red badge, no amber, and a button that says the lane is empty
+// ZERO IS QUIET, the same rule every header count follows: no badge, no amber, and a button that says the lane is
+// empty
 // rather than one that looks broken.
 function paintReviewChip() {
   const btn = $("btn-review");
@@ -14007,8 +13718,8 @@ function paintReviewChip() {
   btn.classList.toggle("is-on", on);
   btn.setAttribute("aria-pressed", on ? "true" : "false");
   btn.title = n
-    ? `Review — ${n} finished row${n === 1 ? "" : "s"} whose result you have not checked yet. ${on ? "The table is filtered to them now: click to show everything again." : "Click to filter the table to exactly these rows."} Each row carries an amber ▣ — not the yellow lock and not the blue turnover mark — with ✓ Reviewed beside it, and a one-line result chip: the first clause of the run's summary, its age and whether it has been checked. The chip opens the card behind it — the whole summary, the report as a real link, and its next steps as chips — without adding a line to the row. Mark all reviewed clears the batch in one press. Press H to step into the oldest one.`
-    : `Review — nothing is waiting for a check: no finished row on this board has a result you have not seen${on ? ". The filter is on, so the table is showing nothing; click to show every row again." : "."} A row lands here when a run ends with something to read, and leaves when you press ✓ Reviewed.`;
+    ? `Review — ${n} finished row${n === 1 ? "" : "s"} whose result you have not checked yet. This is the header's one count of results to read. ${on ? "The table is filtered to them now: click to show everything again." : "Click to filter the table to exactly these rows."} Each row carries an amber ▣ — not the yellow lock and not the blue turnover mark — with ✓ Reviewed beside it, and a one-line result chip: the first clause of the run's summary, its age and whether it has been checked. The chip opens the card behind it — the whole summary, the report as a real link, and its next steps as chips — without adding a line to the row. Mark all reviewed clears the batch in one press.`
+    : `Review — nothing is waiting for a check: no finished row on this board has a result you have not seen. This is the header's one count of results to read${on ? "; the filter is on, so the table is showing nothing - click to show every row again" : ""}. A row lands here when a run ends with something to read, and leaves when you press ✓ Reviewed.`;
   if (all) {
     all.hidden = !(on && n > 0);
     all.textContent = `Mark all ${n} reviewed`;
@@ -14024,10 +13735,6 @@ function paintReviewTable() {
   renderAll();
   reorderProjects();
   renderJobs();
-  // The lane is the Human rotation's THIRD KIND, so a change to it is a change to that button's count and title: a
-  // reviewed press that left the red badge saying what it said a second earlier would be the panel claiming work that
-  // is gone. Cheap and idempotent - the button repaints from the same list this table was just narrowed by.
-  paintHumanButton();
 }
 
 function toggleReviewFilter() {
@@ -14126,7 +13833,6 @@ async function collisionPress({ op, key, pick = null }) {
       return false;
     }
     if (d.record) applyCollisionRecord(d.record);
-    paintHumanButton();
     renderAll();
     showBanner(d.say || (pick === "clear" ? "Ruling withdrawn - the pair goes back to the assistants" : "Ruled"));
     return true;
@@ -14178,17 +13884,15 @@ document.addEventListener("click", async (e) => {
   if (!ok && el.isConnected) el.disabled = false;
 });
 
-// The header control: one red count of everything waiting on a human, and a title that splits it. Zero questions
-// means no badge at all — a quiet button, not a broken one — and the count is repainted from live state on the
-// page's own clock so a deadline that passes cannot leave a number claiming a question that is over.
 /**
  * ONE PAINTING CODE for the header's counting buttons. Every one of them says the same thing the same way: the badge
  * carries the number and is hidden at ZERO (a quiet button, never a broken-looking one), and a class is the highlight
- * that says something is waiting. Only the colour is the caller's - red for Human, purple for Clarify - because the
+ * that says something is waiting. Only the colour is the caller's - purple for Clarify, violet for Collisions, amber
+ * for Permissions - because the
  * colour is the meaning and the shape is not. Returns the number painted, so a caller can word its title from the same
  * count it just drew.
  */
-function paintCountBadge(btn, badge, count, cls = "has-questions") {
+function paintCountBadge(btn, badge, count, cls = "has-waiting") {
   const n = Math.max(0, Math.floor(Number(count) || 0));
   if (badge) {
     badge.hidden = n === 0;
@@ -14205,7 +13909,7 @@ const CLARIFY_PROSE = String(document.getElementById("btn-clarify")?.title || ""
 // The header button's count: how many CLARIFY ITEMS are still waiting on an answer. The number comes from
 // public/clarify-history.js (`clarifyPendingCount`), which reads `outstanding` off the history route - items whose
 // state is "open", so three asks of one question count one and an answered, cancelled or timed-out item counts
-// nothing. Painted by the same `paintCountBadge` as Human's, in the button's own purple.
+// nothing. Painted by `paintCountBadge`, in the button's own purple.
 let clarifyBadgeSig = "";
 function paintClarifyButton() {
   const btn = $("btn-clarify");
@@ -14233,7 +13937,7 @@ function paintClarifyButton() {
 // public/collision-history.js (`collisionPendingCount`), which reads `waiting` off /api/collisions/history - the store's
 // own predicate (`lib/collisions.js` `waitingOf`: state reader, no finished side). An auto-ruled pair, a land order, a
 // superseded pair and a verdict all count ZERO: that is the whole point of this button, and the reason it is not the
-// Human count. Painted by the same `paintCountBadge` as Human's, Clarify's and Permissions', in the collision violet.
+// count. Painted by `paintCountBadge`, as Clarify's and Permissions' are, in the collision violet.
 const COLLISIONS_PROSE = String(document.getElementById("btn-collisions")?.title || "").trim();
 
 let collisionsBadgeSig = "";
@@ -14255,8 +13959,8 @@ function paintCollisionsButton() {
 
 // The Permissions button's count: how many permission requests are WAITING on a person. The number comes from
 // public/permissions-history.js (`permissionsPendingCount`), which counts the live requests /api/state carries in
-// `approvals` - the same map the Human button's dock counts - so a request that was answered or whose window closed
-// counts nothing. Painted by the same `paintCountBadge` as Human's and Clarify's, in the permission box's own amber.
+// `approvals` - the same map the approval dock counts - so a request that was answered or whose window closed
+// counts nothing. Painted by `paintCountBadge`, as Clarify's and Collisions' are, in the permission box's own amber.
 const PERMISSIONS_PROSE = String(document.getElementById("btn-permissions")?.title || "").trim();
 
 let permissionsBadgeSig = "";
@@ -14276,445 +13980,10 @@ function paintPermissionsButton() {
   btn.title = `${line} ${PERMISSIONS_PROSE}`.trim();
 }
 
-function paintHumanButton() {
-  const btn = $("btn-human");
-  if (!btn) return;
-  // THE READER'S SWITCHES, read before the list because `humanQuestions` applies the same three: a kind switched off
-  // in Settings is neither counted here nor stepped into by H (Settings > Human, saved in this browser).
-  const kinds = humanKinds();
-  const list = humanQuestions();
-  // THREE KINDS, one count. A permission and a clarify question are runs stopped until the reader answers; a row to
-  // review is work already finished that needs looking at. The badge is their sum and the title splits it, so a
-  // reader who sees "3" can tell whether it is three blocked runs or three results to read
-  // (public/core/review-lane.js `badge`). The list is already narrowed to the kinds that are on, so this total IS the
-  // enabled kinds' total - there is no second count that could include a kind the reader switched off.
-  const counts = wtReviewLane.badge(list);
-  const perms = counts.permissions;
-  const asks = counts.questions;
-  const reviews = counts.reviews;
-  const collisions = counts.collisions || 0;
-  // How many of the open questions the panel has already asked again about. Not a second count on the
-  // button — the button counts QUESTIONS, and a re-ask never adds one — it is said in the title so a
-  // reader who has been away can tell "nobody answered" from "you were asked again and missed it".
-  const repeats = list.filter((q) => Number(q.reasks) > 0).length;
-  // Only the AGENTS an answer is waiting on: a review row's name is a worktree and a collision's is its counterpart
-  // tree, not an agent holding a question.
-  const agents = [...new Set(list.filter((q) => q.kind !== "review" && q.kind !== "collision").map((q) => q.agent).filter(Boolean))];
-  const at = state.human.key ? list.findIndex((q) => q.key === state.human.key) : -1;
-  const label = $("human-label");
-  const badge = $("human-badge");
-  // THE SWITCHES ARE PART OF THE SIGNATURE. Turning review off while nothing is awaiting review still changes what
-  // this title promises, so the same count has to be allowed to repaint the same button differently.
-  const kindSig = HUMAN_KIND_KEYS.map((key) => (kinds[key] === false ? "0" : "1")).join("");
-  const sig = `${list.length}|${perms}|${asks}|${reviews}|${collisions}|${repeats}|${agents.join(",")}|${at}|${kindSig}`;
-  if (sig === state.human.sig) return;
-  state.human.sig = sig;
-  // The label is Title Case with a leading glyph, the way ✧ Assistant is — the button's word is its name, not a
-  // shouted tag. The rotation counter keeps the same shape: `🙋 Human 2/3`.
-  if (label) label.textContent = at >= 0 ? `🙋 Human ${at + 1}/${list.length}` : "🙋 Human";
-  // ZERO IS QUIET, and the highlight is the count's own: no badge, no red, a button that says why nothing is waiting
-  // rather than one that looks broken. The same call Clarify makes, in this button's red (`paintCountBadge`).
-  paintCountBadge(btn, badge, list.length, "has-questions");
-  // The split names ONLY the kinds that are on (public/core/review-lane.js `split`): a kind the reader switched off
-  // is not a zero in this sentence, it is a kind this button does not count, and "0 to review" would be a claim
-  // about rows it was never shown.
-  const split = wtReviewLane.split(counts, kinds);
-  // Said only when something is off, so a reader who never opened the setting reads exactly the sentence this panel
-  // has always written.
-  const offSaid = humanKindsOffSentence(kinds);
-  // What is open when nothing is: the noun per kind, in the rotation's order, from the kinds that are COUNTED.
-  const held = HUMAN_KIND_KEYS.filter((key) => kinds[key] !== false).map((key) => HUMAN_KIND_WORDS[key].noun);
-  const heldList = held.length > 1 ? `${held.slice(0, -1).join(", ")} or ${held[held.length - 1]}` : held[0] || "";
-  btn.setAttribute(
-    "aria-label",
-    list.length
-      ? `Human — ${list.length} waiting on you: ${split}${repeats ? `, ${repeats} asked again` : ""}${offSaid ? `. ${offSaid}` : ""}`
-      : held.length
-        ? `Human — nothing is waiting on you${offSaid ? `. ${offSaid}` : ""}`
-        : "Human — every kind of this button is switched off in Settings: nothing is counted and H does nothing",
-  );
-  const named = agents.length > 4 ? `${agents.slice(0, 4).join(", ")} and ${agents.length - 4} more` : agents.join(", ");
-  // WHAT A PRESS DOES, in the same three kinds. A switched-off kind is not described as something H will open, because
-  // H will not open it: with every kind on this is the sentence the title has always carried, word for word.
-  const blockers = [];
-  if (kinds.permissions !== false) blockers.push("a permission");
-  if (kinds.clarify !== false) blockers.push("a question");
-  const steps = [];
-  if (blockers.length) steps.push(`${blockers.join(" or ")} opens its agent, centres its prompt and flashes it red with its answer control focused`);
-  if (kinds.review !== false) steps.push("a row to review opens the row, opens its result chip onto the card behind it - the whole summary, the report anchor and the next steps - and puts ✓ Reviewed under the caret, so one more press clears it");
-  if (kinds.collisions !== false) steps.push("a collision opens the row whose pair it is, presses its collision diamond to open the pair card - the counterpart, both tasks, the shared files, every pair on that worktree - and puts the ruling under the caret");
-  btn.title = list.length
-    ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: ${steps.join("; ")}. Anything answered, expired, reviewed, archived or deleted drops out.${offSaid ? ` ${offSaid}` : ""}`
-    : held.length
-      ? `Human — nothing is waiting on you: no ${heldList} is open on this board.${offSaid ? ` ${offSaid}` : ""} Click or press H to check again.`
-      : "Human — every kind of this button is switched off in Settings (Ctrl+,, Human): nothing is counted, so there is nothing to open and H does nothing. Switch one back on there to start counting again.";
-}
-
-// Open exactly the path to one question and put it in front of the reader. A board question: its project and row
-// open, its card unfolded. An assistant's question: the float open, that assistant's own Chat tab on screen. Both:
-// the turn that owns the question unfolded AND paged in (a question can live on a turn that is folded, or on a turn
-// the pager is not currently showing). Then, one landing step for both, the prompt centred, flashed and its control
-// focused. Returns false when the question can no longer be drawn — the caller steps on instead of opening a dead
-// agent.
-function humanShow(q) {
-  // A REVIEW ROW is the third kind: it has no turn, no card and no answer box, so it has its own landing path - the
-  // row opens, the amber marker, the report anchor and the next steps are brought into view, and ✓ Reviewed takes
-  // the caret so one more key clears it.
-  if (q.kind === "review") return humanShowReview(q);
-  // A COLLISION is the fourth kind: two trees, one decision. Its landing is the row whose pair it is, the collision
-  // card under it, and the first ruling press under the caret - the reader is being asked which side goes first, so
-  // that is the control the rotation should leave them on.
-  if (q.kind === "collision") return humanShowCollision(q);
-  if (q.dock) return humanShowDock(q);
-  const conv = conversations().find((c) => c.thread === q.thread);
-  if (!conv) return false;
-  const turn = conv.turns.find((t) => t.id === q.turnId);
-  if (!turn || !humanOpenOnTurn(turn, q.kind)) return false;
-  // The turn that owns the question, unfolded, un-frozen and paged in — one call, because the float draws its card
-  // with `conversationHtml` too and reads exactly this state: one idea of "this turn is the one".
-  wtTurnFold.reveal(state, q.thread, conv.turns, turn.id);
-  const assistant = assistantSessionFor(q.thread);
-  let card;
-  if (assistant) {
-    // An assistant's card is not on the board at all: it lives in the float, one session tab and one Chat pane per
-    // assistant. So the path there is open the float, put THIS assistant's Chat on screen, and let the float's own
-    // renderer draw the card from the fold state just written. A thread whose session record is missing has no pane
-    // to put on screen, and false here is what makes the rotation step on rather than flash a box nobody can see.
-    if (typeof window.__assistantShowThread !== "function" || !window.__assistantShowThread(q.thread)) return false;
-    renderConversation(q.thread);
-    card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
-  } else {
-    // The project and the row first: a card inside a closed row is not on the page at all, and after Collapse all
-    // the project is only open in state while its folder is still shut. hotOpenPath is HUMAN's own opener, so the
-    // rotation and the board cannot drift into two ideas of "open".
-    const row = hotRowFor(q.thread);
-    if (row) hotOpenPath(row);
-    if (state.collapsedJobs.has(q.thread)) state.collapsedJobs.delete(q.thread);
-    renderConversation(q.thread);
-    card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
-    if (!card) {
-      // An unattached card that no render has placed yet: #jobs is the panel's own renderer for that set.
-      renderJobs();
-      card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
-    }
-  }
-  if (!card) return false;
-  return humanLandOnQuestion(card, q);
-}
-
-// A ROW TO REVIEW, brought in front of the reader. The row opens (its project unfolded, the other projects folded -
-// hotOpenPath, the same opener the question path uses), then the result card is centred and flashed amber, and the
-// Reviewed control takes the caret so one more key clears the lane.
-//
-// Returns false when the row is no longer there or no longer awaiting: a row that was archived, deleted or reviewed
-// between the sample and the press is stepped over rather than opened onto nothing.
-function humanShowReview(q) {
-  const row = state.rows.get(q.rowKey);
-  if (!row || !wtReviewLane.awaiting(row)) return false;
-  hotOpenPath(row);
-  const key = q.rowKey;
-  // THE RESULT CARD IS A POPUP behind the row's result chip now, not a block in the detail: the chip is opened the
-  // same way the reader's own press opens it (so the remembered state and the card agree), and the card is what the
-  // rotation lands on. A row with no result chip at all is not one this path can land on.
-  if (typeof openRowChipPop === "function") {
-    setRowChipOpen("result", key, true);
-    if (typeof paintRowChipMarkers === "function") paintRowChipMarkers(key);
-    openRowChipPop("result", key);
-  }
-  let block = document.querySelector(`[data-review-block="${CSS.escape(key)}"]`);
-  if (!block) {
-    // The row was not in the document yet (a row opened by this press paints on the next frame): place the row's
-    // own answer now rather than leaving the rotation with nothing to point at.
-    renderProjectRows(row.project);
-    if (typeof openRowChipPop === "function") openRowChipPop("result", key);
-    block = document.querySelector(`[data-review-block="${CSS.escape(key)}"]`);
-  }
-  const target = block || document.querySelector(`[data-rowchip="result"][data-rowchip-key="${CSS.escape(key)}"]`) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
-  if (!target) return false;
-  programmaticScroll();
-  target.scrollIntoView({ block: "center", behavior: "smooth" });
-  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  target.classList.remove("human-flash");
-  void target.offsetWidth; // restart the ring on every hop, even while the last one is still fading
-  target.classList.add("human-flash");
-  clearTimeout(state.humanFlashTimer);
-  state.humanFlashTimer = setTimeout(() => {
-    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  }, 1900);
-  // THE CONTROL THE READER WOULD REACH FOR: ✓ Reviewed. The row's own button comes first in the document, so this is
-  // the one beside the amber marker; the card's copy is the same press and the same route.
-  const press = document.querySelector(`[data-review-done="${CSS.escape(key)}"]`);
-  if (press) {
-    try {
-      press.focus({ preventScroll: true });
-    } catch {
-      press.focus();
-    }
-  }
-  return true;
-}
-
-// A COLLISION, brought in front of the reader. Same landing rules as a review row - the project unfolded, the row
-// opened, the block centred and ringed - but the block is the pair's card and the caret goes to the FIRST RULING press,
-// because the question is "which side goes first" and the answer is one of those two buttons.
-//
-// The pair is carried by BOTH rows; the rotation entry names one of them (`rowKey`), and either is a valid landing, so
-// a row that vanished between the sample and the press is not a failed step if the other side is still there. If
-// neither row answers, false: the pair is gone and H steps on rather than flashing nothing.
-function humanShowCollision(q) {
-  const rec = q.collision || {};
-  const row = state.rows.get(q.rowKey);
-  const other = rec.other?.path ? state.rows.get(keyOf(rec.other.project || rec.project, rec.other.path)) : null;
-  const land = [row, other].find((r) => r && wtReviewLane.awaitingCollisions(r).some((c) => c.key === rec.key));
-  if (!land) return false;
-  hotOpenPath(land);
-  const key = keyOf(land.project, land.path);
-  // The pair card is a POPUP behind the row's collision diamond: open the one control the reader's own press opens,
-  // and land on the card it puts up (which lists every pair on that worktree).
-  if (typeof openRowChipPop === "function") {
-    setRowChipOpen("collision", key, true);
-    if (typeof paintRowChipMarkers === "function") paintRowChipMarkers(key);
-    openRowChipPop("collision", key);
-  }
-  const find = () =>
-    document.querySelector(`[data-collision-block="${CSS.escape(key)}"][data-collision-key="${CSS.escape(rec.key)}"]`);
-  let block = find();
-  if (!block) {
-    renderProjectRows(land.project);
-    if (typeof openRowChipPop === "function") openRowChipPop("collision", key);
-    block = find();
-  }
-  const target = block || document.querySelector(`[data-rowchip="collision"][data-rowchip-key="${CSS.escape(key)}"]`) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
-  if (!target) return false;
-  programmaticScroll();
-  target.scrollIntoView({ block: "center", behavior: "smooth" });
-  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  target.classList.remove("human-flash");
-  void target.offsetWidth;
-  target.classList.add("human-flash");
-  clearTimeout(state.humanFlashTimer);
-  state.humanFlashTimer = setTimeout(() => {
-    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  }, 1900);
-  const press = document.querySelector(`[data-collision-rule="${CSS.escape(rec.key)}"][data-collision-pick="a"]`);
-  if (press) {
-    try {
-      press.focus({ preventScroll: true });
-    } catch {
-      press.focus();
-    }
-  }
-  return true;
-}
-
-// The last step of every show path, board or float: find the box that carries the question on the card holding it,
-// and put it in front of the reader — centred, ringed, with the caret on the answer control. ONE implementation on
-// purpose: an assistant's card is drawn by the same renderer as a board card, and a second finder or a second
-// focus path would be a second idea of which box a question is.
-function humanLandOnQuestion(card, q) {
-  const turnEl = card.querySelector(`.turn[data-turn="${CSS.escape(q.turnId)}"]`);
-  const box = turnEl?.querySelector(q.kind === "question" ? ".turn-question" : ".turn-approval");
-  // The gate again, on the DOM this time: the box is drawn only while its turn is live and its carrier is open,
-  // and a question that closed between the sample and this paint has no box to show.
-  if (!box || box.classList.contains("is-expired")) return false;
-  // The card wears HUMAN's amber ring (state-held, so a repaint keeps it), and the prompt
-  // itself gets a red ring: this is a question, and the box is what the reader was brought here to read. ONE box
-  // carries it: a ring left on the previous prompt would say two questions are current, and every reader of the
-  // class (this page, the gate) counts exactly one.
-  flashHotCard(q.thread);
-  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  // The PROMPT, not the card: centring the card left the question under the fold, and the console above it is
-  // what the reader reads first. programmaticScroll keeps the panel's scroll-follow from reading this as the
-  // reader taking over. Inside the float this scrolls the float's own chat body and never the page, which is
-  // fixed under it.
-  programmaticScroll();
-  box.scrollIntoView({ block: "center", behavior: "smooth" });
-  box.classList.remove("human-flash");
-  void box.offsetWidth; // restart the ring on every hop, even while the last one is still fading
-  box.classList.add("human-flash");
-  clearTimeout(state.humanFlashTimer);
-  state.humanFlashTimer = setTimeout(() => {
-    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  }, 1900);
-  // The control the reader would reach for. A permission box gets its DENY focused on purpose: the panel answers
-  // approvals on pointerup, so a stray key cannot approve a command, and the fail-closed choice is the safe one
-  // to leave under the caret. A clarify question gets its first choice (or its typed box when it has none).
-  humanFocusNow(box, q.kind);
-  // A row that is opening (or a float being brought to the front) renders its detail a moment after the press, and
-  // that repaint replaces this box: the target is held for a beat and put back by the next render of this thread
-  // (humanRefocus, and the 250 ms humanTick that covers a float repaint) the same way the spawn's caret is. Scoped
-  // to this one thread and only while nothing else holds the caret.
-  state.humanFocus = { thread: q.thread, turnId: q.turnId, kind: q.kind, until: Date.now() + 1500 };
-  return true;
-}
-
-// Put the caret on a prompt's answer control, and say which one: the one place a permission box and a clarify box
-// agree on where the reader starts.
-function humanFocusNow(box, kind) {
-  const control =
-    kind === "question"
-      ? box.querySelector("input[data-qpick], button.tq-choice, textarea.tq-other, button.tq-send")
-      : box.querySelector('[data-choice="deny"]') || box.querySelector("[data-choice]");
-  if (!control) return false;
-  try {
-    control.focus({ preventScroll: true });
-  } catch {
-    control.focus();
-  }
-  return document.activeElement === control;
-}
-
-// After a repaint of the thread the rotation just landed on: put the red ring and the caret back, but never take
-// the caret from the reader (a click, a typed reply or another control all own it from that point).
-function humanRefocus(thread) {
-  const want = state.humanFocus;
-  if (!want || want.thread !== thread || Date.now() > want.until) return;
-  const box = document.querySelector(
-    `.job[data-thread="${CSS.escape(thread)}"] .turn[data-turn="${CSS.escape(want.turnId)}"] ${want.kind === "question" ? ".turn-question" : ".turn-approval"}`,
-  );
-  if (!box) return;
-  box.classList.add("human-flash");
-  if (!document.activeElement || document.activeElement === document.body) humanFocusNow(box, want.kind);
-}
-
-// …and the same put-back on a short clock, because a card can be redrawn by the ROW renderer too (opening a row,
-// a reorder, a project repaint), and none of those go through renderConversation. Scoped to the one prompt the
-// rotation last landed on and to the beat it asked for; the first pointerdown or keystroke ends it, so the page
-// never fights the reader for the caret.
-function humanTick() {
-  const want = state.humanFocus;
-  if (!want) return;
-  if (Date.now() > want.until) {
-    state.humanFocus = null;
-    return;
-  }
-  const box = document.querySelector(
-    `.job[data-thread="${CSS.escape(want.thread)}"] .turn[data-turn="${CSS.escape(want.turnId)}"] ${want.kind === "question" ? ".turn-question" : ".turn-approval"}`,
-  );
-  if (!box) return;
-  if (!box.classList.contains("human-flash")) box.classList.add("human-flash");
-  if (!document.activeElement || document.activeElement === document.body) humanFocusNow(box, want.kind);
-}
-setInterval(humanTick, 250);
-document.addEventListener("pointerdown", () => (state.humanFocus = null), { capture: true, passive: true });
-document.addEventListener("keydown", () => (state.humanFocus = null), { capture: true });
-
-// One of the dock's own permission cards: unfold the dock, then scroll and flash the card itself. The dock is
-// fixed, so scrollIntoView only moves its own list — which is exactly what the dock's own jump does.
-function humanShowDock(q) {
-  const dock = $("approvals");
-  if (!dock) return false;
-  state.humanFocus = null; // a dock card is not a thread: nothing to restore on a card's repaint
-  try {
-    localStorage.setItem(APPROVALS_FOLDED_KEY, "0");
-  } catch {
-    /* the unfurl still happens */
-  }
-  applyApprovalsFold(dock);
-  const sel =
-    q.kind === "write"
-      ? `.turn-approval[data-remote-write="${CSS.escape(q.id)}"]`
-      : `.approval[data-approval="${CSS.escape(q.id)}"]`;
-  const card = dock.querySelector(sel);
-  if (!card) return false;
-  card.scrollIntoView({ block: "center", behavior: "smooth" });
-  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  void card.offsetWidth;
-  card.classList.add("human-flash");
-  clearTimeout(state.humanFlashTimer);
-  state.humanFlashTimer = setTimeout(() => {
-    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
-  }, 1900);
-  const control = card.querySelector('[data-approval-choice="deny"]') || card.querySelector("[data-approval-choice]") || card.querySelector('[data-choice="deny"]') || card.querySelector("[data-choice]");
-  if (control) {
-    try {
-      control.focus({ preventScroll: true });
-    } catch {
-      control.focus();
-    }
-  }
-  return true;
-}
-
-// One press: the next open question, wrapping past the last one. The list is sampled here and NOT kept; only the
-// chosen key and its place are, so the next press knows where to continue from even if this question has gone.
-function humanStep() {
-  // EVERY KIND SWITCHED OFF: the button is quiet and the key is inert. Not a banner about an empty board - there may
-  // be plenty waiting, the reader has told this button not to look - and not an open either, which would be the panel
-  // doing the thing the switch said not to do.
-  if (!humanAnyKindOn()) {
-    state.human.key = null;
-    state.human.at = -1;
-    state.human.sig = "";
-    paintHumanButton();
-    return;
-  }
-  const list = humanQuestions();
-  const last = state.human.key;
-  if (!list.length) {
-    state.human.key = null;
-    state.human.at = -1;
-    state.human.sig = "";
-    paintHumanButton();
-    showBanner("Human: nothing is waiting on you — no permission or clarify question is open");
-    return;
-  }
-  // Where to look: after the question last shown; if that one has gone, the slot it held (the entry that took
-  // its place), or the first when it was the last of the list.
-  const at = last ? list.findIndex((q) => q.key === last) : -1;
-  const from = at >= 0 ? (at + 1) % list.length : last ? (state.human.at >= list.length ? 0 : Math.max(0, state.human.at)) : 0;
-  for (let n = 0; n < list.length; n++) {
-    const i = (from + n) % list.length;
-    if (!humanShow(list[i])) continue; // it closed between the sample and the paint: step on
-    state.human.key = list[i].key;
-    state.human.at = i;
-    state.human.sig = "";
-    paintHumanButton();
-    return;
-  }
-  state.human.key = null;
-  state.human.at = -1;
-  state.human.sig = "";
-  paintHumanButton();
-  showBanner("Human: those questions closed before I could open one — nothing is waiting on you now");
-}
-
-$("btn-human")?.addEventListener("click", (e) => {
-  e.stopPropagation();
-  humanStep();
-});
-
-// THE THREE SWITCHES (Settings > Human). Each writes its own key and repaints the button, so the count, the title and
-// the rotation move together - `humanQuestions` reads the same object, so nothing else needs a repaint to stay honest.
-for (const key of HUMAN_KIND_KEYS) {
-  const box = $(`human-kind-${key}`);
-  box?.addEventListener("change", (e) => setHumanKind(key, e.target.checked));
-}
-
-// H is the rotation's key, and a reader in ANY text field owns that keystroke: an `h` typed into a reply box, a
-// Settings search, an answer box or a contenteditable must not jump the page. Skipped, never swallowed.
-function humanTextEntry(el) {
-  if (!el) return false;
-  const tag = String(el.tagName || "").toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable) return true;
-  return Boolean(el.closest?.('[contenteditable]:not([contenteditable="false"])'));
-}
-
-document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key !== "h" && e.key !== "H") return;
-  if (e.repeat) return; // holding the key must not race through the whole rotation
-  if (humanTextEntry(document.activeElement)) return;
-  // EVERY KIND OFF: H is inert, not a key that answers with a banner about a board it is not reading. Left
-  // un-prevented, so the keystroke stays an ordinary keypress the page does nothing with.
-  if (!humanAnyKindOn()) return;
-  e.preventDefault();
-  humanStep();
-});
-
 // ---- the header's ACTIVE AGENTS marker ------------------------------------------------------------------------
 // One amber bolt that is DRAWN ONLY WHILE AN AGENT IS WORKING, and the press that lands on one. It is the other half
-// of the count beside it: the red Human badge is everything stopped until the reader answers, and this is everything
+// of the counts beside it: a permission or a clarify question is a run stopped until the reader answers, and this is
+// everything
 // burning right now. The evidence is the page's own job list - `state.jobs`, filled by the snapshot and every job
 // frame, the same records the cards draw - read through public/core/hot-mark.js, so the button's existence, its
 // count, its tooltip and the press cannot disagree about which agent is working.
@@ -14732,15 +14001,25 @@ document.addEventListener("keydown", (e) => {
 // NOT A LOCK, NOT A TURNOVER MARK, NOT A SECOND REVIEW MARK. The row's yellow lock is a tree the reader pinned, the
 // blue turnover mark is a branch relationship, the amber ▣ is a result to read; this is none of them - it is a
 // control in the header, and its amber is the panel's own (#d29922), not the lock's #ffb454. A turn parked on a
-// permission or a question is deliberately NOT active: that agent is waiting on the reader, and the red Human count
-// is where it is counted. One question never shows up in two places.
+// permission or a question is deliberately NOT active: that agent is waiting on the reader, and the header's
+// Permissions or Clarify count is where it is counted. One question never shows up in two places.
+// The name the reader knows an agent by: an assistant's own name, else the card's title, else the label, else the
+// thread id. The Active agents bolt lands on an agent the reader has to recognise by the name the board shows, and
+// `assistantSessionFor` is the one lookup that already knows that name.
+function agentNameOf(thread) {
+  const session = assistantSessionFor(thread);
+  if (session) return session.name || thread;
+  const job = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread);
+  return (job && (job.title || job.label)) || thread || "an agent";
+}
+
 function hotAgents() {
   // A board agent, not the panel's own assistant: an assistant's turn has no worktree row and no card on this board,
   // and the board's agents are who a button in the header is about (the same line the Hot Agent search draws).
   const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
   return wtHotMark.agents(convs).map((a) => ({
     ...a,
-    name: humanAgentName(a.thread),
+    name: agentNameOf(a.thread),
     // The tree it is working in, when the run was handed one: a run in a project's own checkout has no tree of its
     // own, and naming the checkout would claim a worktree that was never cut.
     where: baseNameOf(a.turn?.worktreePath || ""),
@@ -14770,7 +14049,7 @@ function paintHotButton() {
   // inert one. So the button comes and goes with the work and with that switch.
   btn.hidden = !wtActiveButton.show(list, on);
   const label = $("hot-label");
-  // The rotation counter keeps the shape Human's has (`🙋 Human 2/3`), and only while the press is inside the list.
+  // The rotation counter reads `⚡ Active 2/3`, and only while the press is inside the list.
   if (label) label.textContent = at >= 0 ? `⚡ Active ${at + 1}/${list.length}` : "⚡ Active";
   const badge = $("hot-badge");
   if (badge) {
@@ -14947,14 +14226,22 @@ document.addEventListener("keydown", (e) => {
   closeDeliverPop({ focus: true });
 });
 
-// D is the list's key. It copies HUMAN's guard exactly — no modifiers, no e.repeat (holding the key must not
-// race the toggle), and a caret in ANY text field owns the keystroke, so a `d` typed into a reply box, a
-// Settings search or an answer box never jumps the page.
+// Is the caret in something the reader is typing into? One guard for every bare-key shortcut on this page: a letter
+// typed into a reply box, a Settings search or an answer box must never jump the page.
+function textEntryFocused(el) {
+  if (!el) return false;
+  const tag = String(el.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable) return true;
+  return Boolean(el.closest?.('[contenteditable]:not([contenteditable="false"])'));
+}
+
+// D is the list's key: no modifiers, no e.repeat (holding the key must not race the toggle), and a caret in ANY
+// text field owns the keystroke.
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key !== "d" && e.key !== "D") return;
   if (e.repeat) return;
-  if (humanTextEntry(document.activeElement)) return;
+  if (textEntryFocused(document.activeElement)) return;
   e.preventDefault();
   toggleDeliverPop();
 });
@@ -20618,8 +19905,6 @@ if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
 if ($("follow-opened")) $("follow-opened").checked = foldFollowsConsole();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 if ($("prev-turn-mode")) $("prev-turn-mode").value = prevTurnMode();
-// Settings > Human: the three kinds the Human button counts, each defaulting on.
-paintHumanKinds();
 void refreshSubagentRoster();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.

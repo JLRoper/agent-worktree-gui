@@ -7,10 +7,11 @@
 //
 // THE BRIEF, and the section that proves each line:
 //
-//   1. THE FOUR CONTROLS, in order and in colour. Assistant search, the Hot Agent pen, Clarify, Human: the purple
-//      button is the fourth control, sitting between the pen and Human, and its colour is the header's violet rather
-//      than Human's grey. The three controls it sits between are unchanged (the pen still has its glyph and its own
-//      keys, Human still reads "Human").
+//   1. THE CONTROLS, in order and in colour. Assistant search, the Hot Agent pen, Clarify, Collisions: the purple
+//      button is the third, sitting between the pen and Collisions, and its colour is the header's violet rather than
+//      the grey the other controls use. The controls beside it are unchanged (the pen still has its glyph and its own
+//      keys, Collisions still reads "Collisions"), and the removed Human control is proved absent with its badge and
+//      its Settings tab.
 //   2. THE ROWS, by state. The store is seeded newest first with an unanswered question, an answered one and a
 //      CANCELED one. The unanswered row is in full colour, carries its marker and both choices, and names the agent,
 //      the tree and the assistant. The answered row is greyed, the answer the reader chose is its loudest element and
@@ -404,7 +405,7 @@ try {
     const control = async () =>
       page.evaluate(() => {
         const btn = document.getElementById("btn-clarify");
-        const human = document.getElementById("btn-human");
+        const collisions = document.getElementById("btn-collisions");
         const pen = document.getElementById("ha-search-open");
         const assistant = document.getElementById("btn-assistant");
         const pos = (a, b) => {
@@ -424,11 +425,10 @@ try {
           // The four controls of the brief, in the order the header draws them.
           order: {
             penBeforeClarify: pos(pen, btn),
-            clarifyBeforeHuman: pos(btn, human),
+            clarifyBeforeCollisions: pos(btn, collisions),
             assistantBeforePen: pos(assistant, pen),
           },
-          humanLabel: human ? human.textContent.trim() : null,
-          humanColor: human ? getComputedStyle(human).color : null,
+          humanGone: !document.getElementById("btn-human") && !document.getElementById("human-badge") && !document.getElementById("settings-tab-human"),
           penLabel: pen ? pen.getAttribute("aria-label") : null,
           penGlyph: Boolean(pen && pen.querySelector("svg.ha-search-glyph")),
           clarifyAria: btn ? { haspopup: btn.getAttribute("aria-haspopup"), expanded: btn.getAttribute("aria-expanded") } : null,
@@ -464,14 +464,14 @@ try {
     section("1. the control: fourth in the header, purple");
     const c = await control();
     ok("the Clarify control exists and app.js wired it", c.present && c.wired === "1", JSON.stringify({ present: c.present, wired: c.wired }));
-    is("the header's own order: assistant, pen, Clarify, Human", [c.order.assistantBeforePen, c.order.penBeforeClarify, c.order.clarifyBeforeHuman], ["before", "before", "before"]);
+    is("the header's own order: assistant, pen, Clarify, Collisions", [c.order.assistantBeforePen, c.order.penBeforeClarify, c.order.clarifyBeforeCollisions], ["before", "before", "before"]);
     is("the label reads Clarify", c.label, "Clarify");
     // While a question waits the button is HIGHLIGHTED, so its text is the light violet over the violet border; the
     // quiet state (zero waiting) is the button's own violet, and section 9 reads that one for itself.
     is("its colour is the header's light violet while a question waits", c.purple, "rgb(231, 214, 255)");
-    ok("its border is purple too, not the grey the other controls use", c.border === "rgb(163, 113, 247)" && c.border !== c.humanColor, JSON.stringify({ border: c.border, human: c.humanColor }));
+    ok("its border is purple too, not the grey the other controls use", c.border === "rgb(163, 113, 247)", JSON.stringify({ border: c.border }));
     is("the Hot Agent pen is untouched", { label: c.penLabel, glyph: c.penGlyph }, { label: "Hot Agent search (Ctrl+Shift+Q)", glyph: true });
-    ok("the Human button is untouched", String(c.humanLabel || "").startsWith("🙋 Human"), c.humanLabel);
+    ok("the Human control is gone, with its badge and its Settings tab", c.humanGone === true);
     is("it starts closed and says so", c.clarifyAria, { haspopup: "dialog", expanded: "false" });
 
     // 1b. THE COUNT ON THE BUTTON, while one question is waiting: the badge is on, it reads 1 (one ITEM, not one ask),

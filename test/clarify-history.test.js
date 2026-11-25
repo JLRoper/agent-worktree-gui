@@ -533,18 +533,19 @@ test("the route answers items, the item total, the attempt count and the outstan
   assert.equal(body.entries.length, 1, "the raw store page keeps its own shape");
 });
 
-// ---- the header count: one painting code, two buttons ------------------------------------------------------------
-// "the same notification counter the Human button carries, drawn by the same painting code" is a claim about two files
-// that no runtime test in this suite can see, so it is pinned at the source: the badge exists in the markup, the
-// painter exists once, and BOTH buttons call it. A future hand-rolled badge on either button fails here.
-test("the header markup carries the clarify badge, hidden at zero, and both buttons are painted by one function", () => {
+// ---- the header count: one painting code, every counting button -------------------------------------------------
+// "the same notification counter the other header controls carry, drawn by the same painting code" is a claim about
+// several files that no runtime test in this suite can see, so it is pinned at the source: the badge exists in the
+// markup, the painter exists once, and EVERY counting button calls it. A future hand-rolled badge fails here.
+test("the header markup carries the clarify badge, hidden at zero, and every counting button is painted by one function", () => {
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
   const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
   assert.match(html, /<span id="clarify-badge" hidden>0<\/span>/, "the badge is in the button and starts hidden");
-  assert.match(html, /<span id="human-badge" hidden>0<\/span>/, "beside the one it mirrors");
+  assert.equal(html.indexOf('id="human-badge"'), -1, "the Human badge this test was written against is gone");
   assert.equal((app.match(/function paintCountBadge\(/g) || []).length, 1, "one painter, not two");
-  assert.match(app, /function paintHumanButton\(\)[\s\S]*?paintCountBadge\(btn, badge, list\.length, "has-questions"\)/);
+  assert.match(app, /function paintCollisionsButton\(\)[\s\S]*?paintCountBadge\(btn, \$\("collisions-badge"\), n, "has-waiting"\)/);
+  assert.match(app, /function paintPermissionsButton\(\)[\s\S]*?paintCountBadge\(btn, \$\("permissions-badge"\), n, "has-waiting"\)/);
   assert.match(app, /function paintClarifyButton\(\)[\s\S]*?paintCountBadge\(btn, \$\("clarify-badge"\), n, "has-unanswered"\)/);
   // Zero is quiet on both: the painter hides the badge and clears the class, and the CSS keeps a hidden badge hidden
   // (`display: inline-block` on the badge would otherwise beat the [hidden] attribute it is drawn with).

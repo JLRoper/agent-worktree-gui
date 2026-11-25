@@ -53,17 +53,19 @@ test("the header carries one DELIVERABLES button, between HUMAN and Collapse all
   assert.match(tag, /title="[^"]*\bD\b[^"]*"/, "the title names the D key");
 
   const at = html.indexOf('id="btn-deliver"');
-  const human = html.indexOf('id="btn-human"');
+  const perms = html.indexOf('id="btn-permissions"');
   const collapse = html.indexOf('id="btn-collapse-all"');
-  assert.ok(human >= 0 && collapse >= 0, "the two neighbours this button sits between are still in the header");
-  assert.ok(human < at && at < collapse, "#btn-deliver sits after #btn-human and before #btn-collapse-all");
+  assert.ok(perms >= 0 && collapse >= 0, "the two neighbours this button sits between are still in the header");
+  assert.ok(perms < at && at < collapse, "#btn-deliver sits after #btn-permissions and before #btn-collapse-all");
+  assert.equal(html.indexOf('id="btn-human"'), -1, "the Human control that used to sit before it is gone");
   assert.equal(html.split('id="btn-deliver"').length - 1, 1, "exactly one DELIVERABLES button");
 });
 
 test("D opens and closes the list, and a d typed into a field stays in the field", () => {
   const src = `${block()}\n${wiring()}`;
-  // The HUMAN precedent, both halves: the bare letter and the two guards (M13, N10).
-  assert.match(src, /humanTextEntry\(document\.activeElement\)/, "a caret in any field owns the keystroke");
+  // The bare-key precedent, both halves: the letter and the two guards (M13, N10). The guard is the page's one
+  // text-entry test, shared with every other bare key.
+  assert.match(src, /textEntryFocused\(document\.activeElement\)/, "a caret in any field owns the keystroke");
   assert.match(src, /e\.repeat/, "holding the key must not race the toggle");
   assert.match(src, /if \(e\.key !== "d" && e\.key !== "D"\) return;/, "bare d/D only");
   assert.match(src, /toggleDeliverPop\(\)/, "the key toggles the list");
@@ -86,7 +88,7 @@ test("a row shows every deliverable with its age, its agent and its project", ()
 
 test("the row opens the agent by JOB ID, never by the turn counter (M7)", () => {
   const src = block();
-  // humanShow looks a turn up as `t.id === q.turnId`; each turn's id IS the job id. `turn` is
+  // The page's landing paths look a turn up as `t.id === <the turn's id>`; each turn's id IS the job id. `turn` is
   // `siblings.length + 1` and moves backwards when old jobs are trimmed, so it cannot address a turn.
   assert.match(src, /t\.id === .*jobId/, "the turn is found by job id");
   assert.doesNotMatch(src, /turnOpen\.set\(\s*(?:entry|e|it)\.turn\b/, "never page a turn in by the counter");

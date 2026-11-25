@@ -5,7 +5,7 @@
 // WHAT THIS IS. docs/reviews-lane.md puts a delivery on the row its run closed in, an amber marker beside the reader's
 // lock and the turnover mark, a result card under the row (one-line summary, the report as a REAL anchor through the
 // panel's own open-file route, the next steps as chips), a header count that filters the table, and a third kind in
-// the Human rotation. This gate boots a throwaway panel (tools/panel-testkit.mjs, the real server.js and the real
+// the one header count of them. This gate boots a throwaway panel (tools/panel-testkit.mjs, the real server.js and the real
 // public/) over a real git fixture with three worktrees, seeds the deliveries through the REAL settle seam
 // (`Jobs.harvestReview` -> lib/review-inbox.js), and drives the page in headless Chromium at 1440x900.
 //
@@ -18,8 +18,9 @@
 //   5. the result card is drawn by the PANEL from the stored delivery, for a run nobody has touched: summary, the
 //      report as an anchor carrying the TREE as its base, and the next steps as chips
 //   6. the anchor goes through the existing route: one POST /api/open-file with the report path and the tree
-//   7. H steps into a review row as a THIRD kind, after permissions and questions: the row opens, the card is
-//      centred and flashed, and ✓ Reviewed takes focus - one more key clears it
+//   7. the Review control is the header's ONE count of these rows: the badge counts them, its title says so and
+//      promises no key, its press filters the table to exactly those rows, H does nothing, and ✓ Reviewed on the
+//      row drops the count in the same frame
 //   8. a bulk mark-all-reviewed clears the rest in one press, and the count is honest again
 //   9. an unanswered card costs nothing: the row stays amber and counted across a reload, with no run involved
 //  10. a delivery with no report path and no next steps still records cleanly and draws a card that says so
@@ -149,6 +150,10 @@ try {
   const result = await withBrowser(async ({ page }) => {
     const out = {};
     const posts = [];
+    // A handler that throws does not fail a Playwright click by itself: the page's own errors are collected so the
+    // H press below can be judged on "nothing was raised" rather than on the absence of a visible change.
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(String(e && e.message ? e.message : e)));
     page.on("request", (r) => {
       if (r.method() === "POST" && r.url().includes("/api/open-file")) {
         try {
@@ -168,23 +173,36 @@ try {
       return group && group.classList.contains("collapsed") ? group.dataset.root : null;
     });
     if (rootToggle) await page.click(`[data-toggle-root="${rootToggle.replace(/"/g, '\\"')}"]`);
-    const scanned = await page.evaluate(async () => {
-      const r = await fetch("/api/state");
-      const snap = await r.json();
-      const p = (snap.projects || []).find((x) => x.name === "lane-proj");
-      return { projects: (snap.projects || []).map((x) => x.name), trees: (p?.worktrees || []).map((t) => t.path), reviews: (p?.worktrees || []).filter((t) => t.review).length };
-    });
-    ok("the scan found the fixture's project with its checkout and three worktrees", scanned.trees.length === 4, `${scanned.projects.join(",")} -> ${scanned.trees.length} rows`);
-    eq("…and the snapshot carries a review record on exactly the two deliveries", scanned.reviews, 2, JSON.stringify(scanned.trees));
-    const storeKeys = await (await fetch(`${panel.base}/api/review`)).json();
-    console.log(`      store ${storeKeys.total} entries: ${(storeKeys.entries || []).map((e) => `${e.key}${e.awaiting ? "" : " (done)"}`).join(" | ")}`);
-    console.log(`      rows: ${scanned.trees.join(" | ")}`);
     await page.click('[data-toggle-project="lane-proj"]');
     await page.waitForFunction(() => document.querySelectorAll("tr.row[data-key]").length >= 4, null, { timeout: 45_000 });
     await page.waitForFunction(() => document.getElementById("review-badge") && !document.getElementById("review-badge").hidden, null, { timeout: 20_000 });
+    // The board's own rows carry the review record the panel attached (server.js `withReviews`); the raw
+    // projects[].worktrees[] list is discovery, and never carried it. Read after the rows are on the page, because a
+    // scan that has not finished yet is an empty board rather than a missing record.
+    await page.waitForFunction(() => [...state.rows.values()].filter((row) => row.review && row.review.summary).length === 2, null, { timeout: 30_000 });
+    const scanned = await page.evaluate(() => {
+      const rows = [...state.rows.values()].filter((row) => row.project === "lane-proj");
+      return { projects: [...state.projects.keys()], trees: rows.map((row) => row.path), reviews: rows.filter((row) => row.review && row.review.summary).length };
+    });
+    ok("the board carries the fixture's checkout and its three worktrees", scanned.trees.length >= 4, `${scanned.projects.join(",")} -> ${scanned.trees.length} rows`);
+    eq("…and two rows carry a review record", scanned.reviews, 2, JSON.stringify(scanned.trees));
+    const storeKeys = await (await fetch(`${panel.base}/api/review`)).json();
+    console.log(`      store ${storeKeys.total} entries: ${(storeKeys.entries || []).map((e) => `${e.key}${e.awaiting ? "" : " (done)"}`).join(" | ")}`);
+    console.log(`      rows: ${scanned.trees.join(" | ")}`);
 
     const keyOfTree = (t) => `lane-proj::${t}`;
     const rowSel = (t) => `tr.row[data-key="${keyOfTree(t)}"]`;
+    // THE CARD IS A POPUP behind the row's result chip (public/board-scaffold.js `openRowChipPop`), so a reader opens it
+    // with that press: the row first (the chip is only drawn on a drawn row), then the chip. One helper for every open
+    // below, so a card that is already up is not toggled shut.
+    const openCard = async (key) => {
+      if (!(await page.evaluate((k) => Boolean(document.querySelector(`[data-review-block="${k}"]`)), key))) {
+        if ((await page.locator(`[data-rowchip="result"][data-rowchip-key="${key}"]`).count()) === 0) await page.click(rowSelKey(key));
+        await page.waitForSelector(`[data-rowchip="result"][data-rowchip-key="${key}"]`, { timeout: 10_000 });
+        await page.click(`[data-rowchip="result"][data-rowchip-key="${key}"]`);
+      }
+      await page.waitForSelector(`[data-review-block="${key}"]`, { timeout: 10_000 });
+    };
 
     // ---- 1. the header control ---------------------------------------------------------------------------
     const head = await page.evaluate(() => {
@@ -262,8 +280,7 @@ try {
     // ---- 4. the result card, drawn by the panel from the store -------------------------------------------
     // Open the delivery that named a report (the older one) the way a reader does: click its row.
     const withReport = (out.markedRows.find((r) => /await-one/i.test(r.key)) || out.markedRows[0]).key;
-    await page.click(rowSelKey(withReport));
-    await page.waitForSelector(`[data-review-block="${withReport}"]`, { timeout: 10_000 });
+    await openCard(withReport);
     const card = await page.evaluate((key) => {
       const block = document.querySelector(`[data-review-block="${key}"]`);
       if (!block) return null;
@@ -292,8 +309,7 @@ try {
 
     // A delivery with no report and no next steps still says so, in a sentence.
     const twoKey = out.markedRows.map((r) => r.key).find((k) => k.includes("await-two"));
-    await page.click(rowSelKey(twoKey));
-    await page.waitForSelector(`[data-review-block="${twoKey}"]`, { timeout: 10_000 });
+    await openCard(twoKey);
     const bare = await page.evaluate((key) => {
       const block = document.querySelector(`[data-review-block="${key}"]`);
       return { anchor: (block?.querySelector(".review-anchor")?.textContent || "").trim(), chips: block?.querySelectorAll(".review-chip").length, none: (block?.textContent || "").includes("no next steps were named") };
@@ -304,7 +320,7 @@ try {
     // ---- 5. the anchor goes through the existing route ---------------------------------------------------
     // A click TOGGLES the row, so open it only if the card is not already there: pressing twice would shut it.
     const stillOpen = await page.evaluate((k) => Boolean(document.querySelector(`[data-review-block="${k}"] [data-open-file]`)), withReport);
-    if (!stillOpen) await page.click(rowSelKey(withReport));
+    if (!stillOpen) await openCard(withReport);
     await page.waitForSelector(`[data-review-block="${withReport}"] [data-open-file]`, { timeout: 5_000 });
     const answered = page.waitForResponse((r) => r.url().includes("/api/open-file") && r.request().method() === "POST", { timeout: 10_000 });
     await page.click(`[data-review-block="${withReport}"] [data-open-file]`);
@@ -316,53 +332,65 @@ try {
     eq("…exactly the base the card carried", sent.base, card.base);
     console.log(`      NOTE  the open route handed the report to this machine's browser - the route under test, not a stub`);
 
-    // ---- 6. H steps into the oldest review row, after permissions and questions ---------------------------
-    await page.click(rowSelKey(withReport)); // fold it again: H must open it itself
+    // ---- 6. the Review control is the header's one count, and its press is the filter ---------------------
+    // The Human button and its H step-through are gone: this control is where a reader sees how many results are
+    // waiting, and its own press is what narrows the table to exactly them.
+    await page.click(rowSelKey(withReport)); // fold the row again: the filter has to show it, not this press
     await page.waitForSelector(`[data-review-block="${withReport}"]`, { state: "detached", timeout: 5_000 }).catch(() => {});
-    await page.evaluate(() => document.activeElement?.blur?.());
-    const title = await page.evaluate(() => document.getElementById("btn-human")?.title || "");
-    ok("the Human title counts the lane as a third kind", /0 permissions, 0 clarify questions, 2 to review/.test(title), title.slice(0, 90));
-    const humanBadge = await page.evaluate(() => ({ text: document.getElementById("human-badge")?.textContent, hidden: document.getElementById("human-badge")?.hidden }));
-    eq("…and the Human badge's total includes them", { text: humanBadge.text, hidden: humanBadge.hidden }, { text: "2", hidden: false });
-    await page.keyboard.press("h");
-    await page.waitForSelector(`[data-review-block="${withReport}"]`, { timeout: 10_000 });
-    const landed = await page.evaluate(() => {
-      const active = document.activeElement;
-      const flashed = document.querySelector(".human-flash");
-      return {
-        focusAttr: active?.getAttribute?.("data-review-done") || null,
-        focusTag: active?.tagName || null,
-        flashed: flashed ? flashed.getAttribute("data-review-block") || flashed.className : null,
-        humanLabel: (document.getElementById("human-label")?.textContent || "").trim(),
-      };
-    });
-    ok("H puts the caret on ✓ Reviewed, so one more key clears the row", Boolean(landed.focusAttr), `${landed.focusTag} ${landed.focusAttr}`);
-    eq("…on the OLDEST delivery, which is the row H stepped into", landed.focusAttr, withReport);
-    ok("…and the card it belongs to is the one flashed in view", Boolean(landed.flashed), String(landed.flashed));
-    ok("…and the rotation says where it is", /Human 1\/2/.test(landed.humanLabel), landed.humanLabel);
-    const humanShot = path.join(SHOT_DIR, "review-lane-human.png");
-    await page.screenshot({ path: humanShot });
-    console.log(`SHOT  ${humanShot}`);
+    const chip = await page.evaluate(() => ({
+      text: document.getElementById("review-badge")?.textContent,
+      hidden: document.getElementById("review-badge")?.hidden,
+      title: document.getElementById("btn-review")?.title || "",
+      pressed: document.getElementById("btn-review")?.getAttribute("aria-pressed"),
+      human: Boolean(document.getElementById("btn-human") || document.getElementById("human-badge") || document.getElementById("settings-tab-human")),
+    }));
+    eq("the count includes both deliveries", { text: chip.text, hidden: chip.hidden }, { text: "2", hidden: false });
+    ok("…and the control says it is the header's one count of results to read", /one count of results to read/i.test(chip.title), chip.title.slice(0, 140));
+    ok("…and promises no key: the H rotation is gone", !/Press H|press H|H steps/.test(chip.title));
+    ok("…and the removed Human control is not on the page", chip.human === false);
+    eq("…and it is filtering, which section 3 turned on with its own press", chip.pressed, "true");
 
-    // One more key: Enter on the focused button clears THAT row.
-    await page.keyboard.press("Enter");
+    // One press shows everything again, and the next narrows it back to exactly the rows the count counted.
+    await page.click("#btn-review");
+    await page.waitForFunction((n) => document.getElementById("btn-review")?.getAttribute("aria-pressed") === "false" && document.querySelectorAll("tr.row[data-key]").length === n, out.allRows.length, { timeout: 10_000 });
+    ok("its press shows every row again", true, `${out.allRows.length} rows`);
+    await page.click("#btn-review");
+    await page.waitForFunction(() => document.getElementById("btn-review")?.getAttribute("aria-pressed") === "true", null, { timeout: 10_000 });
+    const narrowed = await page.evaluate(() => ({
+      rows: document.querySelectorAll("tr.row[data-key]").length,
+      marks: document.querySelectorAll("tr.row .review-mark").length,
+    }));
+    eq("the press filters the table to exactly the rows it counted", narrowed, { rows: 2, marks: 2 });
+    const filterShot = path.join(SHOT_DIR, "review-lane-filter.png");
+    await page.screenshot({ path: filterShot });
+    console.log(`SHOT  ${filterShot}`);
+
+    // H is not a shortcut any more: the key is not claimed, nothing opens, and the page raises nothing for it.
+    const beforeH = await page.evaluate(() => ({
+      rows: document.querySelectorAll("tr.row[data-key]").length,
+      pops: document.querySelectorAll(".rowchip-pop").length,
+    }));
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await page.keyboard.press("h");
+    await page.waitForTimeout(250);
+    const afterH = await page.evaluate(() => ({
+      rows: document.querySelectorAll("tr.row[data-key]").length,
+      pops: document.querySelectorAll(".rowchip-pop").length,
+      flash: document.querySelectorAll(".human-flash, .hot-flash").length,
+    }));
+    eq("H does nothing: the table is unchanged and nothing was opened", afterH, { ...beforeH, flash: 0 });
+    ok("…and the page raised no error for it", pageErrors.length === 0, pageErrors.join(" | "));
+
+    // One press on the row's own ✓ Reviewed clears THAT row, and the count follows in the same frame.
+    await page.click(`[data-review-done="${withReport}"]`);
     await page.waitForFunction(() => (document.getElementById("review-badge")?.textContent || "") === "1", null, { timeout: 10_000 });
     const afterOne = await page.evaluate(() => ({
       count: document.getElementById("review-badge")?.textContent,
       marks: document.querySelectorAll("tr.row .review-mark").length,
-      humanTitle: document.getElementById("btn-human")?.title || "",
+      rows: document.querySelectorAll("tr.row[data-key]").length,
     }));
-    eq("Enter on the focused Reviewed clears the row", { count: afterOne.count, marks: afterOne.marks }, { count: "1", marks: 1 });
-    ok("…and the Human title drops it", /1 to review/.test(afterOne.humanTitle), afterOne.humanTitle.slice(0, 90));
-    const why = await page.evaluate(() => ({
-      list: (typeof humanQuestions === "function" ? humanQuestions() : []).map((q) => q.kind),
-      sig: window.state?.human?.sig,
-      aria: document.getElementById("btn-human")?.getAttribute("aria-label"),
-      title: (document.getElementById("btn-human")?.title || "").slice(0, 60),
-      badge: document.getElementById("human-badge")?.hidden,
-      n: document.getElementById("human-badge")?.textContent,
-    }));
-    console.log(`      human now: ${JSON.stringify(why)}`);
+    eq("✓ Reviewed on the row clears it and the count drops", { count: afterOne.count, marks: afterOne.marks }, { count: "1", marks: 1 });
+    eq("…and the filter is still on, so the table now shows the one row", afterOne.rows, 1);
 
     // ---- 7. the bulk press -------------------------------------------------------------------------------
     await page.click("#btn-review-all");
@@ -370,26 +398,23 @@ try {
     const afterAll = await page.evaluate(() => ({
       marks: document.querySelectorAll("tr.row .review-mark").length,
       pressed: document.querySelectorAll("tr.row [data-review-done]").length,
-      human: document.getElementById("btn-human")?.title || "",
-      humanBadge: document.getElementById("human-badge")?.hidden,
       rows: document.querySelectorAll("tr.row[data-key]").length,
     }));
     eq("mark all reviewed clears every row at once", { marks: afterAll.marks, pressed: afterAll.pressed }, { marks: 0, pressed: 0 });
-    ok("…leaves the Human rotation with nothing of the lane", /nothing is waiting on you/.test(afterAll.human) && afterAll.humanBadge === true, afterAll.human.slice(0, 80));
     eq("…and the filtered table is empty because nothing is awaiting", afterAll.rows, 0);
 
-    // Filter off: the whole board comes back, with the reviewed rows still there and their cards readable.
+    // Filter off: the whole board comes back, with the reviewed rows still there and their cards readable. A press
+    // outside an open card is the reader leaving it (public/board-scaffold.js), so the card is closed with Escape
+    // first: otherwise this press is spent on the card and the filter never toggles.
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelectorAll(".rowchip-pop").length === 0, null, { timeout: 10_000 }).catch(() => {});
     await page.click("#btn-review");
-    await page.waitForFunction((n) => document.querySelectorAll("tr.row[data-key]").length === n, out.allRows.length, { timeout: 10_000 });
+    await page.waitForFunction(() => document.getElementById("btn-review")?.getAttribute("aria-pressed") === "false", null, { timeout: 10_000 });
+    const backRows = await page.evaluate(() => [...document.querySelectorAll("tr.row[data-key]")].map((tr) => tr.dataset.key));
+    ok("the whole board comes back, and the reviewed row is still on it", backRows.length > markedRows.length && backRows.includes(withReport), `${backRows.length} rows`);
     // The rebuild replaced the tbody under the pointer, so the first click can land on nothing: open, and if the card
     // did not appear, press once more. The row is a toggle, so a retry can only ever mean "open it".
-    await page.click(rowSelKey(withReport));
-    await page
-      .waitForSelector(`[data-review-block="${withReport}"]`, { timeout: 3_000 })
-      .catch(async () => {
-        await page.click(rowSelKey(withReport));
-        await page.waitForSelector(`[data-review-block="${withReport}"]`, { timeout: 10_000 });
-      });
+    await openCard(withReport);
     const reviewedCard = await page.evaluate((key) => {
       const block = document.querySelector(`[data-review-block="${key}"]`);
       return {
@@ -409,7 +434,6 @@ try {
     const reloaded = await page.evaluate(() => ({
       badgeHidden: document.getElementById("review-badge")?.hidden,
       marks: document.querySelectorAll("tr.row .review-mark").length,
-      humanBadge: document.getElementById("human-badge")?.hidden,
     }));
     ok("after a reload nothing is awaiting: the stamp is on disk, not in the page", reloaded.badgeHidden === true && reloaded.marks === 0, JSON.stringify(reloaded));
     const finalShot = path.join(SHOT_DIR, "review-lane-after.png");
