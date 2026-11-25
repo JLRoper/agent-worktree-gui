@@ -935,10 +935,18 @@ let snapshotRefreshTimer = null;
 // a reader on 7331 through a restart. Three seconds is the compromise the page can live with: the stream still pushes
 // every write's frame the moment it happens, and this timer only decides how often the POLL's copy is rebuilt.
 const SNAPSHOT_REFRESH_FLOOR_MS = 3000;
+// ...and a longer one while a full pass is walking the fleet. That window is the one the reader actually feels: 40 deep
+// scans land in the first minutes after a restart, and the page is being handed a board and treelist frame per scan the
+// whole time, so the copy the POLL rebuilds is the least valuable work on the loop. Ten seconds there costs nothing a
+// reader can see and leaves the loop to the scans; three seconds everywhere else keeps an idle board current.
+const SNAPSHOT_REFRESH_FLOOR_PASS_MS = 10000;
 let snapshotRefreshLastAt = 0;
+function snapshotRefreshFloor() {
+  return String(currentActivity() || "").startsWith("full scan") ? SNAPSHOT_REFRESH_FLOOR_PASS_MS : SNAPSHOT_REFRESH_FLOOR_MS;
+}
 function scheduleSnapshotRefresh() {
   if (snapshotRefreshTimer) return;
-  const wait = Math.max(25, SNAPSHOT_REFRESH_FLOOR_MS - (Date.now() - snapshotRefreshLastAt));
+  const wait = Math.max(25, snapshotRefreshFloor() - (Date.now() - snapshotRefreshLastAt));
   snapshotRefreshTimer = setTimeout(() => {
     snapshotRefreshTimer = null;
     // One build at a time: a chunked build still in flight means the next tick would queue behind it, not shorten it.
