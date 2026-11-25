@@ -1761,7 +1761,16 @@
     const body = chatBody();
     if (!body) return;
     if (!force && !chatPinned) return;
+    // The transcript's own record of where the reader is wins over the pane's flag. A corner gesture that has just
+    // ended left this transcript short of its foot on purpose (public/app.js endOutGrip records it), and a pin here
+    // scrolls the box back by the drag's travel - measured, a state poll landing under the hand cost 35.7px of corner
+    // at the release, through the frame this schedules. Following resumes on the reader's own scroll to the foot.
+    if (!force && body._atBottom === false) return;
+    // And a gesture that is STILL live owns the offset: no write now, and no frame scheduled for later either.
+    if (typeof cardBodyHeld === "function" && cardBodyHeld(body)) return;
     const toFoot = () => {
+      // The gesture may have started between the schedule and this frame: it still owns the offset then.
+      if (typeof cardBodyHeld === "function" && cardBodyHeld(body)) return;
       // Through `setScroll` (public/board/console.js), so the box remembers where the panel put it: the card's own
       // pin (`stickCardBodySoon`) reads that record to tell the reader's scroll from the panel's, and a write it
       // cannot attribute is a write that can unpin a pane the reader never touched.
@@ -2304,7 +2313,24 @@
     const rev = taskIndexRev();
     const card = host.querySelector(`.job[data-thread="${CSS.escape(conv.thread)}"]`);
     if (card && card.dataset.sig === sig && card.dataset.taskrev === rev) {
+      // The card's head is above the console, and repainting it in place moves the top edge a corner drag froze
+      // (measured: 24.3px of corner lost to a poll landing under the hand). The release draws it.
+      if (globalThis.outGripHoldsCard?.(host)) {
+        globalThis.outGripDefer?.(() => renderAssistantChat(id));
+        return;
+      }
       paintCardMeta(card, conv);
+      return;
+    }
+    // A REBUILD HERE REPLACES THE NODE THE READER IS HOLDING. `host.innerHTML = conversationHtml(conv)` below builds a
+    // new card, and a new console with it: a corner gesture that was live is left holding a node that is gone - a dead
+    // grip, and (because the gesture record outlives it) every board rebuild deferring to a gesture nobody can end. The
+    // board's own rebuild asks this question before it replaces a card (public/render-jobs.js renderConversation,
+    // `outGripHoldsCard`); this path did not, and a repaint landing with the hand down cost the whole drag (measured:
+    // 36px written, the card rebuilt, the new box back on its stored height, the corner 36px off the hand). The
+    // release runs the paint this refused to.
+    if (globalThis.outGripHoldsCard?.(host)) {
+      globalThis.outGripDefer?.(() => renderAssistantChat(id));
       return;
     }
     const prevScrolls = captureScrolls(host);
@@ -2313,7 +2339,12 @@
     // The card body is the float's only scroller, and captureScrolls only knows the consoles: keep its
     // position too, or a repaint mid-read drops the transcript back to its first turn.
     const prevTop = chatBody()?.scrollTop ?? 0;
-    const wasPinned = chatPinned;
+    // WHETHER THE REBUILT CARD FOLLOWS, read from the transcript's own record rather than the pane's flag alone: a
+    // corner gesture that just ended recorded `_atBottom = false` on the body it resized (the drag left the transcript
+    // short of its foot), and a rebuild that pins to the foot anyway scrolls the box back by the drag's travel - the
+    // release wrote nothing, and the repaint undid it. A repaint whose deferred flush lands right after a drag is
+    // exactly that case.
+    const wasPinned = chatPinned && chatBody()?._atBottom !== false;
     const pageY = window.scrollY;
     host.innerHTML = conversationHtml(conv);
     const fresh = host.firstElementChild;

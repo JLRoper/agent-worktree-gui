@@ -1085,6 +1085,14 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   }
   const sig = conversationSignature(conv);
   if (el.dataset.sig === sig) {
+    // A card the corner gesture is holding is not repainted IN PLACE either: its head sits above the console, and a
+    // chip that rewraps, a stats row that gains a digit or an artifact button that appears moves the top edge the drag
+    // froze by its own height (measured: 24.3px of corner lost to a state poll landing under the hand). The release
+    // draws what this refused to.
+    if (globalThis.outGripHoldsCard?.(el)) {
+      globalThis.outGripDefer?.();
+      return;
+    }
     paintCardMeta(el, conv);
     return;
   }

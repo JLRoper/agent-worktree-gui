@@ -10547,21 +10547,29 @@ for (const type of ["gesturestart", "gesturechange"]) {
 // grip already has) plus a gesture that owns the number:
 //
 //   - the box's TOP edge is read ONCE, at the press, and the height of every move is the pointer expressed from that
-//     edge. The top is the one edge of this box no other loop may move while the pointer is down: the PAGE's tail
-//     pin is stood down for the length of the gesture (public/board/console.js cardBodyHeld), because it jumps the
-//     transcript to its foot and the foot cancels every pixel the drag writes. An arithmetic that grew "the drawn
-//     height plus this move's travel" is what let that pin cancel a drag silently: measured on the third recurrence,
-//     40 steps of 3px grew the box's height by 120px and moved its top by -120px, so the grip's bottom edge did not
-//     move at all. The BROWSER's scroll anchor is NOT stood down - it holds the reader's place when a row lands
-//     above, and the gate's "above" case measures the 86.25px of drift that comes of disabling it;
+//     edge. The top is the one edge of this box no other loop may move while the pointer is down, and there are two
+//     loops to stand down rather than one: the PAGE's tail pin (public/board/console.js cardBodyHeld, the chat pane's
+//     own pinChatToBottom, and the card's pin on a rebuild) and the BROWSER's scroll anchor (at the foot its
+//     compensation for a taller box is a scrollTop write of exactly the height the drag added - measured on the live
+//     panel, the corner stood still for a 60px drag at 1600 and followed at 820, and the anchor's choice of node was
+//     the difference). What remains is the SCROLLPORT's own clamp, and it is not a defect the gesture can talk away: a
+//     transcript on its foot has no offset room to give a SHRINK, so the box stops following below the height the
+//     press found and shrinks from its top instead. Buying that room was measured both ways and refused - a pad at the
+//     end of the transcript lifted the composer 120px off the pane's bottom, and a margin under the console carried
+//     the grip out of the transcript's own viewport at 400px. The floor is the transcript's, and the gate judges it as
+//     a floor rather than as a lost corner;
 //   - it writes an explicit pixel height through `setOutHeight` (the ONE writer of `--out-h`), with the sheet's cap
 //     lifted off it for the length of the gesture;
 //   - the min/max clamps are applied ONCE, on release. A clamp applied mid-gesture is a box that stops while the
-//     pointer keeps going, which is the jump in its other form;
+//     pointer keeps going, which is the jump in its other form. The floor of the gesture is the console's own padding
+//     box (measured: `--out-h: 1px` drew 18px), so the number the drag stops on is one the box can actually draw;
 //   - while it runs, the repaint paths leave that console alone (`outDragging` / `outGripHoldsCard`): no re-pin, no
 //     text rebuild, no node replacement, so the corner is under the pointer for every pixel of the travel;
-//   - the release puts a transcript that was following its foot back on it, once: the drag moved the box's bottom,
-//     and a resize the reader asked for must not take the stream's follow away with it.
+//   - the release does NOT put a following transcript back on its foot. The drag moved the box's bottom by the
+//     pointer's travel, and a foot write is a scroll write of exactly that travel: it is what undid every drag that
+//     ever worked (measured: 60px down, the corner 60px below the hand at the release; 120px up, the box back on the
+//     pixel it started from). The release records the truth instead (noteCardBodyScroll), so the transcript stops
+//     following until the reader is back on its foot.
 //
 // The clamps read at release are the sheet's own `min-height`, and the ROOM the box has under its top edge in the
 // viewport. The room rather than the sheet's `max-height`, because the cap is what a console sits on when nobody has
@@ -10602,9 +10610,12 @@ function outGripLive() {
 }
 
 // A repaint path that found the gesture in its way says so here, and the release draws it once, after the height the
-// reader chose has been recorded - so the flush cannot re-clamp what they set.
-function outGripDefer() {
-  if (outGripDrag) outGripDrag.deferred = true;
+// reader chose has been recorded - so the flush cannot re-clamp what they set. A caller with its own paint to run (the
+// assistant's chat card, which is not the board's renderAll) hands that paint over as `flush`.
+function outGripDefer(flush) {
+  if (!outGripDrag) return;
+  outGripDrag.deferred = true;
+  if (typeof flush === "function") outGripDrag.flush = flush;
 }
 
 // The grip's own press. Delegated from the document because the console node is replaced by ordinary repaints, and a
@@ -10621,10 +10632,15 @@ document.addEventListener(
     const r = out.getBoundingClientRect();
     const cs = getComputedStyle(out);
     // The transcript this console is drawn in, when it IS a scrollport (the docked Chat pane, a maximized card):
-    // its pin is what the gesture stands down, and its foot is what the release puts back. A body the sheet does
-    // not scroll (a row's card on the board) is never touched.
+    // its pin is what the gesture stands down. A body the sheet does not scroll (a row's card on the board) is never
+    // touched, because nothing there can clamp the box's top edge.
     const bodyEl = out.closest(".job-body");
     const scrollport = bodyEl && (bodyEl.closest(".job.maximized") || bodyEl.closest('[data-subpane="chat"]')) ? bodyEl : null;
+    // THE FLOOR THE BOX HAS WHATEVER THE SHEET SAYS. A `height` below the console's own padding and border is not a
+    // drawable height: the used height becomes the padding box (measured: `--out-h: 1px` drew 18px, 8px of padding
+    // top and bottom plus the two borders), so a drag that "reached" 1px was a store of 1 and a box of 18 - the number
+    // the gesture wrote, the store kept and the next restore put back was not the box on screen. The floor is the
+    // larger of the sheet's `min-height` and that padding box.
     outGripDrag = {
       out,
       grip,
@@ -10641,15 +10657,25 @@ document.addEventListener(
       moved: false,
       // The sheet's own clamps, read BEFORE the gesture lifts the cap, and the inline style as it was, so a press that
       // moves nothing can put the box back exactly as it found it.
-      min: parseFloat(cs.minHeight),
+      min: Math.max(parseFloat(cs.minHeight) || 0, Math.round((parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0))),
       cap: parseFloat(cs.maxHeight),
       hadVar: out.style.getPropertyValue("--out-h"),
       styleMax: out.style.maxHeight,
       styleMin: out.style.minHeight,
       body: scrollport,
-      following: Boolean(scrollport && scrollport._atBottom !== false),
+      // The transcript's offset at the press: the one number that decides where the box's top edge lands, re-asserted
+      // on every move so the edge the gesture froze is a constant and not a function of anything else that scrolls.
+      bodyTop: scrollport ? scrollport.scrollTop : null,
       deferred: false,
     };
+    // THE BROWSER'S SCROLL ANCHOR, stood down for the length of the gesture. It is a second writer of the top edge:
+    // at the foot its compensation for a taller box is a scrollTop write of exactly the height the drag added, which
+    // is the same cancellation the page's own tail pin used to do (measured: slow@1600/140 wrote the height 60 and
+    // moved the corner 0; the same shape at 820 followed, because the anchor had picked a node above the box). The
+    // place it holds for the reader is a row landing ABOVE during a drag, which every rebuild path already defers
+    // (`outGripHoldsCard`) and the chat pane's own pin now asks the gesture about; a drag is not the moment to trade
+    // the corner for it. Restored at the release, in endOutGrip.
+    if (scrollport) scrollport.style.setProperty("overflow-anchor", "none", "important");
     // The gesture keeps its own pointer, so a release outside the card still ends it. `touch-action: none` on the grip
     // is what makes a touch drag this gesture and not a scroll; the capture is for a pointer stack that needs it.
     try {
@@ -10676,10 +10702,20 @@ window.addEventListener(
   "pointermove",
   (e) => {
     const d = outGripDrag;
-    if (!d || e.pointerId !== d.pointer || !d.out.isConnected) return;
+    if (!d || e.pointerId !== d.pointer) return;
+    // A GESTURE THAT OUTLIVES THE NODE IT HOLDS IS A DEAD GRIP. The console is replaced by ordinary repaints, and
+    // while this record exists every rebuild path in the page defers to `outGripLive()`: a node that went away under
+    // the hand left the board frozen (no repaint, no re-pin) until a pointerup that may never come. The gesture ends
+    // with the node it was holding.
+    if (!d.out.isConnected) return endOutGrip(e);
     // THE TOP EDGE THE PRESS FROZE, not the drawn box: the height is where the pointer is, expressed from an edge
     // no pin may move while the hand is down. See outGripStep and cardBodyHeld (public/board/console.js).
-    const h = outGripStep(d.top, d.grab, e.clientY);
+    let h = outGripStep(d.top, d.grab, e.clientY);
+    // A height below the console's own floor is not a height, so the box stops on the floor (the sheet's min-height,
+    // or the padding box, whichever is larger). The pointer goes on past it; the box does not, and the release keeps
+    // the floor rather than a number nothing could draw.
+    if (h < d.min) h = d.min;
+    if (h < 1) h = 1;
     d.y = e.clientY;
     d.h = h;
     if (Math.abs(h - d.from) >= 1) d.moved = true;
@@ -10688,6 +10724,35 @@ window.addEventListener(
     // up the screen.
     setOutHeight(d.out, h);
     d.out.style.maxHeight = "none";
+    // THE FROZEN OFFSET, RE-ASSERTED. The top edge is what the press froze, and the transcript's offset is what moves
+    // it: this writes the offset the press read, every move. A grow has room for it, so a writer that moved it (the
+    // anchor, a pin, a poll) is undone in the same frame and the edge really is a constant. A shrink has no room: the
+    // write is clamped by the scrollport, and the box stops following there (the gate's floor). What the write buys is
+    // the way BACK - a drag that dips below the floor and comes back re-asserts the offset the moment the content has
+    // room for it again, so the corner returns to the hand instead of staying where the clamp left it (measured in the
+    // gate's crossing shape: 36px lost at 1600 and 100px at 820 without this write).
+    if (d.body && d.bodyTop != null) setScroll(d.body, d.bodyTop);
+    // THE EDGE, PUT BACK WHERE IT WAS FROZEN, once a frame. Nothing above the box is the gesture's (a chip that
+    // rewraps, an artifact button that appears, a live turn's row): when one of those grows, the top edge slides down
+    // by its height and the corner goes with it, because the offset the press read no longer lands the edge where it
+    // was. One read a frame - after the layout this move caused, not one per move - measures that drift and scrolls the
+    // transcript by exactly it, which the growth itself made room for. The height is NOT re-derived from the corrected
+    // edge: it is the pointer's travel from the pressed height, so the box keeps the size the reader chose (measured in
+    // the gate's poll shape: 24.3px of corner lost to a head chip, with the size already right).
+    if (d.body && !d.edgeFrame) {
+      d.edgeFrame = requestAnimationFrame(() => {
+        d.edgeFrame = 0;
+        if (outGripDrag !== d || !d.out.isConnected || !d.body) return;
+        // Only on a grow. Below the pressed height the transcript's own clamp owns the offset, and chasing that drift
+        // would inflate the offset the way-back re-asserts (the box would overshoot when it grows again).
+        if (d.h < d.from - 0.5) return;
+        const drift = d.out.getBoundingClientRect().top - d.top;
+        if (Math.abs(drift) > 0.5) {
+          d.bodyTop = Math.max(0, d.bodyTop + drift);
+          setScroll(d.body, d.bodyTop);
+        }
+      });
+    }
   },
   true,
 );
@@ -10696,6 +10761,8 @@ function endOutGrip(e) {
   const d = outGripDrag;
   if (!d || (e && e.pointerId != null && e.pointerId !== d.pointer)) return;
   outGripDrag = null;
+  if (d.edgeFrame) cancelAnimationFrame(d.edgeFrame);
+  d.edgeFrame = 0;
   try {
     d.grip.releasePointerCapture?.(d.pointer);
   } catch {
@@ -10703,6 +10770,9 @@ function endOutGrip(e) {
   }
   d.box.classList.remove("is-resizing");
   document.body.classList.remove("is-out-gripping");
+  // The anchor the press stood down goes back on the transcript whatever else happens: it is the reader's place in a
+  // transcript that is not being dragged any more.
+  if (d.body) d.body.style.removeProperty("overflow-anchor");
   if (d.out.isConnected) {
     if (!d.moved) {
       // A press that moved nothing is a press on the corner, not a resize: put back exactly what the sheet drew, so a
@@ -10728,22 +10798,29 @@ function endOutGrip(e) {
       // height is what the gesture decided; the cap exists only for a console nobody has resized.
       d.out.style.maxHeight = Number.isFinite(d.cap) && h <= d.cap ? "" : "none";
       rememberOutHeight(d.out.dataset.out, h);
-      // THE FOOT THE GESTURE TOOK AWAY. The drag moved the box's bottom, so a transcript that was following its newest
-      // line is now short of it by the travel - and would stop following the stream the reader is reading because of
-      // a resize they asked for. It goes back to the foot once, through setScroll, so the card's own pin reads the
-      // write as the panel's and keeps following.
-      if (d.body && d.following) {
-        setScroll(d.body, d.body.scrollHeight);
-        d.body._atBottom = true;
-      }
+      // THE FOOT THE GESTURE TOOK AWAY, NOT ONE IT PUTS BACK. The drag moved the box's bottom by exactly the pointer's
+      // travel, with the transcript's offset never written (its pin stood down, its anchor stood down, its room held
+      // by the move): writing the foot here would scroll the transcript by the drag's own travel and put the box back
+      // on the pixel it started from - measured, 60px down and the grip 60px below the corner it was dragged to, and
+      // 120px of an up-drag undone in one write. What the panel records is the truth: this transcript is that far from
+      // its foot now, so it stops following until the reader is back on it (following resumes on the reader's own
+      // scroll, public/board/console.js noteCardBodyScroll).
+      if (d.body) noteCardBodyScroll(d.body);
     }
   }
   // Whatever a repaint path wanted to draw while the pointer was down is drawn now, once.
-  if (d.deferred) renderAll();
+  if (d.deferred) {
+    if (typeof d.flush === "function") d.flush();
+    else renderAll();
+  }
 }
 
 window.addEventListener("pointerup", endOutGrip, true);
 window.addEventListener("pointercancel", endOutGrip, true);
+// A capture lost to a window blur, an alt-tab or a node that left the page is a gesture whose pointerup may never
+// arrive. Both are the end of the gesture, through the same door as a release.
+window.addEventListener("lostpointercapture", endOutGrip, true);
+window.addEventListener("blur", () => endOutGrip(null), true);
 
 // A TODO item's disclosure is a pointer gesture, not a place to put the caret. The item being edited keeps its edit
 // box open right above the facts, and a plain button's mousedown would blur it (and take the caret mid-word); the

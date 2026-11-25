@@ -6472,6 +6472,15 @@ body.pipew-open { overflow: hidden; }
   display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
 }
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box > .job-out { flex: 1 1 auto; max-height: none; }
+/* A console somebody has given a height is drawn AT it, even in the slack turn. `flex: 1 1 auto` above grows the box
+   into whatever room the pane has left, so a 20px height in a transcript shorter than the pane drew 105.41px: the
+   number the gesture wrote, the store kept and the next restore put back was not the box on screen, and a drag to the
+   floor stopped 105px above it. The room a pane has left belongs to the spacer above the turns once the console's
+   height is somebody's answer. `[style*=...]` is the one writer's own output (setOutHeight writes the variable
+   inline), so a console nobody has resized keeps the flex and the frame's room still lands in it. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box > .job-out[style*="--out-h"] {
+  flex: 0 0 auto;
+}
 .as-subpane[data-subpane="chat"] > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
