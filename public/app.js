@@ -10676,6 +10676,8 @@ document.addEventListener(
     // (`outGripHoldsCard`) and the chat pane's own pin now asks the gesture about; a drag is not the moment to trade
     // the corner for it. Restored at the release, in endOutGrip.
     if (scrollport) scrollport.style.setProperty("overflow-anchor", "none", "important");
+    // The watch that keeps the frozen edge the drawn one, for the whole gesture (see outGripEdgeWatch).
+    outGripEdgeWatch(outGripDrag);
     // The gesture keeps its own pointer, so a release outside the card still ends it. `touch-action: none` on the grip
     // is what makes a touch drag this gesture and not a scroll; the capture is for a pointer stack that needs it.
     try {
@@ -10732,30 +10734,37 @@ window.addEventListener(
     // room for it again, so the corner returns to the hand instead of staying where the clamp left it (measured in the
     // gate's crossing shape: 36px lost at 1600 and 100px at 820 without this write).
     if (d.body && d.bodyTop != null) setScroll(d.body, d.bodyTop);
-    // THE EDGE, PUT BACK WHERE IT WAS FROZEN, once a frame. Nothing above the box is the gesture's (a chip that
-    // rewraps, an artifact button that appears, a live turn's row): when one of those grows, the top edge slides down
-    // by its height and the corner goes with it, because the offset the press read no longer lands the edge where it
-    // was. One read a frame - after the layout this move caused, not one per move - measures that drift and scrolls the
-    // transcript by exactly it, which the growth itself made room for. The height is NOT re-derived from the corrected
-    // edge: it is the pointer's travel from the pressed height, so the box keeps the size the reader chose (measured in
-    // the gate's poll shape: 24.3px of corner lost to a head chip, with the size already right).
-    if (d.body && !d.edgeFrame) {
-      d.edgeFrame = requestAnimationFrame(() => {
-        d.edgeFrame = 0;
-        if (outGripDrag !== d || !d.out.isConnected || !d.body) return;
-        // Only on a grow. Below the pressed height the transcript's own clamp owns the offset, and chasing that drift
-        // would inflate the offset the way-back re-asserts (the box would overshoot when it grows again).
-        if (d.h < d.from - 0.5) return;
+  },
+  true,
+);
+
+// THE EDGE, PUT BACK WHERE IT WAS FROZEN, once a frame for the whole gesture. Nothing above the box is the gesture's
+// (a chip that rewraps, an artifact button that appears, a live turn's row): when one of those grows, the top edge
+// slides down by its height and the corner goes with it, because the offset the press read no longer lands the edge
+// where it was. This measures that drift every frame - not every move, because a poll paints between two moves and the
+// gate's own read lands there (measured: 24.3px of corner, corrected only on the next move without this) - and scrolls
+// the transcript by exactly it, which the growth itself made room for. The height is NOT re-derived from the corrected
+// edge: it is the pointer's travel from the pressed height, so the box keeps the size the reader chose. Below the
+// pressed height the transcript's own clamp owns the offset and chasing it would inflate the offset the way-back
+// re-asserts, so a shrink is left alone.
+function outGripEdgeWatch(d) {
+  if (!d || d.edgeFrame) return;
+  const tick = () => {
+    d.edgeFrame = 0;
+    if (outGripDrag !== d) return;
+    if (d.out.isConnected && d.body) {
+      if (d.h >= d.from - 0.5) {
         const drift = d.out.getBoundingClientRect().top - d.top;
         if (Math.abs(drift) > 0.5) {
           d.bodyTop = Math.max(0, d.bodyTop + drift);
           setScroll(d.body, d.bodyTop);
         }
-      });
+      }
+      d.edgeFrame = requestAnimationFrame(tick);
     }
-  },
-  true,
-);
+  };
+  d.edgeFrame = requestAnimationFrame(tick);
+}
 
 function endOutGrip(e) {
   const d = outGripDrag;
