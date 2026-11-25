@@ -386,7 +386,7 @@ test("a landed tree cannot take an unrelated new row: refused by name with a row
 });
 
 test("a fresh cut for a row says it inherits no attachment, and the landed rule leaves a landed tree alone", () => {
-  const row = { path: "C:/x/repo/.worktrees/old-aaaaaa", branch: "wtgui/old-aaaaaa", verdict: "MERGED (1 commit)", ahead: 1 };
+  const row = { path: "checkout-under-test/.worktrees/old-aaaaaa", branch: "wtgui/old-aaaaaa", verdict: "MERGED (1 commit)", ahead: 1 };
   const refused = landedTreeCut({ row, taskId: 313, mainBranch: "main" });
   assert.equal(refused.refusal?.code, "tree_landed");
   assert.match(refused.refusal.reason, /already finished/);
@@ -397,7 +397,7 @@ test("a fresh cut for a row says it inherits no attachment, and the landed rule 
   assert.equal(landedTreeCut({ row: { ...row, verdict: "UNMERGED (2 commits)" } }).note, "", "unlanded work is not finished");
   // The project's own checkout reads ON MAIN by definition and is where every new tree is cut from: "run in place"
   // is a choice the panel has always allowed, so the landed rule must not refuse it.
-  assert.equal(landedTreeCut({ row: { path: "C:/x/repo", branch: "main", verdict: "ON MAIN", ahead: 0 }, taskId: 313, projectPath: "C:/x/repo" }).refusal, null);
+  assert.equal(landedTreeCut({ row: { path: "checkout-under-test", branch: "main", verdict: "ON MAIN", ahead: 0 }, taskId: 313, projectPath: "checkout-under-test" }).refusal, null);
 });
 
 test("the runs-API reading is the only DEAD verdict: a stale card, a 404 and an unreadable answer all keep it alive", () => {
@@ -411,20 +411,20 @@ test("the runs-API reading is the only DEAD verdict: a stale card, a 404 and an 
 
   // A card with no run id cannot be proved dead, so it keeps the ordinary held-tree sentence, word for word.
   const noRun = { id: "job-1", thread: "t-1", status: "running" };
-  const plain = reissueRefusal({ tree: "C:/x/tree-aaaaaa", holder: noRun, run: null });
+  const plain = reissueRefusal({ tree: "tree-under-test", holder: noRun, run: null });
   assert.equal(plain.code, "tree_busy");
   assert.match(plain.reason, /already has a live run \(job-1 on thread t-1, running\)/);
   // A card WITH a run id is answerable, and an unreadable answer is not a death certificate.
   const holder = { id: "job-1", thread: "t-1", runId: "r1", status: "running" };
-  assert.equal(reissueRefusal({ tree: "C:/x/tree-aaaaaa", holder, run: null }).code, "tree_live_run");
-  assert.match(reissueRefusal({ tree: "C:/x/tree-aaaaaa", holder, run: null }).reason, /the runs API could not be read for run r1/);
-  assert.equal(reissueRefusal({ tree: "C:/x/tree-aaaaaa", holder, run: { runId: "r1", read: true, status: "running" } }).code, "tree_live_run");
-  assert.equal(reissueRefusal({ tree: "C:/x/tree-aaaaaa", holder, run: { runId: "r1", read: true, status: "interrupted" } }), null, "DEAD allows it");
-  assert.equal(reissueRefusal({ tree: "C:/x/tree-aaaaaa", holder: null, run: null }), null, "no holder, nothing to ask");
+  assert.equal(reissueRefusal({ tree: "tree-under-test", holder, run: null }).code, "tree_live_run");
+  assert.match(reissueRefusal({ tree: "tree-under-test", holder, run: null }).reason, /the runs API could not be read for run r1/);
+  assert.equal(reissueRefusal({ tree: "tree-under-test", holder, run: { runId: "r1", read: true, status: "running" } }).code, "tree_live_run");
+  assert.equal(reissueRefusal({ tree: "tree-under-test", holder, run: { runId: "r1", read: true, status: "interrupted" } }), null, "DEAD allows it");
+  assert.equal(reissueRefusal({ tree: "tree-under-test", holder: null, run: null }), null, "no holder, nothing to ask");
 
   // The paragraph is built from the run that died, and never asks for a clean tree.
-  const brief = priorWorkBrief({ tree: "C:/x/tree-aaaaaa", holder, run: { runId: "r1", read: true, status: "failed" } });
-  assert.match(brief, /work already exists in C:\/x\/tree-aaaaaa from a previous run/);
+  const brief = priorWorkBrief({ tree: "tree-under-test", holder, run: { runId: "r1", read: true, status: "failed" } });
+  assert.match(brief, /work already exists in tree-under-test from a previous run/);
   assert.match(brief, /ended failed per the runs API/);
   assert.match(brief, /Read it before you overwrite anything/);
   assert.match(brief, /Nothing here asks for a clean tree/);
