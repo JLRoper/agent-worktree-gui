@@ -5630,8 +5630,17 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-form input[type="text"],
 #as-initiatives .init-form select {
   width: 100%;
+  /* THE FORM IS A COLUMN, SO THE BASIS IS A HEIGHT (row 320). `.as-group input[type="text"]` (style.css, the rule
+     above `#as-initiatives`) gives every text input in a group `flex: 1 1 250px`, and a flex-basis is measured on the
+     MAIN axis: in a `flex-direction: column` box that 250px became the title input's HEIGHT - measured 250px of empty
+     box for one line of text at a 449px and a 479px pane - while the description under it (a textarea with no flex
+     rule, three rows of 20px) drew 78px with a scrollbar through 356px of words. The basis has to be off the field in
+     the column, which is the same correction `#as-initiatives .wave-field input` already carries for the same reason.
+     The height below then says what the field is: ONE line, whatever the pane is doing. */
+  flex: 0 0 auto;
+  height: var(--tab-row-h);
   min-height: var(--tab-row-h);
-  padding: var(--tab-s1) var(--tab-s2);
+  padding: 0 var(--tab-s2);
   border: 1px solid var(--tab-line);
   border-radius: var(--tab-r2);
   background: var(--tab-row);
@@ -5639,8 +5648,12 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   font-family: var(--tab-font-mono);
   font-size: 12px;
 }
+/* THE PARAGRAPH FIELD GETS THE ROOM (row 320): four line boxes of the tab's own body type, and it still resizes by
+   hand (`resize: vertical`, from `.as-note-box`). The swap is the whole point of the row - the field that holds a
+   paragraph is the tall one, and the field that holds a title is one line. */
 #as-initiatives .init-form .as-note-box {
   width: 100%;
+  min-height: 96px;
   padding: var(--tab-s2);
   border: 1px solid var(--tab-line);
   border-radius: var(--tab-r2);
@@ -5679,7 +5692,10 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-wavefold { margin: 0 0 var(--tab-s3); padding-top: var(--tab-s3); border-top: 1px solid var(--tab-line); min-width: 0; }
 #as-initiatives .init-wavefold .init-sechead { display: flex; align-items: center; gap: var(--tab-s2); }
 #as-initiatives .init-wavefold .init-sechead .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; text-transform: none; letter-spacing: 0; }
-#as-initiatives .init-wave-note { order: 3; flex: 0 0 auto; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
+/* The waves head's own hint had the same narrow-dock overflow the notes head did: `flex: 0 0 auto` plus `nowrap` in a
+   239px pane measured 248px of head inside 161px of card and widened the whole Initiatives pane to 301px. It shrinks
+   and ellipses now, which changes nothing at a width where it fits. */
+#as-initiatives .init-wave-note { order: 3; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
 /* THE LINE. It runs behind every station, from the first to the last, in the emphasis hairline; a station paints its
    own stretch in its state colour, so the route reads before a single word does. "Behind every station" is a claim the
    station has to keep: it sits ON the connector, so its disc has to be OPAQUE or the line reads straight through it. */
@@ -6035,6 +6051,179 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-hist-none { padding: var(--tab-s1) 0; }
 #as-initiatives .init-tier, #as-initiatives .init-hist-row, #as-initiatives .init-assist { font-size: 12px; }
 
+/* ---- 7b. THE TWO FOLDS AND THE NOTE LOG (row 320) ------------------------------------------------- */
+/* THE FOLDS ARE SECTIONS, NOT ACCORDIONS GROWN SIDEWAYS. The Assistants and History folds used to be a 12px
+   transparent row with a caret, which read as body text beside the waves lane's section head. They now share that
+   head's grammar - the name at one weight, the count in tabular figures, one sentence saying what the fold holds, a
+   hairline over the block - and their rows are cards on a rail. THE BEHAVIOUR IS UNTOUCHED: the same
+   data-init-assist-fold / data-init-history-fold attributes and aria-expanded, the same module sets, the same rows and
+   their own data attributes, so every press, keyboard path, focus token and repaint answers exactly as before. */
+#as-initiatives .init-fold { min-width: 0; margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+#as-initiatives .init-fold .init-foldhead {
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  padding: 0 var(--tab-s2) 0 0;
+  border-radius: var(--tab-r2);
+}
+#as-initiatives .init-fold .init-foldhead .init-proj-name { flex: 0 0 auto; font-weight: 600; font-size: 12px; color: var(--tab-ink); }
+#as-initiatives .init-fold .init-foldhead .chip { font-variant-numeric: tabular-nums; }
+#as-initiatives .init-fold .init-foldhead:hover .init-foldmeta { color: var(--tab-ink-2); }
+#as-initiatives .init-foldmeta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-fold .init-caret { color: var(--tab-ink-3); }
+/* The rail: one hairline down the block, an assistant's own row and a history line as a card on it, with a hairline
+   between neighbours. The rail is what makes a fold read as a list inside a section rather than as more prose. */
+#as-initiatives .init-assists { margin: var(--tab-s1) 0 0; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-assist + .init-assist { border-top: 1px solid var(--tab-line); padding-top: var(--tab-s1); }
+#as-initiatives .init-history { position: relative; margin: var(--tab-s1) 0 0; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-hist-row { position: relative; min-height: 26px; padding: var(--tab-s1) 0; font-size: var(--tab-fs-body); }
+#as-initiatives .init-hist-row + .init-hist-row { border-top: 1px solid var(--tab-line); }
+#as-initiatives .init-hist-dot {
+  position: absolute;
+  left: calc((var(--tab-s4) + 1px) * -1 - 2.5px);
+  top: 13px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tab-line-strong);
+}
+
+/* THE NOTE LOG. A section above the Assistants fold: a count on the head, the list newest first, the writer under
+   it. A reader's own note is neutral and an assistant's carries the violet this panel already uses for a turn that
+   wrote something - the same colour, not a second meaning. A link is a pill with its host in the store's own word
+   (Jira, Bitbucket, GitHub, link), its label beside it, and it opens in a new tab. */
+#as-initiatives .init-notesfold { min-width: 0; margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+#as-initiatives .init-notesfold .init-sechead { margin-bottom: var(--tab-s2); }
+#as-initiatives .init-sechead-name { flex: 0 0 auto; }
+#as-initiatives .init-notes-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+#as-initiatives .init-notes-note { order: 3; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-notes { display: flex; flex-direction: column; min-width: 0; }
+#as-initiatives .init-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s1);
+  min-width: 0;
+  padding: var(--tab-s2) var(--tab-s2) var(--tab-s2) var(--tab-s3);
+  border-left: 2px solid var(--tab-line-strong);
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-note:last-child { border-bottom: 0; }
+#as-initiatives .init-note.is-assistant { border-left-color: var(--violet); background: linear-gradient(90deg, var(--violet-bg), transparent 52%); }
+#as-initiatives .init-note-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--tab-s1) var(--tab-s2); min-width: 0; }
+#as-initiatives .init-note-by { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-note.is-assistant .init-note-by { color: #d7c4ff; }
+#as-initiatives .init-note-who { font-weight: 600; color: var(--tab-ink-2); }
+#as-initiatives .init-note.is-assistant .init-note-who { color: #ecd9ff; }
+#as-initiatives .init-note-when, #as-initiatives .init-note-edited { font-family: var(--tab-font-mono); font-size: 10.5px; color: var(--tab-ink-3); }
+#as-initiatives .init-note-text { margin: 0; font-size: var(--tab-fs-body); line-height: var(--tab-lh-body); color: var(--tab-ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+#as-initiatives .init-note-chip {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--tab-s2);
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s2) 0 0;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r-pill);
+  background: var(--tab-row);
+  color: var(--tab-link);
+  font-size: var(--tab-fs-meta);
+  text-decoration: none;
+  overflow: hidden;
+}
+#as-initiatives .init-note-chip:hover { border-color: var(--tab-line-strong); background: var(--tab-raised); text-decoration: none; }
+#as-initiatives .init-note-host {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0 var(--tab-s2);
+  border-right: 1px solid var(--tab-line);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+#as-initiatives .init-note-chip.is-jira .init-note-host { color: #9ecbff; background: var(--tab-ready-bg); }
+#as-initiatives .init-note-chip.is-bitbucket .init-note-host { color: #ffd7a8; background: var(--tab-warn-bg); }
+#as-initiatives .init-note-chip.is-github .init-note-host { color: var(--tab-ink); background: var(--tab-raised); }
+#as-initiatives .init-note-label { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .init-note-go { display: inline-flex; align-items: center; flex: 0 0 auto; color: var(--tab-ink-3); font-size: 11px; }
+#as-initiatives .init-note-actions { display: flex; flex-wrap: wrap; gap: var(--tab-s1); }
+#as-initiatives .init-note-actions .init-mini { min-height: 24px; padding: 0 var(--tab-s2); font-size: 11px; }
+#as-initiatives .init-note-del.is-armed { color: #ffd7d2; border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+/* WHAT THE LAST NOTE WRITE ANSWERED, beside the box it came from. A note write is not a question - the store never
+   asks one - so this is a plain status line with an accent edge, and only a refusal turns it red. */
+#as-initiatives .init-note-status {
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s1) var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-accent);
+  border-radius: var(--tab-r2);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+}
+#as-initiatives .init-note-status.is-bad { border-left-color: var(--tab-bad); background: var(--tab-bad-bg); color: #ffb4ac; }
+#as-initiatives .init-notes-empty {
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s3);
+  border: 1px dashed var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-body);
+  line-height: 1.55;
+}
+#as-initiatives .init-notes-empty b { display: block; margin-bottom: var(--tab-s1); color: var(--tab-ink-2); font-size: 12px; font-weight: 600; }
+#as-initiatives .init-notewrite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  margin-top: var(--tab-s2);
+  padding: var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+/* THE PARAGRAPH BOX IS THE TALL ONE HERE TOO (row 320): the same inversion the edit form had, corrected at the cause
+   by taking the flex basis off the field in a column and giving the textarea a height of its own. `.init-notebox`
+   deliberately does not borrow `.as-note-box`: that class carries the panel's 11.5px console type, and a note is read
+   as prose, so it takes the tab's body step. */
+#as-initiatives .init-notebox {
+  width: 100%;
+  min-height: 76px;
+  padding: var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font: var(--tab-fs-body)/var(--tab-lh-body) var(--tab-font-ui);
+  resize: vertical;
+}
+#as-initiatives .init-note-write-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); }
+#as-initiatives .init-notefield {
+  flex: 1 1 160px;
+  width: auto;
+  min-width: 0;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font-family: var(--tab-font-mono);
+  font-size: 11px;
+}
+#as-initiatives .init-note-write-row .init-note-cap { flex: 1 1 100%; }
+#as-initiatives .init-noteedit { display: flex; flex-direction: column; gap: var(--tab-s1); }
+#as-initiatives .init-noteedit .init-note-write-row .as-hint { flex: 1 1 100%; }
+#as-initiatives .init-mini.primary { color: #0f1115; background: var(--tab-accent); border-color: var(--tab-accent); font-weight: 600; }
+#as-initiatives .init-mini.primary:hover { background: #4ad35c; color: #0f1115; }
+#as-initiatives .init-mini.primary[disabled] { opacity: .55; }
+
 /* ---- 8. WIDE: the plate splits into its words and its cast, the route runs full width -------------- */
 @container (min-width: 1000px) {
   #as-initiatives .init-card:not(.is-titlecard) {
@@ -6042,7 +6231,7 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
     /* THE NAME'S ROW IS ABOVE BOTH COLUMNS (row 295, ask 3): `head` spans the pair, and the words and the worktrees
        stay side by side beneath it. */
     grid-template-columns: minmax(0, 66ch) minmax(320px, 1fr);
-    grid-template-areas: "head head" "desc side" "chips side" "waves waves" "assist assist" "hist hist";
+    grid-template-areas: "head head" "desc side" "chips side" "waves waves" "notes notes" "assist assist" "hist hist";
     column-gap: var(--tab-s5);
     align-items: start;
     justify-content: start;
@@ -6051,6 +6240,7 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   #as-initiatives .init-card > .init-descfold, #as-initiatives .init-card > .init-desc { grid-area: desc; }
   #as-initiatives .init-card > .init-chips { grid-area: chips; }
   #as-initiatives .init-card > .init-wavefold { grid-area: waves; padding-top: var(--tab-s4); }
+  #as-initiatives .init-card > .init-notesfold { grid-area: notes; }
   #as-initiatives .init-card > .init-side { grid-area: side; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s5); }
   #as-initiatives .init-card > .init-assistfold { grid-area: assist; }
   #as-initiatives .init-card > .init-histfold { grid-area: hist; }
