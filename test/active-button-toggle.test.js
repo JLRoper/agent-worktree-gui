@@ -138,7 +138,7 @@ test("Settings > General carries the row, it ships unchecked, and it names the p
   assert.match(title, /OFF by default/, "the tooltip says the default");
   assert.match(title, /off means ABSENT/, "and says off is absent rather than hidden-but-reserved");
   assert.match(title, /Only an agent actually working is counted/, "what it counts");
-  assert.match(title, /red Human count/, "and that a parked agent belongs to Human instead");
+  assert.match(title, /belongs to the Permissions or Clarify count/, "and that a parked agent belongs to those counts instead");
   assert.match(title, /DIFFERENT control from the Hot Agent pen search/, "the pen search is named as a different control");
   assert.match(title, /Ctrl\+Shift\+Q/, "with its own chord, so nobody turns off the wrong one");
   assert.match(title, /Saved in this browser/, "and the row says where the value lives");
