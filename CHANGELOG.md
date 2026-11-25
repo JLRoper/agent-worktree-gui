@@ -17,22 +17,22 @@ has no tag.
 
 ## v1.169.8 — 2026-11-24 · 6 commits
 
-[`d10f378`](https://github.com/JLRoper/agent-worktree-gui/commit/d10f3781e16b817a840ae42d70d058d27f36ba4e) · [compare v1.169.7...v1.169.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.169.7...v1.169.8)
+[`3f86213`](https://github.com/JLRoper/agent-worktree-gui/commit/3f8621382d3177265dfdc52445be928b8835ab4e) · [compare v1.169.7...v1.169.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.169.7...v1.169.8)
 
 ### Fixed
 
-- fix(console): the corner drag holds the edge the press froze, and the release stops undoing it ([`a7ad481`](https://github.com/JLRoper/agent-worktree-gui/commit/a7ad481533fa6ba27de2da7120120904b48578dc))
-- fix(console): the frozen edge is watched every frame, not only on a move ([`a90867d`](https://github.com/JLRoper/agent-worktree-gui/commit/a90867dca22fc8d1f7b8e9c2ba83d37f99a1fb6e))
+- fix(console): the corner drag holds the edge the press froze, and the release stops undoing it ([`0494f8d`](https://github.com/JLRoper/agent-worktree-gui/commit/0494f8dd867b44487b73615d3a2642e1751783e6))
+- fix(console): the frozen edge is watched every frame, not only on a move ([`2f9f4e1`](https://github.com/JLRoper/agent-worktree-gui/commit/2f9f4e1732b4257c0968aa49d5d5704f46887af5))
 
 ### Docs & tests
 
 - docs: render the changelog - 739 releases ([`9b1626f`](https://github.com/JLRoper/agent-worktree-gui/commit/9b1626f8bcf513f3e3c56f87c0496616de2fb478))
-- docs(report): the corner drag, read again after the fix - 26 of 32 failing on the pre-fix tree, none on this one ([`4481610`](https://github.com/JLRoper/agent-worktree-gui/commit/448161096640f51504115393923b4d80ab001479))
-- docs(report): what the full sweep answered - 3,690 passing, 18 failing, 17 of them on main ([`3cb90bb`](https://github.com/JLRoper/agent-worktree-gui/commit/3cb90bbf37cc2aa6ea78ea55015d479192a81704))
+- docs(report): the corner drag, read again after the fix - 26 of 32 failing on the pre-fix tree, none on this one ([`a768152`](https://github.com/JLRoper/agent-worktree-gui/commit/a76815251ec523aacde63ab8fa207f4a2cd55835))
+- docs(report): what the full sweep answered - 3,690 passing, 18 failing, 17 of them on main ([`4f26a2f`](https://github.com/JLRoper/agent-worktree-gui/commit/4f26a2f3c6827ea2faf2aa341e3f83a6d7818bd3))
 
 ### Other
 
-- chore: 1.169.8 - the version this landing carries ([`d10f378`](https://github.com/JLRoper/agent-worktree-gui/commit/d10f3781e16b817a840ae42d70d058d27f36ba4e))
+- chore: 1.169.8 - the version this landing carries ([`3f86213`](https://github.com/JLRoper/agent-worktree-gui/commit/3f8621382d3177265dfdc52445be928b8835ab4e))
 
 ## v1.169.7 — 2026-11-24 · 2 commits
 
