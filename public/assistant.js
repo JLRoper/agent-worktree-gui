@@ -4096,6 +4096,256 @@
     return true;
   }
 
+  // ---- THE NOTE LOG (row 320) ----------------------------------------------------------------------------------
+  // The MODEL is lib/initiatives.js's and this half adds no field to it. A note arrives as
+  // { id, at, by, kind, text, url?, host?, label?, editedAt?, editedBy? }, the read answers them NEWEST FIRST with a
+  // noteCount, a note whose whole text is one URL is kind "link" with `host` already computed (jira / bitbucket /
+  // github / other), a duplicate URL is already one row, and every cap in `caps` REFUSES rather than clips. So this
+  // painter guesses nothing: the host on a chip is the server's field (a wiki page whose path says "jira" is still
+  // "other"), the author is the note's own `by`, and an over-cap write is drawn with the server's sentence instead of
+  // being trimmed to fit. What is drawn is the list, a box to write in, Edit and Delete per row, a chip for a link, a
+  // count, and an empty state that says what belongs there.
+  const initNoteDraft = new Map(); // initiative id -> { text, label } - the write box, held outside the DOM
+  const initNoteEdit = new Map(); // initiative id -> { noteId, text, label } - the one note being amended
+  const initNoteStatus = new Map(); // initiative id -> { text, bad } - what the last note write answered
+  const initNoteBusy = new Set(); // initiative ids with a note write in flight, so a double press is one write
+  let initNoteArm = ""; // the note id whose Delete has been pressed once and waits for the second
+
+  // The four host names the store can carry, as words: the chip says which reference system a link belongs to, and
+  // "other" is drawn as what it is rather than borrowed from one of the three.
+  const NOTE_HOST_WORDS = { jira: "Jira", bitbucket: "Bitbucket", github: "GitHub", other: "link" };
+  const noteHostWord = (host) => NOTE_HOST_WORDS[String(host || "other")] || NOTE_HOST_WORDS.other;
+  // Who wrote a line, as the card can name them: "you" for the reader, and an assistant's NAME when the card already
+  // carries that assistant (its worktrees), else its id. A note from an assistant this card has no row for is still
+  // attributed - by its id - because an entry nobody can attribute is not memory.
+  function noteWho(init, by) {
+    const id = String(by || "reader");
+    if (id === "reader") return { id, name: "you", assistant: false };
+    const row = (Array.isArray(init?.assistants) ? init.assistants : []).find((a) => String(a.id) === id);
+    return { id, name: String(row?.name || id), assistant: true };
+  }
+  // A link's own words: the label the reader gave it, and when they gave none the URL itself cut to what names it.
+  // Never a guessed title - the store has none, and inventing one would be the page disagreeing with the log.
+  function noteLinkWords(note) {
+    const label = String(note?.label || "").trim();
+    if (label) return label;
+    const url = String(note?.url || note?.text || "");
+    try {
+      const u = new URL(url);
+      const last = u.pathname.split("/").filter(Boolean).pop() || "";
+      return last ? `${u.hostname}/${last}` : u.hostname;
+    } catch {
+      return url;
+    }
+  }
+  // A LINK IS A CHIP, AND IT OPENS IN A NEW TAB. `target="_blank"` with `rel="noopener noreferrer"`: the panel keeps
+  // its place, the anchor is a real anchor (middle-click and copy-link work), and the page that opens cannot reach
+  // back into the panel's window. The host class is the store's own four names, so the chip's colour is not a guess.
+  function noteLinkChipHtml(note) {
+    const url = String(note?.url || note?.text || "");
+    const host = String(note?.host || "other");
+    return `<a class="init-note-chip is-${esc(NOTE_HOST_WORDS[host] ? host : "other")}" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(url)} - opens in a new tab"><span class="init-note-host">${esc(noteHostWord(host))}</span><span class="init-note-label">${esc(noteLinkWords(note))}</span><span class="init-note-go" aria-hidden="true">↗</span></a>`;
+  }
+  function setNoteStatus(id, text, bad = false) {
+    if (!text) initNoteStatus.delete(id);
+    else initNoteStatus.set(id, { text: String(text), bad });
+  }
+  // ONE NOTE, as a row of the log: who and when on the head line, the words (or the chip) under it, and the two
+  // controls the reader owns beside them. The row being edited becomes the form instead of the text, so the log never
+  // shows two versions of the same note at once.
+  function initNoteRowHtml(init, note) {
+    const who = noteWho(init, note.by);
+    const editing = initNoteEdit.get(init.id)?.noteId === String(note.id);
+    const armed = initNoteArm === String(note.id);
+    const busy = initNoteBusy.has(String(init.id));
+    const when = note.at ? `${relTime(note.at)} ago` : "";
+    const edited = note.editedAt
+      ? `<span class="as-hint init-note-edited" title="edited ${esc(note.editedAt)}">edited ${esc(relTime(note.editedAt))} ago${
+          note.editedBy && String(note.editedBy) !== String(note.by) ? ` by ${esc(noteWho(init, note.editedBy).name)}` : ""
+        }</span>`
+      : "";
+    const whenHtml = `<span class="as-hint init-note-when" title="${esc(note.at || "")}">${esc(when || "no time")}</span>`;
+    const body = editing
+      ? (() => {
+          const e = initNoteEdit.get(init.id);
+          const labelField =
+            String(note.kind) === "link"
+              ? `<input type="text" class="init-notefield init-notelabel" data-init-notefield="editLabel" maxlength="${Number(initDoc?.caps?.noteLabel) || 80}" spellcheck="false" placeholder="label for this link (optional)" aria-label="label for this link" value="${esc(e.label)}">`
+              : "";
+          return `<div class="init-noteedit" data-init-noteform="${esc(init.id)}|${esc(note.id)}">
+            <textarea class="init-notebox" data-init-notefield="editText" rows="3" maxlength="${Number(initDoc?.caps?.noteText) || 1000}" spellcheck="false" aria-label="edit this note">${esc(e.text)}</textarea>
+            ${labelField}
+            <div class="as-actions init-note-write-row">
+              <button type="button" class="primary init-mini" data-init-noteeditsave="${esc(init.id)}|${esc(note.id)}"${busy ? " disabled" : ""}>Save note</button>
+              <button type="button" class="init-mini" data-init-notecancel="${esc(init.id)}">Cancel</button>
+              <span class="as-hint">an edit keeps the author it was written by, and stamps who changed it</span>
+            </div>
+          </div>`;
+        })()
+      : String(note.kind) === "link"
+        ? noteLinkChipHtml(note)
+        : `<p class="init-note-text">${esc(note.text)}</p>`;
+    return `<div class="init-note${who.assistant ? " is-assistant" : " is-reader"}" data-init-note="${esc(note.id)}" data-init-note-by="${esc(who.id)}" data-init-note-kind="${esc(String(note.kind || "note"))}">
+      <div class="init-note-head">
+        <span class="init-note-by" title="${who.assistant ? `${esc(who.name)} logged this from a turn` : "you wrote this"}">${
+          who.assistant ? `<span class="init-note-who">${esc(who.name)}</span> logged this` : `<span class="init-note-who">you</span>`
+        }</span>
+        ${whenHtml}
+        ${edited}
+      </div>
+      ${body}
+      ${editing
+        ? ""
+        : `<div class="init-note-actions">
+            <button type="button" class="init-mini init-note-edit" data-init-noteedit="${esc(init.id)}|${esc(note.id)}"${busy ? " disabled" : ""} title="amend this entry's words, or a link's label - the author stamp stays, and an edit adds who changed it">Edit</button>
+            <button type="button" class="init-mini init-note-del${armed ? " is-armed" : ""}" data-init-notedel="${esc(init.id)}|${esc(note.id)}"${busy ? " disabled" : ""} title="${armed ? "press again and the line is gone" : "remove this entry from the log - the first press asks, the second deletes"}">${armed ? "Delete for good?" : "Delete"}</button>
+          </div>`}
+    </div>`;
+  }
+  // THE SECTION, above the Assistants fold. It is drawn on every open card, because a card with no notes is exactly
+  // the card whose reader needs to be told what belongs in one.
+  function initNotesSectionHtml(init) {
+    const notes = Array.isArray(init.notes) ? init.notes : [];
+    const count = Number.isFinite(Number(init.noteCount)) ? Number(init.noteCount) : notes.length;
+    const caps = initDoc?.caps || {};
+    const capText = Number(caps.noteText) || 1000;
+    const capLabel = Number(caps.noteLabel) || 80;
+    const capNotes = Number(caps.notes) || 200;
+    const blocked = initBlocked();
+    const draft = initNoteDraft.get(init.id) || { text: "", label: "" };
+    const busy = initNoteBusy.has(String(init.id));
+    const status = initNoteStatus.get(init.id);
+    const list = notes.length
+      ? `<div class="init-notes" data-init-notes-list="${esc(init.id)}">${notes.map((n) => initNoteRowHtml(init, n)).join("")}</div>`
+      : `<div class="init-notes-empty" data-init-notes-empty="${esc(init.id)}">
+          <b>Nothing remembered here yet</b>
+          <span>What belongs in this log: the ticket the work started from, the pull request that ships a slice, the decision that closed a fork, the version it first went out in. A URL pasted on its own becomes a chip you can open.</span>
+        </div>`;
+    return `<section class="init-notesfold" data-init-notes="${esc(init.id)}" aria-label="${esc(`notes on ${init.title}`)}">
+      <div class="init-sechead">
+        <span class="init-sechead-name">Notes</span>
+        <span class="chip init-notes-count${count ? "" : " is-zero"}" data-init-notes-count="${esc(init.id)}" title="${count} note${count === 1 ? "" : "s"} on this initiative - the log holds ${capNotes}, and a full log refuses rather than dropping the oldest">${count}</span>
+        <span class="as-hint init-notes-note">tickets, PRs, decisions, versions</span>
+      </div>
+      ${list}
+      ${status ? `<div class="init-note-status${status.bad ? " is-bad" : ""}" role="status">${esc(status.text)}</div>` : ""}
+      <div class="init-notewrite" data-init-noteform="${esc(init.id)}">
+        <textarea class="init-notebox" data-init-notefield="text" rows="3" maxlength="${capText}" spellcheck="false" aria-label="${esc(`write a note on ${init.title}`)}" placeholder="Write down what this work should not forget: a decision, a ticket id, a version. A URL on its own becomes a link."${blocked ? " disabled" : ""}>${esc(draft.text)}</textarea>
+        <div class="init-note-write-row">
+          <input type="text" class="init-notefield init-notelabel" data-init-notefield="label" maxlength="${capLabel}" spellcheck="false" aria-label="label for the link this note holds" placeholder="label for a link (optional)" value="${esc(draft.label)}"${blocked ? " disabled" : ""}>
+          <button type="button" class="init-mini primary init-notesave" data-init-notesave="${esc(init.id)}"${blocked || busy ? " disabled" : ""} title="append this to the log - a note is never overwritten, and the whole write is refused if it is over its cap">Save note</button>
+          <span class="as-hint init-note-cap" data-init-note-cap>${capText} characters at most - an over-cap note is refused, never trimmed</span>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  // ---- the note log's three writes -------------------------------------------------------------------------------
+  // ADD APPENDS, EDIT AMENDS, DELETE REMOVES - the three routes lib/initiatives.js exposes, and the answer carries the
+  // whole document the next GET would have answered, so the tab adopts it rather than re-reading. The bounds the form
+  // draws (maxlength) are the store's own caps, and the store's sentence is what an over-cap or duplicate write shows:
+  // a note is never clipped to fit, because a quietly shortened decision is worse than a refused one.
+  function noteFormAt(key) {
+    const host = as$("as-initiatives");
+    const form = host ? host.querySelector(`[data-init-noteform="${CSS.escape(String(key))}"]`) : null;
+    const val = (which) => (form ? String(form.querySelector(`[data-init-notefield="${which}"]`)?.value ?? "") : "");
+    return { text: val("text") || val("editText"), label: val("label") || val("editLabel"), hasLabel: Boolean(form?.querySelector('[data-init-notefield="label"], [data-init-notefield="editLabel"]')) };
+  }
+  function noteValuesFor(id) {
+    // The write box's key is the initiative; an edit form's key is initiative|note. Both are read from the DOM at the
+    // press, so what the reader last typed is what is sent even if a snapshot repainted under the caret.
+    const draft = initNoteDraft.get(String(id)) || { text: "", label: "" };
+    const live = noteFormAt(id);
+    return { text: String(live.text || draft.text || ""), label: String(live.label || draft.label || "") };
+  }
+  async function initNoteAdd(id) {
+    const init = initById(String(id));
+    if (!init || initNoteBusy.has(String(id))) return;
+    const { text: rawText, label: rawLabel } = noteValuesFor(id);
+    const text = String(rawText || "").trim();
+    const label = String(rawLabel || "").trim();
+    if (!text) {
+      setNoteStatus(id, "a note needs something to remember - a sentence, a ticket id, a link, or a decision", true);
+      renderAssistantInitiatives(true);
+      return;
+    }
+    initNoteBusy.add(String(id));
+    try {
+      const d = await initPost("/api/initiatives/notes/add", { id, text, label });
+      adoptInitiatives(d);
+      initNoteDraft.delete(String(id));
+      initNoteArm = "";
+      if (d.duplicate) setNoteStatus(id, "that url is already on this initiative - the row above is the one it kept, and the label it already had is not overwritten", false);
+      else if (d.note?.kind === "link") setNoteStatus(id, `linked - a ${noteHostWord(d.note.host)} chip for ${noteLinkWords(d.note)}`, false);
+      else setNoteStatus(id, "noted - it is the newest line in the log", false);
+    } catch (err) {
+      setNoteStatus(id, String((err && err.message) || err), true);
+    } finally {
+      initNoteBusy.delete(String(id));
+    }
+    renderAssistantInitiatives(true);
+  }
+  function initNoteEditStart(id, noteId) {
+    const init = initById(String(id));
+    const note = (Array.isArray(init?.notes) ? init.notes : []).find((n) => String(n.id) === String(noteId));
+    if (!note) return;
+    initNoteArm = "";
+    initNoteEdit.set(String(id), { noteId: String(note.id), text: String(note.text || ""), label: String(note.label || "") });
+    renderAssistantInitiatives(true);
+    // THE CARET LANDS IN THE WORDS BEING AMENDED, not on the button that is no longer there: the row the reader
+    // pressed has become a form, and the first thing they want is its text.
+    as$("as-initiatives")?.querySelector(`[data-init-noteform="${CSS.escape(`${id}|${note.id}`)}"] textarea`)?.focus({ preventScroll: true });
+  }
+  function initNoteEditCancel(id) {
+    initNoteEdit.delete(String(id));
+    renderAssistantInitiatives(true);
+  }
+  async function initNoteEditSave(id) {
+    const init = initById(String(id));
+    const edit = initNoteEdit.get(String(id));
+    if (!init || !edit || initNoteBusy.has(String(id))) return;
+    const note = (Array.isArray(init.notes) ? init.notes : []).find((n) => String(n.id) === String(edit.noteId));
+    const live = noteFormAt(`${id}|${edit.noteId}`);
+    const text = String(live.text || edit.text || "").trim();
+    if (!text) {
+      setNoteStatus(id, "a note needs something to remember - clearing it would leave an empty line in the log", true);
+      renderAssistantInitiatives(true);
+      return;
+    }
+    const body = { id, note: edit.noteId, text };
+    // A label belongs to a link, and the store refuses it on prose: it is sent only for a link, and a link keeps the
+    // label field whether or not the words were changed.
+    if (String(note?.kind) === "link") body.label = String(live.hasLabel ? live.label : note?.label || "").trim();
+    initNoteBusy.add(String(id));
+    try {
+      const d = await initPost("/api/initiatives/notes/edit", body);
+      adoptInitiatives(d);
+      initNoteEdit.delete(String(id));
+      setNoteStatus(id, d.changed === false ? "nothing changed - the words are the same ones" : "saved - the author stamp is untouched, and the change is stamped beside it", false);
+    } catch (err) {
+      setNoteStatus(id, String((err && err.message) || err), true);
+    } finally {
+      initNoteBusy.delete(String(id));
+    }
+    renderAssistantInitiatives(true);
+  }
+  async function initNoteDelete(id, noteId) {
+    if (initNoteBusy.has(String(id))) return;
+    initNoteBusy.add(String(id));
+    try {
+      const d = await initPost("/api/initiatives/notes/delete", { id, note: noteId });
+      adoptInitiatives(d);
+      initNoteArm = "";
+      if (initNoteEdit.get(String(id))?.noteId === String(noteId)) initNoteEdit.delete(String(id));
+      setNoteStatus(id, "deleted - the line is out of the log, and the panel's own log keeps who removed it", false);
+    } catch (err) {
+      setNoteStatus(id, String((err && err.message) || err), true);
+    } finally {
+      initNoteBusy.delete(String(id));
+    }
+    renderAssistantInitiatives(true);
+  }
+
   function initCardHtml(init, at = 0, count = 1) {
     const blocked = initBlocked();
     const desc = String(init.description || "").trim();
@@ -4234,19 +4484,30 @@
           ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini init-add" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - your tier decides whether it asks, and a question names both the tree and the initiative">+ Add a worktree</button>`}
         </div>
       </div>
-      <div class="init-assistfold">
-        <button type="button" class="init-proj" data-init-assist-fold="${esc(init.id)}" aria-expanded="${assistantsOpen ? "true" : "false"}" title="${assistantsOpen ? "fold" : "unfold"} the assistants that worked on this initiative, newest first - folded, the card stays a map of the work">
-          <span class="init-caret">${assistantsOpen ? "▾" : "▸"}</span>
+      ${/* THE NOTE LOG (row 320). Above the Assistants fold, because it is the part of the card a reader comes back
+           for: a title and a description say what the work IS, and the notes hold what it LEARNS. It draws the store's
+           own fields and nothing else - see initNotesSectionHtml. */ ""}
+      ${initNotesSectionHtml(init)}
+      ${/* THE TWO FOLDS, in the waves lane's own grammar (row 320). A section head with its name, its count and one
+           sentence saying what the fold holds, over rows that are cards rather than loose lines. The behaviour is
+           untouched: the same data-init-assist-fold / data-init-history-fold attributes, the same aria-expanded, the
+           same module sets behind them, the same rows inside - so every press, keyboard path, focus restore and
+           repaint answers exactly as it did. */ ""}
+      <section class="init-fold init-assistfold" data-init-assist-section="${esc(init.id)}">
+        <button type="button" class="init-proj init-foldhead" data-init-assist-fold="${esc(init.id)}" aria-expanded="${assistantsOpen ? "true" : "false"}" title="${assistantsOpen ? "fold" : "unfold"} the assistants that worked on this initiative, newest first - folded, the card stays a map of the work">
+          <span class="init-caret" aria-hidden="true">${assistantsOpen ? "▾" : "▸"}</span>
           <span class="init-proj-name">Assistants</span>
-          <span class="chip${assistants.length ? "" : " is-zero"}">${assistants.length}</span>
+          <span class="chip${assistants.length ? "" : " is-zero"}" data-init-assist-count>${assistants.length}</span>
+          <span class="as-hint init-foldmeta">${assistants.length ? "who has worked this initiative's trees" : "no assistant has worked these trees yet"}</span>
         </button>
         ${assistHtml}
-      </div>
-      <div class="init-histfold">
-        <button type="button" class="init-proj" data-init-history-fold="${esc(init.id)}" aria-expanded="${historyOpen ? "true" : "false"}" title="${historyOpen ? "fold" : "unfold"} the history of this initiative: every attach, detach, create and edit, with the actor and the time - the record a removal is judged against, and one every tier writes">
-          <span class="init-caret">${historyOpen ? "▾" : "▸"}</span>
+      </section>
+      <section class="init-fold init-histfold" data-init-hist-section="${esc(init.id)}">
+        <button type="button" class="init-proj init-foldhead" data-init-history-fold="${esc(init.id)}" aria-expanded="${historyOpen ? "true" : "false"}" title="${historyOpen ? "fold" : "unfold"} the history of this initiative: every attach, detach, create and edit, with the actor and the time - the record a removal is judged against, and one every tier writes">
+          <span class="init-caret" aria-hidden="true">${historyOpen ? "▾" : "▸"}</span>
           <span class="init-proj-name">History</span>
-          <span class="chip${history.length ? "" : " is-zero"}">${history.length}</span>
+          <span class="chip${history.length ? "" : " is-zero"}" data-init-hist-count>${history.length}</span>
+          <span class="as-hint init-foldmeta">${history.length ? `changes to the map, newest first - ${history.length === 1 ? "one line" : `${history.length} lines`}` : "nothing recorded yet"}</span>
         </button>
         ${historyOpen
           ? `<div class="init-history">${
@@ -4254,13 +4515,13 @@
                 ? history
                     .map((ev) => {
                       const line = wtInitiativeFold.historyLine(ev);
-                      return `<div class="init-hist-row" data-init-hist-row="${esc(line.at || "")}" data-init-hist-actor="${esc(line.who)}"><span class="init-hist-what"><b class="init-hist-who">${esc(line.who)}</b> ${esc(line.what)}</span><span class="as-hint init-hist-when" title="${esc(line.at || "")}">${line.at ? `${esc(relTime(line.at))} ago` : "no time recorded"}</span></div>`;
+                      return `<div class="init-hist-row" data-init-hist-row="${esc(line.at || "")}" data-init-hist-actor="${esc(line.who)}"><span class="init-hist-dot" aria-hidden="true"></span><span class="init-hist-what"><b class="init-hist-who">${esc(line.who)}</b> ${esc(line.what)}</span><span class="as-hint init-hist-when" title="${esc(line.at || "")}">${line.at ? `${esc(relTime(line.at))} ago` : "no time recorded"}</span></div>`;
                     })
                     .join("")
                 : `<div class="as-hint init-hist-none">nothing recorded yet - the first change writes the first line</div>`
             }</div>`
           : ""}
-      </div>`
+      </section>`
         : ""}
       ${initNoteFor(init.id)}
     </article>`;
@@ -4337,6 +4598,7 @@
     "data-init-refresh", "data-init-task-card", "data-init-tasks-more", "data-init-assistant", "data-init-create",
     "data-init-save", "data-init-cancel", "data-init-field", "data-init-about", "data-init-density",
     "data-init-up", "data-init-down", "data-init-archive", "data-init-restore", "data-init-filter", "data-init-search",
+    "data-init-notesave", "data-init-noteeditsave", "data-init-noteedit", "data-init-notedel", "data-init-notecancel",
   ];
   let initKeyboardModality = false;
   document.addEventListener("keydown", (e) => {
@@ -4992,6 +5254,44 @@
         void initArchive(String(archiveBtn.dataset.initArchive || ""));
         return;
       }
+      // THE NOTE LOG'S OWN CONTROLS (row 320). Answered before the press rule for the arrows' reason: every one of
+      // them sits INSIDE a card, so the rule would call the press "self" and hand it to a control list that knows
+      // nothing about these names. Delete asks once and deletes on the second press, because a note is memory and a
+      // delete has no undo in this tab.
+      const noteBtn = e.target && e.target.closest ? e.target.closest("[data-init-notesave], [data-init-noteeditsave], [data-init-noteedit], [data-init-notedel], [data-init-notecancel]") : null;
+      if (noteBtn) {
+        e.preventDefault();
+        // TWO SAVES, TWO NAMES. The write box and an open edit form both carry a Save, and they sit in the same card,
+        // so one shared attribute would let the write box's press save the edit (and the note the reader typed would
+        // never go out). `data-init-noteeditsave` names the row it amends; `data-init-notesave` only ever appends.
+        if (noteBtn.dataset.initNoteeditsave) {
+          const [editInit, ...editRest] = String(noteBtn.dataset.initNoteeditsave).split("|");
+          initNoteEditSave(editInit, editRest.join("|"));
+          return;
+        }
+        if (noteBtn.dataset.initNotesave) {
+          void initNoteAdd(String(noteBtn.dataset.initNotesave));
+          return;
+        }
+        if (noteBtn.dataset.initNotecancel) {
+          initNoteEditCancel(String(noteBtn.dataset.initNotecancel));
+          return;
+        }
+        if (noteBtn.dataset.initNoteedit) {
+          const [initId, ...rest] = String(noteBtn.dataset.initNoteedit).split("|");
+          initNoteEditStart(initId, rest.join("|"));
+          return;
+        }
+        const [initId, ...rest] = String(noteBtn.dataset.initNotedel || "").split("|");
+        const noteId = rest.join("|");
+        if (initNoteArm === noteId) {
+          void initNoteDelete(initId, noteId);
+          return;
+        }
+        initNoteArm = noteId;
+        renderAssistantInitiatives(true);
+        return;
+      }
       const kind = wtInitiativeFold.press(e.target, { card, open: cardOpen });
       if (kind === "card") {
         const id = String(card?.dataset.initCard || "");
@@ -5254,6 +5554,30 @@
         return;
       }
       if (readWaveField(e.target.closest("[data-wave-field]"))) return;
+      // THE NOTE DRAFTS (row 320), kept outside the DOM for the reason the initiative drafts are: a snapshot repaints
+      // the card under the caret, and the words have to come back from here. The write box's form key is the
+      // initiative, an edit form's is initiative|note, so the two can never write into one another.
+      const noteField = e.target.closest("[data-init-notefield]");
+      if (noteField) {
+        const key = String(noteField.closest("[data-init-noteform]")?.dataset.initNoteform || "");
+        const [noteInitId, ...noteRest] = key.split("|");
+        const noteId = noteRest.join("|");
+        const which = String(noteField.dataset.initNotefield || "");
+        const value = String(noteField.value ?? "");
+        if (noteInitId && noteId) {
+          const edit = initNoteEdit.get(noteInitId);
+          if (edit && edit.noteId === noteId) {
+            if (which === "editText") edit.text = value;
+            else if (which === "editLabel") edit.label = value;
+          }
+        } else if (noteInitId) {
+          const draft = initNoteDraft.get(noteInitId) || { text: "", label: "" };
+          if (which === "text") draft.text = value;
+          else if (which === "label") draft.label = value;
+          initNoteDraft.set(noteInitId, draft);
+        }
+        return;
+      }
       const field = e.target.closest("[data-init-field]");
       if (!field) return;
       const which = String(field.dataset.initField || "");
