@@ -2497,6 +2497,27 @@ setInterval(() => {
         reason: "the gateway was restarted and the panel did not ask for it",
       });
     })
+    // The SAME clock reaps a worker run that has gone quiet past its own budget, and asks a thread that has
+    // passed its compaction threshold to compact. No second scheduler: one clock, one board read, and each rule
+    // carries its own per-card guards (lib/jobs.js sweepStalledRuns / sweepCompaction).
+    .then(() => jobs.sweepStalledRuns())
+    .then((reaped) => {
+      if (!reaped.length) return;
+      log(
+        `stall reaper: ${reaped.length} run(s) went quiet past their budget and were stopped (${reaped
+          .map((j) => `${j.id}: ${j.reaped?.quietSeconds || "?"}s quiet`)
+          .join(", ")})`,
+      );
+    })
+    .then(() => jobs.sweepCompaction())
+    .then((asked) => {
+      if (!asked.length) return;
+      log(
+        `compaction: ${asked.length} thread(s) past the ${jobs.compactPercent}% threshold (${asked
+          .map((a) => `${a.id}: ${a.state || (a.ok ? "asked" : "skipped")}`)
+          .join(", ")})`,
+      );
+    })
     .catch((e) => log(`orphan sweep failed: ${String((e && e.message) || e)}`))
     .finally(() => {
       sweepingOrphans = false;

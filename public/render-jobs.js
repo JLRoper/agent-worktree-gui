@@ -299,6 +299,49 @@ function turnBlock(conv, turn, index, copy = "", taskLink = null, ask = "", park
     `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread, taskLink)}${park}${ask}</div>`;
 }
 
+// ---- the stuck-turn chip ---------------------------------------------------------------------
+// A worker run that stops producing events used to read `running` on its row until the 7200s wall-clock cap: a
+// #354 run died at that cap after two hours, and another job read running for 45 minutes with no tree and no
+// events. lib/jobs.js now reaps such a run (sweepStalledRuns) and records the compaction it asked for, and this is
+// the one place a person SEES either without opening the job store: a chip on the card's head, beside the live
+// pulse, drawn from the job's own fields only - `stuck`, `reaped` and `compaction`, the same objects /api/jobs
+// carries. Nothing here measures the clock a second time: the state word is the server's, and the age in it is the
+// quiet the server computed.
+//
+// Four states, four different facts:
+//   quiet      a live run whose stream has said nothing past the quiet window. Amber: it is watched, not stopped,
+//              until its age passes its own budget.
+//   reaped     the reaper stopped it through the panel's own cancel path. Red-grey: this row is over, and the
+//              reason names the quiet window and the budget.
+//   compacting the gateway is compacting this run's context: the silence is explained, and the chip says so
+//              instead of accusing it.
+//   (none)     a moving run draws nothing.
+function stuckChipHtml(turn) {
+  const s = turn && turn.stuck;
+  if (!s || !s.state) return "";
+  const mins = (secs) => (secs === null || secs === undefined || !Number.isFinite(Number(secs)) ? "" : `${Math.max(1, Math.round(Number(secs) / 60))}m`);
+  const quiet = mins(s.quietSeconds);
+  if (s.state === "reaped") {
+    const state = turn.compaction?.state;
+    const compact = state ? ` The compaction the panel asked for was ${state}.` : "";
+    const title = `${s.reason || "the panel's quiet-window reaper stopped this run"} — the row no longer waits for the panel's wall-clock cap.${compact}`;
+    return `<span class="stuck-chip is-reaped" data-stuck="reaped" title="${esc(title)}">reaped${quiet ? ` · ${esc(quiet)} quiet` : ""}</span>`;
+  }
+  if (s.state === "compacting") {
+    const title = `${s.reason || "the gateway is compacting this run's context"} — a compacting run is silent by design, so this is not a stall`;
+    return `<span class="stuck-chip is-compacting" data-stuck="compacting" title="${esc(title)}">compacting${quiet ? ` · ${esc(quiet)}` : ""}</span>`;
+  }
+  if (s.state === "quiet") {
+    const over = s.overBudget
+      ? ` It is past its ${s.budgetSeconds}s budget, so the reaper stops it through the panel's cancel path on its next pass.`
+      : ` It has not passed its ${s.budgetSeconds}s budget yet, so it is watched, not stopped.`;
+    const title = `nothing on this run's stream for ${quiet || "a while"} (the ${mins(s.windowSeconds) || "quiet window"} window).${over}`;
+    return `<span class="stuck-chip is-quiet" data-stuck="quiet" title="${esc(title)}">quiet${quiet ? ` ${esc(quiet)}` : ""}</span>`;
+  }
+  return "";
+}
+// ---- end the stuck-turn chip -----------------------------------------------------------------
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   // One resolver per card, computed once: every turn block below draws the same anchors for the same ids.
@@ -581,6 +624,7 @@ function conversationHtml(conv) {
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
       ${pipelineChipHtml(latest.pipeline)}
       ${livePulseHtml(latest)}
+      ${stuckChipHtml(latest)}
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
@@ -955,7 +999,7 @@ function updateJob(j, { scroll = false } = {}) {
 // rebuilding is what used to throw the reader back to the top of a chat mid-read.
 function conversationSignature(conv) {
   const turns = conv.turns
-    .map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.error ? 1 : 0}:${(t.artifacts || []).length}`)
+    .map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.error ? 1 : 0}:${(t.artifacts || []).length}:${t.stuck?.state || ""}`)
     .join(",");
   // A run's approval lives on the TURN (Runs API), not in state.approvals. Without it here, a prompt
   // arriving mid-turn changes nothing in the signature, so the card is not repainted and the approval
