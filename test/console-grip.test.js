@@ -112,7 +112,7 @@ test("the height is written through the one owner, and a move is the pointer fro
   const start = appSrc.indexOf('"pointermove"');
   assert.ok(start > 0, "the move handler is still there");
   const handler = appSrc.slice(start, appSrc.indexOf("function endOutGrip(", start));
-  assert.ok(handler.includes("outGripStep(d.top, d.grab, e.clientY)"), "the press's top edge, not the drawn box");
+  assert.ok(handler.includes("outGripStep(d.top, d.grab, e.clientY / d.z)"), "the press's top edge, not the drawn box, with the pointer in layout px");
   assert.equal(handler.includes("getBoundingClientRect().height"), false, "no second measurement of the height per move");
   assert.ok(handler.includes("setOutHeight(d.out, h)"), "written through the one writer of --out-h");
   assert.equal(/\.out\.style\.height\s*=/.test(appSrc), false, "and never through style.height on the console");
@@ -174,7 +174,7 @@ test("one writer: no path sets a console's height except setOutHeight", () => {
   // number: the gesture, the remembered height a rebuild restores, and the float's slack console drag.
   assert.ok(grab(consoleSrc, "setOutHeight").includes('setProperty("--out-h"'), "the writer, in one place");
   assert.ok(grab(consoleSrc, "applyStoredHeight").includes("setOutHeight(o, h)"), "a rebuilt console restores through it");
-  assert.ok(appSrc.includes("setOutHeight(out, r.height)") && appSrc.includes("setOutHeight(d.out, h)"), "the press and the release");
+  assert.ok(appSrc.includes("setOutHeight(out, r.height / z)") && appSrc.includes("setOutHeight(d.out, h)"), "the press (in layout px) and the release");
   assert.ok(grab(appSrc, "endOutGrip").includes("setOutHeight(d.out, h)"), "the release clamps into the same variable");
   assert.equal(/cons\.style\.height\s*=/.test(page("public/assistant.js")), false, "the float's console drag goes through it too");
 });
@@ -281,8 +281,30 @@ test("the gesture hands its own pointer the whole way", () => {
   const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
   assert.ok(press.includes("setPointerCapture(e.pointerId)"), "captured, so a release outside the card still ends it");
   assert.ok(press.includes("e.button !== 0"), "and only the primary button starts a resize");
-  assert.ok(press.includes("top: r.top"), "the press freezes the box's top edge");
-  assert.ok(press.includes("grab: r.bottom - e.clientY"), "and where inside the grip the hand landed");
-  assert.ok(press.includes("setOutHeight(out, r.height)"), "the press pins the height it found, through the one writer");
+  assert.ok(press.includes("top: r.top / z"), "the press freezes the box's top edge, in layout px");
+  assert.ok(press.includes("grab: (r.bottom - e.clientY) / z"), "and where inside the grip the hand landed, in layout px");
+  assert.ok(press.includes("setOutHeight(out, r.height / z)"), "the press pins the height it found, in layout px, through the one writer");
   assert.ok(grab(appSrc, "endOutGrip").includes("d.hadVar"), "which a press that never moved puts back");
+});
+
+// ---- the units: a press on a zoomed page is a press, not a resize ------------------------------------------------
+test("every length the gesture keeps is a layout length, and the pointer is divided where it enters", () => {
+  // The reader's press-only report: a pointerdown with NO movement moved the corner about 50px. The gesture froze the
+  // drawn height (a VISUAL rect) and wrote it straight into `--out-h` (a LAYOUT length), so on a page at 90% the box
+  // came back at 90% of itself - a resize nobody asked for. The scale is read once and every number is converted at
+  // the boundary: the press, the move's pointer, the edge watch's drift, and the release's room.
+  assert.ok(grab(appSrc, "outGripZoom").includes("getComputedStyle(document.documentElement).zoom"), "the page's own zoom is the scale");
+  const pressAt = appSrc.indexOf("// The grip's own press.");
+  const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
+  assert.ok(press.includes("const z = outGripZoom()"), "read once, at the press");
+  assert.ok(press.includes("z,") && press.includes("from: r.height / z"), "and kept on the gesture record");
+  const move = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
+  assert.ok(move.includes("e.clientY / d.z"), "the move's pointer is divided by it");
+  assert.ok(grab(appSrc, "outGripEdgeWatch").includes("getBoundingClientRect().top / d.z"), "so is the edge watch's drift");
+  assert.ok(grab(appSrc, "endOutGrip").includes("r.top / d.z"), "and the room the release clamps to");
+  assert.equal(
+    /setOutHeight\(out, r\.height\)/.test(appSrc),
+    false,
+    "nothing writes the visual rect back as a layout height",
+  );
 });

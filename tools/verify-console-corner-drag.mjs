@@ -10,6 +10,7 @@
 //   node tools/verify-console-corner-drag.mjs --trace <file>       # every step of every case as JSON
 //   node tools/verify-console-corner-drag.mjs --cause-check        # the slow drag with the browser's anchoring off
 //   node tools/verify-console-corner-drag.mjs --widths 1600,820 --sizes 140,460
+//   node tools/verify-console-corner-drag.mjs --press-sizes 140,300,460,620 --press-zooms 100,90
 //
 // WHAT THIS GUARDS. The console's corner grip (`pre.job-out` under `.out-box > .out-grip`) has one stored size and one
 // writer: `setOutHeight` into `--out-h` (public/board/console.js:3753), remembered on release in `state.outHeights`
@@ -36,6 +37,13 @@
 // it, back down), interrupted by a state poll (`resync`), interrupted by a transcript repaint (an artifact change,
 // then the panel's own `updateJob` -> `renderConversation`), and no-move (a press, then a double-click).
 //
+// THE PRESS-ONLY ROWS (row 332). A press with NO movement, held half a second and released, at every width, at four
+// heights, and at the page's own zoom 100 AND 90. Each row asserts the drawn height, the top edge and the corner hold
+// still to within 1px while the hand is down, and that the release puts the box back exactly - the reader's report was
+// a corner that moved ~50px on the press alone, and the drag matrix's no-move case could not see it because the
+// release undid the jump before it read the box. The 90% rows are the shape that carried it: the drawn height is a
+// visual length and `--out-h` is a layout one.
+//
 // The browser half needs a Playwright install (PANEL_PLAYWRIGHT_ROOT or the global npm prefix), exactly like every
 // other harness in tools/. It starts no server and restarts nothing: it opens the panel at --url in its own isolated
 // browser context, so the reader's tab, its localStorage and its stored heights are untouched.
@@ -46,7 +54,7 @@
 // everything else - the API, the SSE stream, the row scans - come from the running panel. One gate, one set of live
 // data, two trees: the pre-fix commit measures the defect and the fixed tree measures the fix, with no server started,
 // restarted or reconfigured.
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { REPO, loadPlaywright, notRun } from "./browser.mjs";
 
@@ -60,6 +68,13 @@ const opt = (name, fallback) => {
 const BASE = String(opt("url", process.env.PANEL_URL || "http://127.0.0.1:7331")).replace(/\/$/, "");
 // The checkout whose `public/` the page is built from, or null for the panel's own (the ordinary run).
 const SERVE = opt("serve", null) ? path.resolve(opt("serve", null)) : null;
+// A `--serve` that names no checkout is a run that would measure the PANEL's own files and report a pass on a tree
+// nobody served - the route's `continue()` fallback hides it, so it is refused here instead. (A git-bash `$PWD` is
+// `/c/...`, which path.resolve turns into a broken drive-letter path: the exact mistake this guard exists to stop.)
+if (SERVE && !existsSync(path.join(SERVE, "public", "index.html"))) {
+  console.error(`--serve ${SERVE} has no public/index.html: refusing to measure the panel's own files instead`);
+  process.exit(2);
+}
 const MIME = {
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
@@ -76,6 +91,17 @@ const TRACE = opt("trace", null);
 const CAUSE = flag("cause-check");
 const WIDTHS = String(opt("widths", "1600,820")).split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
 const SIZES = String(opt("sizes", "140,460")).split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
+// THE PRESS-ONLY MATRIX. A pointerdown that moves nothing must move nothing: the corner, the box and the store read
+// before the press, at the end of a half-second hold, and after the release. The drag matrix's no-move case reads only
+// the before and the after, so a box that jumps ON the press and is put back on the release passed it - the reader's
+// press-only report (a press with no movement moved the corner about 5% of the screen height, because the drawn height
+// is a VISUAL length and `--out-h` is a LAYOUT one: on a page at 90% the press wrote the visual number and the box came
+// back at 90% of itself). So the rows run at the page's own zoom as well as at 100: a zoom is the shape that carried
+// the defect, and a gate that only ever ran at 100 could not see it.
+const PRESS_SIZES = String(opt("press-sizes", "140,300,460,620")).split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
+const PRESS_ZOOMS = String(opt("press-zooms", "100,90")).split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
+const PRESS_HOLD_MS = 500;
+const PRESS_TOLERANCE_PX = 1; // the brief's number: a press-only row fails above 1px of movement
 // A hand lands a few px inside an 18 px band; 3 px is inside it, and 2 px is the repo's corner tolerance.
 const GRIP_INSET_PX = 3;
 const CORNER_TOLERANCE_PX = 2;
@@ -179,6 +205,9 @@ const PAGE_HELPERS = (gripInset) => {
         slack: Boolean(b.querySelector(":scope > .turn.is-slack")),
         display: getComputedStyle(o).display,
         flex: getComputedStyle(o).flex,
+        // The page's own zoom, as the gesture reads it: the scale between a visual rect and a layout height. A
+        // press-only row at a zoom other than 1 is the shape the reader's report came from.
+        zoom: getComputedStyle(document.documentElement).zoom || "1",
       };
     },
     mark: () => { W.node = out(); return true; },
@@ -438,16 +467,28 @@ async function release(page) {
   return { settleMs, after, writes: during, finalH };
 }
 
-// The starting size for a case, through the page's writer, verified against the rendered box.
-async function startSize(page, px) {
+// The starting size for a case, through the page's writer, verified against the rendered box. `z` is the page's own
+// zoom: the writer speaks layout px, the rect is visual, so the drawn height it is checked against is `px * z`.
+async function startSize(page, px, z = 1) {
   for (let i = 0; i < 5; i += 1) {
     const set = await page.evaluate((n) => window.__CD.setStart(n), px);
     await page.waitForTimeout(120);
     const now = await page.evaluate(() => window.__CD.read());
-    if (now && Math.abs(now.h - px) <= 1) return now;
+    if (now && Math.abs(now.h - px * z) <= 1.5) return now;
     if (!set) break;
   }
   return page.evaluate(() => window.__CD.read());
+}
+
+// The page's own zoom, the way the reader sets it (Settings > Display, applyZoom in public/settings.js): a layout scale
+// on documentElement, so `getBoundingClientRect()` and a pointer are visual px and `--out-h` is a layout length.
+async function applyZoom(page, pct) {
+  await page.evaluate((n) => {
+    document.documentElement.style.zoom = n === 100 ? "" : String(n / 100);
+    try { localStorage.setItem("wtgui.zoom", String(n)); } catch { /* private mode */ }
+    if (typeof state !== "undefined") state.zoom = n;
+  }, pct);
+  await page.waitForTimeout(220);
 }
 
 // ---- the cases ---------------------------------------------------------------------------------------------------
@@ -680,11 +721,75 @@ function verdictOf(run) {
   return { fail: fails, numbers };
 }
 
+// ---- the press-only rows -----------------------------------------------------------------------------------------
+// A press, half a second of stillness, a release. The readings are the box BEFORE the press, at the end of the hold,
+// and after the release: the print is the drawn height, its top edge and the store, so a jump that the release undoes
+// is still a jump, and the row fails on it. `z` is the page's zoom - the reader's defect was a press on a zoomed page,
+// where the drawn height (visual) was written back as a layout height and the box came back `z` times smaller.
+async function pressOnlyCase(page, sizePx, z) {
+  await startSize(page, sizePx, z);
+  await page.evaluate(() => window.__CD.foot());
+  await page.waitForTimeout(150);
+  const before = await page.evaluate(() => window.__CD.read());
+  const { at, down } = await press(page);
+  // The hold: a quarter of a second in, then the end of it. `press` already waited 60ms for the gesture to engage.
+  await page.waitForTimeout(180);
+  const mid = await page.evaluate(() => window.__CD.read());
+  await page.waitForTimeout(Math.max(0, PRESS_HOLD_MS - 240));
+  const held = await page.evaluate(() => window.__CD.read());
+  const { settleMs, after, writes } = await release(page);
+  return { sizePx, z, at, before, down, mid, held, after, writes, settleMs };
+}
+
+// What a press that moves nothing promises: the box and its corner stand still for the whole hold, the release puts
+// back exactly what the sheet drew, and nothing is stored. The tolerance is 1px - the reader asked for that number -
+// and 0 is what the fixed tree measures.
+function pressOnlyVerdict(run) {
+  const { before, down, mid, held, after } = run;
+  const fails = [];
+  const numbers = {};
+  if (!before || !down || !mid || !held || !after) return { fail: ["the row could not be read"], numbers };
+  if (down.held !== true) fails.push("the press did not engage the corner gesture (the band was missed)");
+  const round = (n) => +Number(n).toFixed(2);
+  numbers.drawnBefore = round(before.h);
+  numbers.topBefore = round(before.top);
+  numbers.storedBefore = before.stored;
+  numbers.varBefore = before.varH || "";
+  numbers.drawnHeld = round(held.h);
+  numbers.topHeld = round(held.top);
+  numbers.deltaDrawn = round(held.h - before.h);
+  numbers.deltaTop = round(held.top - before.top);
+  numbers.cornerDelta = round(held.gripBottom - before.gripBottom);
+  numbers.drawnAfter = round(after.h);
+  numbers.topAfter = round(after.top);
+  numbers.afterDeltaDrawn = round(after.h - before.h);
+  numbers.afterDeltaTop = round(after.top - before.top);
+  numbers.storedAfter = after.stored;
+  numbers.varAfter = after.varH || "";
+  numbers.zoom = before.zoom || "1";
+  numbers.heldScrollWrites = run.writes.bodyWrites;
+  numbers.settleMs = run.settleMs;
+  numbers.nodeReplaced = Boolean(after.same === false);
+  if (Math.abs(numbers.deltaDrawn) > PRESS_TOLERANCE_PX) {
+    fails.push(`the box changed height by ${numbers.deltaDrawn}px on the press, with the pointer still`);
+  }
+  if (Math.abs(numbers.deltaTop) > PRESS_TOLERANCE_PX) {
+    fails.push(`the corner moved ${numbers.deltaTop}px on the press, with the pointer still`);
+  }
+  if (Math.abs(numbers.afterDeltaDrawn) > PRESS_TOLERANCE_PX || Math.abs(numbers.afterDeltaTop) > PRESS_TOLERANCE_PX) {
+    fails.push(`the release did not put the box back (${numbers.afterDeltaDrawn}px of height, ${numbers.afterDeltaTop}px of top)`);
+  }
+  if ((after.varH || "") !== (before.varH || "")) fails.push(`the press left --out-h "${before.varH}" -> "${after.varH}"`);
+  if (after.stored !== before.stored) fails.push(`the press changed the stored height ${before.stored} -> ${after.stored}`);
+  if (numbers.nodeReplaced) fails.push("the console node was replaced by a press that moved nothing");
+  return { fail: fails, numbers };
+}
+
 async function main() {
   const pw = loadPlaywright({ root: REPO });
   if (!pw) return notRun("the console corner drag", "no Playwright install (set PANEL_PLAYWRIGHT_ROOT)");
   const numbers = { base: BASE, widths: WIDTHS, sizes: SIZES, cases: {} };
-  const trace = { cases: [] };
+  const trace = { cases: [], pressOnly: [] };
   let version = "";
   let launched = null;
   try {
@@ -753,6 +858,47 @@ async function main() {
             await page.waitForTimeout(80);
           }
         }
+        // THE PRESS-ONLY ROWS: a press, half a second of stillness, a release, at the page's own zoom as well as at
+        // 100. One row per width, height and zoom; each fails above 1px of movement in the box, its corner or its top
+        // edge, and on any change the press leaves in `--out-h` or the store.
+        for (const zoomPct of PRESS_ZOOMS) {
+          await applyZoom(page, zoomPct);
+          const z = zoomPct / 100;
+          for (const size of PRESS_SIZES) {
+            const key = `press-only@${width}/${size}/z${zoomPct}`;
+            try {
+              const run = await pressOnlyCase(page, size, z);
+              const v = pressOnlyVerdict(run);
+              numbers.cases[key] = { ...v.numbers, fail: v.fail, ok: v.fail.length === 0 };
+              trace.pressOnly.push({
+                key,
+                zoom: zoomPct,
+                before: run.before,
+                down: run.down,
+                mid: run.mid,
+                held: run.held,
+                after: run.after,
+                writes: run.writes,
+                settleMs: run.settleMs,
+              });
+              const n = v.numbers;
+              check(
+                v.fail.length === 0,
+                key,
+                `drawn ${n.drawnBefore}px -> ${n.drawnHeld}px (delta ${n.deltaDrawn}px), top ${n.topBefore}px -> ${n.topHeld}px ` +
+                  `(delta ${n.deltaTop}px), corner delta ${n.cornerDelta}px, after ${n.drawnAfter}px/${n.topAfter}px, ` +
+                  `stored ${n.storedBefore == null ? "unset" : `${n.storedBefore}px`} -> ${n.storedAfter == null ? "unset" : `${n.storedAfter}px`}, ` +
+                  `--out-h "${n.varBefore}" -> "${n.varAfter}", zoom ${n.zoom}, scroll writes ${n.heldScrollWrites}` +
+                  (v.fail.length ? ` -- ${v.fail.join("; ")}` : ""),
+              );
+            } catch (err) {
+              check(false, key, `did not run: ${String((err && err.message) || err).slice(0, 240)}`);
+              trace.pressOnly.push({ key, error: String((err && err.message) || err) });
+            }
+            await page.waitForTimeout(100);
+          }
+        }
+        await applyZoom(page, 100);
         if (CAUSE) {
           // The same drag twice at one shape: as the page draws it, and with the transcript's scroll anchoring off.
           // The second run is only credited when the first one reproduced the drift, so a shape where the defect does

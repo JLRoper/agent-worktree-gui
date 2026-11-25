@@ -10621,6 +10621,11 @@ for (const type of ["gesturestart", "gesturechange"]) {
 //   - the min/max clamps are applied ONCE, on release. A clamp applied mid-gesture is a box that stops while the
 //     pointer keeps going, which is the jump in its other form. The floor of the gesture is the console's own padding
 //     box (measured: `--out-h: 1px` drew 18px), so the number the drag stops on is one the box can actually draw;
+//   - THE POINTER IS VISUAL AND THE WRITER IS LAYOUT, and Settings > Display's zoom is the scale between them. One
+//     scale, read at the press (outGripZoom below); every number the gesture keeps is a layout length, and the
+//     pointer is divided by that scale where it enters. Written straight through, a press on a 90% page pinned the
+//     drawn height as a layout height and shrank the box by a tenth of itself - the corner leaving the hand by 50px
+//     with the pointer never moving (the reader's press-only report);
 //   - while it runs, the repaint paths leave that console alone (`outDragging` / `outGripHoldsCard`): no re-pin, no
 //     text rebuild, no node replacement, so the corner is under the pointer for every pixel of the travel;
 //   - the release does NOT put a following transcript back on its foot. The drag moved the box's bottom by the
@@ -10636,8 +10641,26 @@ for (const type of ["gesturestart", "gesturechange"]) {
 const OUT_GRIP_ROOM = 8; // px kept under the box at the viewport's bottom edge, so the grip is not on the very edge
 let outGripDrag = null;
 
+// THE PAGE'S OWN ZOOM IS A UNIT CHANGE, AND THIS GESTURE HAS TO SPEAK ONE UNIT. `clientY` and a
+// `getBoundingClientRect()` are VISUAL px; `--out-h`, the sheet's `min-height`, the transcript's `scrollTop` and
+// `window.innerHeight` are LAYOUT px; Settings > Display's zoom (`applyZoom` in public/settings.js) is the scale
+// between them, and the float's own gestures divide every length they write by the same number for the same reason
+// (public/assistant.js zoomScale). A press that froze the drawn height and wrote it straight back as a height was
+// therefore a press that RESIZED the box: at 90% a console drawn 495 visual px is 550 layout px, the press wrote
+// 495, and the box came back 445.5 - the corner left the hand by 50px with the pointer never moving, and at 110%
+// it moved the other way by the same tenth. Measured at two widths and four heights, both directions
+// (tools/measure-console-press-only.mjs). One scale, read ONCE at the press, and every number this gesture keeps is
+// a LAYOUT length: the pointer is expressed into layout units where it enters, and the rects it reads come back out
+// the same way. At zoom 100 the scale is 1 and every number is the one it always was.
+function outGripZoom() {
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
+  return Number.isFinite(z) && z > 0 ? z : 1;
+}
+
 // The height a move asks for: the pointer, expressed from the top edge the press froze, plus the pixels of the grip
 // the hand landed inside. Negative is not a height, so it lands on 0 and the next move asks again from the same edge.
+// Both arguments are layout lengths (`top` and `grab` were divided by the page zoom at the press, and the pointer is
+// divided by it by the caller), so the answer is one too and can go straight to the writer.
 function outGripStep(top, grab, clientY) {
   const h = Number(clientY) + Number(grab) - Number(top);
   return Number.isFinite(h) && h > 0 ? h : 0;
@@ -10718,6 +10741,9 @@ document.addEventListener(
     if (!out) return;
     const r = out.getBoundingClientRect();
     const cs = getComputedStyle(out);
+    // The scale between the visual numbers below (a rect, a pointer) and the layout numbers the writer and the sheet
+    // speak. Read once, here: the gesture outlives any number of frames and must not re-derive it per move.
+    const z = outGripZoom();
     // The transcript this console is drawn in, when it IS a scrollport (the docked Chat pane, a maximized card):
     // its pin is what the gesture stands down. A body the sheet does not scroll (a row's card on the board) is never
     // touched, because nothing there can clamp the box's top edge.
@@ -10734,13 +10760,17 @@ document.addEventListener(
       box,
       pointer: e.pointerId,
       y: e.clientY,
+      // THE SCALE THIS GESTURE SPEAKS IN. Every length it keeps (top, grab, h, from) is a LAYOUT length, and the
+      // pointer is divided by this on the way in - see outGripZoom. 1 on a page nobody has zoomed.
+      z,
       // THE TWO NUMBERS THE WHOLE GESTURE IS: the top edge it may not let move, and where inside the grip the hand
       // landed. The height of every move is `pointer + grab - top`, so the corner lands on the pointer whatever
-      // else reflowed, and nothing accumulates from one move to the next.
-      top: r.top,
-      grab: r.bottom - e.clientY,
-      h: r.height,
-      from: r.height,
+      // else reflowed, and nothing accumulates from one move to the next. Both are layout px: the rect is visual and
+      // the writer's number is layout, so the divide happens HERE, once, and every reader downstream is in one unit.
+      top: r.top / z,
+      grab: (r.bottom - e.clientY) / z,
+      h: r.height / z,
+      from: r.height / z,
       moved: false,
       // The sheet's own clamps, read BEFORE the gesture lifts the cap, and the inline style as it was, so a press that
       // moves nothing can put the box back exactly as it found it. The cap comes from `outGripCap`, which reads it off
@@ -10778,8 +10808,10 @@ document.addEventListener(
     // gesture is then the box the reader pressed on, and neither `max-height` nor `min-height` can stop that box while
     // the pointer keeps going - a clamp applied mid-gesture is the corner walking away from the cursor, which is the
     // defect this gesture exists to end. The clamps are read back on the release (endOutGrip), and all three inline
-    // values are restored if the press turns out to be a click.
-    setOutHeight(out, r.height);
+    // values are restored if the press turns out to be a click. The number written is the DRAWN height in layout px
+    // (`r.height / z`): written as the visual rect it would be a resize of the box on any zoomed page, which is the
+    // press that moved the corner with the hand still.
+    setOutHeight(out, r.height / z);
     out.style.maxHeight = "none";
     out.style.minHeight = "0";
     box.classList.add("is-resizing");
@@ -10800,8 +10832,10 @@ window.addEventListener(
     // with the node it was holding.
     if (!d.out.isConnected) return endOutGrip(e);
     // THE TOP EDGE THE PRESS FROZE, not the drawn box: the height is where the pointer is, expressed from an edge
-    // no pin may move while the hand is down. See outGripStep and cardBodyHeld (public/board/console.js).
-    let h = outGripStep(d.top, d.grab, e.clientY);
+    // no pin may move while the hand is down. See outGripStep and cardBodyHeld (public/board/console.js). The pointer
+    // arrives in visual px and the edge it is expressed from is a layout length, so it is divided here, by the scale
+    // the press read.
+    let h = outGripStep(d.top, d.grab, e.clientY / d.z);
     // A height below the console's own floor is not a height, so the box stops on the floor (the sheet's min-height,
     // or the padding box, whichever is larger). The pointer goes on past it; the box does not, and the release keeps
     // the floor rather than a number nothing could draw.
@@ -10843,7 +10877,10 @@ function outGripEdgeWatch(d) {
     if (outGripDrag !== d) return;
     if (d.out.isConnected && d.body) {
       if (d.h >= d.from - 0.5) {
-        const drift = d.out.getBoundingClientRect().top - d.top;
+        // Both sides in layout px: the rect is visual, the frozen edge is layout, and the transcript's scrollTop the
+        // correction is written to is layout as well. Without the divide, a zoomed page reported its own scale as
+        // drift every frame and the offset ran away (measured at 90%: 56px added per frame while the hand was still).
+        const drift = d.out.getBoundingClientRect().top / d.z - d.top;
         if (Math.abs(drift) > 0.5) {
           d.bodyTop = Math.max(0, d.bodyTop + drift);
           setScroll(d.body, d.bodyTop);
@@ -10883,9 +10920,11 @@ function endOutGrip(e) {
       // The clamps, here and only here: the number the gesture reached, held to the sheet's floor and to the room the
       // box has under its top edge. The corner comes to rest where the box does, once, instead of tracking a box that
       // was clamped under it mid-drag. The sheet's own `min-height` goes back with them, so the floor is the sheet's
-      // again rather than the 0 the gesture needed to follow the pointer down to it.
+      // again rather than the 0 the gesture needed to follow the pointer down to it. The room is a layout length like
+      // the height and the floor: `innerHeight` is layout px, the box's top is visual, so the top is divided by the
+      // press's scale before it is subtracted.
       const r = d.out.getBoundingClientRect();
-      const room = Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(window.innerHeight - r.top - OUT_GRIP_ROOM));
+      const room = Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(window.innerHeight - r.top / d.z - OUT_GRIP_ROOM));
       const h = outGripRelease(d.h, d.min, room);
       setOutHeight(d.out, h);
       d.out.style.minHeight = d.styleMin;
