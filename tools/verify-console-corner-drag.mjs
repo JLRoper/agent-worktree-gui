@@ -5,6 +5,7 @@
 //
 //   node tools/verify-console-corner-drag.mjs                       # http://127.0.0.1:7331, the live panel
 //   node tools/verify-console-corner-drag.mjs --url http://host:port
+//   node tools/verify-console-corner-drag.mjs --serve <checkout>   # that checkout's public/ served over the panel
 //   node tools/verify-console-corner-drag.mjs --json               # one JSON object, checks on stderr
 //   node tools/verify-console-corner-drag.mjs --trace <file>       # every step of every case as JSON
 //   node tools/verify-console-corner-drag.mjs --cause-check        # the slow drag with the browser's anchoring off
@@ -31,7 +32,14 @@
 // The browser half needs a Playwright install (PANEL_PLAYWRIGHT_ROOT or the global npm prefix), exactly like every
 // other harness in tools/. It starts no server and restarts nothing: it opens the panel at --url in its own isolated
 // browser context, so the reader's tab, its localStorage and its stored heights are untouched.
-import { writeFileSync } from "node:fs";
+//
+// WHY `--serve`. The gesture lives in the page, so the panel that serves it has to be the build under test. Restarting
+// the reader's panel under them is not something a gate may do, and a second instance has no transcript to drag (cards
+// are per process). So `--serve <checkout>` answers the page's own requests from that checkout's `public/` and lets
+// everything else - the API, the SSE stream, the row scans - come from the running panel. One gate, one set of live
+// data, two trees: the pre-fix commit measures the defect and the fixed tree measures the fix, with no server started,
+// restarted or reconfigured.
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { REPO, loadPlaywright, notRun } from "./browser.mjs";
 
@@ -43,6 +51,19 @@ const opt = (name, fallback) => {
 };
 
 const BASE = String(opt("url", process.env.PANEL_URL || "http://127.0.0.1:7331")).replace(/\/$/, "");
+// The checkout whose `public/` the page is built from, or null for the panel's own (the ordinary run).
+const SERVE = opt("serve", null) ? path.resolve(opt("serve", null)) : null;
+const MIME = {
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".woff2": "font/woff2",
+};
 const JSON_OUT = flag("json");
 const TRACE = opt("trace", null);
 const CAUSE = flag("cause-check");
@@ -125,7 +146,14 @@ const PAGE_HELPERS = (gripInset) => {
         storedLs: Number.isFinite(Number(s.ls[id])) ? Number(s.ls[id]) : null,
         gripBottom: +gr.bottom.toFixed(2),
         gripRight: +gr.right.toFixed(2),
-        minH: parseFloat(getComputedStyle(o).minHeight),
+        minH: (() => {
+          // The floor the box actually draws at: the sheet's min-height, or the console's own padding box, whichever is
+          // larger. The gesture clamps to the same pair (public/app.js endOutGrip), and a gate that read only
+          // min-height measured a 1px store against an 18px box as a 17px defect.
+          const pad = (parseFloat(getComputedStyle(o).paddingTop) || 0) + (parseFloat(getComputedStyle(o).paddingBottom) || 0) +
+            (parseFloat(getComputedStyle(o).borderTopWidth) || 0) + (parseFloat(getComputedStyle(o).borderBottomWidth) || 0);
+          return Math.max(parseFloat(getComputedStyle(o).minHeight) || 0, Math.round(pad));
+        })(),
         maxH: getComputedStyle(o).maxHeight,
         inlineMax: o.style.maxHeight,
         content: o.scrollHeight,
@@ -286,6 +314,26 @@ const READY = (gripInset) => {
 };
 
 async function loadPanel(page) {
+  // The build under test, served over the live panel's data (`--serve`): every request that has a file in the
+  // checkout's public/ is answered from it, with the query string the panel appends dropped, and everything else
+  // (the API, SSE, anything the panel generates) goes to the panel. No file, no claim: a 404 from the checkout falls
+  // through rather than shadowing the panel's own answer.
+  if (SERVE) {
+    const root = path.join(SERVE, "public");
+    await page.route(`${BASE}/**`, async (route) => {
+      const url = new URL(route.request().url());
+      const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "") || "index.html";
+      const file = path.resolve(root, rel);
+      if (!file.startsWith(path.resolve(root) + path.sep)) return route.continue();
+      try {
+        const body = readFileSync(file);
+        const type = MIME[path.extname(file).toLowerCase()] || "application/octet-stream";
+        return await route.fulfill({ status: 200, contentType: type, body });
+      } catch {
+        return route.continue();
+      }
+    });
+  }
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 45_000 });
   // The live board renders ~190 project cards on its first paint and the page can block for several seconds; the
   // chat pane is torn down and painted again inside that. Wait for a console with a grip, not for a clock.
@@ -524,25 +572,34 @@ function verdictOf(run) {
   numbers.styleWrites = writes.style;
   numbers.bodyWrites = writes.bodyWrites;
   numbers.bodyWriteStacks = writes.stacks || [];
-  numbers.nodeReplaced = after.same === false;
+  // Read DURING the drag, not after it: what the release then paints (a deferred rebuild that lands in the pointerup)
+  // is the release's business, and the gate's question is whether the node under the hand survived the travel.
+  numbers.nodeReplaced = rows.some((r) => r.same === false);
+  numbers.nodeAfter = after.same;
   numbers.consoleContentSpanPx = +(after.content - before.content).toFixed(2);
   numbers.releaseSnapPx = +(last.h - after.h).toFixed(2);
   numbers.turnIsSlack = Boolean(after.slack);
   numbers.consoleFlex = after.flex || "";
-  numbers.sigChanged = (after.sig || "") !== (before.sig || "");
+  numbers.sigChanged = rows.some((r) => (r.sig || "") !== (before.sig || ""));
   numbers.artifactsBefore = before.artifacts;
   numbers.artifactsAfter = after.artifacts;
 
   // The corner, step by step: grip bottom against (pointer y + the pixels of the grip the hand landed inside).
+  // A TRANSCRIPT'S FLOOR. The console's height is inside the transcript's scrollHeight, so a transcript on its foot
+  // has no offset room for a SHRINK: below the height the press found, the browser's clamp takes the top edge down
+  // with the shrink and the box's bottom stands still (measured, pre-fix: 3px up, the grip 3px off the hand on the
+  // first move; 400px up, 400px gone). That is a clamp, like the sheet's floor, and it is judged by the size check
+  // below - not as a corner the gesture lost. The floor is read where the press found it: how far the transcript was
+  // from its foot (bodyMax - bodyTop) is the room a shrink has, so the corner is judged only at or above
+  // `press height - that room`.
+  const followFloor = +(down.h - Math.max(0, (down.bodyMax ?? 0) - (down.bodyTop ?? 0))).toFixed(2);
   let worstInRange = 0;
   let worstAll = 0;
   let retrograde = 0;
   let prevGrip = down.gripBottom;
   for (const r of rows) {
     const asked = r.dragH;
-    // At the floor the pointer is above a box that cannot follow: that is a clamp, and it is judged by the size
-    // check below, not as a corner the gesture lost.
-    const inRange = asked == null ? true : asked > minH + 0.5 && asked <= room + 1;
+    const inRange = asked == null ? true : asked > minH + 0.5 && asked >= followFloor - 0.5 && asked <= room + 1;
     const err = Math.abs(r.gripBottom - (r.pointerY + grab));
     worstAll = Math.max(worstAll, err);
     if (inRange) worstInRange = Math.max(worstInRange, err);
@@ -597,6 +654,22 @@ function verdictOf(run) {
   // 5. THE NODE. What the hand is on is still there. For a drag this is a lost gesture; for a click it is a repaint
   //    that landed between the two presses, which the click check above already says changed nothing.
   if (name !== "no-move" && numbers.nodeReplaced) fails.push("the console node was replaced while the pointer was down");
+  // 6. THE CORNER AFTER THE RELEASE. The release used to put a following transcript back on its foot, and that is a
+  //    scroll write of exactly the drag's travel: the box came back to the pixel it started from (measured, pre-fix:
+  //    60px down and final -60, 120px down and final -120, 400px up and final 400). Judged only when the release KEPT
+  //    the number the pointer asked for AND the transcript's floor let the box follow there: a drag past the floor or
+  //    past the room is a clamp, and there the corner comes to rest where the box does, by design.
+  const keptAsked =
+    name !== "no-move" &&
+    last.dragH != null &&
+    Math.abs(after.h - last.dragH) <= SIZE_TOLERANCE_PX &&
+    last.dragH > minH + 0.5 &&
+    last.dragH >= followFloor - 0.5;
+  numbers.cornerReleaseChecked = keptAsked;
+  if (keptAsked && Math.abs(numbers.cornerAtReleasePx) > CORNER_TOLERANCE_PX) {
+    fails.push(`the corner stood ${numbers.cornerAtReleasePx}px from the hand after the release (the drag's travel was undone)`);
+  }
+  numbers.followFloorPx = followFloor;
   return { fail: fails, numbers };
 }
 

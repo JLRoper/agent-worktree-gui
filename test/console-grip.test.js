@@ -119,17 +119,54 @@ test("the height is written through the one owner, and a move is the pointer fro
   assert.ok(handler.includes('style.maxHeight = "none"'), "with the sheet's cap lifted off it");
 });
 
-test("the sheet resolves the console's height from the variable, and leaves the browser's anchor alone", () => {
+test("the sheet resolves the console's height from the variable, and the gesture owns the transcript's offset", () => {
   const rule = css.match(/\n\.job-out \{[^}]*\}/);
   assert.ok(rule, "the console's own rule");
   assert.ok(rule[0].includes("height: var(--out-h, auto)"), "the height is the variable, with the sheet's auto as the fallback");
-  // A gesture must NOT disable scroll anchoring: it is the loop that holds the reader's place when a row lands in
-  // the turn above, and tools/verify-console-corner-slow-drag.mjs's "above" case measures the drift when it is off.
+  // The anchor used to be left ON for a gesture, for the place it holds when a row lands above. Measured on the live
+  // panel it is the SECOND writer of the frozen edge: at the foot its compensation for a taller box is a scrollTop
+  // write of exactly the height the drag added (slow@1600/140 wrote 60 and moved the corner 0; the same shape at 820
+  // followed, because the anchor had picked a node above the box). So the press stands it down on the transcript it is
+  // dragging, and the release puts it back - and the offset is re-asserted, which also carries a drag that dips below
+  // the transcript's floor back to the edge the press froze.
   assert.equal(
     /body\.is-out-gripping[^{]*\{[^}]*overflow-anchor/.test(css),
     false,
-    "no overflow-anchor: none for a corner gesture - it moves the box under the hand",
+    "no overflow-anchor: none for the whole page - only the transcript the gesture is dragging loses it",
   );
+  const pressAt = appSrc.indexOf("// The grip's own press.");
+  const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
+  assert.ok(press.includes('setProperty("overflow-anchor", "none"'), "the press stands the anchor down on the transcript it drags");
+  assert.ok(press.includes("bodyTop: scrollport ? scrollport.scrollTop : null"), "and records the offset it must hold");
+  const handler = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
+  assert.ok(handler.includes("setScroll(d.body, d.bodyTop)"), "every move re-asserts the frozen offset");
+  assert.ok(grab(appSrc, "endOutGrip").includes('removeProperty("overflow-anchor")'), "the release gives the anchor back");
+  // The release does NOT put a following transcript back on its foot: that write is a scroll of exactly the drag's
+  // travel, and it is what undid every drag that ever worked.
+  const release = grab(appSrc, "endOutGrip");
+  assert.equal(/setScroll\(d\.body/.test(release), false, "the release writes no foot");
+  assert.ok(release.includes("noteCardBodyScroll(d.body)"), "it records where the drag left the transcript instead");
+});
+
+test("the chat pane's own pin and in-place paints defer to the gesture", () => {
+  const assistant = page("public/assistant.js");
+  // pinChatToBottom is a function of the float's own closure, not a page-level one, so it is sliced from its opening
+  // line to the frame it schedules.
+  const pinAt = assistant.indexOf("function pinChatToBottom(");
+  assert.ok(pinAt > 0, "the pane's pin is still there");
+  const pin = assistant.slice(pinAt, assistant.indexOf("function toggleAssistant(", pinAt));
+  assert.ok(pin.includes("cardBodyHeld(body)"), "the pane's pin asks the gesture");
+  assert.ok(pin.includes("body._atBottom === false"), "and respects a transcript a resize left off its foot");
+  assert.ok(assistant.includes("globalThis.outGripHoldsCard?.(host)"), "the chat rebuild holds off a card under the hand");
+  assert.ok(jobsSrc.includes('outGripHoldsCard?.(el)'), "so does the in-place head paint");
+});
+
+test("a console the reader has sized is drawn at its number, not grown into the pane's spare room", () => {
+  // `.turn.is-slack`'s `flex: 1 1 auto` grew a console into whatever room the pane had left: a 20px height in a short
+  // transcript drew 105.41px, and a drag to the floor stopped 105px above it.
+  const rule = css.match(/\.job-out\[style\*="--out-h"\] \{[^}]*\}/);
+  assert.ok(rule, "the sized console has its own flex rule");
+  assert.ok(rule[0].includes("flex: 0 0 auto"), "and it does not grow into the slack");
 });
 
 test("one writer: no path sets a console's height except setOutHeight", () => {
@@ -159,7 +196,7 @@ test("the rebuild paths that would replace the node defer to the release", () =>
   assert.ok(grab(jobsSrc, "renderJobs").includes("globalThis.outGripLive?.()"), "the unattached list's wholesale rebuild");
   assert.ok(grab(jobsSrc, "renderConversation").includes("globalThis.outGripHoldsCard?.(el)"), "and the one card a console lives in");
   assert.ok(grab(projectsSrc, "renderProjectRows").includes("outGripLive()"), "and a project's rows");
-  assert.ok(grab(appSrc, "endOutGrip").includes("if (d.deferred) renderAll();"), "the release is what draws them");
+  assert.ok(grab(appSrc, "endOutGrip").includes("if (d.deferred)"), "the release is what draws them");
 });
 
 test("the gesture hands its own pointer the whole way", () => {
