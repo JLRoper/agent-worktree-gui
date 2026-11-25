@@ -173,7 +173,7 @@ test("measured files, and only measured files, put the two presses on the record
 const NOTE_TEXT = "something is in my way and I cannot tell whose tree it is";
 const noteBook = (name) => new CollisionBook({ file: path.join(CARDS_DIR, `${name}.json`) });
 
-test("a note whose target names no row and no live agent is recorded resolved-by-absence, not held on the Human button", async () => {
+test("a note whose target names no row and no live agent is recorded resolved-by-absence, not counted as a waiting pair", async () => {
   const rows = [TREE("card-a"), TREE("card-b")];
   const book = noteBook("book-absent");
   const out = book.recordNote({
@@ -203,10 +203,9 @@ test("a note whose target names no row and no live agent is recorded resolved-by
   assert.equal(view.other, null);
   assert.equal(view.otherTarget, "card-nope", "the words are kept, as the words");
 
-  // THE HUMAN BUTTON, through the lane's own arithmetic: its count is a count of decisions, and this is not one.
+  // THE COLLISIONS COUNT, through the lane's own arithmetic: it counts decisions, and this is not one.
   const row = { project: PROJECT, path: rows[0].path, name: rows[0].name, collisions: [view] };
-  assert.deepEqual(lane.awaitingCollisions(row), []);
-  assert.deepEqual(lane.collisions([row]), [], "no collision item for H to step into");
+  assert.deepEqual(lane.awaitingCollisions(row), [], "no waiting pair on the row, so nothing for the Collisions count");
   // THE CHIP: resolved, so the row is not painted as a live alarm by the other surface that reads the same record.
   assert.deepEqual(chips.tally([view], PROJECT), { open: 0, resolved: 1, total: 1 });
   // …and the row's ONE diamond says so in words, since it draws no number: the card and the control read one tally.

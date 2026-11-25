@@ -108,9 +108,9 @@ test("each block follows the heading row that names it, and no block is a tab", 
   for (const id of ["settings-glossary-index", "settings-glossary-kinds", "settings-glossary-chips", "settings-glossary-board-chip"]) {
     assert.doesNotMatch(block(id), /data-settings-tab|role="tab"/, `${id} adds no tab`);
   }
-  // The strip's count is unchanged: fourteen tabs and fourteen panels, the glossary inside three of them.
-  assert.equal(html.split('data-settings-tab="').length - 1, 14, "still fourteen tabs");
-  assert.equal(html.split('role="tabpanel"').length - 1, 14, "still fourteen panels");
+  // The strip lost the Human tab with its button: thirteen tabs and thirteen panels, the glossary inside three of them.
+  assert.equal(html.split('data-settings-tab="').length - 1, 13, "thirteen tabs");
+  assert.equal(html.split('role="tabpanel"').length - 1, 13, "thirteen panels");
 });
 
 test("the three tab titles name the blocks they now carry", () => {

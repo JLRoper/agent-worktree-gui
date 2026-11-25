@@ -45,9 +45,9 @@
   <dt>Settings switches found</dt><dd>4, not 3: <code>human-kind-permissions</code>, <code>-clarify</code>, <code>-review</code>, <code>-collisions</code> (public/index.html at the base)</dd>
   <dt>Review items now counted by</dt><dd>the existing Review control, public/index.html:68, painted at public/app.js:13704</dd>
   <dt>H key</dt><dd>removed, not reassigned: no <code>e.key === "h"</code> listener survives</dd>
-  <dt>Removed from public/app.js</dt><dd>840 lines net (the list, the kinds, the painter, the show paths, the H key)</dd>
-  <dt>Removed from public/index.html</dt><dd>the button and badge, the settings tab, the settings panel (60 lines net)</dd>
-  <dt>Removed from public/style.css</dt><dd>the button and badge rules, the <code>humanflash</code> keyframes and its three selectors (41 lines net)</dd>
+  <dt>Removed from public/app.js</dt><dd>763 lines removed, 48 added: the list, the kinds, the painter, the show paths, the H key</dd>
+  <dt>Removed from public/index.html</dt><dd>49 lines removed, 11 added: the button and badge, the settings tab, the settings panel</dd>
+  <dt>Removed from public/style.css</dt><dd>34 lines removed, 7 added: the button and badge rules, the <code>humanflash</code> keyframes and its three selectors</dd>
   <dt>Harnesses deleted</dt><dd><code>tools/verify-human-button.mjs</code>, <code>tools/verify-human-kinds.mjs</code>, and their two <code>verify:</code> scripts</dd>
   <dt>Harness added</dt><dd><code>tools/verify-header-without-human.mjs</code> (38 checks, 0 failed)</dd>
   <dt>Long dashes</dt><dd>0 em dashes, 0 en dashes in this page</dd>
@@ -164,7 +164,13 @@ OK  38/38 checks passed</pre>
   <li><code>verify-collision-pairs</code>: crashes in its own seeding at line 231 on this branch and on the base, before a browser opens, because the sweep's fake queue no longer answers <code>filed</code>.</li>
 </ul>
 
-<h2>6. What this page does not prove</h2>
+<h2>6. The suite, and the cap it hit</h2>
+
+<p><code>npm test</code> on this tip reached <b>3810 passing</b> and <b>24 failing</b>, then stalled in <code>test/worktree-assistant.test.js</code> - a file that leaves handles open and also times out alone on the base - and was cancelled at the 19-minute cap. Every one of those 24 reads the same on the base at <code>36fb301</code>, checked file by file: assistant-queue-reattach 1, gateway-permissions 1, harness 1 (another lane left <code>tools/verify-wave-file-exists.mjs</code> unwired), initiative-tier-route 3, junctioned-node-modules 1, paths-http 1, paths 1, project-open-route 1, project-rules 1, rebase-route 1, refresh-row-route 1, round-grouping-restart 1, scan-roots 1, scan-upstream 1, waves-route 3, waves-write 1, worktree-assistant 3. None of them names a file this landing touched.</p>
+
+<p>Four failures this landing did cause were repaired before the push, and they were all assertions about the surface it removed: the tab strip's count (14 tabs, 14 panels), the General row's promise that a parked turn belongs to the red Human count, and the collision card's use of the lane's removed rotation list. Those four files read 46/46 after the repair.</p>
+
+<h2>7. What this page does not prove</h2>
 
 <ul>
   <li>It does not re-prove the CONTENT of the three popovers: their rows, their answers and their histories are their own gates' subject, and the readings above are those gates' own numbers.</li>
