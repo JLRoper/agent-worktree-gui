@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.176.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.176.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-756 releases from v0.1.0 (2026-10-20) to v1.176.3 (2026-11-25), 2686 commits between the tags. Every release is anchored by an
+757 releases from v0.1.0 (2026-10-20) to v1.176.4 (2026-11-25), 2692 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.176.4 — 2026-11-25 · 6 commits
+
+[`a7483e8`](https://github.com/JLRoper/agent-worktree-gui/commit/a7483e8d3eb33fd1b826ca05a833e54f0710f68b) · [compare v1.176.3...v1.176.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.176.3...v1.176.4)
+
+### Fixed
+
+- fix(console): a folded thought row is measured off the row ([`583c659`](https://github.com/JLRoper/agent-worktree-gui/commit/583c65955dd44a2f1c0604ea0c9d81039ddc1aeb))
+- fix(console): the rebuild fits its rows before the page is measured ([`8436ac4`](https://github.com/JLRoper/agent-worktree-gui/commit/8436ac4f418797e5baa65d889f629430126a84e3))
+
+### Docs & tests
+
+- test(header): the tab-strip counts follow the removal, and the report carries the suite reading ([`15534df`](https://github.com/JLRoper/agent-worktree-gui/commit/15534dff5321ca89357ff6e14b6e7d2b9030a972))
+- docs: render the changelog - 756 releases ([`a4c1f80`](https://github.com/JLRoper/agent-worktree-gui/commit/a4c1f805b8f79a97660631d118ec5bd393d7b0fa))
+- test(verify): the gate opens a live row and --root boots the tree it names ([`b70527c`](https://github.com/JLRoper/agent-worktree-gui/commit/b70527c20d6bb3d38cb80c2593f47bf33c988fda))
+
+### Other
+
+- chore: 1.176.4 - the version this landing carries ([`a7483e8`](https://github.com/JLRoper/agent-worktree-gui/commit/a7483e8d3eb33fd1b826ca05a833e54f0710f68b))
 
 ## v1.176.3 — 2026-11-25 · 5 commits
 
