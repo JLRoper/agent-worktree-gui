@@ -4741,6 +4741,222 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   border-radius: 6px;
 }
 
+/* ---- the PERMISSIONS control -------------------------------------------------------------------------------------
+   The Clarify button's mechanics in the permission box's amber: the same shape, the same count badge and the same
+   painting code, a different question and a different colour. Amber is not a decoration here - a permission box on a
+   card is amber (.turn-approval), and the button that lists the same requests should read as the same thing. */
+.topbar #btn-permissions {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #e8c26a;
+  border-color: #5b4a22;
+  background: #1c1910;
+}
+.topbar #btn-permissions .pm-glyph { display: block; }
+.topbar #btn-permissions .pm-label { color: inherit; }
+.topbar #btn-permissions:hover { color: #ffd479; border-color: var(--amber); background: #241f12; }
+.topbar #btn-permissions[aria-expanded="true"] { color: #ffd479; border-color: var(--amber); background: #2a2312; box-shadow: 0 0 0 1px rgba(227, 179, 65, .35) inset; }
+.topbar #btn-permissions:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px; }
+.topbar #btn-permissions.has-waiting { color: #ffd479; border-color: var(--amber); background: #2a2312; }
+.topbar #btn-permissions.has-waiting:hover { border-color: #f0cd7a; background: #332a15; }
+#permissions-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: var(--amber); color: #221a05;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #e3b34155;
+}
+#permissions-badge[hidden] { display: none; }
+
+.ph-pop {
+  position: fixed;
+  z-index: 60;
+  width: min(600px, calc(100vw - 16px));
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid #4a3d1c;
+  border-radius: 10px;
+  background: #0f1219;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .55), 0 0 0 1px rgba(227, 179, 65, .10);
+  overflow: hidden;
+}
+.ph-pop[hidden] { display: none; }
+.ph-pop:focus { outline: none; }
+.ph-pop .ph-head {
+  flex: none;
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 9px;
+  border-bottom: 1px solid #2f2915;
+  background: #141208;
+  cursor: grab;
+}
+.ph-pop.is-dragging .ph-head { cursor: grabbing; }
+.ph-pop.is-dragging { user-select: none; }
+.ph-pop .ph-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: #2a2312; color: #ffd479;
+  font: 700 11px/17px var(--ui);
+}
+.ph-pop .ph-title { font: 600 11.5px/1.4 var(--ui); color: #ffd479; }
+.ph-pop .ph-count { flex: 1 1 auto; font: 10px/1.5 var(--mono); color: var(--dim); }
+.ph-pop .ph-close {
+  flex: none;
+  width: 20px; height: 20px; padding: 0;
+  border: 1px solid transparent; border-radius: 5px;
+  background: transparent; color: var(--dim);
+  font: 11px/18px var(--ui); cursor: pointer;
+}
+.ph-pop .ph-close:hover { color: var(--text); border-color: var(--line); }
+.ph-pop .ph-list {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 5px;
+  overflow-y: auto;
+}
+.ph-pop .ph-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 7px;
+  align-items: baseline;
+  padding: 6px 8px 7px;
+  border: 1px solid #232a34;
+  border-left: 3px solid #3a4150;
+  border-radius: 6px;
+  background: #12161d;
+  cursor: pointer;
+}
+.ph-pop .ph-row:hover { background: #182030; border-color: #2f3a4a; }
+.ph-pop .ph-row:focus-visible, .ph-pop .ph-row.is-active { outline: none; border-color: var(--amber); background: #1c1a12; }
+.ph-pop .ph-row.is-open { border-left-color: var(--amber); }
+.ph-pop .ph-mark {
+  font: 700 9.5px/1.6 var(--mono);
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ph-pop .ph-mark-open { color: #ffd479; background: #2a2312; }
+.ph-pop .ph-mark-answered { color: #9aa4b2; background: #1c222b; }
+.ph-pop .ph-mark-expired { color: #ffd479; background: #2a2312; text-transform: none; }
+.ph-pop .ph-when { justify-self: end; font: 9.5px/1.6 var(--mono); color: var(--dimmer); white-space: nowrap; }
+.ph-pop .ph-when.is-low { color: #ffb4ae; }
+.ph-pop .ph-when.is-over { color: #ff8f87; }
+.ph-pop .ph-cmd {
+  grid-column: 1 / -1;
+  margin: 1px 0 0;
+  font: 10.5px/1.55 var(--mono);
+  color: #e6e9ee;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8.5em;
+  overflow-y: auto;
+}
+.ph-pop .ph-cmd.is-muted { color: #5f6875; }
+.ph-pop .ph-q { grid-column: 1 / -1; color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
+.ph-pop .ph-policy { grid-column: 1 / -1; font: 9.5px/1.6 var(--mono); color: #d9b75c; overflow-wrap: anywhere; }
+.ph-pop .ph-answer { grid-column: 1 / -1; color: #dfe3ea; font-weight: 600; overflow-wrap: anywhere; }
+.ph-pop .ph-choices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.ph-pop .ph-choice {
+  font: 10.5px/1.7 var(--ui);
+  color: #ffd479;
+  background: #2a2312;
+  border: 1px solid #5b4a22;
+  border-radius: 4px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+.ph-pop .ph-choice:hover { color: #221a05; background: #e3b341; border-color: #e3b341; }
+.ph-pop .ph-choice.is-deny { color: #ffb4ae; background: #2a1416; border-color: #6d2c30; }
+.ph-pop .ph-choice.is-deny:hover { color: #2a1416; background: #ff8f87; border-color: #ff8f87; }
+.ph-pop .ph-choice[disabled] { opacity: .45; cursor: default; }
+.ph-pop .ph-choice[disabled]:hover { color: #ffd479; background: #2a2312; border-color: #5b4a22; }
+.ph-pop .ph-choice.is-deny[disabled]:hover { color: #ffb4ae; background: #2a1416; border-color: #6d2c30; }
+.ph-pop .ph-err { grid-column: 1 / -1; font: 9.5px/1.6 var(--mono); color: #ffb4ae; }
+.ph-pop .ph-err:empty { display: none; }
+.ph-pop .ph-note { grid-column: 1 / -1; font: 9.5px/1.6 var(--mono); color: var(--dim); }
+.ph-pop .ph-row.is-answered { background: #101419; border-left-color: #3a4150; opacity: .86; }
+.ph-pop .ph-row.is-answered:hover { background: #141a22; opacity: 1; }
+.ph-pop .ph-row.is-expired { background: #15130d; border-left-color: var(--amber); }
+.ph-pop .ph-row.is-expired:hover { background: #1a170f; }
+.ph-pop .ph-row.is-expired .ph-cmd { color: #c9cdd4; }
+.ph-pop .ph-row.is-over { border-left-color: #ff8f87; }
+.ph-pop .ph-meta {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: 3px 8px;
+  font: 9.5px/1.6 var(--mono);
+  color: var(--dimmer);
+  overflow-wrap: anywhere;
+}
+.ph-pop .ph-agent { color: #b9c2cf; }
+.ph-pop .ph-thread { color: #7d8797; }
+.ph-pop .ph-run { color: #a08a55; }
+.ph-pop .ph-tree { color: #7d8797; }
+.ph-pop .ph-assistant { color: #d9b75c; }
+.ph-pop .ph-age { margin-left: auto; }
+.ph-pop .ph-foot {
+  flex: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 9px;
+  border-top: 1px solid #2f2915;
+  background: #141208;
+  font: 10px/1.5 var(--mono);
+  color: var(--dim);
+}
+.ph-pop .ph-foot-text { flex: 1 1 auto; min-width: 0; }
+.ph-pop .ph-more {
+  flex: none;
+  font: 10px/1.6 var(--mono);
+  color: #ffd479;
+  background: #2a2312;
+  border: 1px solid #5b4a22;
+  border-radius: 4px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.ph-pop .ph-more[hidden] { display: none; }
+.ph-pop .ph-none { padding: 14px 10px; color: var(--dim); font-size: 11.5px; }
+.ph-pop .ph-none.is-error { color: #ffb4ae; }
+.ph-pop .ph-retry {
+  margin-left: 6px;
+  font: 10px/1.6 var(--mono);
+  color: #ffd479;
+  background: #2a2312;
+  border: 1px solid #5b4a22;
+  border-radius: 4px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.ph-pop .ph-resize {
+  position: absolute; right: 3px; bottom: 3px;
+  z-index: 1;
+  width: 16px; height: 16px;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: .9;
+  background-image:
+    linear-gradient(135deg, transparent 0 78%, #d9a521 78% 90%, transparent 90% 100%),
+    linear-gradient(135deg, transparent 0 52%, #d9a521 52% 64%, transparent 64% 100%),
+    linear-gradient(135deg, transparent 0 26%, #d9a521 26% 38%, transparent 38% 100%);
+}
+.ph-pop .ph-resize:hover { opacity: 1; }
+.ph-pop.is-resizing { user-select: none; }
+
+/* The landing's flash, in the permission box's amber: the worktree links' own animation on the row, a ring on the
+   card for an assistant's agent, which has no board row. A permission picked out of the list is not a sign of life. */
+@keyframes flashrow-permissions {
+  from { background-color: #2a2312; }
+  to { background-color: var(--row-rest-bg, transparent); }
+}
+tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row, 900ms) ease-out; }
+@keyframes flash-permissions-ring {
+  from { box-shadow: 0 0 0 2px #e3b341 inset, 0 0 12px rgba(227, 179, 65, .45); }
+  to { box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(227, 179, 65, 0); }
+}
+.job.flash-permissions { animation: flash-permissions-ring 1300ms ease-out; }
+
 
 .ha-search-pop {
   position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 0;

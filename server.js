@@ -82,6 +82,7 @@ import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, read
 import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/restart.js";
 import { readPipelineDocument } from "./lib/pipeline-doc.js";
 import { Approvals } from "./lib/approvals.js";
+import { PermissionsHistory } from "./lib/permissions-history.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel, allowPushWithoutAskingFor } from "./lib/remote-writes.js";
 import {
   PUSH_CHOICES,
@@ -179,6 +180,10 @@ import { HOT_AGENT_SEARCH_PATH, createHotAgentSearchRoutes } from "./routes/hot-
 // The header's Clarify popup: every question the panel has asked, how each settled, and the reader's re-ask of one
 // they missed (routes/clarify-history.js).
 import { CLARIFY_PATH, createClarifyHistoryRoutes } from "./routes/clarify-history.js";
+// The header's Permissions popup: every permission request the panel has held, the ones still waiting, and how each
+// one ended (routes/permissions-history.js). The store is this file's own and the live queue is lib/approvals.js, so
+// both travel in; the module owns the page shape, the honest total and the live count.
+import { PERMISSIONS_HISTORY_PATH, createPermissionsHistoryRoutes } from "./routes/permissions-history.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, BOARD_PATH, createStateRoutes } from "./routes/state.js";
@@ -1444,9 +1449,68 @@ function gonePointers(id) {
   };
 }
 
+// ---- the permission history ---------------------------------------------------------------------------------------
+// Every approval request the panel's transport has held, and how each one ended. The record is written when the
+// request ARRIVES and when it SETTLES, so a decision outlives the pending map, the run it belonged to and a restart.
+// lib/paths.js owns the file's spelling; a bare Jobs-less tool passes no path and writes nothing.
+const permissionsHistory = new PermissionsHistory({ file: config.permissionsHistoryFile, log });
+
+// Where a request belongs: the WTGUI_THREAD the transport plugin echoes back names the agent that is blocked, and the
+// job store knows that agent's turn, run, tree and assistant. A thread the board does not know resolves to nothing,
+// and the row then says the thread and no run rather than inventing one.
+function approvalWhere(thread) {
+  const t = String(thread || "").trim();
+  if (!t) return {};
+  let job = null;
+  try {
+    job = (jobs.list() || []).find((j) => String(j.thread || "") === t) || null;
+  } catch {
+    job = null;
+  }
+  if (!job) return {};
+  const treePath = String(job.worktreePath || job.cwd || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  const projectPath = String(job.projectPath || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  const assistantId = job.assistantId ? String(job.assistantId) : null;
+  return {
+    jobId: job.id || null,
+    runId: job.runId || null,
+    // The panel's own name for the session first (a rename is what the reader sees), then the gateway's title, then the
+    // thread: the row always names the agent, and never prints an empty cell where its name belongs.
+    agent: job.label || job.title || t,
+    tree: job.branch || (treePath ? treePath.split("/").pop() : ""),
+    treePath,
+    project: projectPath ? projectPath.split("/").pop() : "",
+    assistantId,
+    assistantName: assistantId ? jobs.assistantNameFor?.(assistantId) || "" : "",
+  };
+}
+
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
-const approvals = new Approvals({ onEvent: broadcast });
+//
+// TWO THINGS HAPPEN ON EVERY EVENT: the page is told (broadcast, as before) and the durable record is written. A
+// request that ARRIVES is recorded with its exact text, the choices the host allowed, the run behind it and the
+// gateway's one-line policy note; a request whose window closed with nobody answering is recorded as EXPIRED, never as
+// the `deny` the sweep has to send the waiting host - nobody chose that, and the history must not say they did.
+const approvals = new Approvals({
+  onEvent: (evt) => {
+    try {
+      if (evt?.type === "approval" && evt.request) {
+        permissionsHistory.ask({ ...evt.request, ...approvalWhere(evt.request.thread) });
+      } else if (evt?.type === "approval-answered" && evt.timeout) {
+        const row = permissionsHistory.find(evt.id);
+        // Stamped at the DEADLINE, not at the sweep that noticed it: the row reports when the window actually closed.
+        permissionsHistory.expired(evt.id, {
+          why: "timed out",
+          at: row?.deadline ? new Date(Number(row.deadline)).toISOString() : null,
+        });
+      }
+    } catch (e) {
+      log(`permissions history: could not record ${String(evt?.id || evt?.request?.id || "a request")} (${String((e && e.message) || e)})`);
+    }
+    broadcast(evt);
+  },
+});
 
 // ---- who may put a branch on a remote ------------------------------------------------------------
 // The reader's rule: a worktree the panel cuts is LOCAL ONLY unless the work is going to land. The setting
@@ -2202,6 +2266,19 @@ const PREFIX_MOUNTS = [
   // (lib/clarify-history.js), the assistant roster is what names the asker, and the send is `sendClarifyReask` below -
   // the same thread-send path a reply takes - so the module owns the page shape, the refusals and the honest total.
   { prefix: CLARIFY_PATH, handles: createClarifyHistoryRoutes({ jobs, nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null, sendJson, readBody, authorised, config, sendReask: sendClarifyReask }) },
+  // The header's Permissions popup (routes/permissions-history.js): one read over every permission request the panel
+  // has held, plus the live ones the popup may answer. The store and the live queue are both this file's, and the
+  // thread-to-run lookup is the same one that records the ask, so the popup's rows and the record cannot disagree.
+  {
+    prefix: PERMISSIONS_HISTORY_PATH,
+    handles: createPermissionsHistoryRoutes({
+      approvals,
+      permissions: permissionsHistory,
+      describe: approvalWhere,
+      nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null,
+      sendJson,
+    }),
+  },
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },
@@ -6348,6 +6425,10 @@ const server = createServer(async (req, res) => {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = approvals.answer(body.id, body.choice, body.by || "ui");
+      // A PERSON'S PRESS, written down: the store records the choice that was accepted, who sent it and when, from the
+      // same call that closed the request. A refused answer records nothing - no decision was made, and the history
+      // must not grow one.
+      if (r?.ok) permissionsHistory.answered(body.id, { choice: r.choice, by: String(body.by || "reader") });
       return sendJson(res, r.ok ? 200 : 409, r);
     }
 
