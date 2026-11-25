@@ -355,13 +355,17 @@ const readCard = (page, thread) =>
     };
   }, thread);
 
-// The reader's own way in: the HUMAN control opens the agent, the row and the turn that hold the question. A card
-// already in the page (the project unfolded, the row open) needs no press.
+// The reader's own way in: the Permissions control lists every request this panel held, and a press on the waiting
+// row opens the agent, the row and the turn that hold the question. A card already in the page (the project unfolded,
+// the row open) needs no press.
 async function reveal(page, thread) {
   const present = () => page.evaluate((t) => Boolean(document.querySelector(`.agents-block .job[data-thread="${t}"] .turn-approval`)), thread);
   if (await present()) return true;
-  if ((await page.locator("#btn-human").count()) > 0) {
-    await page.click("#btn-human");
+  if ((await page.locator("#btn-permissions").count()) > 0) {
+    await page.click("#btn-permissions");
+    await page.waitForSelector("#permissions-pop:not([hidden])", { timeout: 10_000 }).catch(() => {});
+    const row = page.locator(`#permissions-pop [data-permissions-row], #permissions-pop [data-perm-row], #permissions-pop .pm-row`).first();
+    if ((await row.count()) > 0) await row.click();
     await sleep(400);
   }
   if (await present()) return true;
@@ -507,7 +511,7 @@ async function main() {
           const shown = await reveal(page, c.thread);
           ok(`the card is on the page (${c.thread})`, shown, shown ? "" : "no .turn-approval for the thread");
           if (!shown) continue;
-          // The HUMAN press flashes the box; let the animation finish so the capture is the settled card.
+          // A landing press can ring the box; let the animation finish so the capture is the settled card.
           await sleep(1900);
           const card = await readCard(page, c.thread);
           ok("the block is drawn above the command", card.summaryBeforeCommand === true, JSON.stringify({ summaryBottom: card.summaryBottom, commandTop: card.commandTop }));

@@ -310,27 +310,6 @@ test("answering the question ends the re-ask: the clock has nothing left to rais
   assert.equal(assistant.alerts.filter((a) => a.rule === "question" && a.status === "open").length, 0, "and its alert is closed");
 });
 
-// ── the HUMAN rotation: one row per question ───────────────────────────────────────────────────
-test("the HUMAN list keys a question without its count, so a re-ask updates the row instead of adding one", async () => {
-  const page = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
-  const source = sliceBetween(page, "function humanQuestionKey(", "function humanQuestions(");
-  const humanQuestionKey = new Function(`${source}; return humanQuestionKey;`)();
-
-  const before = humanQuestionKey("question", "turn-7", "p-1");
-  const after = humanQuestionKey("question", "turn-7", "p-1");
-  assert.equal(before, after, "the same prompt on the same turn is the same row, however many times it is asked");
-  assert.equal(humanQuestionKey("question", "turn-7", "p-1"), "question:turn-7:p-1");
-  assert.notEqual(humanQuestionKey("question", "turn-7", "p-2"), before, "a NEW prompt is a different row");
-  assert.notEqual(humanQuestionKey("approval", "turn-7", "p-1"), before, "an approval is not a question");
-  assert.doesNotMatch(before, /2|3/, "nothing about how often it was asked can be in the key");
-
-  // The list itself must build its rows from that key — a helper nobody calls proves nothing.
-  const region = sliceBetween(page, "function humanQuestions()", "function paintHumanButton()");
-  assert.match(region, /key: humanQuestionKey\(/, "the rotation's row carries the stable key");
-  assert.match(region, /reasks: Math\.max\(0, Number\(ask\?\.reasks\) \|\| 0\)/, "…and the count rides on the row, outside the key");
-  assert.doesNotMatch(region, /key: `${kind}:\$\{t\.id\}/, "the inline key string is gone — one builder, one answer");
-});
-
 test("a burst of runs probes the route once, and every body is the same sentence", async (t) => {
   const { jobs, bodies, dir, probes } = await panel(t);
   // Six workers started together: the memo is only written once the probe answers, so this is the

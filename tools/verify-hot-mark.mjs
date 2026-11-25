@@ -11,13 +11,13 @@
 //      OFF, so this gate turns it ON through that row first - the default and the off/on proof are the subject of
 //      tools/verify-active-button-toggle.mjs;
 //   1. with nothing running it is not in the header at all - not grey, not a zero badge, absent;
-//   2. an agent PARKED on a permission is not hot (it is live, and the red Human count beside it owns it), so the
-//      bolt stays away while Human reads 1 - the two controls never count the same agent;
-//   3. one working agent draws it, amber, beside Human, the same height and on the same row: the family's own
+//   2. an agent PARKED on a permission is not hot (it is live, and Permissions and Clarify own it), so the bolt stays
+//      away while the parked turn is not counted by it - the two never count the same run;
+//   3. one working agent draws it, amber, beside the Review control, the same height and on the same row: the family's own
 //      hit area, with the count on its badge and the agent named in its tooltip;
 //   4. two working agents are two on the badge and both named in the tooltip;
 //   5. a press lands on the next one - the card flashes and the label steps (`Hot 1/2`), a second press on the other;
-//   6. the work ending takes the bolt away again, and the header is back to Human alone.
+//   6. the work ending takes the bolt away again, and the header is back to its counts alone.
 //
 // HOW THE LIVE AGENTS ARE MADE. The page's own job list is the evidence the bolt reads, so the harness replaces the
 // job list every /api/state answer carries with the seeded records (the same technique tools/verify-focus-mode.mjs
@@ -26,7 +26,7 @@
 // its own applySnapshot -> applyJobSnapshot path, then paints from its own clock.
 //
 // The screenshots are taken at 1440x900, the size the brief names: `hot-mark-header-1440x900.png` is the header with
-// Human and the bolt together, `hot-mark-press-1440x900.png` the page after the press.
+// the Review control and the bolt together, `hot-mark-press-1440x900.png` the page after the press.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -136,7 +136,7 @@ const result = await (async () => {
           await route.fulfill({ response: res, json });
         });
 
-        await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
+        await openPage(page, panel.base, { selector: "header.topbar #btn-review" });
 
         // Put a list under the page and wait for it to be applied and painted. `resync` is the page's own snapshot
         // read, and the paint arrives on its own 1 s clock (the same one that keeps the Human count honest), which is
@@ -152,15 +152,15 @@ const result = await (async () => {
         const headerState = () =>
           page.evaluate(() => {
             const bar = document.querySelector("header.topbar");
-            const human = document.querySelector("#btn-human");
-            if (!bar || !human) return { missing: true };
-            const hbox = human.getBoundingClientRect();
-            return { missing: false, headerHeight: Math.round(bar.getBoundingClientRect().height), humanBox: { x: Math.round(hbox.x), y: Math.round(hbox.y), w: Math.round(hbox.width), h: Math.round(hbox.height) } };
+            const sibling = document.querySelector("#btn-deliver");
+            if (!bar || !sibling) return { missing: true };
+            const hbox = sibling.getBoundingClientRect();
+            return { missing: false, headerHeight: Math.round(bar.getBoundingClientRect().height), siblingBox: { x: Math.round(hbox.x), y: Math.round(hbox.y), w: Math.round(hbox.width), h: Math.round(hbox.height) } };
           });
         const hotState = () =>
           page.evaluate(() => {
             const btn = document.querySelector("#btn-hot");
-            const human = document.querySelector("#btn-human");
+            const sibling = document.querySelector("#btn-deliver");
             const pen = document.querySelector("#ha-search-open");
             const rect = (el) => {
               const b = el.getBoundingClientRect();
@@ -187,14 +187,11 @@ const result = await (async () => {
               background: "",
               border: "",
               recipe: null,
-              humanRecipe: human ? recipe(getComputedStyle(human)) : null,
+              siblingRecipe: sibling ? recipe(getComputedStyle(sibling)) : null,
               box: { x: 0, y: 0, w: 0, h: 0 },
-              humanBox: human ? rect(human) : { x: 0, y: 0, w: 0, h: 0 },
+              siblingBox: sibling ? rect(sibling) : { x: 0, y: 0, w: 0, h: 0 },
               penBox: pen ? rect(pen) : { x: 0, y: 0, w: 0, h: 0 },
-              humanBadge: (() => {
-                const b = human && document.querySelector("#human-badge");
-                return b && !b.hidden ? b.textContent || "" : "";
-              })(),
+              humanGone: !document.querySelector("#btn-human") && !document.querySelector("#human-badge"),
               inControls: Boolean(btn && btn.closest("header.topbar .controls")),
               inRow: Boolean(btn && btn.closest("tr.row, tr.detail")),
               key: (() => {
@@ -207,7 +204,7 @@ const result = await (async () => {
             };
             // On a build WITHOUT the marker there is no button to read: every field stays at its absent value, so the
             // gate reports its failures and a count instead of throwing on the first undefined.
-            if (!btn || !human) return out;
+            if (!btn || !sibling) return out;
             const box = btn.getBoundingClientRect();
             const cs = getComputedStyle(btn);
             return {
@@ -258,10 +255,10 @@ const result = await (async () => {
         section("nothing is hot");
         await seed([]);
         const head = await headerState();
-        ok("the header is drawn, with Human on it", !head.missing && head.humanBox.w > 0 && head.headerHeight > 0, JSON.stringify(head));
+        ok("the header is drawn, with the other controls on it", !head.missing && head.siblingBox.w > 0 && head.headerHeight > 0, JSON.stringify(head));
         let s = await hotState();
         ok("the page has the marker at all", s.exists === true);
-        ok("#btn-human is there and quiet", s.humanBadge === "", `human badge ${JSON.stringify(s.humanBadge)}`);
+        ok("the Human control is gone from the page", s.humanGone === true, JSON.stringify({ humanGone: s.humanGone }));
         ok("the bolt is NOT in the header at all", s.hidden === true && s.drawn === false, JSON.stringify({ hidden: s.hidden, drawn: s.drawn }));
         ok("...and it says why, for anything that reads it", /nothing is working right now/.test(s.title), s.title.slice(0, 80));
         // A build with no marker at all (the RED proof: `--root` an export of main before this landed) stops here
@@ -272,11 +269,11 @@ const result = await (async () => {
           return { base: panel.base, port: panel.port, notes: "no #btn-hot in this build" };
         }
 
-        // ---- 2. a parked agent is live, and is Human's -----------------------------------------------------------
+        // ---- 2. a parked agent is live, and is not the bolt's -----------------------------------------------
         section("an agent parked on a permission is not hot");
         await seed([PARKED]);
         s = await hotState();
-        ok("the parked run raises the red Human count", s.humanBadge === "1", `human badge ${JSON.stringify(s.humanBadge)}`);
+        ok("the removed Human control is absent, so the parked run is not counted by the bolt", s.humanGone === true, JSON.stringify({ humanGone: s.humanGone }));
         ok("the bolt stays away: a parked agent is the red count's, not the amber one", s.hidden === true && s.drawn === false, JSON.stringify({ hidden: s.hidden, drawn: s.drawn }));
 
         // ---- 3. a working agent draws the bolt -------------------------------------------------------------------
@@ -288,16 +285,15 @@ const result = await (async () => {
         eq("...labelled as the family's controls are, with the word Active", s.label, "⚡ Active");
         eq("...carrying the count on its badge", s.badge, "1");
         ok("...with the amber state class on", s.isHot === true);
-        eq("Human stays quiet beside it: a working agent is not a question", s.humanBadge, "");
+        ok("and the removed Human control has not come back", s.humanGone === true);
         ok("its colour is the panel's amber, not the lock's or the review mark's", s.color === "rgb(240, 198, 116)", `color ${s.color}`);
         ok("its background is the amber surface", s.background === "rgb(42, 35, 18)", `background ${s.background}`);
         ok("its border is the amber edge", s.border === "rgb(77, 61, 18)", `border ${s.border}`);
-        ok("the same hit-area recipe as Human: padding, border, radius, font, gap", JSON.stringify(s.recipe) === JSON.stringify(s.humanRecipe), JSON.stringify({ bolt: s.recipe, human: s.humanRecipe }));
-        // The bolt's badge is drawn and Human's is not here, and the badge is 17px in a 16px line: Human's own button
-        // grows by that pixel the moment it counts something, which is why this is "within a pixel" and the
-        // both-badges case below is "exactly".
-        ok("the same height as Human, to the pixel its hidden badge accounts for", Math.abs(s.box.h - s.humanBox.h) <= 1, `bolt ${s.box.h} vs human ${s.humanBox.h}`);
-        ok("on the same row as Human", Math.abs(s.box.y + s.box.h / 2 - (s.humanBox.y + s.humanBox.h / 2)) <= 1, JSON.stringify({ bolt: s.box, human: s.humanBox }));
+        ok("the same hit-area recipe as the Deliverables control beside it: padding, border, radius, font, gap", JSON.stringify(s.recipe) === JSON.stringify(s.siblingRecipe), JSON.stringify({ bolt: s.recipe, sibling: s.siblingRecipe }));
+        // The bolt's badge is drawn and the Review control's is not here, and the badge is 17px in a 16px line: a
+        // button grows by that pixel the moment it counts something, which is why this is "within a pixel".
+        ok("the same height as the Deliverables control, to the pixel its own badge accounts for", Math.abs(s.box.h - s.siblingBox.h) <= 1, `bolt ${s.box.h} vs sibling ${s.siblingBox.h}`);
+        ok("on the same row as the Deliverables control", Math.abs(s.box.y + s.box.h / 2 - (s.siblingBox.y + s.siblingBox.h / 2)) <= 1, JSON.stringify({ bolt: s.box, sibling: s.siblingBox }));
         ok("immediately beside it, in the flex gap", s.box.x < s.penBox.x && s.penBox.x - (s.box.x + s.box.w) <= 12, `gap ${s.penBox.x - (s.box.x + s.box.w)}px`);
         ok("its tooltip names the agent and says what the press does", /the lightning bolt/.test(s.title) && /Click to land on the next one/.test(s.title), s.title.slice(0, 120));
         ok("its aria-label counts the agents", /1 working right now/.test(s.aria), s.aria);
@@ -349,9 +345,8 @@ const result = await (async () => {
 
         await seed([PARKED, HOT_TWO]);
         s = await hotState();
-        eq("a parked run beside a working one is still only Human's", s.humanBadge, "1");
-        eq("...and the bolt counts the working agent alone", s.badge, "1");
-        eq("with both badges drawn the two buttons are the same box, exactly", [s.box.h, s.box.y], [s.humanBox.h, s.humanBox.y]);
+        eq("the bolt counts the working agent alone", s.badge, "1");
+        ok("and the removed Human control is still absent", s.humanGone === true);
 
         ok("the page raised no error", pageErrors.length === 0, pageErrors.join(" | ").slice(0, 200));
         ok("the console logged no error", consoleErrors.length === 0, consoleErrors.join(" | ").slice(0, 200));

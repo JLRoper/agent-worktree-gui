@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Human button, removed: four kinds, four owners</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --amber:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .am { color:var(--amber); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  figure { margin:16px 0 6px; }
+  figure img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
+  figcaption { font-size:13px; color:var(--dim); margin-top:6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The Human button, removed: four kinds, four owners</h1>
+<p class="sub">agent-worktree-gui 1.176.3, branch <code>wtgui/remove-the-human-button-from-the-f302c9</code>, cut from main at <code>36fb301</code> (1.176.2). The Human control was the last step of the header plan: one badge over four kinds of waiting, and one H key that stepped through all four. Permissions landed at <code>58231d8</code> (PR #920), Collisions at <code>ea0320e</code> (PR #922), and Clarify before both, so this landing removes the button rather than replacing it. Every number below comes from a run on this branch; every line number is on this branch.</p>
+
+<dl class="facts">
+  <dt>Kinds measured</dt><dd>4: permissions, clarify questions, review items, collisions</dd>
+  <dt>Settings switches found</dt><dd>4, not 3: <code>human-kind-permissions</code>, <code>-clarify</code>, <code>-review</code>, <code>-collisions</code> (public/index.html at the base)</dd>
+  <dt>Review items now counted by</dt><dd>the existing Review control, public/index.html:68, painted at public/app.js:13704</dd>
+  <dt>H key</dt><dd>removed, not reassigned: no <code>e.key === "h"</code> listener survives</dd>
+  <dt>Removed from public/app.js</dt><dd>840 lines net (the list, the kinds, the painter, the show paths, the H key)</dd>
+  <dt>Removed from public/index.html</dt><dd>the button and badge, the settings tab, the settings panel (60 lines net)</dd>
+  <dt>Removed from public/style.css</dt><dd>the button and badge rules, the <code>humanflash</code> keyframes and its three selectors (41 lines net)</dd>
+  <dt>Harnesses deleted</dt><dd><code>tools/verify-human-button.mjs</code>, <code>tools/verify-human-kinds.mjs</code>, and their two <code>verify:</code> scripts</dd>
+  <dt>Harness added</dt><dd><code>tools/verify-header-without-human.mjs</code> (38 checks, 0 failed)</dd>
+  <dt>Long dashes</dt><dd>0 em dashes, 0 en dashes in this page</dd>
+</dl>
+
+<h2>1. The audit: four kinds, and the surface each one keeps</h2>
+
+<p>The button counted four kinds, and its Settings tab carried four switches - one per kind - each on by default. The brief describes three switches and lists four names; the markup is the authority, and it had four. The table is what each kind now has, and where the reader meets it.</p>
+
+<table>
+  <tr><th>Kind</th><th>What it is</th><th>Surface after this landing</th><th>Wired at</th></tr>
+  <tr>
+    <td class="n">permissions</td>
+    <td>a run stopped on a command it wants to run; the panel's permission box, or a gateway approval</td>
+    <td>the <b>Permissions</b> control: amber count, popup listing every request, one answer route</td>
+    <td class="n">public/index.html:66, public/app.js:13967</td>
+  </tr>
+  <tr>
+    <td class="n">clarify questions</td>
+    <td>a run waiting on a decision: a clarify question on a card</td>
+    <td>the <b>Clarify</b> control: purple count over the question history, rows that open the asking turn</td>
+    <td class="n">public/index.html:46, public/app.js:13914</td>
+  </tr>
+  <tr>
+    <td class="n">collisions</td>
+    <td>two live trees touching the same work, nothing stopped yet</td>
+    <td>the <b>Collisions</b> control: violet count of pairs waiting on a person, popup where a pair is ruled</td>
+    <td class="n">public/index.html:55, public/app.js:13944</td>
+  </tr>
+  <tr>
+    <td class="n">review items</td>
+    <td>a finished row whose result nobody has checked yet</td>
+    <td>the <b>Review</b> control: amber count from the rows the board draws, a press that filters the table to exactly them</td>
+    <td class="n">public/index.html:68, public/app.js:13704</td>
+  </tr>
+</table>
+
+<p><b>The choice made for review items: the existing Review control, not a new one.</b> It already counted these rows and already filtered the table to them, so a second control would have been two numbers for one fact. What changed is the copy: its painted title now says it is the header's one count of results to read, and the sentence that promised the H walk is gone because the walk is gone. The count itself is unchanged: <code>wtReviewLane.count(state.rows.values())</code> (public/app.js:13707) over the rows the board drew, through <code>awaiting</code> (public/core/review-lane.js:25). A delivery whose tree was archived or deleted is not a row, and is not counted - the property the lane module exists to keep.</p>
+
+<h2>2. H: removed, and what that costs</h2>
+
+<p>H was the rotation's key. With the button gone there is nothing to rotate over, and reassigning the letter would have put a fourth one-key walk beside three popovers that already have their own keyboard model (Up and Down step the rows, Enter opens one, Escape closes). So H now does nothing at all: the listener is deleted, the letter is unclaimed, and the page raises nothing for it. The gate presses <code>h</code> and <code>H</code> on a blurred page and reads the same board, the same closed popovers, no ring and no page error.</p>
+
+<p><b>What the reader loses, named:</b></p>
+<ul>
+  <li>the combined badge - one number for everything waiting. Four counts now sit in the header, each naming its own kind;</li>
+  <li>the H walk into the oldest review row: the row opened, the result chip opened onto its card, and <code>✓ Reviewed</code> under the caret for one more key. Clicking <b>Review</b> filters the table to exactly those rows, and each row keeps its own <code>✓ Reviewed</code>;
+  <li>the four switches that could narrow the count. Each surviving control counts its own kind unconditionally, which is the same default the switches shipped with.</li>
+</ul>
+
+<h2>3. What was removed, with its place</h2>
+
+<table>
+  <tr><th>Surface</th><th>What went</th><th>Evidence</th></tr>
+  <tr><td>The button</td><td><code>#btn-human</code>, <code>#human-label</code>, <code>#human-badge</code>, and the header comments that named it</td><td class="n">public/index.html:68 at the base, absent now</td></tr>
+  <tr><td>The Settings tab</td><td><code>#settings-tab-human</code>, <code>#settings-panel-human</code>, and its four <code>human-kind-*</code> switches with their preview lines</td><td class="n">public/index.html:91 and 723-756 at the base</td></tr>
+  <tr><td>The list</td><td><code>humanQuestions()</code>, <code>reviewRotationRows()</code>, <code>collisionRotationRows()</code>, <code>humanOpenOnTurn</code>, <code>humanQuestionKey</code>, and the kinds object</td><td class="n">public/app.js, the HUMAN section</td></tr>
+  <tr><td>The painter</td><td><code>paintHumanButton()</code> and its ten call sites (the 1 s clock, a job frame, a snapshot repaint, an answer, a ruling)</td><td class="n">public/app.js, public/board-scaffold.js:275, public/render-jobs.js:947, public/settings.js:137,191</td></tr>
+  <tr><td>The show paths</td><td><code>humanShow</code>, <code>humanShowReview</code>, <code>humanShowCollision</code>, <code>humanShowDock</code>, <code>humanLandOnQuestion</code>, <code>humanFocusNow</code>, <code>humanRefocus</code>, <code>humanTick</code>, <code>humanStep</code>, and the rotation's flash timer</td><td class="n">public/app.js, public/render-jobs.js:1161</td></tr>
+  <tr><td>The key</td><td>the <code>h</code>/<code>H</code> keydown listener. The text-entry guard it shared survives as <code>textEntryFocused</code>, because the D key uses it</td><td class="n">public/app.js:14231</td></tr>
+  <tr><td>The style</td><td><code>#btn-human</code> and <code>#human-badge</code>, the <code>humanflash</code> keyframes, and the three <code>.human-flash</code> selectors</td><td class="n">public/style.css:131-143 and 185-196 at the base</td></tr>
+  <tr><td>The arithmetic</td><td><code>sortHuman</code>, <code>badge</code>, <code>split</code>, <code>keepKinds</code>, <code>kindKey</code>, <code>rank</code>, <code>title</code>, <code>keeps</code> and <code>collisions</code> in the lane module</td><td class="n">public/core/review-lane.js</td></tr>
+  <tr><td>The gates</td><td>the rotation's own two harnesses and their package scripts; every other harness that waited on <code>#btn-human</code> now waits on a control that ships</td><td class="n">tools/, package.json</td></tr>
+</table>
+
+<p>One survivor is worth naming: <code>humanAgentName</code> was only ever the rotation's name lookup, but the Active bolt uses the same answer, so it survives as <code>agentNameOf</code> beside <code>hotAgents</code>. The three landing helpers the rotation used (<code>hotRowFor</code>, <code>hotOpenPath</code>, <code>flashHotCard</code>) already had other callers - the Clarify, Permissions and Collisions popovers - and are untouched.</p>
+
+<h2>4. The proof, and what each run answered</h2>
+
+<p>The new gate boots the real panel over a real git fixture, seeds one delivery through the panel's own settle seam (<code>Jobs.harvestReview</code>), and drives the page at 1440x900 and at 768x900. Its 38 checks:</p>
+
+<pre>node tools/verify-header-without-human.mjs
+
+PASS  no button, badge, label, Settings tab, Settings panel or switch survives
+PASS  the delivery is counted on the Review badge: 1
+PASS  the Review control says it is the header's one count of results to read
+PASS  …and promises no key, because the H rotation is gone
+PASS  its press filters the table to exactly the row it counted: 1 row, 1 mark
+PASS  #btn-permissions / #btn-clarify / #btn-collisions are drawn, wired, and name their popover
+PASS  each of the three presses opens its own popover, inside the viewport
+PASS  H opens nothing, flashes nothing and does not move the page
+PASS  …and the page raised no error for it
+PASS  the strip still carries its tabs (13), none of them Human, every one naming a panel that exists
+PASS  at 1440: no control outside the viewport, no sideways scroll, no overlap, header 89px, 1 row
+PASS  at 768: no control outside the viewport, no sideways scroll, no overlap, header 147px, 2 rows
+
+OK  38/38 checks passed</pre>
+
+<p>Each kind's own gate also ran on this branch, because removing a header control must not disturb what the surviving ones show:</p>
+
+<table>
+  <tr><th>Gate</th><th>What it proves for this landing</th><th>Reading</th></tr>
+  <tr><td class="n">verify-header-without-human</td><td>absence, the review count, three controls that open, H inert, no dangling tab, two widths</td><td class="ok">38/38</td></tr>
+  <tr><td class="n">verify-review-lane</td><td>the Review count and filter, no H, a reviewed row drops the count; also repaired here: the card is opened through the row's result chip, the way the page draws it</td><td class="ok">58/58</td></tr>
+  <tr><td class="n">verify-permissions-history</td><td>a permission request still reaches the reader through the Permissions control: count, popup, one answer route, a durable history</td><td class="ok">44/44 (second run; 43/44 on the first, on a deadline-stamp timing check)</td></tr>
+  <tr><td class="n">verify-clarify-history</td><td>a clarify question still reaches the reader through Clarify: count, rows, landing on the asking turn; the Human control proved absent with its badge and tab</td><td class="ok">75/75</td></tr>
+  <tr><td class="n">verify-collisions</td><td>a collision still reaches the reader through Collisions: the marker on both rows, the pair card, the ruling, and a badge that goes quiet when the pair is ruled</td><td class="ok">40/40</td></tr>
+  <tr><td class="n">verify-collision-absence</td><td>an absent counterpart is not a waiting pair, and the Collisions count says one pair, not two</td><td class="ok">27/27</td></tr>
+  <tr><td class="n">verify-hot-mark</td><td>the Active bolt is unchanged beside the counts, and the removed control is absent</td><td class="ok">41/41</td></tr>
+  <tr><td class="n">verify-active-button-toggle</td><td>the Active button's switch and its two states, with the removed control proved absent</td><td class="ok">34/34</td></tr>
+  <tr><td class="n">verify-hot-agent-header</td><td>the header order: assistant, pen, Clarify, Collisions, Permissions</td><td class="ok">25/25</td></tr>
+  <tr><td class="n">verify-deliverables-ui</td><td>the Deliverables control unchanged; the header order assertion repaired to Permissions, Deliverables, Review</td><td class="am">123/125</td></tr>
+</table>
+
+<p>Two of the 125 in the last row are a browser-side effect, not a code reading: the gate opens a report twice and the second answer is "already open in msedge.exe", which its own assertion counts as a failure. The base reads the same two failures, so they are quoted here rather than fixed in this landing.</p>
+
+<h2>5. Red on the base too, quoted so nobody owns them</h2>
+
+<p>Three harnesses are red on main before this branch touches them, at the same lines with the same counts. They are named here so the red does not read as this landing's regression, and they are left alone:</p>
+
+<ul>
+  <li><code>verify-approval-summary</code>: 14/18 on this branch and 14/18 on the base; the fixture's approval card never appears for any of its four threads.</li>
+  <li><code>verify-collision-card-fixes</code>: 30/32 on this branch and 30/32 on the base; the self-pair fixture no longer produces a pair to stand down.</li>
+  <li><code>verify-collision-pairs</code>: crashes in its own seeding at line 231 on this branch and on the base, before a browser opens, because the sweep's fake queue no longer answers <code>filed</code>.</li>
+</ul>
+
+<h2>6. What this page does not prove</h2>
+
+<ul>
+  <li>It does not re-prove the CONTENT of the three popovers: their rows, their answers and their histories are their own gates' subject, and the readings above are those gates' own numbers.</li>
+  <li>It does not measure the reader's loss quantitatively. The H walk is gone; how much that costs a reader who used it is not a number this page can produce.</li>
+  <li>It does not touch the Questions roster the Clarify control owns, or the collision pair card, or the review lane's stored record. None of them moved.</li>
+</ul>
+
+<p class="small">Reproduce the removal's own proof with <code>npm run verify:header-without-human</code>. Screenshots land in <code>.shots/</code>, which is gitignored.</p>
+</main>
+</body>
+</html>

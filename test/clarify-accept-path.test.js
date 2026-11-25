@@ -138,7 +138,7 @@ test("one press answers a question once, greys every copy, and clears both surfa
   sliceBetween(page, "// Every card that draws this question", "function artifactsFor(");
   const build = pageHarness(
     `${decls}\n${clock}\n${helpers}\n${declaredIn(settings, "applyQuestionAnswered")}`,
-    ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "paintHumanButton", "showBanner"],
+    ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "showBanner"],
     ["answerRunQuestion", "questionFlights"],
   );
 
@@ -200,7 +200,7 @@ test("one press answers a permission once, greys every copy, and clears both cop
   const handlers = sliceBetween(page, "async function answerRunApproval(", "// Take the decision away from a card");
   const build = pageHarness(
     `${flights}\n${sent}\n${handlers}\n${declaredIn(settings, "applyApprovalAnswered")}`,
-    ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "paintHumanButton", "showBanner", "answerRemoteWrite", "closeApprovalCard"],
+    ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "showBanner", "answerRemoteWrite", "closeApprovalCard"],
     ["answerRunApproval", "approvalFlights"],
   );
 

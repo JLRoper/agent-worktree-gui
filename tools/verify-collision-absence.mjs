@@ -11,7 +11,7 @@
 //      with the words it was written with and no reader hand-over - not dropped, and not filed as a question;
 //   2. the row still carries the report, and the card prints it as settled with NO ruling press and NO ask press,
 //      so the reader is not offered a ruling that does not exist;
-//   3. THE HUMAN COUNT: the same board holds one pair the reader CAN rule on and the absent note, and the badge says
+//   3. THE COLLISIONS COUNT: the same board holds one pair the reader CAN rule on and the absent note, and the badge says
 //      "1 collision" - the absent record does not add a count, and H never steps into it;
 //   4. a later pass does not reopen it: the second sweep leaves it `absent`, so it cannot become the reader's work by
 //      the panel's own clock.
@@ -186,25 +186,19 @@ const result = await (async () => {
         const painted = () =>
           page.waitForFunction(
             () => {
-              const btn = document.getElementById("btn-human");
-              // index.html's STATIC title is the one that says "every open permission"; the painted one names the
-              // counts. Waiting on that difference needs no dash of its own.
-              return Boolean(btn && btn.title && !/every open permission/.test(btn.title));
+              const btn = document.getElementById("btn-collisions");
+              // index.html's STATIC title is the one that begins "Collisions - every pair"; the painted one names the
+              // count. Waiting on that difference needs no dash of its own.
+              return Boolean(btn && btn.title && /waiting on you/.test(btn.title));
             },
             null,
             { timeout: 20_000 },
           );
         const view = () =>
           page.evaluate(() => {
-            const btn = document.getElementById("btn-human");
-            const badge = document.getElementById("human-badge");
-            const label = document.getElementById("human-label");
-            let list = [];
-            try {
-              list = humanQuestions().map((q) => ({ kind: q.kind, key: q.key }));
-            } catch {
-              list = [];
-            }
+            const btn = document.getElementById("btn-collisions");
+            const badge = document.getElementById("collisions-badge");
+            const pending = typeof collisionPendingCount === "function" ? collisionPendingCount() : null;
             return {
               rows: [...state.rows.values()].map((r) => ({
                 path: r.path,
@@ -213,10 +207,9 @@ const result = await (async () => {
               })),
               badge: (badge?.textContent || "").trim(),
               badgeHidden: badge ? badge.hidden : null,
-              label: (label?.textContent || "").trim(),
+              pending,
               title: btn?.title || "",
-              list,
-              humanKey: state.human.key,
+              aria: btn?.getAttribute("aria-label") || "",
               blocks: [...document.querySelectorAll("[data-collision-block]")].map((el) => ({
                 key: el.getAttribute("data-collision-key"),
                 state: (el.querySelector(".collision-state")?.textContent || "").trim(),
@@ -235,7 +228,7 @@ const result = await (async () => {
             };
           });
 
-        await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
+        await openPage(page, panel.base, { selector: "header.topbar #btn-collisions" });
         await rowsLoaded();
         // A 404 that the page makes for a resource nobody asked about (the favicon is one) is not this gate's business;
         // any OTHER failed request is, so the URLs are kept and asserted on below rather than only the console string.
@@ -299,12 +292,12 @@ const result = await (async () => {
         eq("…and NO ruling press and NO ask press", [absentBlock?.rules, absentBlock?.asks], [0, 0]);
         ok("…while the pair's own card still offers both", v.blocks.some((b) => b.key !== ABSENT_KEY && b.rules > 0), JSON.stringify(v.blocks.map((b) => [b.key, b.rules, b.asks])));
 
-        // ---- 3. THE HUMAN COUNT: one decision on the board, and the badge says one -------------------------------
-        section("the Human count without it");
+        // ---- 3. THE COLLISIONS COUNT: one decision on the board, and the badge says one ---------------------------
+        section("the Collisions count without it");
         eq("the badge counts the pair only", [v.badge, v.badgeHidden], ["1", false]);
-        ok("…and its title says one collision, not two", /1 collision/.test(v.title) && !/2 collisions/.test(v.title), v.title.slice(0, 140));
-        eq("…the rotation holds one collision item", v.list.filter((q) => q.kind === "collision").length, 1);
-        ok("…and it is not the absent record", v.list.every((q) => q.kind !== "collision" || q.key !== `collision:${ABSENT_KEY}`), JSON.stringify(v.list));
+        eq("…and the count it is painted from is the store's own waiting number", v.pending, 1);
+        ok("…and its title says one pair, not two", /1 pair waiting on you/.test(v.title) && !/2 pairs/.test(v.title), v.title.slice(0, 160));
+        ok("…and the absent record is not a waiting pair anywhere in that count", /nothing is waiting|1 pair/.test(v.title), v.title.slice(0, 160));
 
         await page.screenshot({ path: path.join(shots, "collision-absence-1440x900.png"), fullPage: true });
         console.log(`SHOT  ${path.join(shots, "collision-absence-1440x900.png")}`);

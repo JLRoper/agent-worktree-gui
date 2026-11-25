@@ -26,8 +26,8 @@
 //      answers. A side no queue row owns reads "no task row on this tree"; a side whose own task is done reads as
 //      already stood down and its pair is not counted for the reader.
 //
-// On top of the four: the ruled pair re-reads as "already ruled" on both rows after a fresh detection, the Human badge
-// counts the pair ONCE (a decision, not a marker), H parks on it, and the Collisions switch still turns it off.
+// On top of the four: the ruled pair re-reads as "already ruled" on both rows after a fresh detection, the Collisions
+// control counts the pair ONCE (a decision, not a marker), and its popover lists the waiting pair and rules it.
 //
 // WHAT IT DOES NOT PROVE: the queue rows themselves. `fileQueue` is the panel's own route, and this sandbox has the
 // assistant disabled, so the two filed rows are seeded through `sweepCollisions` with a fake queue (the same seam
@@ -298,8 +298,8 @@ const result = await (async () => {
         const painted = () =>
           page.waitForFunction(
             () => {
-              const btn = document.getElementById("btn-human");
-              return Boolean(btn && btn.title && !/^Human — every open permission/.test(btn.title));
+              const btn = document.getElementById("btn-collisions");
+              return Boolean(btn && /waiting on you/.test(btn.title || ""));
             },
             null,
             { timeout: 20_000 },
@@ -481,24 +481,16 @@ const result = await (async () => {
               })),
               collisionHistory: (r.collisionHistory || []).map((c) => ({ key: c.key, files: c.files, state: c.state, superseded: c.superseded || null })),
             }));
-            const btn = document.getElementById("btn-human");
-            const badge = document.getElementById("human-badge");
-            const label = document.getElementById("human-label");
-            let list = [];
-            try {
-              list = humanQuestions().map((q) => ({ kind: q.kind, key: q.key }));
-            } catch {
-              list = [];
-            }
+            const btn = document.getElementById("btn-collisions");
+            const badge = document.getElementById("collisions-badge");
+            const pending = typeof collisionPendingCount === "function" ? collisionPendingCount() : null;
             return {
               rows,
               badge: (badge?.textContent || "").trim(),
               badgeHidden: badge ? badge.hidden : null,
-              label: (label?.textContent || "").trim(),
+              pending,
               title: btn?.title || "",
               aria: btn?.getAttribute("aria-label") || "",
-              list,
-              humanKey: state.human.key,
               blocks: [...document.querySelectorAll("[data-collision-block]")].map((el) => ({
                 rowKey: el.getAttribute("data-collision-block"),
                 key: el.getAttribute("data-collision-pair"),
@@ -559,7 +551,7 @@ const result = await (async () => {
         page.on("response", (r) => {
           if (r.status() >= 400) console.log(`      HTTP ${r.status()} ${r.url()}`);
         });
-        await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
+        await openPage(page, panel.base, { selector: "header.topbar #btn-collisions" });
         await rowsLoaded();
         // A group and a project both start collapsed, and a collapsed project paints no row: the marker count, the
         // diamonds and every card below need the rows actually drawn.
@@ -810,32 +802,26 @@ const result = await (async () => {
         // The badge counts the SIBLING pair once (it came to the reader on the second pass); the ruled pair and the
         // stood-down pair are not questions any more.
         eq("the badge counts one decision, not six markers", [v.badge, v.badgeHidden], ["1", false]);
-        ok("…and the title names the collision kind once", /1 collision/.test(v.title), v.title.slice(0, 120));
-        eq("…and the rotation holds one collision item", v.list.filter((q) => q.kind === "collision").length, 1);
-        await page.evaluate(() => document.activeElement?.blur?.());
-        await page.keyboard.press("h");
-        await page.waitForTimeout(300);
-        const stepped = await view();
-        ok("H steps into the collision", /^collision:/.test(stepped.humanKey || ""), String(stepped.humanKey));
+        eq("…and the count it is painted from is the store's own waiting number", v.pending, 1);
+        ok("…and the title names one waiting pair", /1 pair waiting on you/.test(v.title), v.title.slice(0, 160));
 
-        // ---- 7. the Collisions switch still turns the kind off ----------------------------------------------
-        section("the Human kind and its switch");
-        const openSettings = async () => {
-          const open = await page.evaluate(() => !document.getElementById("settings-panel-human")?.hidden);
-          if (!open) await page.click("#btn-settings");
-          await page.click("#settings-tab-human");
-        };
-        await openSettings();
-        await page.waitForSelector("#human-kind-collisions", { state: "visible", timeout: 10_000 });
-        await page.click("#human-kind-collisions");
-        await page.waitForTimeout(300);
-        const off = await view();
-        eq("switching Collisions off empties the rotation of collisions", off.list.filter((q) => q.kind === "collision").length, 0);
-        ok("…and the badge goes quiet", off.badgeHidden === true, JSON.stringify([off.badge, off.badgeHidden]));
-        await page.click("#human-kind-collisions");
-        await page.waitForTimeout(300);
-        const on = await view();
-        eq("switching it back on restores the count", [on.badge, on.list.filter((q) => q.kind === "collision").length], ["1", 1]);
+        // ---- 7. the Collisions control lists the waiting pair, and Esc closes it -----------------------------
+        section("the Collisions control");
+        await page.click("#btn-collisions");
+        await page.waitForSelector("#collisions-pop:not([hidden])", { timeout: 15_000 });
+        const pop = await page.evaluate(() => ({
+          rows: [...document.querySelectorAll("#collisions-pop .co-row")].map((el) => ({
+            key: el.getAttribute("data-key"),
+            waiting: Boolean(el.querySelector(".co-mark-waiting")),
+          })),
+          count: (document.getElementById("co-count")?.textContent || "").trim(),
+        }));
+        ok("its popover lists the pairs this panel has seen", pop.rows.length >= 1, JSON.stringify(pop));
+        eq("…with exactly one of them waiting on the reader", pop.rows.filter((r) => r.waiting).length, 1);
+        ok("…and the popover's own count says one", /1/.test(pop.count), pop.count);
+        await page.keyboard.press("Escape");
+        await page.waitForFunction(() => document.getElementById("collisions-pop")?.hidden === true, null, { timeout: 10_000 });
+        ok("Escape closes it and the header is unchanged", true);
 
         ok("no page error", pageErrors.length === 0, pageErrors.join(" | "));
         ok("no console error", consoleErrors.length === 0, consoleErrors.join(" | "));

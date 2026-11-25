@@ -12,8 +12,9 @@
 //   1. a reader who never opened the row: the switch is OFF and the header carries NO Active button - not grey, not a
 //      zero badge, not a reserved slot;
 //   2. turning it ON through that row puts the control back with its new word, its bolt and its count while an agent
-//      is working - and the count is only ever the agents working now: an agent parked on a permission is the red
-//      Human count, so with every agent parked the control is absent again even though the switch is on;
+//      is working - and the count is only ever the agents working now: an agent parked on a permission is not a
+//      working agent, so with every agent parked the control is absent again even though the switch is on (and the
+//      removed Human control is proved absent from the page);
 //   3. one press still lands: the next working agent's card flashes and the label steps (`Active 1/1`) - the
 //      click-through the row promised did not move with the switch;
 //   4. turning it OFF takes the control away again while the same agent is still working, and the browser keeps that
@@ -134,7 +135,7 @@ const result = await (async () => {
           await route.fulfill({ response: res, json });
         });
 
-        await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
+        await openPage(page, panel.base, { selector: "header.topbar #btn-review" });
 
         const seed = async (list) => {
           fixture = list;
@@ -164,7 +165,7 @@ const result = await (async () => {
         const mark = () =>
           page.evaluate(() => {
             const btn = document.getElementById("btn-hot");
-            const human = document.getElementById("btn-human");
+            const review = document.getElementById("btn-review");
             const pen = document.getElementById("ha-search-open");
             const glyph = pen ? pen.querySelector("svg") : null;
             const r = (el) => {
@@ -182,10 +183,11 @@ const result = await (async () => {
               title: btn?.title || "",
               color: btn ? getComputedStyle(btn).color : "",
               box: btn ? r(btn) : { x: 0, y: 0, w: 0, h: 0 },
-              humanBadge: (() => {
-                const b = document.getElementById("human-badge");
+              reviewBadge: (() => {
+                const b = document.getElementById("review-badge");
                 return b && !b.hidden ? b.textContent || "" : "";
               })(),
+              humanGone: !document.getElementById("btn-human") && !document.getElementById("human-badge"),
               pen: {
                 exists: Boolean(pen),
                 drawn: Boolean(pen && pen.offsetParent !== null && pen.getBoundingClientRect().width > 0),
@@ -213,7 +215,7 @@ const result = await (async () => {
         ok("there is a hidden control in the header's group", s.inHeader === true, JSON.stringify({ inHeader: s.inHeader }));
         ok("but it is NOT drawn: off is absent, not hidden-but-reserved", s.hidden === true && s.drawn === false, JSON.stringify({ hidden: s.hidden, drawn: s.drawn }));
         ok("...with no box on the page either, so nothing is reserving a slot", s.box.w === 0 && s.box.h === 0, JSON.stringify(s.box));
-        eq("an agent is working, and it is not counted anywhere", s.humanBadge, "");
+        ok("the removed Human control is absent from the header", s.humanGone === true);
         await shot("active-button-1-off-1440x900.png");
         ok("the proof is taken at 1440x900", (await page.viewportSize()).width === 1440 && (await page.viewportSize()).height === 900);
 
@@ -256,11 +258,11 @@ const result = await (async () => {
         eq("and still calls itself the Hot Agent search", s.pen.label, "Hot Agent search (Ctrl+Shift+Q)");
         ok("the Active control sits to its left, as it always did", s.box.x < s.pen.box.x, JSON.stringify({ active: s.box, pen: s.pen.box }));
 
-        // ---- 4. parked agents are Human's, never the Active count ------------------------------------------------
+        // ---- 4. parked agents are never the Active count ---------------------------------------------------------
         section("every agent parked: the control is away even with the switch on");
         await seed([PARKED]);
         s = await mark();
-        eq("the parked run is the red Human count", s.humanBadge, "1");
+        ok("the parked run is not counted by this control: a parked turn is not working", s.hidden === true && s.drawn === false, JSON.stringify({ hidden: s.hidden, drawn: s.drawn }));
         ok("and the Active control is absent: nothing is working", s.hidden === true && s.drawn === false, JSON.stringify({ hidden: s.hidden, drawn: s.drawn }));
 
         // ---- 5. one press still lands ---------------------------------------------------------------------------
@@ -296,7 +298,7 @@ const result = await (async () => {
         // ---- 7. the choice is the browser's, so a reload keeps it ------------------------------------------------
         section("the choice survives a reload");
         await page.reload();
-        await page.waitForSelector("header.topbar #btn-human");
+        await page.waitForSelector("header.topbar #btn-review");
         await page.evaluate((next) => {
           window.__activeFixture.list = next;
         }, [WORKING]);
@@ -312,7 +314,7 @@ const result = await (async () => {
         await page.check("#general-active-button");
         await closeDrawer();
         await page.reload();
-        await page.waitForSelector("header.topbar #btn-human");
+        await page.waitForSelector("header.topbar #btn-review");
         await page.evaluate((next) => {
           window.__activeFixture.list = next;
         }, [WORKING]);

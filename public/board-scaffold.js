@@ -61,7 +61,7 @@
 //   stay in app.js
 //   the writers          apiFetch and resync (public/core/transport.js), showBanner
 //   the repaint targets  paintAgentBadges (public/render-jobs.js), refreshChips and reorderProjects
-//                        (public/render-projects.js), paintHumanButton (app.js)
+//                        (public/render-projects.js)
 //
 // THE LOAD CONTRACT. public/index.html loads CLASSIC scripts, so the page is one global scope: a top-level
 // `function` here is a window property and a top-level `const` or `let` is a binding every other script reads by
@@ -270,9 +270,6 @@ function repaintAgentState() {
   // An agent starting or finishing changes where its project belongs: bring it up (or let it settle)
   // without waiting for the next 30s snapshot, in every folder the reader is not working in.
   reorderProjects();
-  // A job that started, stopped or parked changes the HUMAN rotation's own list, and the count on its button is
-  // how the reader notices a question without looking for it — so it is repainted with the rest of the state.
-  paintHumanButton();
   // The HOT AGENTS bolt is drawn from the same list and by the same rule: a turn starting or stopping is exactly
   // when the marker has to appear or go, and this is the seam every turn change already passes through.
   paintHotButton();

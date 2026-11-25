@@ -9,12 +9,13 @@
 //
 //   1. two worktrees of ONE project with the same file dirty are a collision the scan can prove, and BOTH rows wear
 //      the violet marker, each naming the other tree and the shared file (never a bare flag);
-//   2. the Human button counts the pair ONCE - the same pair is carried by both rows and the badge is a decision
-//      count, not a marker count - and its title names "1 collision";
+//   2. the Collisions control counts the pair ONCE - the same pair is carried by both rows and its badge is a
+//      decision count, not a marker count - and its title names "1 pair waiting on you";
 //   3. the pair is handed to the reader by the panel's own pass, not by a fixture flag: two sweeps more than
 //      COLLISION_PASS_MS apart with nobody standing down is the second of the three conditions in collision-flow.js;
-//   4. H steps into it: the collision card is centred, flashed, and the ruling press takes the caret - and a press
-//      outside the card is the reader leaving it, so the row's chip is what re-opens it for the ruling;
+//   4. the reader's own press on the row's collision diamond opens the pair card, with the shared file, the worker's
+//      sentence and both press controls on it - and a press outside the card is the reader leaving it, so the row's
+//      chip is what re-opens it for the ruling;
 //   5. a worker's COLLISION line is on the same pair - filed against its own tree, resolved to the other row, and read
 //      back off the card as the worker's own sentence - because the fixture runs `Jobs.harvestCollisions` against the
 //      book the panel boots from, so the parse, the record and the render are one path;
@@ -173,8 +174,8 @@ const result = await (async () => {
         const painted = () =>
           page.waitForFunction(
             () => {
-              const btn = document.getElementById("btn-human");
-              return Boolean(btn && btn.title && !/^Human — every open permission/.test(btn.title));
+              const btn = document.getElementById("btn-collisions");
+              return Boolean(btn && /waiting on you/.test(btn.title || ""));
             },
             null,
             { timeout: 20_000 },
@@ -212,24 +213,16 @@ const result = await (async () => {
                 canAsk: c.canAsk,
               })),
             }));
-            const btn = document.getElementById("btn-human");
-            const badge = document.getElementById("human-badge");
-            const label = document.getElementById("human-label");
-            let list = [];
-            try {
-              list = humanQuestions().map((q) => ({ kind: q.kind, key: q.key, agent: q.agent }));
-            } catch {
-              list = [];
-            }
+            const btn = document.getElementById("btn-collisions");
+            const badge = document.getElementById("collisions-badge");
+            const pending = typeof collisionPendingCount === "function" ? collisionPendingCount() : null;
             return {
               rows,
               badge: (badge?.textContent || "").trim(),
               badgeHidden: badge ? badge.hidden : null,
-              label: (label?.textContent || "").trim(),
+              pending,
               title: btn?.title || "",
               aria: btn?.getAttribute("aria-label") || "",
-              list,
-              humanKey: state.human.key,
               focus: document.activeElement?.getAttribute?.("data-collision-pick") || document.activeElement?.dataset?.collisionRule || null,
               blocks: [...document.querySelectorAll("[data-collision-block]")].map((el) => ({
                 key: el.getAttribute("data-collision-key"),
@@ -257,7 +250,7 @@ const result = await (async () => {
         page.on("response", (r) => {
           if (r.status() >= 400 && !/favicon/i.test(r.url())) failed.push(`${r.status()} ${r.url()}`);
         });
-        await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
+        await openPage(page, panel.base, { selector: "header.topbar #btn-collisions" });
         await rowsLoaded();
 
         // ---- 1. the scan proves the pair, and the sweep files it ------------------------------------------
@@ -321,26 +314,25 @@ const result = await (async () => {
         v = await view();
         eq("the pair is the reader's now, on both rows", [v.rows.find((r) => r.path === ONE)?.collisions[0]?.state, v.rows.find((r) => r.path === TWO)?.collisions[0]?.state], ["reader", "reader"]);
 
-        // ---- 4. the badge counts the pair ONCE, and H steps into it ---------------------------------------
-        section("the Human badge, and H");
+        // ---- 4. the count, and the card the reader's own press opens ---------------------------------------
+        section("the Collisions count, and the card behind it");
         eq("the badge counts one decision, not two markers", [v.badge, v.badgeHidden], ["1", false]);
-        ok("the title names the collision kind", /1 collision/.test(v.title), v.title.slice(0, 120));
-        eq("the rotation holds one collision item", v.list.filter((q) => q.kind === "collision").length, 1);
-        await page.evaluate(() => document.activeElement?.blur?.());
-        await page.keyboard.press("h");
-        await page.waitForTimeout(300);
+        eq("…and the count it is painted from is the store's own waiting number", v.pending, 1);
+        ok("the title names the waiting pair", /1 pair waiting on you/.test(v.title), v.title.slice(0, 160));
+        ok("…and the aria says the same, so a screen reader hears the number", /1 pair waiting on you/.test(v.aria), v.aria.slice(0, 160));
+        // The reader's press on the row's diamond is the way into the card now that no rotation exists.
+        await page.click("tr.row .collision-mark[data-collision-diamond]");
+        await page.waitForSelector(".rowchip-pop .collision-block", { timeout: 15_000 });
         const stepped = await view();
-        ok("H parked the rotation on the collision", /^collision:/.test(stepped.humanKey || ""), String(stepped.humanKey));
-        ok("…and the ruling press has the caret", stepped.focus === "a" || stepped.focus === "b" || Boolean(stepped.focus), JSON.stringify(stepped.focus));
         ok("…on the card, with the pair's evidence", stepped.blocks.length >= 1 && stepped.blocks[0].chips.includes("lib/shared.js"), JSON.stringify(stepped.blocks.map((b) => b.chips)));
         ok("…and the worker's sentence is on it", stepped.blocks.some((b) => b.notes.some((n) => n.includes(NOTE))), JSON.stringify(stepped.blocks.map((b) => b.notes)));
         ok("…marked as reported by its worker", stepped.blocks.some((b) => /reported by its worker/.test(b.when)), JSON.stringify(stepped.blocks.map((b) => b.when)));
-        // The card H lands on is the row's own COLLISION CHIP popup, not a block in the row's detail. Its chip key is
-        // what the shot's press below can close and what the ruling step re-opens through the chip.
+        // The card is the row's own COLLISION CHIP popup, not a block in the row's detail. Its chip key is what the
+        // shot's press below can close and what the ruling step re-opens through the chip.
         const landedKey = stepped.pops.find((p) => p.kind === "collision")?.key || null;
         ok("…and the card is the row's collision chip popup", Boolean(landedKey), JSON.stringify(stepped.pops));
 
-        // Both cards on screen for the shot: the row the rotation landed on is open, the other one is opened here.
+        // Both cards on screen for the shot: the row the press landed on is open, the other one is opened here.
         await page.evaluate(() => {
           for (const r of state.rows.values()) if ((r.collisions || []).length) hotOpenPath(r);
           renderAll();
@@ -348,8 +340,8 @@ const result = await (async () => {
         await page.waitForTimeout(200);
         await page.screenshot({ path: path.join(shots, "collisions-rows-1440x900.png"), fullPage: true });
         console.log(`SHOT  ${path.join(shots, "collisions-rows-1440x900.png")}`);
-        await page.locator("#btn-human").screenshot({ path: path.join(shots, "collisions-human-1440x900.png") });
-        console.log(`SHOT  ${path.join(shots, "collisions-human-1440x900.png")}`);
+        await page.locator("#btn-collisions").screenshot({ path: path.join(shots, "collisions-control-1440x900.png") });
+        console.log(`SHOT  ${path.join(shots, "collisions-control-1440x900.png")}`);
 
         // ---- 5. the ruling ---------------------------------------------------------------------------------
         section("the reader rules");
@@ -400,10 +392,10 @@ const result = await (async () => {
         ok("…and the row's diamond says every pair is resolved", ruled.marks.length === 2 && ruled.marks.every((m) => /^1 collision, resolved/.test(m.title)), JSON.stringify(ruled.marks.map((m) => m.title)));
         // The button repaints on the page's own clock, so the quiet badge is waited for rather than read on the press.
         const quieted = await page
-          .waitForFunction(() => document.getElementById("human-badge")?.hidden === true, null, { timeout: 20_000 })
+          .waitForFunction(() => document.getElementById("collisions-badge")?.hidden === true, null, { timeout: 20_000 })
           .then(() => true)
           .catch(() => false);
-        ok("a ruled pair stops waiting on the reader, so the badge goes quiet", quieted, JSON.stringify(await page.evaluate(() => (document.getElementById("human-badge") || {}).hidden)));
+        ok("a ruled pair stops waiting on the reader, so the Collisions badge goes quiet", quieted, JSON.stringify(await page.evaluate(() => (document.getElementById("collisions-badge") || {}).hidden)));
         await page.screenshot({ path: path.join(shots, "collisions-ruled-1440x900.png") });
         console.log(`SHOT  ${path.join(shots, "collisions-ruled-1440x900.png")}`);
 

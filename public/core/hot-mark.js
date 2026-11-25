@@ -13,9 +13,9 @@
 // HOT IS NOT LIVE, and the difference is the whole point of the control. The panel calls a turn live while it is
 // running, starting, waiting, queued, OR parked on a permission or a question (public/board-scaffold.js LIVE_STATUS,
 // and lib/jobs.js LIVE_JOB_STATUS agrees) - a parked turn is still inside the turn, and counting it as finished was
-// once a real defect. But a parked turn is not WORKING: it is waiting on the reader, and that is the red Human
-// count's own subject. So the bolt is the other half of the same board: amber for an agent that is burning right
-// now, red on Human for one that is stuck on you. Every status in HOT_STATUS is also in LIVE_STATUS (the test pins
+// once a real defect. But a parked turn is not WORKING: it is waiting on the reader, and that is what Permissions
+// and Clarify count. So the bolt is the other half of the same board: amber for an agent that is burning right
+// now, a badge on Permissions or Clarify for one that is stuck on you. Every status in HOT_STATUS is also in LIVE_STATUS (the test pins
 // the subset), and `waiting_for_approval` is deliberately absent.
 //
 // A turn carrying an OPEN approval or question is not hot whatever its status says: the approval event and the
@@ -87,16 +87,16 @@
   }
 
   // The button's tooltip. It names the agents and the trees they are working in, says what the press does, and draws
-  // the line between this amber and Human's red in the reader's own words - the two controls are read side by side.
+  // the line between this amber and a stopped run's count in the reader's own words - the controls are read side by side.
   // The word is ACTIVE: the control's ids and its module keep the old name `hot` on the wire (and this file is one of
   // them), but a person reads Active, and every title and aria-label this file answers says so.
   function title(list) {
     const items = (list || []).filter(Boolean);
     if (!items.length) {
-      return "Active agents - nothing is working right now: no agent on this board is inside a turn. This button is drawn only while one is; a turn parked on a permission or a question is the red Human count, not this.";
+      return "Active agents - nothing is working right now: no agent on this board is inside a turn. This button is drawn only while one is; a turn parked on a permission or a question is counted by Permissions or Clarify, not here.";
     }
     const named = items.map((a) => (a.where ? `${a.name || a.key} (${a.where})` : a.name || a.key));
-    return `Active agents - ${plural(items.length, "agent", "agents")} working right now: ${named.join(", ")}. Click to land on the next one: its row opens if it has one, the board scrolls to its card and the card flashes. A turn parked on a permission or a question is not active - that is the red Human count, and the yellow lock and the blue turnover mark on a row are other things again. Settings > General > "Show the Active agents button in the floating header" turns this button off.`;
+    return `Active agents - ${plural(items.length, "agent", "agents")} working right now: ${named.join(", ")}. Click to land on the next one: its row opens if it has one, the board scrolls to its card and the card flashes. A turn parked on a permission or a question is not active - Permissions and Clarify are where that is counted, and the yellow lock and the blue turnover mark on a row are other things again. Settings > General > "Show the Active agents button in the floating header" turns this button off.`;
   }
 
   root.wtHotMark = { HOT_STATUS, hot, asks, agents, count, step, title };

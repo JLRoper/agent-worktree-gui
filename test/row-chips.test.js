@@ -266,19 +266,19 @@ test("the popup is clamped to the window, so neither card is clipped at 768", ()
   assert.ok(!/\.rowchip\.collision-chip/.test(css), "no collision-chip rule survives");
 });
 
-test("the Human rotation opens the chip, and the header copy no longer promises a card under the row", () => {
+test("the row chips open their card popups, and no title promises a card under the row", () => {
   const app = read("public/app.js");
-  const showReview = sliceBetween(app, "function humanShowReview(q)", "// A COLLISION, brought in front of the reader");
-  assert.match(showReview, /setRowChipOpen\("result", key, true\)/);
-  assert.match(showReview, /openRowChipPop\("result", key\)/);
-  const showCollision = sliceBetween(app, "function humanShowCollision(q)", "// The last step of every show path");
-  assert.match(showCollision, /setRowChipOpen\("collision", key, true\)/);
-  assert.match(showCollision, /openRowChipPop\("collision", key\)/);
+  const scaffold = read("public/board-scaffold.js");
+  // The press is the chip's own: one opener, two kinds of card behind it. The Human rotation used to call the same two
+  // functions; it is gone, and nothing in app.js drives a chip any more.
+  assert.match(scaffold, /function openRowChipPop\(/);
+  assert.match(scaffold, /function setRowChipOpen\(/);
+  const popup = sliceBetween(scaffold, "function rowChipInner(kind, row, key)", "// What the popup draws");
+  assert.match(popup, /reviewBlockHtml\(row, key\)/);
+  assert.match(popup, /collisionBlockHtml\(row, key\)/);
+  assert.doesNotMatch(app, /openRowChipPop\(/, "the page no longer lands on a chip from a header rotation");
   // The copy followed the surface: the reader is told about the chip and the card behind it, not a block underneath.
-  const titles = app.includes("result card under it");
-  assert.equal(titles, false, "no title promises a card under the row");
-  assert.match(app, /opens its result chip onto the card behind it/);
-  assert.match(app, /presses its collision diamond to open the pair card/);
+  assert.equal(app.includes("result card under it"), false, "no title promises a card under the row");
 });
 
 // THE PAIR CARD IS A SUMMARY OVER FOUR CLOSED SECTIONS. The card's job is to state the decision - which side goes
