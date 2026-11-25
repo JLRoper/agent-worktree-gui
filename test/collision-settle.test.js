@@ -64,7 +64,7 @@ const MERGE = ({ aClean = null, bClean = null, a = null, b = null, aFirst = null
 });
 
 // ---- 1. one direction clean -------------------------------------------------------------------------------------
-test("one clean direction names the order: the side the other merges onto goes first", () => {
+test("one clean direction names the order: the side the other merges onto goes first", async () => {
   // A first is clean, so B's work merges onto A without a conflict: A goes first and B still lands.
   const settled = settleCollision({ ...PAIR(), merge: MERGE({ aClean: true, bClean: false }) });
   assert.equal(settled.why, "one-direction");
@@ -80,7 +80,7 @@ test("one clean direction names the order: the side the other merges onto goes f
 });
 
 // ---- 2. both directions clean: the deterministic pick -----------------------------------------------------------
-test("both directions clean: older cut first, then fewer commits, then the branch name", () => {
+test("both directions clean: older cut first, then fewer commits, then the branch name", async () => {
   const facts = { a: { cutAt: "2026-11-19T09:00:00.000Z", commits: 4 }, b: { cutAt: "2026-11-19T10:00:00.000Z", commits: 1 } };
   const both = settleCollision({ ...PAIR(), merge: MERGE({ aClean: true, bClean: true, ...facts }) });
   assert.equal(both.why, "both-clean");
@@ -116,7 +116,7 @@ test("both directions clean: older cut first, then fewer commits, then the branc
 });
 
 // ---- 3b. both directions clean, but about nothing ---------------------------------------------------------------
-test("two trees on the same commit, neither committed: git compared nothing, so the pair stays the reader's", () => {
+test("two trees on the same commit, neither committed: git compared nothing, so the pair stays the reader's", async () => {
   const same = { a: { cutAt: "2026-11-19T09:00:00.000Z", commits: 0 }, b: { cutAt: "2026-11-19T09:00:00.000Z", commits: 0 } };
   const rec = { ...PAIR(), merge: MERGE({ aClean: true, bClean: true, ...same, tips: { a: "a".repeat(40), b: "a".repeat(40) } }) };
   const settled = settleCollision(rec);
@@ -136,7 +136,7 @@ test("two trees on the same commit, neither committed: git compared nothing, so 
 });
 
 // ---- 3. both directions conflict: the only card ----------------------------------------------------------------
-test("both directions conflict: no pick, and that is the only collision that asks the reader", () => {
+test("both directions conflict: no pick, and that is the only collision that asks the reader", async () => {
   const rec = { ...PAIR(), merge: MERGE({ aClean: false, bClean: false }) };
   const settled = settleCollision(rec);
   assert.equal(settled.pick, null);
@@ -159,7 +159,7 @@ test("both directions conflict: no pick, and that is the only collision that ask
 // ---- the sweep -------------------------------------------------------------------------------------------------
 const ownerOf = (side) => (side.path.endsWith("coll-a") ? "assistant-1" : "assistant-2");
 
-test("a pair git can order is settled automatically, once, and asks nothing on any later sweep", () => {
+test("a pair git can order is settled automatically, once, and asks nothing on any later sweep", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "collision-settle-"));
   try {
     const file = path.join(dir, "collisions.json");
@@ -179,7 +179,7 @@ test("a pair git can order is settled automatically, once, and asks nothing on a
         return MERGE({ aClean: true, bClean: false });
       },
     };
-    const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+    const first = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
     assert.equal(first.pairs, 1);
     assert.deepEqual(first.settled.map((s) => [s.pick, s.why, s.basis]), [["a", "one-direction", "merge"]]);
     assert.deepEqual(first.escalated, []);
@@ -207,7 +207,7 @@ test("a pair git can order is settled automatically, once, and asks nothing on a
 
     // THE REGRESSION: the same pair, re-detected from the other row's side, asks git nothing and the reader nothing.
     for (const offset of [4000, 9000, 14000]) {
-      const again = sweepCollisions({ rows: [...rows].reverse(), book, now: Date.parse("2026-11-19T12:00:00.000Z") + offset, ...deps });
+      const again = await sweepCollisions({ rows: [...rows].reverse(), book, now: Date.parse("2026-11-19T12:00:00.000Z") + offset, ...deps });
       assert.equal(again.pairs, 1);
       assert.deepEqual(again.settled, []);
       assert.deepEqual(again.escalated, []);
@@ -229,7 +229,7 @@ test("a pair git can order is settled automatically, once, and asks nothing on a
   }
 });
 
-test("both directions clean is settled by the same tie-break however the rows arrive", () => {
+test("both directions clean is settled by the same tie-break however the rows arrive", async () => {
   const book = new CollisionBook({});
   const rows = [TREE("coll-a"), TREE("coll-b")];
   const facts = { a: { cutAt: "2026-11-19T09:00:00.000Z", commits: 3 }, b: { cutAt: "2026-11-19T10:00:00.000Z", commits: 1 } };
@@ -239,17 +239,17 @@ test("both directions clean is settled by the same tie-break however the rows ar
     fileQueue: () => ({ taskId: 1 }),
     probeMerge: () => MERGE({ aClean: true, bClean: true, ...facts }),
   };
-  const forward = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  const forward = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   assert.deepEqual(forward.settled.map((s) => [s.pick, s.basis]), [["a", "older cut"]]);
   // A second book, fed the rows the other way round, settles on the same TREE: the pick is a side of the pair, and
   // the pair's sides are ordered by path, never by the order the detector happened to walk the rows.
   const second = new CollisionBook({});
-  const backward = sweepCollisions({ rows: [...rows].reverse(), book: second, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  const backward = await sweepCollisions({ rows: [...rows].reverse(), book: second, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   assert.deepEqual(backward.settled.map((s) => [s.pick, s.basis]), [["a", "older cut"]]);
   assert.equal(second.all()[0].ruling.path, book.all()[0].ruling.path);
 });
 
-test("both directions conflicting: no ruling on the first pass, the card on the second", () => {
+test("both directions conflicting: no ruling on the first pass, the card on the second", async () => {
   const book = new CollisionBook({});
   const rows = [TREE("coll-a"), TREE("coll-b")];
   let probes = 0;
@@ -266,20 +266,20 @@ test("both directions conflicting: no ruling on the first pass, the card on the 
       return MERGE({ aClean: false, bClean: false });
     },
   };
-  const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  const first = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   assert.deepEqual(first.settled, [], "git cannot order this pair, and the panel does not guess");
   assert.equal(filed.length, 2, "the assistants still get their notices first");
   assert.equal(stateOf(book.all()[0]), "assistants");
   assert.equal(book.all()[0].merge.aFirst.clean, false);
   // The pass rule hands it over, because that is the pair the reader really has to decide.
-  const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  const second = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
   assert.deepEqual(second.escalated.map((e) => e.why), ["no-stand-down"]);
   assert.equal(stateOf(book.all()[0]), "reader");
   assert.equal(book.state().count, 1);
   assert.equal(probes, 1, "the second pass reads the answer the record already carries");
 });
 
-test("a withdrawn automatic pick is not put straight back: the pair becomes the reader's", () => {
+test("a withdrawn automatic pick is not put straight back: the pair becomes the reader's", async () => {
   const book = new CollisionBook({});
   const rows = [TREE("coll-a"), TREE("coll-b")];
   let probes = 0;
@@ -292,7 +292,7 @@ test("a withdrawn automatic pick is not put straight back: the pair becomes the 
       return MERGE({ aClean: true, bClean: true });
     },
   };
-  sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   const key = book.all()[0].key;
   assert.equal(book.get(key).ruling.auto, true);
   // The reader overrules it with the same withdraw the card has always had.
@@ -302,7 +302,7 @@ test("a withdrawn automatic pick is not put straight back: the pair becomes the 
   assert.deepEqual(book.get(key).autoWithheld.pick, "a");
   assert.equal(stateOf(book.get(key)), "assistants");
   // The next sweep does not re-probe and does not re-rule, and the pass then brings the pair to the reader.
-  const next = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  const next = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
   assert.deepEqual(next.settled, []);
   assert.equal(book.get(key).ruling, null);
   assert.deepEqual(next.escalated.map((e) => e.why), ["no-stand-down"]);
@@ -310,7 +310,7 @@ test("a withdrawn automatic pick is not put straight back: the pair becomes the 
   assert.equal(probes, 1);
 });
 
-test("a probe git could not answer never settles silently: the pair is still the reader's", () => {
+test("a probe git could not answer never settles silently: the pair is still the reader's", async () => {
   const book = new CollisionBook({});
   const rows = [TREE("coll-a"), TREE("coll-b")];
   const deps = {
@@ -319,15 +319,15 @@ test("a probe git could not answer never settles silently: the pair is still the
     fileQueue: () => ({ taskId: 950 }),
     probeMerge: () => ({ ok: false, at: "2026-11-19T12:00:00.000Z", error: "git exited 129", aFirst: null, bFirst: null }),
   };
-  const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  const first = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   assert.deepEqual(first.settled, []);
   assert.equal(book.all()[0].ruling, null);
-  const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  const second = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
   assert.deepEqual(second.escalated.map((e) => e.why), ["no-stand-down"]);
   assert.equal(stateOf(book.all()[0]), "reader");
 });
 
-test("the ordinary pair - one file dirty in two trees, nothing committed - still comes to the reader", () => {
+test("the ordinary pair - one file dirty in two trees, nothing committed - still comes to the reader", async () => {
   const book = new CollisionBook({});
   const same = "c".repeat(40);
   const rows = [TREE("coll-a", { head: same }), TREE("coll-b", { head: same })];
@@ -337,17 +337,17 @@ test("the ordinary pair - one file dirty in two trees, nothing committed - still
     fileQueue: () => ({ taskId: 990 }),
     probeMerge: () => MERGE({ aClean: true, bClean: true, a: { cutAt: null, commits: 0 }, b: { cutAt: null, commits: 0 }, tips: { a: same, b: same } }),
   };
-  const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  const first = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   assert.deepEqual(first.settled, [], "the two tips are one commit: there is no order for git to name");
   assert.equal(book.all()[0].merge.aFirst.clean, true);
   assert.equal(stateOf(book.all()[0]), "assistants");
-  const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  const second = await sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
   assert.deepEqual(second.escalated.map((e) => e.why), ["no-stand-down"]);
   assert.equal(stateOf(book.all()[0]), "reader");
 });
 
 // ---- the lane and the probe -------------------------------------------------------------------------------------
-test("the review lane draws an automatic pick as auto-settled with the reason, not as already ruled", () => {
+test("the review lane draws an automatic pick as auto-settled with the reason, not as already ruled", async () => {
   const rec = {
     key: "k",
     state: "ruled",
@@ -367,7 +367,7 @@ test("the review lane draws an automatic pick as auto-settled with the reason, n
   assert.deepEqual(lane.awaitingCollisions({ path: "p", collisions: [rec] }), []);
 });
 
-test("the probe asks merge-tree in both directions against the two tips", () => {
+test("the probe asks merge-tree in both directions against the two tips", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "collision-merge-"));
   try {
     const repo = path.join(dir, "repo");
@@ -432,7 +432,7 @@ test("the probe asks merge-tree in both directions against the two tips", () => 
   }
 });
 
-test("the conflict list is read from merge-tree's own block, never from its messages", () => {
+test("the conflict list is read from merge-tree's own block, never from its messages", async () => {
   const out = ["875c96da9ac67ae8a0d5b33617f623cd1c9e3bd9", "a.txt", "lib/shared.js", "", "Auto-merging a.txt", "CONFLICT (content): Merge conflict in a.txt"].join("\n");
   assert.deepEqual(mergeConflictPaths(out), ["a.txt", "lib/shared.js"]);
   assert.deepEqual(mergeConflictPaths("d26f8c6069aafbd60876ccbed9d5524da5106cea\n"), []);

@@ -3439,14 +3439,14 @@ function fileCollisionRuling(record) {
 // written only when something moved - an unchanged board must not rewrite a file every tick.
 let collisionSweepCount = 0;
 let collisionSweepLastAt = 0;
-function sweepCollisionsNow() {
+async function sweepCollisionsNow() {
   const before = JSON.stringify(collisions.all());
   let report = null;
   try {
     // Every assistant's queue, read ONCE for this sweep: each side's task is resolved out of these rows by the row's
     // own `worktree` field (lib/collisions.js `owningTaskFor`), which is the fact a spawn wrote - never a branch name.
     const queues = collisionQueues();
-    report = sweepCollisions({
+    report = await sweepCollisions({
       rows: rowsWithProject(),
       book: collisions,
       ownerOf: collisionOwnerOf,
@@ -3510,11 +3510,9 @@ function sweepCollisionsNow() {
 // The sweep's clock. Ten seconds is a scan or two on a busy board and nothing on a quiet one, and the route can ask for
 // one NOW (POST /api/collisions {op:"sweep"}) so a reader or a proof never waits for the tick.
 const collisionSweepTimer = setInterval(() => {
-  try {
-    sweepCollisionsNow();
-  } catch {
-    /* the sweep logs its own failures; the clock must not die with one */
-  }
+  // The sweep is async now (its landing probe runs git off the loop), so a rejection has to be caught on the promise:
+  // a try/catch around the call would only catch a synchronous throw and leave the rest unhandled.
+  void sweepCollisionsNow().catch((e) => log(`collision sweep failed: ${String((e && e.message) || e)}`));
 }, 10_000);
 if (typeof collisionSweepTimer.unref === "function") collisionSweepTimer.unref();
 // The route the mount table above resolves: the read, the ask, the ruling, and an on-demand sweep.
@@ -4556,7 +4554,7 @@ function withTreeNames(snap) {
 
 // ---- the two directories the panel keeps its things in ---------------------------------------------
 // The page shows these, with their sizes, and offers to open either or to empty the scratch one. Both numbers come
-// from lib/paths.js's cached walk (10 s), so a board polled every few seconds never pays for a fresh stat of the
+// from lib/paths.js's cached walk (60 s), so a board polled every few seconds never pays for a fresh stat of the
 // attachments folder; `at` says how old the reading is rather than the page pretending it is live.
 function pathsInfo() {
   const data = sizeOf(config.dataDir);

@@ -9,7 +9,7 @@
 //   * recordNote() stores that answer, and a same-tree or unmatched note can never be ruled on;
 //   * probeSharedFiles() measures the paths both branches changed against their merge base, in a REAL repository,
 //     and says "no shared file" as an ANSWER (ok: true, files: []) rather than as a failure;
-//   * probeLanded() says whether a tip is in main and names the landing commit, also in a real repository;
+//   * await probeLanded() says whether a tip is in main and names the landing commit, also in a real repository;
 //   * the sweep supersedes a report whose side landed AFTER the report was stamped, keeps it in history with the
 //     commit named, drops it from the live lane, and never files it again.
 import assert from "node:assert/strict";
@@ -51,7 +51,7 @@ const SIDE = (name, over = {}) => sideOf(TREE(name, over));
 const QUEUES = (rows) => [{ assistantId: "assistant-1", assistant: "One", tasks: rows }];
 
 // ---- fix one: the key is resolved against the queue rows and the worktrees ------------------------------------
-test("a target resolves to a queue row by id and by thread, to a worktree by path, slug and branch", () => {
+test("a target resolves to a queue row by id and by thread, to a worktree by path, slug and branch", async () => {
   const rows = [TREE("card-a"), TREE("card-b")];
   const queues = QUEUES([
     { id: 12, title: "the b work", state: "doing", worktree: rows[1].path, thread: "card-b-thread" },
@@ -85,7 +85,7 @@ test("a target resolves to a queue row by id and by thread, to a worktree by pat
   assert.equal(targetTaskId("wtgui/12"), null);
 });
 
-test("a target that names THIS tree is same-tree, and one that names nothing is none - neither is a pair", () => {
+test("a target that names THIS tree is same-tree, and one that names nothing is none - neither is a pair", async () => {
   const rows = [TREE("card-a"), TREE("card-b")];
   const self = rows[0].path;
   const queues = QUEUES([{ id: 12, title: "the a work", state: "doing", worktree: self, thread: "card-a-thread" }]);
@@ -103,7 +103,7 @@ test("a target that names THIS tree is same-tree, and one that names nothing is 
   assert.equal(stale.kind, "same-tree");
 });
 
-test("a note records the resolution: same-tree and no-match notes carry no counterpart and cannot be ruled on", () => {
+test("a note records the resolution: same-tree and no-match notes carry no counterpart and cannot be ruled on", async () => {
   const rows = [TREE("card-a"), TREE("card-b")];
   const queues = QUEUES([{ id: 12, title: "the b work", state: "doing", worktree: rows[1].path, thread: "card-b-thread" }]);
   const book = new CollisionBook({ file: path.join(CARDS_DIR, "book-note.json") });
@@ -136,7 +136,7 @@ test("a note records the resolution: same-tree and no-match notes carry no count
   assert.deepEqual(paired.files, []);
 });
 
-test("measured files, and only measured files, put the two presses on the record", () => {
+test("measured files, and only measured files, put the two presses on the record", async () => {
   const book = new CollisionBook({});
   const rows = [TREE("card-a"), TREE("card-b")];
   const pair = book.recordNote({ project: PROJECT, treePath: rows[0].path, branch: rows[0].branch, target: "card-b", text: "same file", rows, queues: [] }).record;
@@ -173,7 +173,7 @@ test("measured files, and only measured files, put the two presses on the record
 const NOTE_TEXT = "something is in my way and I cannot tell whose tree it is";
 const noteBook = (name) => new CollisionBook({ file: path.join(CARDS_DIR, `${name}.json`) });
 
-test("a note whose target names no row and no live agent is recorded resolved-by-absence, not held on the Human button", () => {
+test("a note whose target names no row and no live agent is recorded resolved-by-absence, not held on the Human button", async () => {
   const rows = [TREE("card-a"), TREE("card-b")];
   const book = noteBook("book-absent");
   const out = book.recordNote({
@@ -221,7 +221,7 @@ test("a note whose target names no row and no live agent is recorded resolved-by
   assert.equal(lane.awaitingCollisions({ collisions: [pairView] }).length, 0, "a pair still with the assistants is not the reader's yet either");
 });
 
-test("a target that names a live agent's tree is still the reader's, and a caller that did not look settles nothing", () => {
+test("a target that names a live agent's tree is still the reader's, and a caller that did not look settles nothing", async () => {
   const rows = [TREE("card-a")];
   const live = [{ path: "/repos/card-proj/.worktrees/card-unscanned", branch: "wtgui/card-unscanned", name: "card-unscanned" }];
   const book = noteBook("book-live-agents");
@@ -257,7 +257,7 @@ test("a target that names a live agent's tree is still the reader's, and a calle
   assert.equal(again.record.absent, null);
 });
 
-test("a record the old code handed over on the spot reads back as an absence, and one escalated later does not", () => {
+test("a record the old code handed over on the spot reads back as an absence, and one escalated later does not", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "collision-absent-"));
   const file = path.join(dir, "collisions.json");
   const base = {
@@ -312,7 +312,7 @@ test("a record the old code handed over on the spot reads back as an absence, an
 });
 
 // ---- fix one, measured for real: two branches, one merge base --------------------------------------------------
-test("probeSharedFiles measures the paths both branches changed against their merge base", () => {
+test("probeSharedFiles measures the paths both branches changed against their merge base", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "collision-shared-"));
   const repo = path.join(dir, "repo");
   const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -368,7 +368,7 @@ test("probeSharedFiles measures the paths both branches changed against their me
 });
 
 // ---- fix two, measured for real: a landing with a date ----------------------------------------------------------
-test("probeLanded names the commit that landed a tip, and says when it landed", () => {
+test("probeLanded names the commit that landed a tip, and says when it landed", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "collision-landed-"));
   const repo = path.join(dir, "repo");
   const env = { ...process.env, GIT_AUTHOR_DATE: "2026-02-02T10:00:00Z", GIT_COMMITTER_DATE: "2026-02-02T10:00:00Z" };
@@ -393,7 +393,7 @@ test("probeLanded names the commit that landed a tip, and says when it landed", 
     const tipA = git("rev-parse", "HEAD").trim();
 
     // Not landed yet.
-    const before = probeLanded({ path: repo, head: tipB }, { main: "main" });
+    const before = await probeLanded({ path: repo, head: tipB }, { main: "main" });
     assert.equal(before.ok, true);
     assert.equal(before.landed, false);
     assert.equal(before.commit, null);
@@ -407,15 +407,15 @@ test("probeLanded names the commit that landed a tip, and says when it landed", 
       stdio: ["ignore", "pipe", "pipe"],
     });
     const landing = git("rev-parse", "HEAD").trim();
-    const landed = probeLanded({ path: repo, head: tipB }, { main: "main" });
+    const landed = await probeLanded({ path: repo, head: tipB }, { main: "main" });
     assert.equal(landed.ok, true);
     assert.equal(landed.landed, true);
     assert.equal(landed.commit, landing, "the merge commit IS the landing");
     assert.equal(landed.landedAt, "2026-02-02T12:00:00.000Z");
     // The other branch is still out.
-    assert.equal(probeLanded({ path: repo, head: tipA }, { main: "main" }).landed, false);
+    assert.equal((await probeLanded({ path: repo, head: tipA }, { main: "main" })).landed, false);
     // A repository with no such main is a failure with a sentence, not a false answer.
-    const nowhere = probeLanded({ path: repo, head: tipB }, { main: "no-such-main" });
+    const nowhere = await probeLanded({ path: repo, head: tipB }, { main: "no-such-main" });
     assert.equal(nowhere.ok, false);
     assert.match(nowhere.error, /no no-such-main/);
   } finally {
@@ -451,7 +451,7 @@ function notedBook() {
   return { book, rows, record: out.record };
 }
 
-test("a landing later than the report supersedes the pair: history names the commit, the live lane drops it", () => {
+test("a landing later than the report supersedes the pair: history names the commit, the live lane drops it", async () => {
   const { book, rows, record } = notedBook();
   const landed = () => ({ ok: true, at: LANDED_AT, repo: rows[1].path, main: "main", mainRef: "refs/heads/main", tip: rows[1].head, landed: true, commit: LANDING, landedAt: LANDED_AT, error: null });
   const notLanded = () => ({ ok: true, at: LANDED_AT, repo: rows[0].path, main: "main", mainRef: "refs/heads/main", tip: rows[0].head, landed: false, commit: null, landedAt: null, error: null });
@@ -464,7 +464,7 @@ test("a landing later than the report supersedes the pair: history names the com
     ownerOf: () => null,
     fileQueue: () => ({ taskId: 900 }),
   };
-  const first = sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
+  const first = await sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
   assert.equal(first.measured.length, 1, "the note's claim was measured");
   assert.deepEqual(first.measured[0].files, 1);
   assert.equal(first.superseded.length, 1);
@@ -489,7 +489,7 @@ test("a landing later than the report supersedes the pair: history names the com
 
   // A SUPSERSEDED PAIR IS NOT RE-FILED, however many sweeps run.
   for (const offset of [120_000, 180_000]) {
-    const again = sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + offset, ...deps });
+    const again = await sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + offset, ...deps });
     assert.deepEqual(again.filed, []);
     assert.deepEqual(again.superseded, [], "the record is already history");
   }
@@ -501,7 +501,7 @@ test("a landing later than the report supersedes the pair: history names the com
   assert.deepEqual(reread.forTree(rows[0].path), []);
 });
 
-test("a landing OLDER than the report is not a supersession: the pair is live and the report stands", () => {
+test("a landing OLDER than the report is not a supersession: the pair is live and the report stands", async () => {
   const { book, rows, record } = notedBook();
   const deps = {
     probeLanded: () => ({ ok: true, at: "2026-03-03T08:00:00.000Z", repo: rows[1].path, main: "main", mainRef: "refs/heads/main", tip: rows[1].head, landed: true, commit: LANDING, landedAt: "2026-03-03T08:00:00.000Z", error: null }),
@@ -509,7 +509,7 @@ test("a landing OLDER than the report is not a supersession: the pair is live an
     tasksFor: () => [],
     ownerOf: () => null,
   };
-  const report = sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
+  const report = await sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
   assert.deepEqual(report.superseded, []);
   assert.equal(book.get(record.key).superseded, null);
   const live = book.forTree(rows[0].path);
@@ -518,7 +518,7 @@ test("a landing OLDER than the report is not a supersession: the pair is live an
   assert.equal(live[0].reportedAt, REPORT_AT, "the report's stamp is what the landing was compared with");
 });
 
-test("a landing a sweep could not date is not guessed at: the pair stays", () => {
+test("a landing a sweep could not date is not guessed at: the pair stays", async () => {
   const { book, rows, record } = notedBook();
   const deps = {
     probeLanded: () => ({ ok: true, at: LANDED_AT, repo: rows[1].path, main: "main", mainRef: "refs/heads/main", tip: rows[1].head, landed: true, commit: LANDING, landedAt: null, error: null }),
@@ -526,13 +526,13 @@ test("a landing a sweep could not date is not guessed at: the pair stays", () =>
     tasksFor: () => [],
     ownerOf: () => null,
   };
-  const report = sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
+  const report = await sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
   assert.deepEqual(report.superseded, []);
   assert.equal(book.get(record.key).superseded, null);
   assert.equal(book.get(record.key).land.landed, true, "the answer is cached, but no commit is claimed as later");
 });
 
-test("a same-tree note is never superseded into a pair: its one side landing ends it as history", () => {
+test("a same-tree note is never superseded into a pair: its one side landing ends it as history", async () => {
   const book = new CollisionBook({});
   const rows = [TREE("card-a")];
   const own = book.recordNote({ project: PROJECT, treePath: rows[0].path, branch: rows[0].branch, target: "card-a", text: "this is my own tree", rows, at: REPORT_AT });
@@ -543,14 +543,14 @@ test("a same-tree note is never superseded into a pair: its one side landing end
     tasksFor: () => [],
     ownerOf: () => null,
   };
-  const report = sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
+  const report = await sweepCollisions({ rows, book, now: Date.parse(REPORT_AT) + 60_000, ...deps });
   assert.deepEqual(report.superseded.map((s) => s.pairKey), [own.record.key]);
   assert.deepEqual(book.forTree(rows[0].path), []);
   assert.equal(book.historyFor(rows[0].path)[0].resolution.kind, "same-tree");
 });
 
 // A commit that is not a full sha is refused rather than stored as an uncheckable claim.
-test("supersede refuses a commit that is not a full sha", () => {
+test("supersede refuses a commit that is not a full sha", async () => {
   const { book, record } = notedBook();
   const kept = book.supersede(record.key, { commit: "abc123", landedAt: LANDED_AT, side: "b", main: "main" });
   assert.equal(kept.superseded, null);
