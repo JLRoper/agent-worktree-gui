@@ -11,6 +11,7 @@
 //   node tools/verify-console-corner-drag.mjs --cause-check        # the slow drag with the browser's anchoring off
 //   node tools/verify-console-corner-drag.mjs --widths 1600,820 --sizes 140,460
 //   node tools/verify-console-corner-drag.mjs --press-sizes 140,300,460,620 --press-zooms 100,90
+//   node tools/verify-console-corner-drag.mjs --inner-height 1080
 //
 // WHAT THIS GUARDS. The console's corner grip (`pre.job-out` under `.out-box > .out-grip`) has one stored size and one
 // writer: `setOutHeight` into `--out-h` (public/board/console.js:3753), remembered on release in `state.outHeights`
@@ -102,6 +103,13 @@ const PRESS_SIZES = String(opt("press-sizes", "140,300,460,620")).split(",").map
 const PRESS_ZOOMS = String(opt("press-zooms", "100,90")).split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
 const PRESS_HOLD_MS = 500;
 const PRESS_TOLERANCE_PX = 1; // the brief's number: a press-only row fails above 1px of movement
+// THE VIEWPORT HEIGHT. It was hard-coded at 900, and a live chat pane at 820x900 can scroll the open turn's console
+// out of its own scrollport: the transcript is on its foot, the console sits at the turn's top, and the corner the
+// gesture needs is then drawn above the pane and painted over by the pane's tabs, so every press misses the band and
+// the case reports a drag that never happened (measured on origin/main 83ec04e: 16 of 32 drag cases, all at 820).
+// 1080 is the reader's screen and the shape tools/measure-console-press-only.mjs measures at; --inner-height keeps
+// 900 available for a reproduction, and a press that cannot reach the corner now says so instead of failing as a drag.
+const INNER_H = Number(opt("inner-height", 1080)) || 1080;
 // A hand lands a few px inside an 18 px band; 3 px is inside it, and 2 px is the repo's corner tolerance.
 const GRIP_INSET_PX = 3;
 const CORNER_TOLERANCE_PX = 2;
@@ -153,6 +161,20 @@ const PAGE_HELPERS = (gripInset) => {
       if (!g) return null;
       const r = g.getBoundingClientRect();
       return { x: +(r.right - gripInset).toFixed(1), y: +(r.bottom - gripInset).toFixed(1) };
+    },
+    // WHAT IS AT THE CORNER'S POINT. A press that misses the band is a case that measured nothing, and a bare miss
+    // cannot tell a hand that was a pixel off from a corner the pane's own tabs are painting over (a live transcript
+    // scrolled to its foot can leave the open turn's console above the scrollport, so the corner is drawn - and is
+    // not pressable - outside the pane). The verdicts quote this instead of reporting a drag that never happened.
+    hit: (pt) => {
+      const g = grip();
+      const el = pt ? document.elementFromPoint(pt.x, pt.y) : null;
+      const name = (n) => {
+        if (!n) return "nothing";
+        const cls = typeof n.className === "string" && n.className.trim() ? `.${n.className.trim().split(/\s+/).join(".")}` : "";
+        return `${n.tagName.toLowerCase()}${cls}`;
+      };
+      return { onGrip: Boolean(g && el && (el === g || g.contains(el))), at: name(el) };
     },
     // Every number a case is a statement about. `stored` is the panel's own store (state.outHeights, keyed by the
     // console's id) and `varH` the one writer's CSS variable - the same number through the two ends of its life.
@@ -418,6 +440,9 @@ async function press(page) {
     await page.waitForTimeout(60);
     down = await page.evaluate(() => window.__CD.read());
     if (down && down.held === true) break;
+    // Why it missed, so the case says "the corner is not pressable here" instead of "the drag failed".
+    const hit = await page.evaluate((pt) => window.__CD.hit(pt), at);
+    down = down ? { ...down, hit } : down;
     await page.mouse.up();
     await page.waitForTimeout(120);
   }
@@ -582,12 +607,22 @@ async function runCase(page, name, sizePx, innerHpx) {
 
 // What each case promises, in the three numbers the brief asks for: pointer delta against size delta, the corner
 // against the pointer, the store against the box.
+// A press that never reached the band measured nothing, and the page says what was at the point instead. A corner
+// scrolled above its pane is a shape this gate cannot press; that is a different sentence from a drag that lost the hand.
+function missReason(down) {
+  const hit = down && down.hit;
+  if (!hit) return "";
+  return hit.onGrip
+    ? " (the point is the grip, so the band was missed)"
+    : ` (the point is ${hit.at}, not the grip: the corner is outside the pane's scrollport or painted over at this shape)`;
+}
+
 function verdictOf(run) {
   const { name, before, down, after, rows, writes, settleMs, innerHpx } = run;
   const fails = [];
   const numbers = {};
   if (!before || !down || !after) return { fail: ["the case could not be read"], numbers };
-  if (down.held !== true) fails.push("the press did not engage the corner gesture");
+  if (down.held !== true) fails.push(`the press did not engage the corner gesture${missReason(down)}`);
 
   const grab = +(down.gripBottom - down.pointerY).toFixed(2);
   const startH = before.h;
@@ -749,7 +784,7 @@ function pressOnlyVerdict(run) {
   const fails = [];
   const numbers = {};
   if (!before || !down || !mid || !held || !after) return { fail: ["the row could not be read"], numbers };
-  if (down.held !== true) fails.push("the press did not engage the corner gesture (the band was missed)");
+  if (down.held !== true) fails.push(`the press did not engage the corner gesture (the band was missed)${missReason(down)}`);
   const round = (n) => +Number(n).toFixed(2);
   numbers.drawnBefore = round(before.h);
   numbers.topBefore = round(before.top);
@@ -757,6 +792,9 @@ function pressOnlyVerdict(run) {
   numbers.varBefore = before.varH || "";
   numbers.drawnHeld = round(held.h);
   numbers.topHeld = round(held.top);
+  // The store is the third number the row reads: a press that moves the box and writes the new number into `state.outHeights`
+  // is a resize the release might not take back, so it is read at the hold as well as after the release.
+  numbers.storedHeld = held.stored;
   numbers.deltaDrawn = round(held.h - before.h);
   numbers.deltaTop = round(held.top - before.top);
   numbers.cornerDelta = round(held.gripBottom - before.gripBottom);
@@ -780,6 +818,7 @@ function pressOnlyVerdict(run) {
     fails.push(`the release did not put the box back (${numbers.afterDeltaDrawn}px of height, ${numbers.afterDeltaTop}px of top)`);
   }
   if ((after.varH || "") !== (before.varH || "")) fails.push(`the press left --out-h "${before.varH}" -> "${after.varH}"`);
+  if (held.stored !== before.stored) fails.push(`the press changed the stored height ${before.stored} -> ${held.stored} while the hand was down`);
   if (after.stored !== before.stored) fails.push(`the press changed the stored height ${before.stored} -> ${after.stored}`);
   if (numbers.nodeReplaced) fails.push("the console node was replaced by a press that moved nothing");
   return { fail: fails, numbers };
@@ -802,7 +841,7 @@ async function main() {
   }
   try {
     for (const width of WIDTHS) {
-      const context = await launched.newContext({ viewport: { width, height: 900 } });
+      const context = await launched.newContext({ viewport: { width, height: INNER_H } });
       await context.addInitScript((key) => {
         try { localStorage.setItem(key, "1"); } catch { /* private mode: the button opens it */ }
       }, OPEN_KEY);
@@ -887,7 +926,7 @@ async function main() {
                 key,
                 `drawn ${n.drawnBefore}px -> ${n.drawnHeld}px (delta ${n.deltaDrawn}px), top ${n.topBefore}px -> ${n.topHeld}px ` +
                   `(delta ${n.deltaTop}px), corner delta ${n.cornerDelta}px, after ${n.drawnAfter}px/${n.topAfter}px, ` +
-                  `stored ${n.storedBefore == null ? "unset" : `${n.storedBefore}px`} -> ${n.storedAfter == null ? "unset" : `${n.storedAfter}px`}, ` +
+                  `stored ${n.storedBefore == null ? "unset" : `${n.storedBefore}px`} -> ${n.storedHeld == null ? "unset" : `${n.storedHeld}px`} during the hold -> ${n.storedAfter == null ? "unset" : `${n.storedAfter}px`}, ` +
                   `--out-h "${n.varBefore}" -> "${n.varAfter}", zoom ${n.zoom}, scroll writes ${n.heldScrollWrites}` +
                   (v.fail.length ? ` -- ${v.fail.join("; ")}` : ""),
               );
