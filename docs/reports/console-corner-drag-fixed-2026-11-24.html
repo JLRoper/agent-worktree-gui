@@ -304,10 +304,11 @@ ranked followers the gate proves.</p>
       test/console-tail-pin.test.js</code> - 41 pass, 0 fail. test/console-grip.test.js was updated to the new rules: the
       release writes no foot, the press stands the anchor down and records the offset, the chat pin and the in-place head
       paint ask the gesture, and a sized console does not grow into the slack.</li>
-  <li><code>npm run test:changed</code> (the focused set the diff names): 2,209 passing, 6 failing. Five of the six fail
-      on the clean <code>origin/main</code> export too (paths.test.js's config-key walk, harness.test.js's declared
+  <li><code>npm run test:changed</code> (the focused set the diff names): <strong>cancelled at 2,209 passing and 6
+      failing</strong>, after one file stopped returning and the run was killed rather than left to sit. Five of the six
+      fail on the clean <code>origin/main</code> export too (paths.test.js's config-key walk, harness.test.js's declared
       harness, scan-roots, assistant-queue-reattach, junctioned-node-modules); the sixth is a Windows temp-dir flake
-      (ENOTEMPTY on <code>%Temp%\wtgui-director-*</code>) that passes when the file is run alone.</li>
+      (ENOTEMPTY on the Director's scratch folder) that passes when that file is run alone.</li>
   <li><code>npm test</code>, once, on the final tree: <strong>cancelled at 21 minutes</strong> with 3,690 passing and 18
       failing. One of the 18 was this tree's own: <code>test/reports-are-tracked.test.js</code> named this page as
       "on disk and not in the index" (this clone's <code>.git/info/exclude</code> hides <code>docs/reports/*.html</code>),
