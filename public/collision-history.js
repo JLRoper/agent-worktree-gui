@@ -170,13 +170,6 @@ function collisionHistoryPopEl() {
     if (e.key === "Escape") {
       e.stopPropagation();
       input.blur();
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const row = input.closest?.(".ch-row");
-      const pick = String(row?.dataset.defaultPick || "");
-      if (pick) void collisionHistoryRule(String(input.dataset.key || ""), pick, row?.querySelector(".co-rule"));
     }
   });
   return pop;
@@ -222,7 +215,6 @@ function coWaitingHtml(rec) {
   const busy = collisionHist.ruling.has(rec.key);
   const aName = C ? C.sideName(rec.a) : "the first side";
   const bName = C ? C.sideName(rec.b) : "the second side";
-  const first = C && C.pickOf(rec) ? C.pickOf(rec).pick : "a";
   return `
     <span class="ch-mark co-mark co-mark-waiting">● waiting on you</span>
     <span class="co-reason" title="${coEsc(detail || reason)}">${coEsc(reason)}</span>
@@ -274,10 +266,8 @@ function coRowHtml(rec, index) {
   const state = C ? C.stateOf(rec) : rec.state;
   const active = index === collisionHist.active;
   const title = C ? `${C.pairText(rec)} · ${C.reasonLine(rec)}` : rec.key;
-  const pick = C ? C.pickOf(rec) : null;
-  const defaultPick = rec.reason?.would?.pick || pick?.pick || "a";
   return `
-    <div class="ch-row co-row is-${coEsc(state)}${active ? " is-active" : ""}" data-key="${coEsc(rec.key)}" data-default-pick="${coEsc(defaultPick)}" role="option" aria-selected="${active ? "true" : "false"}" tabindex="-1" title="${coEsc(title)}">
+    <div class="ch-row co-row is-${coEsc(state)}${active ? " is-active" : ""}" data-key="${coEsc(rec.key)}" role="option" aria-selected="${active ? "true" : "false"}" tabindex="-1" title="${coEsc(title)}">
       ${waiting ? coWaitingHtml(rec) : coSettledHtml(rec)}
     </div>`;
 }
