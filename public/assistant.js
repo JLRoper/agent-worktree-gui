@@ -2548,36 +2548,31 @@
     return document.activeElement === box;
   }
 
-  // THE WAVE BAR'S OWNER CHIP (row 291, ask 3): that assistant's Chat, with the reader's question about ONE TASK
-  // already typed - "I have a question about #<id> <title>... " - the caret after it and the box focused, so the first
-  // keystroke continues the sentence. The same rule as the chart's chip above: NOTHING is sent, Enter stays the
-  // reader's to press, and an assistant with no turn yet is handed its intro box rather than an invented one.
-  //
-  // THE PREFILL IS KEPT AS A DRAFT. The composer already holds whatever the reader has typed until it is sent or
-  // cleared, and the page's repaints hand that text back (public/app.js restoreTyping, fed by state.replyDrafts); a
-  // chip that DISCARDED the sentence when the reader clicked away would throw away words they may have already added
-  // a line to, and an accidental press would leave them nothing to return to. Keeping it costs one draft they can
-  // select and delete, and the `input` event below is what makes it a draft rather than text a repaint would erase.
-  function openQuestionAbout(at) {
-    const own = String(at?.assistantId || "").trim();
-    if (!showAssistantPane(own, "chat")) {
-      showBanner(`that task is owned by ${own || "an assistant"}, which is not on the board any more - it has no composer to ask in`);
-      return false;
-    }
-    const rec = sessionById(own);
-    const thread = String(rec?.threadId || "");
+  // THE BOX AN ASSISTANT TYPES INTO, on the pane a press just put on screen: the thread's own reply box when that
+  // thread has a turn on screen, else the newest reply box the pane draws, else its intro box (an assistant nothing has
+  // been asked yet). One lookup for both presses that start a sentence for an assistant - the wave lane's owner chip and
+  // the initiative card's assistant row - so they cannot land in two different boxes, or in another assistant's: the
+  // host is the pressed assistant's own pane (`hostFor`), never Assistant #1's.
+  function chatBoxOf(own, thread) {
     const chat = hostFor(own, "chat");
-    // The box the assistant TYPES into: the thread's own reply box when it has a turn on screen, else its intro box.
-    const box =
-      (thread ? chat?.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`) : null) ||
+    const want = String(thread || "");
+    return (
+      (want ? chat?.querySelector(`.reply-box[data-reply="${CSS.escape(want)}"]`) : null) ||
       chat?.querySelector(".reply-box[data-reply]") ||
-      as$(firstBoxId(own));
-    if (!box) return false;
-    const id = String(at?.taskId || "").trim();
-    const title = String(at?.title || "").replace(/\s+/g, " ").trim();
-    writeBox(box, `I have a question about #${id}${title ? ` ${title}` : ""}... `);
-    // The composer's own draft contract (public/app.js, the `input` listener on `.reply-box`): an input event puts the
-    // sentence in state.replyDrafts, so the transcript's next repaint draws it back instead of emptying the box.
+      as$(firstBoxId(own)) ||
+      null
+    );
+  }
+
+  // A SENTENCE THE READER HAS NOT FINISHED IS KEPT AS THE COMPOSER'S OWN DRAFT, not as text in a box. `writeBox` puts
+  // it where the reader sees it; the `input` event is the contract public/app.js's listener on `.reply-box` answers
+  // (state.replyDrafts), and THAT map is what the next repaint draws back (restoreReplyDraft/restoreTyping). A write
+  // that stopped at the DOM would be erased by the first poll that rebuilt the card - the same lesson row 301 learned
+  // from the send's side. The caret goes after the last character, so typing continues the sentence instead of
+  // replacing or preceding it. NOTHING IS SENT: Enter stays the reader's to press, and a press that posted on its own
+  // would be a message they never wrote.
+  function startAssistantLine(box, line) {
+    writeBox(box, line);
     try {
       box.dispatchEvent(new Event("input", { bubbles: true }));
     } catch {
@@ -2587,6 +2582,30 @@
     box.focus({ preventScroll: true });
     setCaretOffset(box, readBox(box).length);
     return document.activeElement === box;
+  }
+
+  // THE WAVE BAR'S OWNER CHIP (row 291, ask 3): that assistant's Chat, with the reader's question about ONE TASK
+  // already typed - "I have a question about #<id> <title>... " - the caret after it and the box focused, so the first
+  // keystroke continues the sentence. The same rule as the chart's chip above: NOTHING is sent, Enter stays the
+  // reader's to press, and an assistant with no turn yet is handed its intro box rather than an invented one.
+  //
+  // THE PREFILL IS KEPT AS A DRAFT (startAssistantLine): the composer already holds whatever the reader has typed
+  // until it is sent or cleared, and the page's repaints hand that text back; a chip that DISCARDED the sentence when
+  // the reader clicked away would throw away words they may have already added a line to, and an accidental press
+  // would leave them nothing to return to. Keeping it costs one draft they can select and delete, and the `input`
+  // event is what makes it a draft rather than text a repaint would erase.
+  function openQuestionAbout(at) {
+    const own = String(at?.assistantId || "").trim();
+    if (!showAssistantPane(own, "chat")) {
+      showBanner(`that task is owned by ${own || "an assistant"}, which is not on the board any more - it has no composer to ask in`);
+      return false;
+    }
+    const rec = sessionById(own);
+    const box = chatBoxOf(own, String(rec?.threadId || ""));
+    if (!box) return false;
+    const id = String(at?.taskId || "").trim();
+    const title = String(at?.title || "").replace(/\s+/g, " ").trim();
+    return startAssistantLine(box, `I have a question about #${id}${title ? ` ${title}` : ""}... `);
   }
 
   // A queue row is a CONSOLE row. `openAgentThread` opens the project, the row and the card; the reader asked for the
@@ -3783,11 +3802,16 @@
       .map((chip) => `<span class="${chip.cls}" title="${esc(chip.title)}">${chip.text}</span>`)
       .join("");
     const who = String(a.name || a.id);
+    // THE INITIATIVE, NAMED BY THE TITLE THE CARD SHOWS. The press writes the reader's question with this exact string -
+    // the same value the card draws in `.init-title` - and never an id: an id is not what the reader pressed, and a
+    // line that named one would be a sentence about the store rather than about the work. Carried on the button so the
+    // press reads it from the row it landed on, even though opening the chat repaints this tab away.
+    const about = String(init.title || "");
     const key = wtInitiativeFold.taskFoldKey(init.id, a.id);
     const tasksOpen = initTaskOpen.has(key);
     const n = Number(a.tasks) || (Array.isArray(a.taskRows) ? a.taskRows.length : 0);
     return `<div class="init-assist" data-init-assistant-row="${esc(a.id)}">
-      <button type="button" class="init-assist-btn" data-init-assistant="${esc(a.id)}" data-init-thread="${esc(a.thread || "")}" title="open ${esc(who)}'s pane and put the cursor in its chat box - nothing is sent">${esc(who)}</button>
+      <button type="button" class="init-assist-btn" data-init-assistant="${esc(a.id)}" data-init-thread="${esc(a.thread || "")}" data-init-title="${esc(about)}" title="${about ? `open ${esc(who)}'s chat with the question about ${esc(about)} already typed - the caret after it and nothing sent, so your first keystroke continues it` : `open ${esc(who)}'s pane and put the cursor in its chat box - nothing is sent`}">${esc(who)}</button>
       <button type="button" class="init-proj init-assist-fold" data-init-task-fold="${esc(key)}" aria-expanded="${tasksOpen ? "true" : "false"}" aria-label="${esc(`${who}: ${tasksOpen ? "hide" : "show"} the ${n} task${n === 1 ? "" : "s"} on this initiative`)}" title="${tasksOpen ? "fold" : "unfold"} the exact tasks ${esc(who)} is doing on this initiative's worktrees - every queue row on its trees, newest activity first">
         <span class="init-caret">${tasksOpen ? "▾" : "▸"}</span>
         <span class="init-proj-name">tasks</span>
@@ -4604,24 +4628,29 @@
     return true;
   }
 
-  // An assistant's NAME in the card: that assistant's pane on screen, its Chat selected, and the caret in the box it
-  // types into. The box is the thread's own reply box when the assistant has a thread on screen, and its intro box
-  // when it is new (nothing has been asked of it yet) - the same pair the chat pane itself draws, never a guess. The
-  // caret goes to the END of what is there: pressing a name must not overwrite a draft the reader left in it.
-  function focusInitiativeAssistant(id, thread) {
+  // An assistant's NAME in the card: that assistant's pane on screen, its Chat selected, and ITS composer holding the
+  // reader's question about this initiative - "Question about <the card's title>: " - with the caret after the colon
+  // and the space, so the first keystroke continues the sentence. This is the wave lane's owner-chip contract, not a
+  // second way to prefill (startAssistantLine): the box is that assistant's own thread box or its intro box, the line
+  // is kept as the composer's own draft so a repaint draws it back, and NOTHING is sent.
+  //
+  // The line REPLACES whatever the box held. A press from another initiative is a new question, and two sentences
+  // stacked in one box would be a message nobody wrote; the initiative is named by the title the card shows, never by
+  // an id. A card that somehow carries no title still opens the pane and puts the caret in the box - with no invented
+  // words in front of the reader.
+  function focusInitiativeAssistant(id, thread, title) {
     const own = String(id || "");
     if (!showAssistantPane(own, "chat")) return false;
-    const want = String(thread || "");
-    const chat = as$("as-chat");
-    const box =
-      (want ? chat?.querySelector(`.reply-box[data-reply="${CSS.escape(want)}"]`) : null) ||
-      chat?.querySelector(".reply-box[data-reply]") ||
-      as$(firstBoxId(own));
+    const box = chatBoxOf(own, String(thread || ""));
     if (!box) return false;
-    box.focus({ preventScroll: true });
-    setCaretOffset(box, readBox(box).length);
-    box.scrollIntoView({ block: "center", behavior: "auto" });
-    return document.activeElement === box;
+    const about = String(title == null ? "" : title).trim();
+    if (!about) {
+      box.scrollIntoView({ block: "center", behavior: "auto" });
+      box.focus({ preventScroll: true });
+      setCaretOffset(box, readBox(box).length);
+      return document.activeElement === box;
+    }
+    return startAssistantLine(box, `Question about ${about}: `);
   }
 
   // All three writes the tab makes, in one place. `action` is add or remove and the tree is the select's value for an
@@ -5098,7 +5127,13 @@
         return;
       }
       if (el.dataset.initAssistant) {
-        focusInitiativeAssistant(String(el.dataset.initAssistant), String(el.dataset.initThread || ""));
+        // The title travels with the press, read from the row it landed on: opening the chat repaints this tab away, so
+        // the card's own words are what the line is built from, never a lookup after the fact.
+        focusInitiativeAssistant(
+          String(el.dataset.initAssistant),
+          String(el.dataset.initThread || ""),
+          String(el.dataset.initTitle || ""),
+        );
         return;
       }
       if (el.dataset.initEdit) {
