@@ -928,14 +928,26 @@ function invalidateSnapshot() {
 // the same as a cache hit instead of 3.5s of construction plus 3.5s of stringify on the one event loop. The very first
 // read of a process has nothing to answer with and still builds inline.
 let snapshotRefreshTimer = null;
+// A FLOOR ON HOW OFTEN THE BOARD IS REBUILT, and it is what keeps the panel answerable while a pass is running.
+// Every row frame invalidates the snapshot, and a full pass over the fleet emits thousands of them (14,418 in the six
+// minutes after a boot, measured 2026-11-25), so "refresh as soon as it is stale" became "rebuild forever": 48 builds
+// of 458-2,004ms back to back, and every /api/state poll landed inside one - median 3,504ms, p90 7,071ms, measured from
+// a reader on 7331 through a restart. Three seconds is the compromise the page can live with: the stream still pushes
+// every write's frame the moment it happens, and this timer only decides how often the POLL's copy is rebuilt.
+const SNAPSHOT_REFRESH_FLOOR_MS = 3000;
+let snapshotRefreshLastAt = 0;
 function scheduleSnapshotRefresh() {
   if (snapshotRefreshTimer) return;
+  const wait = Math.max(25, SNAPSHOT_REFRESH_FLOOR_MS - (Date.now() - snapshotRefreshLastAt));
   snapshotRefreshTimer = setTimeout(() => {
     snapshotRefreshTimer = null;
+    // One build at a time: a chunked build still in flight means the next tick would queue behind it, not shorten it.
+    if (snapshotCache.stats().textBuilding) return scheduleSnapshotRefresh();
+    snapshotRefreshLastAt = Date.now();
     // Both frames are refreshed together: they share the invalidation, and the stream sends the board first.
     void snapshotCache.textAsync().catch(() => {});
     void boardCache.textAsync().catch(() => {});
-  }, 25);
+  }, wait);
   if (typeof snapshotRefreshTimer.unref === "function") snapshotRefreshTimer.unref();
 }
 function snapshotText() {
