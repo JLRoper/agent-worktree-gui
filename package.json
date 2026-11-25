@@ -136,6 +136,7 @@
     "verify:human-button": "node tools/verify-human-button.mjs",
     "verify:clarify-history": "node tools/verify-clarify-history.mjs",
     "verify:clarify-reask": "node tools/verify-clarify-reask.mjs",
+    "verify:clarify-shape": "node tools/verify-clarify-shape.mjs",
     "verify:human-kinds": "node tools/verify-human-kinds.mjs",
     "verify:collisions": "node tools/verify-collisions.mjs",
     "verify:collision-absence": "node tools/verify-collision-absence.mjs",

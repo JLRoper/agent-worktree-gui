@@ -53,6 +53,9 @@ it`, `Route: move it`, `Route: delete it`, `Ask: ...` repeat a kind and are caug
 - `public/clarify-history.js` - the popup draws `#ch-shapes` under its head from the route's summary, with the week's
   numbers and the all-kept-cards record in its tooltip. It hides while there is no summary to print.
 - `test/clarify-shape.test.js` (new) - 13 cases, listed under the proofs.
+- `tools/verify-clarify-shape.mjs` (new) - the live gate: a real panel, a real page, a stub gateway that raises one
+  `clarify.request` per run, and three cards answered through their own buttons. `npm run verify:clarify-shape`.
+- `package.json` - the `verify:clarify-shape` script, and the 1.169.2 bump.
 - `docs/using-the-board.md` - not touched; the popup's count is self-describing on the card.
 
 ## The proofs, as run
@@ -69,8 +72,26 @@ brief's order:
 | the popup count moves one per card | the real `GET /api/clarify/history` route over that store | `week` 0 -> 1 -> 2 with one four-direction card each, `weekCards` 3 after a two-choice card, and `limit=1` still reporting `week: 2` |
 | a two-choice card still works end to end | raise, answer, settle through the seam | `j.question` null, `questionDone.answer` the chosen label, the history row `answered` and still carrying `shape.ok: false` |
 
-The clarify family was run as one set (`test/clarify-*.test.js`, 96 tests) at the change: 96 pass, 0 fail. The full
-suite was run once before the push; its line is recorded in the pull request.
+The clarify family was run as one set (`test/clarify-*.test.js`, 96 tests) at the change: 96 pass, 0 fail.
+
+The live gate (`node tools/verify-clarify-shape.mjs`) ran the same three shapes through a real panel, a real page and a
+stub gateway, one worker run per card, and answered each card through its own button: 36 checks, 36 pass, 0 fail.
+
+| what the gate read | result |
+| --- | --- |
+| the seam's record on a real run | `shape` present, `ok: true`, one strip on the card, four enabled choices |
+| the popup after one card | `four directions: 1 of 1 card this week` |
+| the two-choice card | `short: none of the 4 directions in 2 choices · missing Finish, Deeper, Route, Ask`, both choices live, answered (`the turn, and its tree`), history row `answered` and still short |
+| the popup after two and three cards | `1 of 2` then `1 of 3 cards this week` |
+| the out-of-order card | `four directions, out of order: ...`, four choices, none disabled, answered, history keeps the verdict |
+| the page | no page error while drawing or answering any of the three |
+
+The cards themselves are captured at `docs/reports/assets/clarify-shape/card-strip.png` (the four-direction strip) and
+`docs/reports/assets/clarify-shape/popup-count.png` (the popup's count).
+
+The full suite (`npm test`) was started once and cancelled at about 22 minutes, still running, under the standing rule
+that a suite run past 20 minutes is cancelled. What was run instead, and passed: the 13 new cases, the 96-test clarify
+family, and the 36-check live gate above.
 
 ## What was not done, on purpose
 
