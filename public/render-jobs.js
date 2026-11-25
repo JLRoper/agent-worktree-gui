@@ -801,6 +801,10 @@ function renderJobs() {
     $("jobs").innerHTML = listed.length
       ? `${pending.length ? `<div class="job-pending" data-pending="${pending.length}"><p class="empty">Waiting for the first scan: ${pending.length} agent${pending.length === 1 ? "" : "s"} whose tree the list has not named yet. Not unattached - the tree list is still arriving.</p>${pending.map(conversationHtml).join("")}</div>` : ""}${convs.map(conversationHtml).join("")}`
       : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
+    // The rebuilt list's folded thought rows are fitted in the SAME task as the write, before anything below reads a
+    // height: the page clamp, the scroll restores and the new-card jump all measure this list, and a row that folds
+    // after they have read it moves the reader's line.
+    fitThinkRows($("jobs"));
     restoreTyping($("jobs"), typing);
     // The panel above the board just changed height. This rebuild is one synchronous step, so a moved scroll is the
     // browser clamping the page (a shorter document pulls a reader parked at the bottom upward), never the reader
@@ -812,9 +816,6 @@ function renderJobs() {
     restoreScrolls($("jobs"), prevScrolls);
     applyStoredScrolls($("jobs"));
     for (const c of listed) restoreReplyDraft(c.thread);
-    // The rebuilt list's folded thought rows are fitted before any height is read below (the scroll restores and the
-    // new-card jump both measure this list).
-    fitThinkRows($("jobs"));
     // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
     // preventScroll, so a restore never drags the page to the box.
     restoreTyping($("jobs"), typing);
