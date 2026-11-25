@@ -10648,6 +10648,35 @@ function outGripRelease(h, min, max) {
   return Math.max(lo, Math.min(hi, Math.round(Number(h) || lo)));
 }
 
+// THE SHEET'S CAP, NOT THE ONE THE LAST GESTURE LEFT. A box dragged past its cap carries `max-height: none` inline, and
+// the computed value of that is "none" - parseFloat answers NaN - so a press that read the computed value directly took
+// the release's "no cap" branch for the rest of that node's life: the sheet's cap was never put back, even after the
+// reader dragged the box under it again. The lift the gesture wrote is taken off for the read and put back exactly as
+// it was, so the press always asks the pane's own rule (docs/reports/console-corner-drag-code-2026-11-24.html, 4.3).
+// A pane whose rule is itself `max-height: none` (the docked Chat pane, public/style.css) has no inline lift to remove
+// and no cap to find: NaN is the honest answer there, and the release lifts it.
+function outGripCap(out, cs) {
+  let cap = parseFloat(cs && cs.maxHeight);
+  if (Number.isFinite(cap)) return cap;
+  const inline = out && out.style ? out.style.maxHeight : "";
+  if (!inline) return cap;
+  out.style.maxHeight = "";
+  try {
+    cap = parseFloat(getComputedStyle(out).maxHeight);
+  } finally {
+    out.style.maxHeight = inline;
+  }
+  return cap;
+}
+
+// What the release leaves on the box: the sheet's cap back whenever the height the reader chose is under it, and the
+// lift whenever that height is above it - or whenever no cap could be read, which is a pane that has none (the docked
+// Chat pane) and a box an earlier gesture already lifted. An explicit height is what the gesture decided; the cap
+// exists only for a console nobody has resized.
+function outGripCapStyle(cap, h) {
+  return Number.isFinite(cap) && h <= cap ? "" : "none";
+}
+
 // Is a live corner gesture holding THIS console? Asked by the console's own writers (public/board/console.js) and by
 // the card rebuild (public/render-jobs.js), by bare name: the page is one global scope (public/index.html's contract).
 function outDragging(out) {
@@ -10711,9 +10740,11 @@ document.addEventListener(
       from: r.height,
       moved: false,
       // The sheet's own clamps, read BEFORE the gesture lifts the cap, and the inline style as it was, so a press that
-      // moves nothing can put the box back exactly as it found it.
-      min: Math.max(parseFloat(cs.minHeight) || 0, Math.round((parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0))),
-      cap: parseFloat(cs.maxHeight),
+      // moves nothing can put the box back exactly as it found it. The cap comes from `outGripCap`, which reads it off
+      // the sheet when an earlier drag's `max-height: none` is still on the box: parseFloat of that computed value is
+      // NaN, and a cap destroyed by one over-cap drag is a release with nothing to clamp back to.
+      min: outFloor(cs),
+      cap: outGripCap(out, cs),
       hadVar: out.style.getPropertyValue("--out-h"),
       styleMax: out.style.maxHeight,
       styleMin: out.style.minHeight,
@@ -10855,12 +10886,11 @@ function endOutGrip(e) {
       const h = outGripRelease(d.h, d.min, room);
       setOutHeight(d.out, h);
       d.out.style.minHeight = d.styleMin;
-      // Lifted whenever the height the reader chose is at or above the cap - and ALSO when the cap cannot be read,
-      // which is the ordinary state of a box an earlier gesture already lifted (its computed max-height is "none" by
-      // then, and parseFloat of that is NaN). Restoring the sheet's cap in that case snaps a second drag straight back
-      // down to it: measured, a 250px box dragged to 270 drew 230 on release, because the cap came back. An explicit
-      // height is what the gesture decided; the cap exists only for a console nobody has resized.
-      d.out.style.maxHeight = Number.isFinite(d.cap) && h <= d.cap ? "" : "none";
+      // The cap the press read off the SHEET (outGripCap), so a box an earlier drag took over the cap and this one
+      // brought back under it gets the sheet's cap again - the invariant the inline lift used to destroy. A pane with
+      // no cap of its own (the docked chat) keeps the lift: an explicit height is what the gesture decided, and the cap
+      // exists only for a console nobody has resized.
+      d.out.style.maxHeight = outGripCapStyle(d.cap, h);
       rememberOutHeight(d.out.dataset.out, h);
       // THE FOOT THE GESTURE TOOK AWAY, NOT ONE IT PUTS BACK. The drag moved the box's bottom by exactly the pointer's
       // travel, with the transcript's offset never written (its pin stood down, its anchor stood down, its room held

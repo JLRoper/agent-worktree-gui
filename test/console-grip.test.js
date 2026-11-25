@@ -199,6 +199,82 @@ test("the rebuild paths that would replace the node defer to the release", () =>
   assert.ok(grab(appSrc, "endOutGrip").includes("if (d.deferred)"), "the release is what draws them");
 });
 
+// ---- the cap the second drag needs, and the fold flush under the pointer -------------------------------------
+// Report 4.3, second half: the press read `parseFloat(cs.maxHeight)`, and one drag past the cap leaves
+// `max-height: none` inline - which parses to NaN. Every later press then took the release's "no cap" branch, so the
+// sheet's cap was never re-applied to that node, even after the reader dragged back under it. The gate drags once per
+// case, so it cannot see this; this is the two-drag case it never had.
+function gripCapPage() {
+  const context = vm.createContext({
+    Math,
+    Number,
+    // The browser's own rule: an inline max-height wins over the sheet's.
+    getComputedStyle: (el) => ({ maxHeight: el.style.maxHeight || el.sheetCap || "" }),
+  });
+  vm.runInContext(
+    [grab(appSrc, "outGripCap"), grab(appSrc, "outGripCapStyle"), grab(appSrc, "outGripRelease")].join("\n"),
+    context,
+  );
+  return context;
+}
+
+test("a second drag on a box the first one took past the cap still knows the sheet's cap", () => {
+  const page = gripCapPage();
+  const box = { sheetCap: "320px", style: { maxHeight: "" } };
+  const press = () => page.outGripCap(box, page.getComputedStyle(box));
+
+  const first = press();
+  assert.equal(first, 320, "the first press reads the pane's cap off the sheet");
+  box.style.maxHeight = "none"; // what the press writes before the pointer moves
+  const one = page.outGripRelease(420, 18, Math.max(first, 700));
+  box.style.maxHeight = page.outGripCapStyle(first, one);
+  assert.equal(one, 420, "the first drag keeps the height it reached, past the cap");
+  assert.equal(box.style.maxHeight, "none", "with the cap lifted off it");
+
+  const second = press();
+  assert.equal(second, 320, "the second press still knows the sheet's cap: 'none' inline is not a cap of NaN");
+  const two = page.outGripRelease(260, 18, Math.max(second, 700));
+  box.style.maxHeight = page.outGripCapStyle(second, two);
+  assert.equal(two, 260, "the second drag keeps the height it chose");
+  assert.equal(box.style.maxHeight, "", "and the sheet's cap is back on the box, because 260 is under it");
+  assert.equal(page.outGripCapStyle(NaN, 300), "none", "a pane with no cap of its own (the docked chat) still lifts it");
+});
+
+// Report 4.4: cmdFoldResize watches every console (wireConsole observes each one), so EVERY height write of the corner
+// gesture fires the observer, whose flush rewrites the text nodes of every command card inside the box being dragged.
+// That is the "text rebuilt under the pointer" the gesture forbids, in the frame after the write - and the flush asked
+// nobody whether a gesture was live. The gate counted 0 childList mutations in every case because it drags a console
+// with no command card in it, so there was nothing there to prove.
+function foldFlush(pending, heldOut) {
+  const painted = [];
+  const context = vm.createContext({
+    consoleHeld: (out) => out === heldOut,
+    paintCommandFoldMark: (box) => painted.push(box.name),
+    requestAnimationFrame: () => 7,
+  });
+  context.cmdFoldPending = new Set(pending);
+  context.cmdFoldFrame = 0;
+  vm.runInContext([grab(consoleSrc, "flushCommandFoldMarks"), grab(consoleSrc, "armCommandFoldFrame")].join("\n"), context);
+  vm.runInContext("flushCommandFoldMarks()", context);
+  return { painted, context };
+}
+
+test("a command-card fold flush under the pointer waits for the release instead of rewriting the card", () => {
+  const heldOut = { name: "the console being dragged" };
+  const held = { name: "held", isConnected: true, closest: (sel) => (sel === "pre.job-out" ? heldOut : null) };
+  const free = { name: "free", isConnected: true, closest: () => null };
+
+  const { painted, context } = foldFlush([free, held], heldOut);
+
+  assert.deepEqual(painted, ["free"], "the card outside the dragged console is marked; the one inside it is not rewritten");
+  assert.equal(vm.runInContext("[...cmdFoldPending].length", context), 1, "the held card is still pending");
+  assert.equal(vm.runInContext("[...cmdFoldPending][0]", context), held, "exactly the card the gesture holds");
+  assert.equal(vm.runInContext("cmdFoldFrame", context), 7, "and it is re-armed for the next frame, not dropped");
+  assert.ok(grab(consoleSrc, "armCommandFoldFrame").includes("flushCommandFoldMarks"), "the observer's frame runs the gated flush");
+  assert.ok(grab(consoleSrc, "scheduleCommandFoldMark").includes("armCommandFoldFrame()"), "and the observer schedules through it");
+  assert.ok(grab(consoleSrc, "paintCommandFoldMark").includes("consoleHeld"), "and the painter asks the gesture itself, so no call site can slip past");
+});
+
 test("the gesture hands its own pointer the whole way", () => {
   const pressAt = appSrc.indexOf("// The grip's own press.");
   assert.ok(pressAt > 0, "the press handler is still there");

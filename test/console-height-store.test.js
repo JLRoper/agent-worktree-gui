@@ -106,7 +106,16 @@ const context = {
     getItem: (k) => (storage.has(k) ? storage.get(k) : null),
     setItem: (k, v) => storage.set(k, String(v)),
   },
-  getComputedStyle: (el) => ({ maxHeight: el.cap }),
+  // The four numbers a restore reads off a laid-out box: the sheet's own floor and cap, and the padding and border
+  // the console's height cannot go below (the 18px padding box the drag measured: 8px top and bottom, two 1px rules).
+  getComputedStyle: (el) => ({
+    maxHeight: el.cap,
+    minHeight: el.minHeight,
+    paddingTop: "8px",
+    paddingBottom: "8px",
+    borderTopWidth: "1px",
+    borderBottomWidth: "1px",
+  }),
   Math,
   Number,
   Set,
@@ -114,9 +123,13 @@ const context = {
   Object,
 };
 vm.createContext(context);
+// `outFloor` is the shared floor the release and the restore both hold. Read from the source when it is there: the
+// head this landed on has no such function, and a harness that insisted on it would fail the whole FILE at load
+// instead of failing the two tests that report the defect.
 vm.runInContext(
   [
     "const selfScrolled = new WeakSet();",
+    ...(src.includes("function outFloor(") ? [grab("outFloor")] : []),
     grab("loadOutHeights"),
     grab("saveOutHeights"),
     grab("rememberOutHeight"),
@@ -194,6 +207,37 @@ test("the height goes on BEFORE the scroll is placed, so the reader's line is cl
 
   assert.deepEqual(box.writes, ["--out-h=420px", "maxHeight=none", "scrollTop=1200"], "height first, then the line");
   assert.equal(box.max, 3580, "the parked line was clamped against a 420 px box, not a 320 px one");
+});
+
+// ---- the floor, and the layout the restore cannot have yet -----------------------------------------------------
+// Report 4.2: `applyStoredHeight` applied whatever positive number the store held, with no floor, while the release
+// clamped the same number to the sheet's `min-height` and the console's padding box. A number below the padding box is
+// not a height anything can draw (measured: `--out-h: 1px` drew 18px), so a store written at the bottom of a drag came
+// back as a number the box on screen did not have - and the store kept it for the next restore to apply again.
+test("a stored height below the padding box reloads at the 18px floor, and the store agrees", () => {
+  const box = fresh();
+  context.state.outHeights["turn-1"] = 4; // a store the box cannot draw: 8px padding twice plus two 1px borders
+
+  context.placeBuiltConsoles(root([box]));
+
+  assert.equal(box.style["--out-h"], "18px", "the box on screen is the padding-box floor, not the 4px the store held");
+  assert.equal(box.clientHeight, 18, "and that is the height the reader sees");
+  assert.equal(context.state.outHeights["turn-1"], 18, "the store agrees with the box: no second number to restore");
+  assert.deepEqual(JSON.parse(storage.get("wm.outHeights")), { "turn-1": 18 }, "and the agreed number is the one on disk");
+});
+
+// Report 4.7: a restore takes any root, and the render path that restores into a fragment inserts afterwards. A
+// detached console has no computed `max-height` (the empty string, so parseFloat is NaN), and the cap lift was written
+// as `Number.isFinite(cap) && h > cap` - so the lift was SKIPPED and nothing re-ran when the layout appeared. The
+// reader's 420px came back on the pane's 320px cap, which is the 2026-11-23 case 7 report again.
+test("a stored height restored into a box with no layout yet still lifts the cap", () => {
+  const box = fresh({ cap: "" }); // detached: there is no computed max-height to read
+  context.state.outHeights["turn-1"] = 420;
+
+  context.placeBuiltConsoles(root([box]));
+
+  assert.equal(box.style["--out-h"], "420px", "the height the reader chose is applied");
+  assert.equal(box.style.maxHeight, "none", "and the cap is lifted without a measurement, because the pane has not laid it out yet");
 });
 
 // ---- the store itself -----------------------------------------------------------------------------------------
