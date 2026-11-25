@@ -199,16 +199,29 @@ function thinkLidPx(box) {
 }
 
 // The largest word-boundary prefix of `head` that fits the four-line lid WITH the dots, or null when the whole thing
-// fits and nothing is hidden by the lid. Measured on the box itself, so the answer is this console's own width and
-// font. The cut is remembered against the exact prefix it cut: a thought only grows, so the four-line cut of its
-// first paragraph does not move as more words arrive, and a streaming row does not re-measure on every delta.
+// fits and nothing is hidden by the lid.
+//
+// THE MEASUREMENT IS OFF THE ROW THE READER IS LOOKING AT. This used to write each candidate into the row's own box and
+// read its scrollHeight back. It cannot paint between those writes (one task, one frame), but the write was still the
+// whole thought in the folded box: every frame the page was handed a NEW version of the card - a state frame, a
+// rebuild, the sweep - drew the row from its source and this function's candidates then held the full section until
+// the next delta put the cut back. That is the flash the reader reported: a folded row that shows the whole thought
+// and re-folds in under 100 ms, on every reasoning event.
+//
+// So the measurement happens on a hidden sibling of the box (`thinkProbe`): the same width, the same font and leading,
+// no lid on it, out of flow and invisible. The row's own box is only ever written with the answer.
 function thinkLidCut(row, box, head, limit) {
+  const probe = thinkProbe(box);
+  const width = probe._w;
   const fits = (s) => {
-    box.textContent = s + THINK_DOTS;
-    return box.scrollHeight <= limit + 1;
+    probe.textContent = s + THINK_DOTS;
+    return probe.getBoundingClientRect().height <= limit + 1;
   };
+  // The cut is remembered against the exact prefix it cut AND the width it was cut at: a thought only grows, so the
+  // four-line cut of its first paragraph does not move as more words arrive, but a card that changed width has to be
+  // measured again.
   const cached = row._thinkCut;
-  if (cached && cached.limit === limit && head.length >= cached.cut && head.slice(0, cached.cut) === cached.head) return cached.cut;
+  if (cached && cached.limit === limit && cached.w === width && head.length >= cached.cut && head.slice(0, cached.cut) === cached.head) return cached.cut;
   if (fits(head)) {
     row._thinkCut = null;
     return null;
@@ -230,12 +243,62 @@ function thinkLidCut(row, box, head, limit) {
     const stop = head.search(/\s/);
     shown = stop < 0 ? head : head.slice(0, stop);
   }
-  row._thinkCut = { limit, cut: shown.length, head: shown };
+  row._thinkCut = { limit, w: width, cut: shown.length, head: shown };
   return row._thinkCut.cut;
+}
+
+// The measuring surface a folded row's cut is found on: ONE hidden box on <body>, styled with the same computed text
+// properties as the row's box, so a candidate is measured at this console's own width and font without writing it into
+// the row. It is not a child of the row: a hidden sibling inside the console would still join the console's
+// `textContent`, so a copy of the block or a search over it would find a thought twice.
+//
+// The properties are copied rather than inherited from a class, because the box's font is the card's (`--term-size`
+// moves with Console size and a Ctrl+wheel zoom) and its wrapping is the console's. The copy is skipped while the
+// signature holds, so a delta costs one compare and no style write.
+const THINK_MEASURE_PROPS = Object.freeze([
+  "font-family",
+  "font-size",
+  "font-style",
+  "font-weight",
+  "line-height",
+  "letter-spacing",
+  "word-spacing",
+  "white-space",
+  "word-break",
+  "overflow-wrap",
+  "text-indent",
+  "tab-size",
+  "direction",
+]);
+let thinkMeasureBox = null;
+function thinkProbe(box) {
+  if (!thinkMeasureBox || !thinkMeasureBox.isConnected) {
+    const host = document.createElement("div");
+    host.className = "think-measure";
+    host.setAttribute("aria-hidden", "true");
+    const span = document.createElement("span");
+    span.className = "think-measure-text";
+    host.appendChild(span);
+    document.body.appendChild(host);
+    thinkMeasureBox = span;
+    thinkMeasureBox._sig = "";
+  }
+  const cs = getComputedStyle(box);
+  const width = box.clientWidth;
+  const sig = `${width}|${cs.fontSize}|${cs.lineHeight}|${cs.fontFamily}|${cs.fontWeight}|${cs.fontStyle}|${cs.letterSpacing}|${cs.wordSpacing}|${cs.whiteSpace}|${cs.wordBreak}|${cs.overflowWrap}|${cs.textIndent}|${cs.tabSize}|${cs.direction}`;
+  if (thinkMeasureBox._sig !== sig) {
+    for (const prop of THINK_MEASURE_PROPS) thinkMeasureBox.style.setProperty(prop, cs.getPropertyValue(prop));
+    thinkMeasureBox.style.width = `${width}px`;
+    thinkMeasureBox._sig = sig;
+    thinkMeasureBox._w = width;
+  }
+  return thinkMeasureBox;
 }
 
 // Draw one row from the thought it holds: the whole thought when it is open, the first section plus dots when it is
 // minimized. `_drawn` stays the SOURCE text (that is what drawRowText's high-water mark compares), never the summary.
+// The row's box is written ONCE, with what may be shown: a folded row is never handed its source text, so a card that
+// repaints mid-stream cannot paint the whole thought into the four lines the reader is looking at.
 function fitThinkRow(row) {
   if (!row || !row.dataset || !row.dataset.thinkRow) return false;
   const box = row.querySelector(":scope > .think-text");
@@ -265,14 +328,31 @@ function fitThinkRow(row) {
   return true;
 }
 
+// Draw every folded row of a card (or console) that has just been built from markup. The cut is a MEASUREMENT, so
+// markup cannot carry it: a card drawn again holds its rows at their source until something fits them, which is what
+// left a folded row over its lid for the frames after a repaint. Every path that rebuilds a card calls this in the
+// same task as the write, so the repaint and its fit are one frame.
+function fitThinkRows(root) {
+  if (!root || root.nodeType !== 1) return 0;
+  const rows = root.matches?.(".jl-think[data-think-row]") ? [root] : [...(root.querySelectorAll?.(".jl-think[data-think-row]") || [])];
+  let n = 0;
+  for (const row of rows) if (fitThinkRow(row)) n += 1;
+  return n;
+}
+
 // The sweep that finishes rows the draw could not measure: a card that was collapsed when the thought arrived, a
 // console that changed width, a zoom. It rewrites only a box whose words differ, so a settled row costs one compare.
 function sweepThinkLids() {
   if (typeof document === "undefined" || document.hidden) return;
-  for (const row of document.querySelectorAll(".jl-think[data-think-row]")) fitThinkRow(row);
+  fitThinkRows(document);
 }
 
 // The markup of one thinking row. `sep` is the stream's blank line above a piece (wtStream.pieces).
+//
+// A FOLDED row's markup is provisional: it carries the first section, and the four-line cut is a measurement, so the
+// row is finished by fitThinkRow() - the append path does it as the row lands, and every path that rebuilds a card
+// does it in the same task through fitThinkRows(). Until then the box holds the source section and the CSS lid is the
+// only bound on it, which is exactly why the rebuild paths must not be allowed to paint in between.
 function thinkRowHtml(l, sep = "") {
   const lid = String(l.lid ?? thinkLid(l.at));
   const text = String(l.text ?? "");
@@ -301,9 +381,15 @@ function patchThinkRow(el, l) {
   // The row's high-water mark is the SOURCE, not the summary: `_drawn` is what drawRowText compares and appends from,
   // and a patch and a paint are two writers of one row that must agree about what has already been drawn.
   el._drawn = text;
+  // A streamed delta NEVER decides whether the row is open. The reader's press owns `is-open` (app.js) and
+  // thinkOpenRows is its record, so a row the reader opened stays open with no class write per token, and a row they
+  // left folded cannot be opened by words arriving. The compare is a repair for a row a paint left out of step, and
+  // it writes nothing in the steady state.
   const open = thinkOpenRows.has(lid);
-  el.classList.toggle("is-open", open);
-  el.setAttribute("aria-expanded", open ? "true" : "false");
+  if (el.classList.contains("is-open") !== open) {
+    el.classList.toggle("is-open", open);
+    el.setAttribute("aria-expanded", open ? "true" : "false");
+  }
   const mark = el.querySelector(":scope > [data-think-live]");
   if (l.live && !mark) {
     const from = Number(l.at) || Date.now();

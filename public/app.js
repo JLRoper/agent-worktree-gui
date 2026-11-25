@@ -9699,6 +9699,10 @@ function fillAgentSlots(root, reuse) {
     if (fresh) {
       fresh.dataset.sig = conversationSignature(conv);
       slot.replaceWith(fresh);
+      // A folded thought row in the rebuilt card carries its source until it is measured (the cut is a measurement):
+      // fit it before anything reads the card's heights - the console placement below and the caller's scroll map
+      // both measure, and a row that folds after they have read it would move the reader's line.
+      fitThinkRows(fresh);
       // No card was carried into this slot: the rebuild BUILT one, so its consoles have no old node to read and no
       // entry in the caller's scroll map, and the same-task restores below skip them. Place them here, before the
       // frame the insert is in is painted - the top of a log the run has been writing is not where the reader was.

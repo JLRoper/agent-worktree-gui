@@ -2352,6 +2352,9 @@
       fresh.dataset.sig = sig;
       fresh.dataset.taskrev = rev;
     }
+    // The float's card is rebuilt here too, so its folded thought rows are fitted before any height is read (the
+    // restores below put the reader's place back from heights that a late fold would change).
+    fitThinkRows(host);
     restoreScrolls(host, prevScrolls);
     applyStoredScrolls(host);
     restoreReplyDraft(conv.thread);
