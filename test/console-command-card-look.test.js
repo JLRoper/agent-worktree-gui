@@ -87,7 +87,7 @@ test("the marker is written for every card a render path places, and taken back 
   // it hands each added subtree to the painter.
   assert.match(consoleJs, /scheduleCommandFoldMark\(node\);/);
   assert.match(consoleJs, /for \(const el of root\.querySelectorAll\?\.\("\.code-box\.is-cmd"\) \|\| \[\]\) boxes\.push\(el\);/);
-  assert.match(consoleJs, /cmdFoldFrame = typeof requestAnimationFrame === "function" \? requestAnimationFrame\(flush\)/);
+  assert.match(consoleJs, /typeof requestAnimationFrame === "function"[\s\S]{0,40}requestAnimationFrame\(flushCommandFoldMarks\)/);
   // A body that changes width is measured again: the wrap moved, so the last visible character moved with it. ONE
   // observer, on the console the cards are drawn in - the target per card was one more observation per rebuild.
   assert.match(consoleJs, /const cmdFoldResize =/);

@@ -3280,6 +3280,11 @@ function clearCommandFoldMark(box) {
 // was 1.7 ms per call and 32 Range reads for four text nodes, 8 of 8 re-marks doing the same binary search again.
 function paintCommandFoldMark(box) {
   if (!box || box.nodeType !== 1 || !box.classList || !box.classList.contains("is-cmd")) return;
+  // A card inside a console a live corner gesture owns is text under the pointer, and the observer above is fired by
+  // that gesture's own height writes. The flush asks the same question; so does this, so no other call site can rewrite
+  // the card in the frame after a write (docs/reports/console-corner-drag-code-2026-11-24.html, 4.4).
+  const held = typeof box.closest === "function" ? box.closest("pre.job-out") : null;
+  if (held && consoleHeld(held)) return;
   const body = box.querySelector(":scope > .code-body");
   if (!body) return;
   const clamped = box.classList.contains("is-clamped");
@@ -3393,14 +3398,40 @@ function scheduleCommandFoldMark(root) {
   for (const el of root.querySelectorAll?.(".code-box.is-cmd") || []) boxes.push(el);
   if (!boxes.length) return;
   for (const box of boxes) cmdFoldPending.add(box);
+  armCommandFoldFrame();
+}
+
+// The next frame's flush. One owner for the handle, because the flush re-arms itself while a gesture holds a card.
+function armCommandFoldFrame() {
   if (cmdFoldFrame) return;
-  const flush = () => {
-    cmdFoldFrame = 0;
-    const batch = [...cmdFoldPending];
-    cmdFoldPending.clear();
-    for (const box of batch) if (box.isConnected) paintCommandFoldMark(box);
-  };
-  cmdFoldFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(flush) : (setTimeout(flush, 0), 1);
+  cmdFoldFrame =
+    typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame(flushCommandFoldMarks)
+      : (setTimeout(flushCommandFoldMarks, 0), 1);
+}
+
+// One frame of marks, and the place the corner gesture is asked. cmdFoldResize watches every console (wireConsole
+// observes each one), so a drag's own height writes fire this flush, and a mark rewrites the text nodes inside the
+// console under the pointer - the exact "text rebuilt under the pointer" the gesture forbids, landing in the frame
+// after the write. A card the gesture holds goes back into the pending set and the frame is armed again, so it is
+// marked after the release instead of dropping out of the batch
+// (docs/reports/console-corner-drag-code-2026-11-24.html, 4.4).
+function flushCommandFoldMarks() {
+  cmdFoldFrame = 0;
+  const batch = [...cmdFoldPending];
+  cmdFoldPending.clear();
+  let waiting = false;
+  for (const box of batch) {
+    if (!box.isConnected) continue;
+    const out = typeof box.closest === "function" ? box.closest("pre.job-out") : null;
+    if (out && consoleHeld(out)) {
+      cmdFoldPending.add(box);
+      waiting = true;
+      continue;
+    }
+    paintCommandFoldMark(box);
+  }
+  if (waiting) armCommandFoldFrame();
 }
 
 const copyObserver = new MutationObserver((records) => {
@@ -3761,6 +3792,18 @@ function setOutHeight(out, px) {
   return true;
 }
 
+// THE FLOOR A CONSOLE CAN ACTUALLY DRAW: the larger of the sheet's `min-height` and the console's own padding and
+// borders. `--out-h: 1px` drew 18px (8px of padding top and bottom plus the two 1px rules), so a number under that
+// was a store, a gesture and a restore agreeing on a height the box never had. ONE function for both paths - the press
+// clamps the pointer to it (public/app.js) and a restore puts at least it back - because two floors are how the release
+// came to clamp a number the restore did not (docs/reports/console-corner-drag-code-2026-11-24.html, 4.2).
+function outFloor(cs) {
+  const pad = (parseFloat(cs && cs.paddingTop) || 0) + (parseFloat(cs && cs.paddingBottom) || 0);
+  const rule = (parseFloat(cs && cs.borderTopWidth) || 0) + (parseFloat(cs && cs.borderBottomWidth) || 0);
+  const sheet = parseFloat(cs && cs.minHeight) || 0;
+  return Math.max(sheet, Math.round(pad + rule));
+}
+
 // The console back to the sheet's own size: a press that never moved must leave no height behind.
 function clearOutHeight(out) {
   if (out && out.style) out.style.removeProperty("--out-h");
@@ -3776,6 +3819,8 @@ function clearOutHeight(out) {
 // height above the cap lifts the cap exactly as the drag did; the cap is read off the page rather than assumed, because
 // one board draws the same console under 320 px in a worktree row and 230 px in the unattached list. A height at or
 // under the cap is left to the sheet: the inline height alone reproduces it, and the cap keeps doing its job.
+// The floor is the third: a restore is the other path that decides the number, so it holds the same padding-box floor
+// the release does (outFloor) and writes a clamped number back to the store.
 //
 // Returns whether a height was applied, so a caller can tell "the reader chose this" from "a fresh box".
 function applyStoredHeight(o) {
@@ -3783,11 +3828,23 @@ function applyStoredHeight(o) {
   // A box a live corner gesture owns has a height the reader is setting with the pointer: a stored number written over
   // it mid-drag is the box jumping under the corner.
   if (globalThis.consoleHeld?.(o)) return false;
-  const h = Number(state.outHeights[o.dataset.out || ""]);
-  if (!Number.isFinite(h) || h <= 0) return false;
+  const stored = Number(state.outHeights[o.dataset.out || ""]);
+  if (!Number.isFinite(stored) || stored <= 0) return false;
+  const cs = getComputedStyle(o);
+  // THE FLOOR, THE SAME ONE THE RELEASE CLAMPS TO (outFloor). A store written at the bottom of a drag can be under the
+  // console's own padding box, and putting that back drew - and kept - a number the box never had.
+  const h = Math.max(outFloor(cs), Math.round(stored));
   if (!setOutHeight(o, h)) return false;
-  const cap = parseFloat(getComputedStyle(o).maxHeight);
-  if (Number.isFinite(cap) && h > cap) o.style.maxHeight = "none";
+  // The store agrees with the box: a clamped number goes back into the store, so the next restore does not apply the
+  // undrawable one again and the entry on disk is the height the reader is looking at.
+  if (h !== Math.round(stored)) globalThis.rememberOutHeight?.(o.dataset.out, h);
+  // THE CAP IS LIFTED WHEN THE HEIGHT NEEDS IT - and when there is no cap TO read, because a console restored into a
+  // fragment that is inserted afterwards has no layout yet: its computed max-height is the empty string, which parses
+  // to NaN, and the old `Number.isFinite(cap) && h > cap` skipped the lift and nothing re-ran once the layout appeared
+  // (docs/reports/console-corner-drag-code-2026-11-24.html, 4.7). An explicit height with the cap lifted is honest in
+  // any pane, and a height under a cap that COULD be read still leaves the sheet's cap doing its job.
+  const cap = parseFloat(cs.maxHeight);
+  if (!Number.isFinite(cap) || h > cap) o.style.maxHeight = "none";
   return true;
 }
 
