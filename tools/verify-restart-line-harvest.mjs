@@ -175,7 +175,13 @@ try {
         const input = String(body.input || "");
         const isProof = input.trim().startsWith(PROOF_PROMPT.slice(0, 24));
         const id = `run_${++seq}`;
-        runs.set(id, { id, session: body.session_id || "", input, proof: isProof, status: isProof ? "completed" : "running", output: isProof ? "PANEL-RESTART-OK" : "" });
+        // The restart reply belongs to ONE turn. The replacement wakes the assistant after the bounce, and the
+        // stub would answer that wake with the same RESTART line - a second request the panel correctly refuses,
+        // and a refusal this gate would then read as the turn's own. The reply is captured per run and the next
+        // assistant turn gets a plain one.
+        const paragraphs = !isProof && body.session_id === "panel-assistant" ? reply : ["Acknowledged."];
+        if (!isProof && body.session_id === "panel-assistant") reply = ["Acknowledged."];
+        runs.set(id, { id, session: body.session_id || "", input, proof: isProof, paragraphs, status: isProof ? "completed" : "running", output: isProof ? "PANEL-RESTART-OK" : "" });
         res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ run_id: id }));
         return;
       }
@@ -187,7 +193,7 @@ try {
         if (!run) return res.end();
         // An assistant turn's reply arrives the way the live stream carries it: one paragraph per fragment,
         // each after the first opening with the blank line that starts a new text line.
-        const paragraphs = run.session === "panel-assistant" ? reply : ["Acknowledged."];
+        const paragraphs = Array.isArray(run.paragraphs) ? run.paragraphs : ["Acknowledged."];
         const frames = paragraphs.map((p, i) => ({ event: "message.delta", delta: i === 0 ? p : `\n\n${p}` }));
         frames.push({ event: "run.completed", output: paragraphs.join("\n\n"), usage: { total_tokens: 10, input_tokens: 8, output_tokens: 2 } });
         let i = 0;
@@ -301,6 +307,16 @@ try {
     10_000,
   );
   check("…and the board is open on it, the way the reader's browser is", health?.clients, 1);
+
+  // A panel restart is legal only when the checkout names a version this process does NOT serve: a bump that
+  // landed while the panel was up. The sandbox boots its own copy of the tree, so the copy's `package.json` is
+  // bumped HERE, after the boot, exactly as a landing moves it under a running panel. Without this the line is
+  // refused by the same-version gate and the gate measures a refusal instead of the restart it is about.
+  const pkgPath = path.join(panelRoot, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  const parts = String(pkg.version || "0.0.0").split(".").map((n) => Number(n) || 0);
+  pkg.version = `${parts[0]}.${parts[1]}.${(parts[2] || 0) + 1}`;
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 
   // ---- the turn, through the panel's own route -------------------------------------------------------------
   // A panel that never came up must report FAILs rather than throw: every step below tolerates an absent
