@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.174.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.176.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-752 releases from v0.1.0 (2026-10-20) to v1.174.0 (2026-11-25), 2667 commits between the tags. Every release is anchored by an
+753 releases from v0.1.0 (2026-10-20) to v1.176.0 (2026-11-25), 2674 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.176.0 — 2026-11-25 · 7 commits
+
+[`58231d8`](https://github.com/JLRoper/agent-worktree-gui/commit/58231d814188c945ebdf32d2ea4d9632e1c3b999) · [compare v1.174.0...v1.176.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.174.0...v1.176.0)
+
+### Added
+
+- feat(header): the Permissions button - a live count, a popup that answers, and a durable history ([`e288a82`](https://github.com/JLRoper/agent-worktree-gui/commit/e288a82975eb3152631427bc833a286114831728))
+- feat(header): the Permissions badge counts /api/state's own approvals ([`249cd47`](https://github.com/JLRoper/agent-worktree-gui/commit/249cd47fc61d96256c6602d0d369adf8e9ad8ec2))
+
+### Docs & tests
+
+- docs: the report's shot folder and line citations follow the rebase onto 1.173.2 ([`6f9ee9e`](https://github.com/JLRoper/agent-worktree-gui/commit/6f9ee9e226dbc18b67e66084198794b18deb44b9))
+- docs: render the changelog - 752 releases ([`1477c2a`](https://github.com/JLRoper/agent-worktree-gui/commit/1477c2a952feb1bee4db7023a52a0b0843489e8d))
+- docs: the Permissions row's evidence page ([`1d7284b`](https://github.com/JLRoper/agent-worktree-gui/commit/1d7284b3ff1338f8b3fd62801b0c63041ae1d59d))
+
+### Other
+
+- chore: the stale-page guard's comment reads with a hyphen ([`dc6eb36`](https://github.com/JLRoper/agent-worktree-gui/commit/dc6eb36b11c85feb83165eef86fc32bded6a9b57))
+- chore: 1.176.0 - the version this landing carries ([`58231d8`](https://github.com/JLRoper/agent-worktree-gui/commit/58231d814188c945ebdf32d2ea4d9632e1c3b999))
 
 ## v1.174.0 — 2026-11-25 · 3 commits
 
