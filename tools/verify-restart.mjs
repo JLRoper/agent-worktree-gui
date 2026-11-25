@@ -492,13 +492,20 @@ check("...and the record keeps them apart", [goneResume.record.interrupted.map((
 ok("...its card repaired to interrupted-by-restart", /the gateway no longer has run/.test(goneInternal.error), goneInternal.error);
 ok("...with no promise it will finish on its own", !/will finish on its own/.test(goneInternal.error) && !/may still be live/.test(goneInternal.error), goneInternal.error);
 
-// The helper waits for the outgoing pid before it binds the port. Two cases, each with its own marker: a
-// detached replacement writes its marker a moment after the helper itself has exited.
+// The helper's wait is OPT-IN now, and it is a short flush window rather than a blind one. Three cases, each with
+// its own marker: a detached replacement writes its marker a moment after the helper itself has exited.
+//
+//   * the pid it was told about is already gone: the replacement starts at once;
+//   * a graceful shutdown was asked for and the pid is still there: nothing binds while it runs, and the
+//     replacement starts once it exits inside the window;
+//   * no shutdown was asked for: the port is taken at once - the replacement's marker exists while the outgoing
+//     process is still running, which is the whole point of the measured 20 s bounce this replaced.
 const helper = path.join(ROOT, "lib", "panel-restart.cjs");
 const helperEnv = { ...process.env, HERMES_PANEL_RESTART_WAIT_MS: "6000" };
 const cases = [
-  { name: "gone", parent: "999999", marker: path.join(dir, "replacement-gone.txt") },
-  { name: "alive", parent: null, marker: path.join(dir, "replacement-alive.txt") },
+  { name: "gone", parent: "999999", marker: path.join(dir, "replacement-gone.txt"), graceful: false, expectEarly: true },
+  { name: "alive-graceful", parent: null, marker: path.join(dir, "replacement-alive.txt"), graceful: true, expectEarly: false },
+  { name: "alive-unasked", parent: null, marker: path.join(dir, "replacement-unasked.txt"), graceful: false, expectEarly: true },
 ];
 for (const c of cases) {
   const fakeServer = path.join(dir, `fake-server-${c.name}.cjs`);
@@ -507,18 +514,28 @@ for (const c of cases) {
   let dummyParent = null;
   let parentPid = c.parent;
   if (c.parent === null) {
-    dummyParent = spawn(process.execPath, ["-e", "setTimeout(() => {}, 1500)"], { stdio: "ignore" });
+    dummyParent = spawn(process.execPath, ["-e", "setTimeout(() => {}, 2500)"], { stdio: "ignore" });
     parentPid = String(dummyParent.pid);
   }
-  const child = spawn(process.execPath, [helper, fakeServer, pidFile, path.join(dir, `${c.name}.out.log`), path.join(dir, `${c.name}.err.log`), parentPid], { stdio: "ignore", env: helperEnv });
-  if (dummyParent) {
+  const argv = [helper, fakeServer, pidFile, path.join(dir, `${c.name}.out.log`), path.join(dir, `${c.name}.err.log`), parentPid];
+  if (c.graceful) argv.push("0", "127.0.0.1", "graceful");
+  const child = spawn(process.execPath, argv, { stdio: "ignore", env: helperEnv });
+  if (dummyParent && !c.expectEarly) {
     await sleep(600);
-    check("while the old process is alive, nothing has bound the port", existsSync(c.marker), false);
+    check("while the old process is alive and a shutdown was asked for, nothing has bound the port yet", existsSync(c.marker), false);
+    await new Promise((r) => dummyParent.on("exit", r));
+  } else if (dummyParent) {
+    // No shutdown was asked for: the replacement is launched while the old process is still here. The marker is
+    // written by the replacement the helper spawns, so this is the real launch, not the helper's own log.
+    check("with no shutdown asked for, the replacement is launched at once", await waitFor(() => existsSync(c.marker), 3_000, 100), true);
+    check("...while the outgoing process is still running", dummyParent.exitCode === null, true);
     await new Promise((r) => dummyParent.on("exit", r));
   }
   await new Promise((r) => child.on("exit", r));
   if (c.parent === "999999") {
     ok("with the old process already gone, the replacement starts at once", await waitFor(() => existsSync(c.marker), 5_000, 100), "marker file missing");
+  } else if (c.expectEarly) {
+    ok("the early launch left its marker", existsSync(c.marker), "marker file missing");
   } else {
     ok("once the old process exits, the replacement starts", await waitFor(() => existsSync(c.marker), 5_000, 100), "marker file missing");
   }
