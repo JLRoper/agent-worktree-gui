@@ -6,6 +6,14 @@
 //                                      records in their own list, which nothing else in the panel reads
 //   POST /api/initiatives              { title, description } - create
 //   POST /api/initiatives/update       { id, title?, description? } - edit the words only
+//   POST /api/initiatives/notes/add    { id, text, url?, label?, by? } - append one note to the initiative's log
+//   POST /api/initiatives/notes/edit   { id, note, text?, label?, by? } - amend one entry's words or a link's label
+//   POST /api/initiatives/notes/delete { id, note, by? } - remove one entry
+//                                      THE THREE NOTE ROUTES NEVER ASK. The tier governs the map (whose worktrees
+//                                      belong to what); a note is memory written on a record the reader already has,
+//                                      and the assistant half of this feature logs notes from finished turns. A
+//                                      question per note would make the log useless exactly where it matters. Each
+//                                      write records its actor on the note itself and in the panel's log.
 //   POST /api/initiatives/move         { tree, initiative, action: "add"|"remove" } - attach or detach, unless the
 //                                      tier says this change has to ask
 //   POST /api/initiatives/reorder      { id, to, by? } - move one ACTIVE initiative to a 1-based position, immediately.
@@ -28,7 +36,7 @@
 // THE STORE IS REFUSED, NOT REPAIRED. Every write answers 409 with lib/initiatives.js's own sentence when the file
 // exists and cannot be read, and that check runs BEFORE a question is parked: a card whose answer could only fail is
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
-import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
+import { DESCRIPTION_MAX, NOTE_LABEL_MAX, NOTE_TEXT_MAX, NOTE_URL_MAX, NOTES_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
 import { WAVE_GATE_CHOICES, taskWithOwner, waveEvidenceNeeds, waveFileExistsPaths, waveIsOpen, waveLane, waveMemberOpen } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
@@ -247,6 +255,10 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       // caller handed in without the reader (a fixture with only initiativeList and treesFor) draws no history rather
       // than failing the whole view: the tab is a read, and a read should not depend on a method added later.
       history: typeof initiatives.historyFor === "function" ? initiatives.historyFor(init.id) : [],
+      // THE NOTE LOG, read with the initiative and newest first, for the same reason the history is: the note just
+      // written is the one being looked for. A fixture that predates notes draws an empty log rather than failing.
+      notes: typeof initiatives.notesFor === "function" ? initiatives.notesFor(init.id) : [],
+      noteCount: typeof initiatives.notesFor === "function" ? initiatives.notesFor(init.id).length : 0,
     };
   });
   // THE ARCHIVED LIST. Its own array, never mixed into `initiatives`: every count, chip, lane and drive in the panel
@@ -269,6 +281,9 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       projects,
       projectCount: projects.length,
       treeCount: trees.length,
+      // The put-away card draws no log - its notes are still on the record and Restore brings them back unchanged -
+      // but the count is carried so the tab can say how much memory it is putting away.
+      noteCount: typeof initiatives.notesFor === "function" ? initiatives.notesFor(init.id).length : 0,
     };
   });
   return {
@@ -277,7 +292,16 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     found: status.found,
     readable: status.readable,
     error: status.error,
-    caps: { title: TITLE_MAX, description: DESCRIPTION_MAX },
+    caps: {
+      title: TITLE_MAX,
+      description: DESCRIPTION_MAX,
+      // The note log's caps, so the form and the store cannot disagree about what a note may be. They REFUSE rather
+      // than clip (lib/initiatives.js's header says why), and the tab draws the numbers beside its own counter.
+      noteText: NOTE_TEXT_MAX,
+      noteLabel: NOTE_LABEL_MAX,
+      noteUrl: NOTE_URL_MAX,
+      notes: NOTES_MAX,
+    },
     // The level in force, so the tab can say which one decides its questions and the settings select has one source.
     // `tiers` is the four labels, so a second surface cannot draw a different list.
     tier: { id: level.id, label: level.label, hint: level.hint },
@@ -707,6 +731,57 @@ export function createInitiativesRoutes({
       if (out.changed !== false) onChange("edited");
       log(`initiatives: "${out.initiative.title}" edited (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
       sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, initiative: out.initiative, ...(await rebuildView()) });
+      return true;
+    }
+
+    // ---- the note log: add, edit, delete ---------------------------------------------------------------------------
+    // One entry is appended, one is amended, one is removed, and every answer carries the whole document the next GET
+    // would answer (the rebuild below), so a caller never has to re-read to find the note it just wrote. The store's
+    // own refusals are the answers: 400 with its sentence for an empty note or an over-cap one, 404 for an initiative
+    // or a note that does not exist.
+    if (route === `${INITIATIVES_PATH}/notes/add` || route === `${INITIATIVES_PATH}/notes/edit` || route === `${INITIATIVES_PATH}/notes/delete`) {
+      const refused = unreadable();
+      if (refused) {
+        sendJson(res, 409, refused);
+        return true;
+      }
+      const id = String(payload.id || payload.initiative || "").trim();
+      const existing = initiatives.initiativeById(id);
+      if (!existing) {
+        sendJson(res, 404, { ok: false, error: `no such initiative: ${id || "(none)"}` });
+        return true;
+      }
+      const by = actorOf(payload);
+      const verb = route.slice(`${INITIATIVES_PATH}/notes/`.length);
+      const noteId = String(payload.note || payload.noteId || "").trim();
+      if (verb !== "add" && !noteId) {
+        sendJson(res, 400, { ok: false, error: `a note ${verb} needs the note id` });
+        return true;
+      }
+      const out =
+        verb === "add"
+          ? initiatives.addNote({ initiative: id, text: payload.text, url: payload.url, label: payload.label, by })
+          : verb === "edit"
+            ? initiatives.editNote({ initiative: id, note: noteId, text: payload.text, label: payload.label, by })
+            : initiatives.deleteNote({ initiative: id, note: noteId, by });
+      if (!out.ok) {
+        sendJson(res, out.notFound ? 404 : 400, out);
+        return true;
+      }
+      const changed = out.changed !== false;
+      if (changed) onChange(`note ${verb === "add" ? "added" : verb === "edit" ? "edited" : "deleted"}`);
+      const did = verb === "add" ? "noted" : verb === "edit" ? "edited" : "deleted";
+      const what = verb === "add" ? `${did} "${String(out.note?.text || "").replace(/\s+/g, " ").slice(0, 80)}" on` : `${did} a note on`;
+      log(`initiatives: ${what} "${existing.title}" (${existing.id}) by ${by}${changed ? "" : " - nothing changed"}`);
+      sendJson(res, verb === "add" && changed ? 201 : 200, {
+        ok: true,
+        asked: false,
+        changed,
+        ...(verb === "add" ? { duplicate: Boolean(out.duplicate), note: out.note } : {}),
+        ...(verb === "edit" ? { note: out.note } : {}),
+        ...(verb === "delete" ? { deleted: out.deleted } : {}),
+        ...(await rebuildView()),
+      });
       return true;
     }
 

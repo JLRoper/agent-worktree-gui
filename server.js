@@ -1990,6 +1990,10 @@ assistant = new Assistant({
   // The reader's per-tree owner store: WHO wakes on a tree is decided from this same record the row's owner cell
   // draws (lib/assistant.js `assistantIdForJob`), so the two cannot disagree.
   locks,
+  // The initiative store, so a turn's `INITIATIVE NOTE` line lands on the piece of work it names (lib/assistant.js
+  // `applyActions`). One store, the same object the initiatives tab writes, so a note logged by a turn and a note
+  // typed by the reader are the same log.
+  initiatives,
   // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
   // the controller and run only once the turn that asked for it has ended.
   onRestart: (spec) => restart.request(spec),

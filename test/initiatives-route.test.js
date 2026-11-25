@@ -480,3 +480,138 @@ test("archiving is refused while a wave or a task under it is open, names them, 
   );
   assert.equal((backRow.initiatives || []).some((i) => i.id === id), true, "and the chart chip is back");
 });
+
+// ---- row 319: the note log, over the wire -----------------------------------------------------------------------------
+// THE LOG IS THE READER'S MEMORY AND THE ASSISTANT'S TOO, so the three routes write at once and every answer carries the
+// whole document the next GET would give. What this section pins:
+//
+//   * add -> edit -> delete round-trips through the store FILE, with the author stamps kept and the edit stamped
+//     beside them rather than over them;
+//   * a pasted Jira, Bitbucket and GitHub URL each land as `kind: "link"` with `host` recorded, and the same ticket
+//     pasted twice is one row;
+//   * an empty note, an over-cap note, an unknown initiative and an unknown note each answer cleanly - 400 or 404,
+//     with the store's own sentence;
+//   * the tier NEVER parks a note: at `all`, where an edit of the words asks, a note still lands at once.
+test("notes add, edit and delete over the wire, and every answer carries the log with the initiative", async () => {
+  await setTier("none");
+  const made = await post(base, "/api/initiatives", { body: { title: "Notes candidate", description: "a record with a memory" } });
+  assert.equal(made.status, 201, made.text);
+  const id = made.json.initiative.id;
+
+  const added = await post(base, "/api/initiatives/notes/add", {
+    body: { id, text: "DMR-39015 is the ticket that started this", by: "reader" },
+  });
+  assert.equal(added.status, 201, added.text);
+  assert.equal(added.json.ok, true);
+  assert.equal(added.json.changed, true);
+  assert.equal(added.json.asked, false);
+  const noteId = added.json.note.id;
+  assert.match(noteId, /^note_/);
+  assert.equal(added.json.note.by, "reader");
+  // The answer is the tab's next document: the note is already on the initiative in it, newest first.
+  const inAnswer = added.json.initiatives.find((i) => i.id === id);
+  assert.equal(inAnswer.notes.length, 1);
+  assert.equal(inAnswer.noteCount, 1);
+  assert.equal(inAnswer.notes[0].id, noteId);
+
+  const edited = await post(base, "/api/initiatives/notes/edit", {
+    body: { id, note: noteId, text: "DMR-39015 started it; 1.169.7 shipped the first slice", by: "assistant-2" },
+  });
+  assert.equal(edited.status, 200, edited.text);
+  assert.equal(edited.json.changed, true);
+  assert.equal(edited.json.note.by, "reader", "an edit does not rewrite who logged it");
+  assert.equal(edited.json.note.editedBy, "assistant-2");
+  assert.match(edited.json.note.text, /1\.169\.7 shipped/);
+
+  // THE FILE holds it, not only the tab's answer.
+  const doc = readStore();
+  const record = doc.initiatives.find((i) => i.id === id);
+  assert.equal(record.notes.length, 1);
+  assert.equal(record.notes[0].id, noteId);
+  assert.equal(record.notes[0].by, "reader");
+  assert.equal(record.notes[0].editedBy, "assistant-2");
+  // A reload of the store reads the same entry: the note outlives the process that wrote it.
+  const reread = new Initiatives({ file: initiativesFile, log: () => {} });
+  assert.equal(reread.notesFor(id)[0].text, record.notes[0].text);
+
+  const deleted = await post(base, "/api/initiatives/notes/delete", { body: { id, note: noteId, by: "reader" } });
+  assert.equal(deleted.status, 200, deleted.text);
+  assert.equal(deleted.json.changed, true);
+  assert.equal(deleted.json.deleted.id, noteId);
+  const afterDelete = deleted.json.initiatives.find((i) => i.id === id);
+  assert.equal(afterDelete.notes.length, 0);
+  assert.equal(afterDelete.noteCount, 0);
+  assert.equal(readStore().initiatives.find((i) => i.id === id).notes.length, 0);
+});
+
+test("a Jira, a Bitbucket and a GitHub url each land as a link with the right host, and a duplicate is one row", async () => {
+  const made = await post(base, "/api/initiatives", { body: { title: "Links candidate" } });
+  const id = made.json.initiative.id;
+  const jira = "https://jira.prog.sefl.com/browse/DMR-39015";
+  const links = [
+    [jira, "jira", "the ticket"],
+    ["https://bitbucket.prog.sefl.com/projects/DMR/repos/menu/pull-requests/4/overview", "bitbucket", "the menu PR"],
+    ["https://github.com/JLRoper/agent-worktree-gui/pull/806", "github", "the landing PR"],
+  ];
+  for (const [url, host, label] of links) {
+    const out = await post(base, "/api/initiatives/notes/add", { body: { id, text: url, label, by: "reader" } });
+    assert.equal(out.status, 201, out.text);
+    assert.equal(out.json.note.kind, "link");
+    assert.equal(out.json.note.host, host);
+    assert.equal(out.json.note.label, label);
+    assert.equal(out.json.note.url, url);
+  }
+  const again = await post(base, "/api/initiatives/notes/add", { body: { id, text: `${jira}/` } });
+  assert.equal(again.status, 200, again.text);
+  assert.equal(again.json.changed, false);
+  assert.equal(again.json.duplicate, true);
+  const card = again.json.initiatives.find((i) => i.id === id);
+  assert.equal(card.notes.length, 3, "one row per reference, not four copies of one ticket");
+  assert.deepEqual(card.notes.map((n) => n.host).sort(), ["bitbucket", "github", "jira"]);
+  assert.equal(card.notes.find((n) => n.host === "jira").label, "the ticket", "a second paste keeps the reader's label");
+});
+
+test("an empty note, an over-cap note, an unknown initiative and an unknown note each refuse cleanly", async () => {
+  const made = await post(base, "/api/initiatives", { body: { title: "Refusals candidate" } });
+  const id = made.json.initiative.id;
+  const empty = await post(base, "/api/initiatives/notes/add", { body: { id, text: "   " } });
+  assert.equal(empty.status, 400, empty.text);
+  assert.equal(empty.json.ok, false);
+  assert.match(empty.json.error, /needs something to remember/);
+  const long = await post(base, "/api/initiatives/notes/add", { body: { id, text: "x".repeat(1001) } });
+  assert.equal(long.status, 400, long.text);
+  assert.equal(long.json.cap, "note-text");
+  assert.match(long.json.error, /at most 1000/);
+  const unknown = await post(base, "/api/initiatives/notes/add", { body: { id: "init_missing", text: "a note" } });
+  assert.equal(unknown.status, 404, unknown.text);
+  assert.match(unknown.json.error, /no such initiative/);
+  const noNote = await post(base, "/api/initiatives/notes/edit", { body: { id, note: "note_missing", text: "x" } });
+  assert.equal(noNote.status, 404, noNote.text);
+  assert.match(noNote.json.error, /no such note/);
+  const noId = await post(base, "/api/initiatives/notes/delete", { body: { id } });
+  assert.equal(noId.status, 400, noId.text);
+  assert.match(noId.json.error, /needs the note id/);
+});
+
+test("a note never parks a question, even at the tier where editing the words does", async () => {
+  // The record is made at a level that does not ask, so the only questions in this test are the two controls' own.
+  await setTier("none");
+  const made = await post(base, "/api/initiatives", { body: { title: "Never asks candidate" } });
+  assert.equal(made.status, 201, made.text);
+  const id = made.json.initiative.id;
+  await setTier("all");
+  // CONTROL: the words ask at this level, so the level really is in force.
+  const edit = await post(base, "/api/initiatives/update", { body: { id, description: "a new description" } });
+  assert.equal(edit.status, 202, edit.text);
+  assert.equal(edit.json.asked, true);
+  // THE NOTE DOES NOT: it lands, at once, and it names its actor.
+  const noted = await post(base, "/api/initiatives/notes/add", { body: { id, text: "the decision that closed the fork", by: "assistant-2" } });
+  assert.equal(noted.status, 201, noted.text);
+  assert.equal(noted.json.asked, false);
+  assert.equal(noted.json.note.by, "assistant-2");
+  assert.equal(readStore().initiatives.find((i) => i.id === id).notes.length, 1);
+  // The parked edit is still a question, not a second write: nothing about the note answered it.
+  const pending = await pendingCards();
+  assert.ok(pending.some((c) => c.kind === "initiative"), "the edit's question is in the dock, unanswered");
+  await setTier("none");
+});
