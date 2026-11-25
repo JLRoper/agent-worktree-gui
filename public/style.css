@@ -1429,6 +1429,23 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 @keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.72); } }
 /* A looping dot is exactly what this asks to turn off. The state word and the age stay: only the motion goes. */
 @media (prefers-reduced-motion: reduce) { .live-pulse .pulse-dot { animation: none; } }
+/* ---- the stuck-turn chip ------------------------------------------------------------------------
+   A quiet or reaped worker run, on the card's head beside the pulse (public/render-jobs.js stuckChipHtml,
+   fed by the job's own `stuck`/`reaped` fields). The pulse says what the panel last HEARD; this says what the
+   panel decided about the silence. Same pill geometry as the pulse so the head does not reflow when one turns
+   into the other, and the three states are three colours: amber = watched (quiet, not yet past its budget),
+   violet = the gateway is compacting (a silence explained, not a stall), red = the reaper stopped it. */
+.stuck-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex: none; align-self: center;
+  font-family: var(--mono); font-size: 11px; line-height: 1.4;
+  padding: 1px 7px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--dim);
+  white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums;
+}
+.stuck-chip.is-quiet { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.stuck-chip.is-reaped { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+.stuck-chip.is-compacting { color: #c3a6ff; border-color: #3a2d56; background: rgba(140, 110, 220, .12); }
 /* The console's marching tail (public/board/console.js marchRowHtml). It is a SIBLING of the console, drawn under
    the box: the record's text, height and scroll are the console's own, so the row can neither enter the record nor
    move the feed. The pulse idiom supplies the dot (the @keyframes livepulse breath above) and the mono 11px text;

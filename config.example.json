@@ -31,6 +31,9 @@
   "host": "0.0.0.0",
   "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 7200,
+  "jobStallQuietMinutes": 10,
+  "jobStallBudgetSeconds": 1800,
+  "jobCompactContextPercent": 80,
   "hermesBin": null,
   "matrix": {
     "scriptPath": "C:/Users/roper/matrix-hermes-bridge/hermes_matrix_bridge.py",
