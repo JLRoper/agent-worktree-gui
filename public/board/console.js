@@ -333,8 +333,10 @@ function fitThinkRow(row) {
 // left a folded row over its lid for the frames after a repaint. Every path that rebuilds a card calls this in the
 // same task as the write, so the repaint and its fit are one frame.
 function fitThinkRows(root) {
-  if (!root || root.nodeType !== 1) return 0;
-  const rows = root.matches?.(".jl-think[data-think-row]") ? [root] : [...(root.querySelectorAll?.(".jl-think[data-think-row]") || [])];
+  // A card (element), the document (the 1200 ms sweep) and a fragment (a card built off-page) are all roots a
+  // repaint hands this function; only an element can be a row itself.
+  if (!root || (root.nodeType !== 1 && root.nodeType !== 9 && root.nodeType !== 11)) return 0;
+  const rows = root.nodeType === 1 && root.matches?.(".jl-think[data-think-row]") ? [root] : [...(root.querySelectorAll?.(".jl-think[data-think-row]") || [])];
   let n = 0;
   for (const row of rows) if (fitThinkRow(row)) n += 1;
   return n;
