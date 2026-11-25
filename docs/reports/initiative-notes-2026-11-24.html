@@ -38,13 +38,13 @@
 <body>
 <main>
 <h1>The note log on the initiative card, and the two boxes that were the wrong way round</h1>
-<p class="sub">agent-worktree-gui 1.172.0, branch <code>wtgui/read-queue-row-320-first-fd654b</code>, cut from main at <code>dd93fed1</code> (1.171.0). Queue row 320, the UI half: the notes model was already on main in 1.170.0, and this row draws it, fixes the inverted edit form at its cause, and brings the Assistants and History folds up to the waves lane. Every line number is on this branch; every measurement comes from <code>tools/verify-initiative-notes.mjs</code> driving real Chromium against a sandbox panel.</p>
+<p class="sub">agent-worktree-gui 1.174.0, branch <code>wtgui/read-queue-row-320-first-fd654b</code>, rebased onto main at <code>7a8227c5</code> (1.173.2). Queue row 320, the UI half: the notes model was already on main in 1.170.0, and this row draws it, fixes the inverted edit form at its cause, and brings the Assistants and History folds up to the waves lane. Every line number is on this branch; every measurement comes from <code>tools/verify-initiative-notes.mjs</code> driving real Chromium against a sandbox panel.</p>
 
 <dl class="facts">
   <dt>Files in the UI change</dt><dd>public/assistant.js, public/style.css</dd>
   <dt>Model, routes, lib/</dt><dd>untouched - the row that owns them landed first</dd>
   <dt>New gate</dt><dd>tools/verify-initiative-notes.mjs (74 checks, 0 failed)</dd>
-  <dt>Version</dt><dd>1.172.0, above main's 1.171.0</dd>
+  <dt>Version</dt><dd>1.174.0, above main's 1.173.2</dd>
   <dt>Landing</dt><dd>push and PR only; this branch is not merged into</dd>
 </dl>
 
@@ -56,17 +56,17 @@ preference: <strong>one inherited flex-basis was being measured on the wrong axi
   <tr><th>What</th><th>Where</th><th>What it does here</th></tr>
   <tr>
     <td class="n">.as-group input[type="text"]</td>
-    <td class="n">public/style.css:4950</td>
+    <td class="n">public/style.css:4961</td>
     <td><code>flex: 1 1 250px</code> - the 250px is a flex-BASIS, and a basis is a size on the MAIN axis</td>
   </tr>
   <tr>
     <td class="n">#as-initiatives .init-form</td>
-    <td class="n">public/style.css:5609</td>
+    <td class="n">public/style.css:5620</td>
     <td><code>display:flex; flex-direction: column</code> - so the main axis is VERTICAL, and that 250px became the title input's height</td>
   </tr>
   <tr>
     <td class="n">.as-note-box (the textarea)</td>
-    <td class="n">public/style.css:4818, 5643</td>
+    <td class="n">public/style.css:4829, 5654</td>
     <td>no flex rule of its own, <code>rows=3</code> at 20px line boxes - so it drew exactly three rows and scrolled through the rest</td>
   </tr>
 </table>
@@ -78,7 +78,7 @@ description   height  78.0px   flex "0 1 auto"    flex-basis auto    scrollHeigh
 <p>The fix is at that cause, not at the symptom: the column's own field rule takes the basis off
 (<code>flex: 0 0 auto</code>) and states the height it means - one control row - while the textarea is given a floor of
 96px and keeps <code>resize: vertical</code>. The same correction the waves lane's field already carries for the same
-reason (<code>public/style.css:5860</code>). After the change, at three widths:</p>
+reason (<code>public/style.css:5871</code>). After the change, at three widths:</p>
 
 <table>
   <tr><th>Viewport</th><th>Pane</th><th>Title</th><th>Description</th><th>Title flex-basis</th></tr>
@@ -103,7 +103,7 @@ carries the whole document the next GET would answer, so the tab adopts it inste
 ("Delete for good?") because a note is memory with no undo in this tab.</p>
 
 <figure>
-  <img src="assets/initiative-notes-1.172.0/02-notes-chips-1440.png" alt="The notes section: a GitHub chip with no label, a Jira chip with the reader's label, a prose note, and the status line under them">
+  <img src="assets/initiative-notes-1.174.0/02-notes-chips-1440.png" alt="The notes section: a GitHub chip with no label, a Jira chip with the reader's label, a prose note, and the status line under them">
   <figcaption>A GitHub link and a Jira link as chips - host badge, label, new-tab anchor - over a prose note, with the last write's answer under the list.</figcaption>
 </figure>
 
@@ -119,7 +119,7 @@ carries the whole document the next GET would answer, so the tab adopts it inste
 </ul>
 
 <figure>
-  <img src="assets/initiative-notes-1.172.0/03-notes-and-folds-1440.png" alt="Three notes above the write box, with the Assistants fold open onto its task card">
+  <img src="assets/initiative-notes-1.174.0/03-notes-and-folds-1440.png" alt="Three notes above the write box, with the Assistants fold open onto its task card">
   <figcaption>An assistant's note (violet, attributed) at the top of the log, a Jira chip, an edited reader note, and the Assistants fold open beneath with a task card in it.</figcaption>
 </figure>
 
@@ -127,7 +127,7 @@ carries the whole document the next GET would answer, so the tab adopts it inste
 <p>Assistants and History read as body text beside the waves lane: a 12px transparent row with a caret. They are now
 sections - the name at one weight, the count in tabular figures, one sentence saying what the fold holds, a hairline
 over the block, and their rows as cards on a rail
-(<code>public/style.css:6043</code>, <code>public/assistant.js:4491</code>).</p>
+(<code>public/style.css:6055</code>, <code>public/assistant.js:4491</code>).</p>
 <p><strong>No behaviour moved.</strong> The markup keeps <code>data-init-assist-fold</code>,
 <code>data-init-history-fold</code>, <code>data-init-hist-row</code>, <code>data-init-hist-actor</code>,
 <code>data-init-assistant-row</code> and the <code>init-proj</code>/<code>init-proj-name</code> classes the older
@@ -147,7 +147,7 @@ gates and the measurement tools select on. The gate drives the behaviour rather 
 <h2>4. One overflow that was not this row's, fixed in passing</h2>
 <p>At the 239px pane the waves lane's own hint (<code>flex: 0 0 auto; white-space: nowrap</code>) measured 248px of
 section head inside 161px of card and pushed the whole Initiatives pane to 301px. It was already there on main. The
-rule now shrinks and ellipses (<code>public/style.css:5687</code>), which is invisible at any width where it fits. The
+rule now shrinks and ellipses (<code>public/style.css:5698</code>), which is invisible at any width where it fits. The
 pane measures 239/239 at 480 now, and 479/479 at 1440.</p>
 
 <h2>5. What is deliberately not here</h2>
@@ -160,10 +160,10 @@ pane measures 239/239 at 480 now, and 479/479 at 1440.</p>
 <h2>6. Reproducing it</h2>
 <pre>node tools/verify-initiative-notes.mjs          # boots its own fixture + panel, 74 checks
 node tools/verify-initiative-notes.mjs --shots &lt;dir&gt;   # screenshots somewhere else</pre>
-<p class="small">The sandbox writes its own <code>WAG_HOME</code> under the scratch root (<code>tools/initiatives-fixture.mjs</code>), boots <code>server.js</code> on a free port, and never touches the live panel on 7331. Screenshots for this report: <code>docs/reports/assets/initiative-notes-1.172.0/</code>.</p>
+<p class="small">The sandbox writes its own <code>WAG_HOME</code> under the scratch root (<code>tools/initiatives-fixture.mjs</code>), boots <code>server.js</code> on a free port, and never touches the live panel on 7331. Screenshots for this report: <code>docs/reports/assets/initiative-notes-1.174.0/</code>.</p>
 
 <figure>
-  <img src="assets/initiative-notes-1.172.0/04-notes-480.png" alt="The notes section at a 480px window: chips, rows and the write box, no sideways overflow">
+  <img src="assets/initiative-notes-1.174.0/04-notes-480.png" alt="The notes section at a 480px window: chips, rows and the write box, no sideways overflow">
   <figcaption>The same section at a 480px window (a 239px pane): the chip, the rows and the write box fit, and the head's hint ellipses.</figcaption>
 </figure>
 </main>
