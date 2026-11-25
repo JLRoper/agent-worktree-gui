@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The console corner, read as code</title>
+<style>
+:root { --ink:#e7ecf3; --dim:#9aa7b8; --faint:#6c7a8c; --bg:#0b0e13; --panel:#111722; --line:#212b3a;
+        --accent:#7cc4ff; --warn:#ffb86b; --bad:#ff8a80; --good:#7ee787; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+* { box-sizing:border-box; }
+html { background:var(--bg); }
+body { margin:0; color:var(--ink); background:var(--bg);
+       font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+main { max-width:1020px; margin:0 auto; padding:38px 26px 90px; }
+header.report { border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:26px; }
+header.report .row { color:var(--faint); font:12px/1.4 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+header.report h1 { font-size:30px; line-height:1.2; margin:8px 0 10px; letter-spacing:-.01em; }
+header.report .meta { color:var(--dim); font:12.5px/1.6 var(--mono); }
+header.report .meta b { color:var(--ink); font-weight:600; }
+nav.toc { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; margin:0 0 30px; }
+nav.toc .t { color:var(--faint); font:11px/1.4 var(--mono); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; }
+nav.toc > ol { margin:0; padding-left:0; list-style:none; columns:2; column-gap:34px; }
+nav.toc > ol > li { margin:5px 0 2px; font-size:13px; break-inside:avoid; }
+nav.toc ol.sub { columns:1; list-style:none; margin:1px 0 5px; padding-left:14px; }
+nav.toc ol.sub li { margin:1px 0; font-size:12.5px; }
+nav.toc ol.sub a { color:var(--faint); }
+nav.toc a { color:var(--dim); text-decoration:none; }
+nav.toc a:hover { color:var(--accent); }
+h2 { font-size:22px; margin:44px 0 12px; padding-top:14px; border-top:1px solid var(--line); letter-spacing:-.01em; }
+h3 { font-size:17px; margin:28px 0 8px; color:#cfd9e6; }
+h4 { font-size:15px; margin:22px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; font-size:12px; }
+p { margin:10px 0 12px; }
+ul, ol { margin:10px 0 14px; padding-left:24px; }
+li { margin:5px 0; }
+code { font:12.5px/1.45 var(--mono); background:#0f1520; border:1px solid var(--line); border-radius:4px; padding:0 4px; color:#bcd4ee; }
+pre.code { background:#0d1219; border:1px solid var(--line); border-radius:8px; padding:14px 16px; overflow:auto; margin:14px 0 18px; }
+pre.code code { background:none; border:0; padding:0; font-size:12px; line-height:1.55; color:#c9d6e6; }
+blockquote { margin:14px 0; padding:10px 16px; border-left:3px solid var(--warn); background:#171208; color:#f0dcbf; border-radius:0 6px 6px 0; }
+blockquote code { background:#20180c; border-color:#3a2c14; color:#ffd9a4; }
+hr { border:0; border-top:1px solid var(--line); margin:34px 0; }
+.tw { overflow:auto; margin:14px 0 20px; }
+table { border-collapse:collapse; width:100%; font-size:13.5px; }
+th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+th { color:var(--faint); font:11px/1.4 var(--mono); text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid #2c394c; }
+tbody tr:hover { background:#0f1520; }
+td code, th code { font-size:11.5px; }
+a { color:var(--accent); }
+strong { color:#fff; font-weight:600; }
+.tag { display:inline-block; font:10.5px/1.6 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+       border:1px solid var(--line); border-radius:99px; padding:0 7px; margin-left:6px; color:var(--dim); }
+footer.report { margin-top:60px; padding-top:16px; border-top:1px solid var(--line); color:var(--faint); font:12px/1.6 var(--mono); }
+@media print { html, body { background:#fff; color:#111; } main { max-width:none; } nav.toc { display:none; }
+  code, pre.code { background:#f4f6f9; color:#111; border-color:#d6dce5; } th { color:#333; } }
+</style>
+</head>
+<body>
+<main>
+<header class="report">
+<div class="row">agent-worktree-gui &middot; queue row 315 &middot; the code half</div>
+<h1>The console corner, read as code</h1>
+<div class="meta">rendered from <code>docs/reports/console-corner-drag-code-2026-11-24.md</code> by <code>tools/render-report-notes.mjs</code></div>
+</header>
+<nav class="toc"><div class="t">on this page</div><ol><li><a href="#what-this-page-is">What this page is</a><ol class="sub"><li><a href="#what-was-run">What was run</a></li></ol></li><li><a href="#1-one-drag-end-to-end">1. One drag, end to end</a><ol class="sub"><li><a href="#1-1-the-markup-and-the-hit-band">1.1 The markup and the hit band</a></li><li><a href="#1-2-the-press">1.2 The press</a></li><li><a href="#1-3-the-move">1.3 The move</a></li><li><a href="#1-4-the-release">1.4 The release</a></li><li><a href="#1-5-the-store">1.5 The store</a></li><li><a href="#1-6-every-other-writer-of-the-same-number">1.6 Every other writer of the same number</a></li><li><a href="#1-7-the-poll-and-the-fold">1.7 The poll, and the fold</a></li></ol></li><li><a href="#2-where-they-disagree">2. Where they disagree</a></li><li><a href="#3-the-physics-reproduced">3. The physics, reproduced</a></li><li><a href="#4-the-seven-candidates-one-at-a-time">4. The seven candidates, one at a time</a><ol class="sub"><li><a href="#4-1-two-owners-writing-one-size-present-ranked-first">4.1 Two owners writing one size - PRESENT, ranked first</a></li><li><a href="#4-2-a-clamp-in-one-place-only-present-ranked-third">4.2 A clamp in one place only - PRESENT, ranked third</a></li><li><a href="#4-3-an-invariant-from-a-stale-measurement-present-ranked-fourth">4.3 An invariant from a stale measurement - PRESENT, ranked fourth</a></li><li><a href="#4-4-a-write-in-the-wrong-frame-partly-present-ranked-fifth">4.4 A write in the wrong frame - PARTLY PRESENT, ranked fifth</a></li><li><a href="#4-5-rounding-drift-per-move-event-rejected">4.5 Rounding drift per move event - REJECTED</a></li><li><a href="#4-6-a-gesture-that-outlives-the-pointer-present-ranked-second">4.6 A gesture that outlives the pointer - PRESENT, ranked second</a></li><li><a href="#4-7-a-height-restored-before-the-layout-that-makes-it-valid-latent-ranked-sixth">4.7 A height restored before the layout that makes it valid - LATENT, ranked sixth</a></li></ol></li><li><a href="#5-the-ranking">5. The ranking</a></li><li><a href="#6-four-options-for-the-fix">6. Four options for the fix</a><ol class="sub"><li><a href="#option-1-recommended-the-gesture-owns-the-offset-by-delta-and-the-foot-is-given-up-for-the-resize">Option 1 (recommended): the gesture owns the offset by delta, and the foot is given up for the resize</a></li><li><a href="#option-2-keep-the-corner-drop-the-foot-entirely-for-a-resized-turn">Option 2: keep the corner, drop the foot entirely for a resized turn</a></li><li><a href="#option-3-track-the-edge-instead-of-freezing-it">Option 3: track the edge instead of freezing it</a></li><li><a href="#option-4-take-the-console-out-of-the-transcript-s-scroll">Option 4: take the console out of the transcript's scroll</a></li><li><a href="#and-three-small-ones-that-ride-along-whichever-option-lands">And three small ones that ride along, whichever option lands</a></li></ol></li></ol></nav>
+<h2 id="what-this-page-is">What this page is</h2>
+<p>The code half of queue row 315, run beside the Playwright measurement row. The reader's report is that the session output console's bottom-right drag is glitchy, and the ask is to name the class of problem so it stops coming back every few turnovers.</p>
+<p>This page reads the resize path and names each defect as a mechanism with a file and a line. It does not measure a drag in a browser, and it changes nothing: <code>public/</code> and <code>lib/</code> were read only, because the measurement row holds those files. The one experiment here is a minimal page built from the sheet's own rules, in section 3, to test the layout physics the gesture's arithmetic assumes.</p>
+<p>Read at version 1.169.1, branch <code>wtgui/read-queue-row-315-first-c03227</code>, cut from <code>main</code> at <code>0d6e9441</code>. The landing carries version 1.169.4 on top of <code>origin/main</code> at <code>6a6da6b7</code>; the reading below is of the code at the read commit.</p>
+<h3 id="what-was-run">What was run</h3>
+<ul>
+<li><code>npm run test:changed -- --list</code> answered with this tree's two changed files (<code>docs/reports/console-corner-drag-code-2026-11-24.md</code>, <code>tools/render-report-notes.mjs</code>) and "no test names or imports any of them". Nothing under <code>public/</code>, <code>lib/</code> or <code>routes/</code> changed, so there is no code path for a focused test to cover.</li>
+<li>The full sweep (<code>npm test</code>) was run in this worktree and did not converge: one run ended after 515 passing cases with no summary, and a second, with <code>--test-timeout=180000</code> to bound a hung file, reached 3508 passing cases before the 20 minute limit, where it was cancelled. Every failure names a file this branch does not touch, and the five that were opened belong to this worktree's environment or to <code>origin/main</code>:</li>
+<li><code>test/gateway-permissions.test.js:373</code> dies on <code>ENOENT: config.json</code>, which is gitignored (<code>.gitignore:26</code>) and absent in a fresh worktree; the main checkout is the one that has one.</li>
+<li><code>test/assistant-queue-reattach.test.js:412</code> throws <code>TypeError: Cannot read properties of undefined (reading 'find')</code>, and the same file fails the same way against a clean <code>git archive</code> of <code>origin/main</code> at <code>0d6e9441</code>.</li>
+<li><code>test/initiative-tier-route.test.js</code> fails three assertions at 3 against 4 on the same clean export.</li>
+<li><code>test/harness.test.js</code> fails on <code>tools/verify-wave-file-exists.mjs</code> declaring a LIVE GATE with no <code>package.json</code> script; that file is in <code>origin/main</code> and the script is absent there too.</li>
+<li><code>test/assistant-hard-restart.test.js</code> passes 6/6 in isolation, so its one suite-time failure is load.</li>
+</ul>
+<p>  The rest are in the same families (the config routes, the panel's paths, and its git routes) and were not opened one by one.</p>
+<ul>
+<li>The probe in section 3 is a scratch file, <code>corner-scroll-probe2.mjs</code>, run under Chromium via Playwright 1.64.1 on Node 26.3.0, headless at 900x700. It is not in the tree: it is a reproduction of the sheet's rules, and its page and loop are printed above so it can be rebuilt from this page.</li>
+</ul>
+<h2 id="1-one-drag-end-to-end">1. One drag, end to end</h2>
+<h3 id="1-1-the-markup-and-the-hit-band">1.1 The markup and the hit band</h3>
+<p>The console is a <code>&lt;pre class="job-out"&gt;</code> inside a <code>.out-box</code> that holds nothing else, and the grip is a span in that box's bottom-right corner:</p>
+<ul>
+<li><code>public/board/console.js:1421</code> <code>outGripHtml()</code> draws <code>&lt;span class="out-grip" data-out-grip="1"&gt;</code>, and <code>public/render-jobs.js:243</code> places it inside the same <code>.out-box</code> as the <code>&lt;pre&gt;</code>. The marching tail and the tail chips are siblings of the box, so a row arriving under the console cannot move the corner (<code>public/style.css:1521</code>).</li>
+<li><code>public/style.css:1531</code> is the band: 18x18, <code>position: absolute</code>, <code>touch-action: none</code>, no border radius so the corner-most pixels are not clipped out of the hit area.</li>
+<li><code>public/style.css:1685</code> gives the console one height source, <code>height: var(--out-h, auto)</code>, one cap (<code>max-height: 230px</code>) and one floor (<code>min-height: 34px</code>). In the docked Chat pane the pane rules take over: <code>max-height: none</code>, <code>flex: 0 0 auto</code>, so the height variable is honoured exactly (<code>public/style.css:6439</code>). In a maximized card the console is a block inside <code>.out-box</code> with <code>max-height: none</code> (<code>public/style.css:3794</code>); its <code>flex: 1</code> there is inert because <code>.out-box</code> is not a flex container.</li>
+</ul>
+<h3 id="1-2-the-press">1.2 The press</h3>
+<p><code>public/app.js:10598</code> listens for <code>pointerdown</code> on the document in capture, so the gesture survives the console node being replaced. It refuses a second gesture (<code>public/app.js:10601</code>), finds the console under the grip (<code>10602</code> to <code>10606</code>), and writes down the whole gesture in one record (<code>public/app.js:10614</code> to <code>10638</code>):</p>
+<ul>
+<li><code>top: r.top</code> and <code>grab: r.bottom - e.clientY</code>. These two numbers are the gesture. Every move is <code>pointer + grab - top</code>, so nothing accumulates from one move to the next (<code>public/app.js:10561</code>).</li>
+<li><code>min</code> and <code>cap</code>, read off the box at the press: <code>parseFloat(cs.minHeight)</code> and <code>parseFloat(cs.maxHeight)</code> (<code>public/app.js:10630</code> to <code>10631</code>).</li>
+<li><code>hadVar</code>, <code>styleMax</code>, <code>styleMin</code>, the inline values as they were, so a press that never moves can put the box back exactly (<code>public/app.js:10632</code> to <code>10634</code>).</li>
+<li><code>body</code> and <code>following</code>: the transcript, and whether it was on its foot at the press (<code>public/app.js:10612</code> to <code>10613</code>, <code>10635</code> to <code>10636</code>).</li>
+<li><code>setPointerCapture</code> (<code>10642</code>), then the first write: the drawn height pinned through <code>setOutHeight</code>, the cap and the floor lifted to <code>none</code> and <code>0</code>, the body class on (<code>public/app.js:10651</code> to <code>10655</code>).</li>
+</ul>
+<h3 id="1-3-the-move">1.3 The move</h3>
+<p><code>public/app.js:10661</code> is one expression per move: <code>outGripStep(d.top, d.grab, e.clientY)</code>, then <code>setOutHeight(d.out, h)</code> and <code>max-height: none</code> (<code>10675</code> to <code>10676</code>). There is no measurement in this handler and no clamp: it writes a pixel height derived from an edge frozen at the press, and the corner lands on the pointer by construction as long as that edge has not moved.</p>
+<p><code>setOutHeight</code> is the one writer (<code>public/board/console.js:3753</code>): it rounds the number and sets <code>--out-h</code>. The sheet reads it (<code>public/style.css:1691</code>).</p>
+<h3 id="1-4-the-release">1.4 The release</h3>
+<p><code>public/app.js:10681</code> <code>endOutGrip</code>, on <code>pointerup</code> and <code>pointercancel</code> on the window (<code>public/app.js:10731</code> to <code>10732</code>), and it does four things in one task:</p>
+<ol>
+<li>If the press never moved (less than 1px, <code>public/app.js:10671</code>), put the inline values back and stop (<code>10693</code> to <code>10699</code>).</li>
+<li>Otherwise clamp once: <code>room</code> is the room under the box's LIVE top edge, <code>h = outGripRelease(d.h, d.min, room)</code> (<code>public/app.js:10705</code> to <code>10707</code>), and the result is written through <code>setOutHeight</code> (<code>10708</code>).</li>
+<li>Decide the cap, and remember the number in the store (<code>public/app.js:10715</code> to <code>10716</code>).</li>
+<li>If the transcript was following at the press, put it back on its foot: <code>setScroll(d.body, d.body.scrollHeight)</code> (<code>public/app.js:10721</code> to <code>10724</code>).</li>
+</ol>
+<p>Then, if any repaint path deferred itself during the gesture, a full <code>renderAll()</code> runs inside the same pointerup (<code>public/app.js:10728</code>).</p>
+<h3 id="1-5-the-store">1.5 The store</h3>
+<p>The number lives outside the DOM, because a rebuild replaces the node and everything inline with it (<code>public/app.js:660</code> to <code>670</code>):</p>
+<ul>
+<li><code>state.outHeights</code> is loaded from <code>localStorage["wm.outHeights"]</code> at boot (<code>public/app.js:423</code>, <code>671</code> to <code>683</code>), keyed by <code>pre.dataset.out</code> (the turn id, <code>@pin</code> on a pinned copy).</li>
+<li><code>rememberOutHeight</code> writes it on a release that moved (<code>public/app.js:695</code> to <code>700</code>), <code>pruneOutHeights</code> drops entries for turns that left the board (<code>public/app.js:705</code> to <code>714</code>, called from <code>public/render-jobs.js:768</code>).</li>
+<li><code>applyStoredHeight</code> puts it back on a node that is not the one the reader dragged (<code>public/board/console.js:3778</code>), lifting the sheet's cap when the stored number is above it (<code>3786</code> to <code>3787</code>).</li>
+</ul>
+<h3 id="1-6-every-other-writer-of-the-same-number">1.6 Every other writer of the same number</h3>
+<p>The console's HEIGHT has one writer, which is real and is held by <code>test/console-grip.test.js:135</code>. What the reader sees as "the size" is not only the height: it is <code>top + height</code>, and the top edge is written by everything that scrolls the transcript. This is the full list of writers of the box's size or position, and the guard each one asks.</p>
+<div class="tw"><table>
+<thead><tr><th>Writer</th><th>What it writes</th><th>When</th><th>The guard it asks</th></tr></thead>
+<tbody>
+<tr><td>the gesture, press</td><td><code>--out-h</code> = drawn height, cap <code>none</code>, floor <code>0</code>, body class</td><td>pointerdown</td><td>none, it is the gesture</td></tr>
+<tr><td>the gesture, move</td><td><code>--out-h</code> = pointer + grab - frozen top, cap <code>none</code></td><td>pointermove</td><td>none</td></tr>
+<tr><td>the gesture, release</td><td><code>--out-h</code> clamped, cap, floor, the store, the transcript's scrollTop</td><td>pointerup</td><td>none</td></tr>
+<tr><td>the remembered height</td><td><code>--out-h</code>, and <code>max-height: none</code> when above the cap</td><td>any rebuild that builds a node</td><td><code>consoleHeld</code> (console.js:3782)</td></tr>
+<tr><td>the float's slack drag</td><td><code>--out-h</code> and <code>max-height</code> of the open turn's console</td><td>a float corner resize</td><td>none, it is a different gesture (assistant.js:8162, 8165)</td></tr>
+<tr><td>the page's tail pin</td><td><code>body.scrollTop = max</code></td><td>every appended line, once per frame</td><td><code>cardBodyHeld</code> (console.js:3674, 3685; 3700)</td></tr>
+<tr><td>the console's own tail</td><td><code>console.scrollTop = max</code></td><td>every appended line, the 400ms sweep</td><td><code>consoleHeld</code> (console.js:2396, 4218, 4339)</td></tr>
+<tr><td>the 400ms sweep</td><td><code>console.scrollTop = max</code>, the chip</td><td>every 400ms</td><td><code>outDragging</code> (app.js:13131)</td></tr>
+<tr><td>the browser's scroll anchor</td><td><code>body.scrollTop</code></td><td>content grows above the viewport</td><td>not stood down, on purpose (style.css:1559)</td></tr>
+<tr><td>the browser's own clamp</td><td><code>body.scrollTop</code> when <code>scrollHeight</code> shrinks under it</td><td>a shrink inside a scrollport</td><td>none, it is a layout consequence, not a write</td></tr>
+<tr><td>the page's anchor compensation</td><td><code>window.scrollTo</code></td><td>any DOM change</td><td><code>body.is-out-gripping</code> (app.js:9340)</td></tr>
+<tr><td><code>localStorage</code></td><td><code>wm.outHeights</code></td><td>a release that moved</td><td>none</td></tr>
+</tbody></table></div>
+<p>The first line of that table and the last five are the whole story. The gesture writes a height and treats the top edge as a constant; the transcript's scroll is a writer of the top edge; and none of the three guards that exist (<code>consoleHeld</code>, <code>cardBodyHeld</code>, <code>outDragging</code>) covers the browser's clamp or the release's own foot write.</p>
+<h3 id="1-7-the-poll-and-the-fold">1.7 The poll, and the fold</h3>
+<p>Two of the brief's writers deserve their own paragraph because they are the ones that look most dangerous and are the ones that hold.</p>
+<p><strong>The poll.</strong> Every server event and every periodic read lands in one of four node-replacing rebuilds: <code>renderAll</code> (<code>public/app.js:10033</code>), <code>renderJobs</code> (<code>public/render-jobs.js:735</code>), <code>renderConversation</code> (<code>public/render-jobs.js:1071</code>), <code>renderProjectRows</code> (<code>public/render-projects.js:1637</code>). Each one asks the gesture before it touches the DOM, and each one defers rather than racing it: <code>public/app.js:10036</code>, <code>public/render-jobs.js:740</code>, <code>public/render-jobs.js:1093</code>, <code>public/render-projects.js:1642</code>. The 400ms repair pass asks too, and skips the console the hand is on (<code>public/app.js:13131</code>). So a poll cannot replace the node under the pointer today, and cannot re-pin the console or the transcript it is inside. What survives a gesture is the 400ms chip paint, which draws the tail chip and no size at all.</p>
+<p><strong>The fold.</strong> There are two folds and only one of them is a writer of the size. A turn's fold takes the console off the page; the number is not lost with the node because it is in <code>state.outHeights</code>, and unfolding builds the card again from <code>conversationHtml</code> and puts the number back through <code>applyStoredHeight</code> (<code>public/board/console.js:3818</code> to <code>3823</code>). A command card's fold is the other one: it rewrites a text node inside the console (4.4), and the gesture's own height writes are what schedule it, through the ResizeObserver at <code>public/board/console.js:3369</code>.</p>
+<h2 id="2-where-they-disagree">2. Where they disagree</h2>
+<p><code>cardBodyHeld</code> stands the page's tail pin down for the length of the gesture, so no appended line can scroll the transcript while the hand is down. That is the fix from row 281 and it holds: <code>tools/verify-console-corner-slow-drag.mjs</code> measures 0px of top-edge movement across 40 steps in three shapes.</p>
+<p>But the pin is not the coupling. In a scrollport that is at its foot, the maximum scroll offset IS a function of the console's height:</p>
+<pre class="code lang-text"><code>max        = scrollHeight - clientHeight
+scrollHeight includes the console's height
+at the foot: scrollTop = max</code></pre>
+<p>So while the transcript is on its foot, changing the console's height changes <code>max</code>, and therefore changes where the top edge can be. Nothing has to write for that to happen:</p>
+<ul>
+<li>Grow the console by N. <code>max</code> grows by N. <code>scrollTop</code> stays where it is, so the top edge stays, and the corner follows the pointer. This is the down-drag, and it is why the gate passes.</li>
+<li>Shrink the console by N. <code>max</code> shrinks by N, <code>scrollTop</code> is now past it, and the browser's layout clamp moves <code>scrollTop</code> by -N. The content moves DOWN by N, the box's top moves DOWN by N, and the box's bottom, <code>top + height</code>, does not move at all. This is the up-drag, and no gate covers it.</li>
+<li>Then the release does the same thing in the other direction on purpose: <code>setScroll(body, scrollHeight)</code> after the size write scrolls the transcript to its foot, which moves the top edge UP by the drag's own travel, and the corner the gesture just put under the pointer goes back with it.</li>
+</ul>
+<h2 id="3-the-physics-reproduced">3. The physics, reproduced</h2>
+<p>The page below is the sheet's own chain of rules for the docked Chat pane, with no panel code and no gesture: a column flex scrollport (<code>public/style.css:6406</code>), a turn that is <code>flex: 0 0 auto</code> (<code>6436</code>), a console at <code>height: var(--out-h)</code> with <code>flex: 0 0 auto</code> (<code>6439</code>), and the sticky composer that sits below it (<code>6429</code>). The sheet's <code>* { box-sizing: border-box }</code> (<code>public/style.css:43</code>) travels with it, so a height written from a rect is the height drawn. A fixed 380px block above the console makes the transcript overflow, as a live conversation does.</p>
+<pre class="code lang-html"><code>&lt;div class="job"&gt;&lt;div class="job-body" id="body"&gt;
+  &lt;div class="above"&gt;&lt;/div&gt;
+  &lt;div class="turn"&gt;&lt;div class="out-wrap"&gt;&lt;div class="out-box"&gt;&lt;pre class="job-out" id="out"&gt;...&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="reply"&gt;&lt;/div&gt;
+&lt;/div&gt;&lt;/div&gt;</code></pre>
+<p>The loop is the gesture's own arithmetic, then the release:</p>
+<pre class="code lang-js"><code>const want = clientY + 2 - press.top;                 // outGripStep, app.js:10561
+out.style.setProperty("--out-h", Math.round(want) + "px");   // setOutHeight, console.js:3753
+// release, app.js:10722
+body.scrollTop = body.scrollHeight;</code></pre>
+<p>Down, 40 steps of +3px, measured after each write. <code>corner</code> is the console's bottom edge minus where the drag put it:</p>
+<pre class="code lang-text"><code>PRESS  scrollTop 117 of max 117  top -117  bottom 441  h 558
+
+ step    pointer       h      top   bottom  scrollTop  corner
+    1      442.0   561.0   -117.0    444.0        117    0.00
+   10      469.0   588.0   -117.0    471.0        117    0.00
+   20      499.0   618.0   -117.0    501.0        117    0.00
+   30      529.0   648.0   -117.0    531.0        117    0.00
+   40      559.0   678.0   -117.0    561.0        117    0.00
+
+RELEASE (body.scrollTop = body.scrollHeight)
+  scrollTop 237   top -237   bottom 441   h 678</code></pre>
+<p>The drag itself is exact: the pointer moves 117px (442 to 559), the height grows the same 117px (561 to 678), the top edge holds at -117, and the corner column is 0.00 at every one of the 40 steps. Then the release writes 120px of scroll: the top edge goes from -117 to -237, and the box's bottom from 561 to 441, which is the position it had at the press. The grip's bottom edge ends 0.00px from where the drag started, for 120.00px of travel. The size the reader chose is kept; the place they put it is not.</p>
+<p>Up, from the same foot, 40 steps of -3px:</p>
+<pre class="code lang-text"><code> step    pointer       h      top   bottom  scrollTop  corner
+    1      436.0   675.0   -234.0    441.0        234    3.00
+   10      409.0   648.0   -207.0    441.0        207   30.00
+   20      379.0   618.0   -177.0    441.0        177   60.00
+   30      349.0   588.0   -147.0    441.0        147   90.00
+   40      319.0   558.0   -117.0    441.0        117  120.00</code></pre>
+<p>The height follows the pointer, but the bottom edge pins at 441 on the very first step and never moves again: the box shrinks from the top while the pointer walks away from it. After 120px of travel the corner is 120px from the hand - the whole gesture, gone.</p>
+<p>That is the same defect in both directions, and it is not a timing bug: it is arithmetic on an edge that is not free.</p>
+<h2 id="4-the-seven-candidates-one-at-a-time">4. The seven candidates, one at a time</h2>
+<h3 id="4-1-two-owners-writing-one-size-present-ranked-first">4.1 Two owners writing one size - PRESENT, ranked first</h3>
+<p><strong>The mechanism.</strong> The console's height has one writer; the console's POSITION does not. At the foot, <code>scrollTop</code>'s maximum is a function of the console's height (section 2), so the scrollport is a second writer of the top edge the gesture froze at <code>public/app.js:10623</code>. During a gesture that writer appears twice: the browser's clamp on a shrink, on every move, and the release's own foot restore at <code>public/app.js:10721</code> to <code>10724</code>, after the size write at <code>10708</code>. <code>cardBodyHeld</code> (<code>public/board/console.js:3661</code>) stands down the page's tail pin and nothing else, and a clamp is not a pin.</p>
+<p><strong>What proves it.</strong> The probe in section 3, with the sheet's own rules: 0.00px of corner error across 40 steps of a down drag, then 120px of travel undone in the release's single write (the grip's bottom edge ends 0.00px from where the drag started), and a frozen bottom edge for the whole of an up drag. The prior measurement report contains the same number and reads it as a feature: <code>docs/reports/console-corner-slow-drag-2026-11-23.html</code> records the transcript's scrollTop held at 3036 for all 40 steps of a 120px drag and then "the release then puts the transcript back on its foot (3036 to 3156)", which is a 120px write after a 120px drag. The box's top was 443.7 during the drag and the grip's bottom 863.7; after that write the top is 323.7 and the grip is back at 743.7, the position it had at the press.</p>
+<p><strong>What fixes it.</strong> The gesture takes ownership of the scrollport's offset for the length of the drag, by delta, and the release stops forcing the foot. Option 1 in section 6 is the full form.</p>
+<p><strong>How a test holds it.</strong> The gate already collects the grip's rect at every step; it does not read it after the release. <code>tools/verify-console-corner-slow-drag.mjs:480</code> to <code>489</code> checks the transcript's foot and the height variable after the release, never the corner. Add the corner's position in the frame after <code>pointerup</code>, and add an up-drag shape (40 steps of -3px) with the same assertion. Today the down shape fails that assertion by the travel and the up shape fails it by the travel too.</p>
+<h3 id="4-2-a-clamp-in-one-place-only-present-ranked-third">4.2 A clamp in one place only - PRESENT, ranked third</h3>
+<p><strong>The mechanism.</strong> Two paths decide the size and only one clamps. The release clamps to the sheet's floor and the room under the box (<code>public/app.js:10707</code>, <code>public/app.js:10568</code>). <code>applyStoredHeight</code> (<code>public/board/console.js:3778</code>) applies whatever positive number the store holds, with no floor and no room, and then LIFTS the sheet's cap to match the number (<code>public/board/console.js:3786</code> to <code>3787</code>). A 600px height chosen in a maximized card is therefore restored into a board row at 600px with <code>max-height: none</code>, in a pane whose sheet says 230 or 320. The restore removes the protection instead of clamping to it. There are three different floors in the code as well: the sheet's <code>min-height</code> read at the press, <code>FLOAT_OUT_MIN</code> for the float's own drag (<code>public/assistant.js:46</code>, <code>561</code> to <code>574</code>), and no floor at all on a restore.</p>
+<p><strong>What proves it.</strong> Reading the two paths side by side; and a stored number against a stub box whose computed cap is 320, which comes out of <code>applyStoredHeight</code> uncapped.</p>
+<p><strong>What fixes it.</strong> One clamp function, called by both paths: the release computes the room and the floor, the restore does the same against the pane it is landing in and never lifts the cap past that pane's room.</p>
+<p><strong>How a test holds it.</strong> A unit test over <code>applyStoredHeight</code> with a stubbed computed style: a 600px store into a 320px pane must land at or under the pane's room, and must not write <code>max-height: none</code> outside it. <code>test/console-height-store.test.js</code> already drives the store this way.</p>
+<h3 id="4-3-an-invariant-from-a-stale-measurement-present-ranked-fourth">4.3 An invariant from a stale measurement - PRESENT, ranked fourth</h3>
+<p><strong>The mechanism.</strong> Three numbers are frozen at the press and spent at the release: <code>d.min</code>, <code>d.cap</code> (<code>public/app.js:10630</code> to <code>10631</code>) and <code>d.top</code>. The release then measures <code>room</code> from the box's LIVE top edge (<code>public/app.js:10705</code> to <code>10706</code>) while the height it clamps was expressed from the FROZEN one (<code>public/app.js:10668</code>). When anything legitimately moved the top in between, the clamp and the arithmetic are talking about two different edges. The measured size of that drift is 0.75px in the ordinary "a row lands above" case and 86.25px when the browser's anchor is disabled (<code>docs/reports/console-corner-slow-drag-2026-11-23.html</code>, the "above" case), so this is a small error today and a large one in any body where the anchor is off.</p>
+<p>There is a second, stickier half. Once a box has been dragged past the cap, its inline <code>max-height</code> is <code>none</code>, so the next press reads <code>parseFloat("none")</code> as NaN (<code>public/app.js:10631</code>) and the release takes the <code>"none"</code> branch at <code>public/app.js:10715</code> for every later drag: the sheet's cap is never re-applied to that node, even after the reader drags it back under the cap. The invariant is not just read stale, it is destroyed by one use.</p>
+<p><strong>What proves it.</strong> The two branches at <code>public/app.js:10715</code>, read in sequence; and a two-drag case on one box, the second one back under the cap.</p>
+<p><strong>What fixes it.</strong> Read the clamps at the release, once, and derive the cap from the sheet rule rather than from the inline value the last gesture left (<code>getComputedStyle</code> after removing the inline cap, or a class the gesture adds and removes).</p>
+<p><strong>How a test holds it.</strong> A two-drag case in the gate: over the cap, then back under it, asserting the computed cap is the sheet's again and the box is drawn at the height chosen.</p>
+<h3 id="4-4-a-write-in-the-wrong-frame-partly-present-ranked-fifth">4.4 A write in the wrong frame - PARTLY PRESENT, ranked fifth</h3>
+<p><strong>The mechanism.</strong> The repaint guards hold. <code>renderAll</code> defers (<code>public/app.js:10033</code> to <code>10039</code>), <code>renderJobs</code> defers (<code>public/render-jobs.js:735</code> to <code>743</code>), <code>renderConversation</code> defers for the card that holds the console (<code>public/render-jobs.js:1091</code> to <code>1096</code>), <code>renderProjectRows</code> defers (<code>public/render-projects.js:1637</code> to <code>1645</code>), the 400ms sweep skips the box (<code>public/app.js:13131</code>), and the text writers ask <code>consoleHeld</code> (<code>public/board/console.js:2990</code>, <code>3091</code>, <code>4218</code>, <code>4339</code>). A poll cannot snap the box back mid-drag today.</p>
+<p>What is not covered is one observer. <code>cmdFoldResize</code> (<code>public/board/console.js:3369</code>) watches every console (<code>public/board/console.js:2218</code> to <code>2220</code>), so every height write of the gesture fires it, and its callback schedules a flush (<code>public/board/console.js:3401</code>) that rewrites the text nodes of every command card inside the box being dragged (<code>public/board/console.js:3281</code>). That is the exact "text rebuilt under the pointer" the invariant forbids, in the frame after the write, and the flush asks nobody whether a gesture is live.</p>
+<p>The residual of the same family is the deferred flush: when any repaint was pending, the release runs a full <code>renderAll()</code> inside the pointerup (<code>public/app.js:10728</code>), in the same task as the foot write. Two writes that can move the box, in the same frame, after the hand has let go.</p>
+<p><strong>What proves it.</strong> The observer's callback has no <code>consoleHeld</code> or <code>outGripLive</code> ask, and it is scheduled by the size change the gesture makes.</p>
+<p><strong>What fixes it.</strong> Ask <code>outGripLive()</code> in the fold flush and in <code>paintCommandFoldMark</code>, and run the deferred <code>renderAll</code> in the next frame rather than inside the pointerup.</p>
+<p><strong>How a test holds it.</strong> A source test that the flush names the gesture, beside <code>test/console-grip.test.js:146</code>; and a measurement that counts DOM writes under the pointer, which is the shape the slow-drag harness already wraps for <code>scrollTop</code>.</p>
+<h3 id="4-5-rounding-drift-per-move-event-rejected">4.5 Rounding drift per move event - REJECTED</h3>
+<p><strong>The mechanism.</strong> There is none, and that is worth saying plainly because it is the candidate most often guessed at. The height of a move is not accumulated: <code>outGripStep</code> is a pure function of the pointer, the grab and the frozen top (<code>public/app.js:10561</code> to <code>10564</code>), and <code>setOutHeight</code> rounds only the value it writes (<code>public/board/console.js:3755</code>). The error is bounded at half a pixel per frame and cannot accumulate, and the store receives the same rounded value the box draws (<code>public/app.js:10708</code> to <code>10716</code>). The probe shows it: the corner is at 0.00 for all 40 steps of the down drag. A drift would need an accumulator of the form <code>h += dy</code>, and there is none.</p>
+<p><strong>What proves it.</strong> <code>outGripStep</code> has no state; <code>test/console-grip.test.js:44</code> to <code>59</code> drives it with fractional inputs.</p>
+<p><strong>What fixes it.</strong> Nothing. What a future rewrite must not do is reintroduce an accumulator.</p>
+<p><strong>How a test holds it.</strong> Extend the existing arithmetic test with a 40-step loop over a fractional top and assert the corner's offset stays constant.</p>
+<h3 id="4-6-a-gesture-that-outlives-the-pointer-present-ranked-second">4.6 A gesture that outlives the pointer - PRESENT, ranked second</h3>
+<p><strong>The mechanism.</strong> The gesture has no way to end itself when the console it holds is detached. <code>public/app.js:10665</code> returns from the move when <code>!d.out.isConnected</code> without clearing <code>outGripDrag</code>; the press refuses every new gesture while it is set (<code>public/app.js:10601</code>); <code>outGripLive()</code> stays true (<code>public/app.js:10586</code>), so every rebuild path keeps deferring (<code>public/app.js:10036</code>, <code>public/render-jobs.js:740</code>, <code>public/render-projects.js:1642</code>) and the board stops repainting. Nothing listens for <code>lostpointercapture</code> (<code>public/app.js:10731</code> to <code>10732</code>) even though the capture at <code>10642</code> is the only reason a release outside the window arrives at all. So a node replacement the guards miss, a capture lost to a window blur or an alt-tab, or a release outside the window after a capture that failed, leaves the grip dead and the board frozen until some later pointerup, which may never come.</p>
+<p><strong>What proves it.</strong> The source: the early return with no cleanup, and the missing listener. A bench can detach <code>d.out</code> and dispatch one move, then assert <code>outGripLive()</code> is false; today it is true.</p>
+<p><strong>What fixes it.</strong> End the gesture when the console it holds is gone (<code>if (!d.out.isConnected) return endOutGrip(e)</code>), and listen for <code>lostpointercapture</code> and <code>blur</code> to end it as well.</p>
+<p><strong>How a test holds it.</strong> A source assertion that the move's <code>isConnected</code> branch calls <code>endOutGrip</code>, plus the bench above. The gate's <code>pointercancel</code> shape covers the tidy half only.</p>
+<h3 id="4-7-a-height-restored-before-the-layout-that-makes-it-valid-latent-ranked-sixth">4.7 A height restored before the layout that makes it valid - LATENT, ranked sixth</h3>
+<p><strong>The mechanism.</strong> The height variable does not depend on layout, so the write order is not the problem. The cap does: <code>applyStoredHeight</code> lifts the cap from a measurement, <code>parseFloat(getComputedStyle(o).maxHeight)</code> (<code>public/board/console.js:3786</code>). A detached node has no computed <code>max-height</code> (the value is the empty string, so <code>parseFloat</code> is NaN), the lift is skipped, and nothing re-runs when the layout appears. Every current caller inserts before it restores - <code>public/render-jobs.js:1116</code> then <code>1127</code>, <code>public/app.js:9641</code> then <code>9645</code>, <code>public/assistant.js:2318</code> then <code>2325</code>, and <code>public/render-projects.js:1799</code> after the comment that says the rows are in the document - so there is no live path today. But the helper takes any root, and the line just above one of those callers builds exactly the detached holder that would break it (<code>public/render-jobs.js:1113</code>). The next render path that restores into a held fragment loses the reader's height silently, which is the same report as 2026-11-23's case 7: 420px dragged, 320px after the rebuild.</p>
+<p><strong>What proves it.</strong> The order in each caller, and an <code>applyStoredHeight</code> against a node with no layout.</p>
+<p><strong>What fixes it.</strong> Do not depend on the measurement: when a height is set from the store, the cap it needs is the pane's, and a <code>max-height: none</code> written with the height is honest whatever the pane's cap was measured as. Or store the above-cap flag with the number.</p>
+<p><strong>How a test holds it.</strong> A unit test that <code>applyStoredHeight</code> on a detached node still lifts the cap, beside <code>test/console-height-store.test.js</code>.</p>
+<h2 id="5-the-ranking">5. The ranking</h2>
+<p>The question is which ONE best explains a drag that is glitchy rather than slow, so the ranking is by how much a reader sees in the ordinary gesture, not by how bad the worst case is.</p>
+<ol>
+<li><strong>Two owners writing one size (4.1).</strong> It fires on every drag in the two panes the reader uses, in both directions: in the docked Chat pane and a maximized card the transcript is normally on its foot, and the release then puts the box back where it started, by the travel, in one step. The prior fix removed the same cancellation from the 40 steps of the gesture and left it in the release. That is the jump a hand feels.</li>
+<li><strong>A gesture that outlives the pointer (4.6).</strong> Rare, but when it fires the grip is dead and the whole board stops repainting, which reads as the panel being broken rather than the corner being jumpy. It is second because it is a one-directional trap: no amount of dragging fixes it.</li>
+<li><strong>A clamp in one place only (4.2).</strong> A stored height is restored without the clamp the release used, and the cap is lifted to match, so the same number is legal in one pane and illegal in another. The reader sees the box change size without touching it.</li>
+<li><strong>An invariant from a stale measurement (4.3).</strong> A few pixels in the ordinary case, and the cap is destroyed after one over-cap drag, which is what makes the second drag on a box feel different from the first.</li>
+<li><strong>A write in the wrong frame (4.4).</strong> The fold-mark flush under the pointer and the rebuild inside the release. Visible as a flicker in the text, or as a second move at the end of the gesture, not as a wrong size.</li>
+<li><strong>A height restored before its layout (4.7).</strong> Latent. No caller hits it today.</li>
+<li><strong>Rounding drift per move (4.5).</strong> Not present. The arithmetic is pure and the error is bounded.</li>
+</ol>
+<p>The reason the same corner has come back three times is in this list: every fix re-derived the height, and the thing that keeps moving is the top edge. <code>docs/reports/console-corner-slow-drag-2026-11-23.html</code> says it plainly in its own section 4, then fixes the pin for the 40 steps of the drag and restores it in the release.</p>
+<h2 id="6-four-options-for-the-fix">6. Four options for the fix</h2>
+<p>The measurement row owns the numbers these options should be judged by; this section is the shape of each change and what it costs.</p>
+<h3 id="option-1-recommended-the-gesture-owns-the-offset-by-delta-and-the-foot-is-given-up-for-the-resize">Option 1 (recommended): the gesture owns the offset by delta, and the foot is given up for the resize</h3>
+<p>Two changes, both in <code>public/app.js</code>, and no change to <code>public/board/console.js</code>:</p>
+<ul>
+<li>Track the transcript's offset in the drag record. At the press, <code>d.bodyTop = d.body.scrollTop</code> (the press already forces a layout for the rect, so this is free). On a move where the height SHRINKS, write the same delta back: <code>d.body.scrollTop = Math.max(0, d.bodyTop + (h - d.written))</code>, and keep <code>d.bodyTop</code> in step. The browser's clamp then cannot lower the top edge, because the write lands exactly on the new maximum. On a grow, nothing is written, because nothing clamps.</li>
+<li>At the release, do not write the foot. Replace <code>setScroll(d.body, d.body.scrollHeight)</code> (<code>public/app.js:10722</code>) with <code>noteCardBodyScroll(d.body)</code>, so the panel records the truth: the resize took this transcript off its foot. The console's own tail keeps the newest line in view (<code>public/board/console.js:4339</code>), and following resumes the moment the reader is back on the foot.</li>
+</ul>
+<p>The corner cannot be cancelled by construction, because the only scroll write the gesture makes is the same delta the height moved by. The cost is a visible behaviour change: after a resize in a following transcript, the transcript sits a few pixels short of its foot and the composer sits with it, until the reader scrolls back. That is the honest state of a transcript whose console the reader has just made taller.</p>
+<p>The gate holds it: a corner assertion in the frame after <code>pointerup</code>, plus an up-drag shape and a shrink-past-the-foot shape.</p>
+<h3 id="option-2-keep-the-corner-drop-the-foot-entirely-for-a-resized-turn">Option 2: keep the corner, drop the foot entirely for a resized turn</h3>
+<p>The same release change as Option 1, and instead of a per-move write, the console is taken out of the transcript's arithmetic for the length of the gesture by holding the body's scroll at the press value with <code>overflow: hidden</code> on the scrollport and its <code>scrollTop</code> preserved. A scrollport that cannot scroll cannot clamp, so the top edge is genuinely frozen and the corner follows in both directions. The release restores <code>overflow</code> and the offset, which lands wherever the content puts it: the box moves once, at the end, by the whole travel.</p>
+<p>Cheaper in code than Option 1 and worse for the reader: it moves the jump from "at release, always" to "at release, still", and a hidden scrollbar mid-gesture is its own tell.</p>
+<h3 id="option-3-track-the-edge-instead-of-freezing-it">Option 3: track the edge instead of freezing it</h3>
+<p>One <code>getBoundingClientRect</code> per move, and the frozen top is corrected by the drawn one: <code>d.top += (r.top - d.drawnTop)</code>, with <code>d.drawnTop</code> updated after each write. This absorbs the clamp, the anchor's drift, and anything else that moves the edge inside one frame, and it needs no change to the release's scroll behaviour.</p>
+<p>The cost is the thing this file was written to avoid: a forced layout per pointermove, at the pointer's own rate (which is several times the frame rate on a good mouse), on a page the console work has measured at 55k nodes (<code>public/board/console.js:2196</code> to <code>2200</code>). It also leaves the release jump, because the release's foot write happens after the last correction.</p>
+<h3 id="option-4-take-the-console-out-of-the-transcript-s-scroll">Option 4: take the console out of the transcript's scroll</h3>
+<p>The structural answer: in the docked pane and a maximized card, draw the open turn's console in a region of its own below a scrolling history, so the console's height is not part of the transcript's <code>scrollHeight</code> at all. Then the height and the offset are independent by construction, and no gesture arithmetic can be cancelled by a pin, an anchor or a clamp.</p>
+<p>This is the only option that removes the class rather than the instance. It is a layout change to the two panes with the most follow and fold behaviour in the page, so it is a design of its own, not a landing for this row.</p>
+<h3 id="and-three-small-ones-that-ride-along-whichever-option-lands">And three small ones that ride along, whichever option lands</h3>
+<ul>
+<li>The lostpointercapture and detached-node ends for the gesture (4.6), which are a handful of lines and stop the board freezing.</li>
+<li>The <code>outGripLive()</code> ask in the fold flush (4.4), one line.</li>
+<li>The clamp on restore and the cap that is not destroyed by one use (4.2, 4.3), which belong with whichever row next touches <code>applyStoredHeight</code>.</li>
+</ul>
+<footer class="report">Read-only: no file under <code>public/</code> or <code>lib/</code> was changed for this page.</footer>
+</main>
+</body>
+</html>
