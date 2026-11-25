@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.169.7 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.169.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-739 releases from v0.1.0 (2026-10-20) to v1.169.7 (2026-11-24), 2628 commits between the tags. Every release is anchored by an
+740 releases from v0.1.0 (2026-10-20) to v1.169.8 (2026-11-24), 2634 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.169.8 — 2026-11-24 · 6 commits
+
+[`d10f378`](https://github.com/JLRoper/agent-worktree-gui/commit/d10f3781e16b817a840ae42d70d058d27f36ba4e) · [compare v1.169.7...v1.169.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.169.7...v1.169.8)
+
+### Fixed
+
+- fix(console): the corner drag holds the edge the press froze, and the release stops undoing it ([`a7ad481`](https://github.com/JLRoper/agent-worktree-gui/commit/a7ad481533fa6ba27de2da7120120904b48578dc))
+- fix(console): the frozen edge is watched every frame, not only on a move ([`a90867d`](https://github.com/JLRoper/agent-worktree-gui/commit/a90867dca22fc8d1f7b8e9c2ba83d37f99a1fb6e))
+
+### Docs & tests
+
+- docs: render the changelog - 739 releases ([`9b1626f`](https://github.com/JLRoper/agent-worktree-gui/commit/9b1626f8bcf513f3e3c56f87c0496616de2fb478))
+- docs(report): the corner drag, read again after the fix - 26 of 32 failing on the pre-fix tree, none on this one ([`4481610`](https://github.com/JLRoper/agent-worktree-gui/commit/448161096640f51504115393923b4d80ab001479))
+- docs(report): what the full sweep answered - 3,690 passing, 18 failing, 17 of them on main ([`3cb90bb`](https://github.com/JLRoper/agent-worktree-gui/commit/3cb90bbf37cc2aa6ea78ea55015d479192a81704))
+
+### Other
+
+- chore: 1.169.8 - the version this landing carries ([`d10f378`](https://github.com/JLRoper/agent-worktree-gui/commit/d10f3781e16b817a840ae42d70d058d27f36ba4e))
 
 ## v1.169.7 — 2026-11-24 · 2 commits
 
