@@ -65,7 +65,7 @@ const eq = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(
 
 const args = process.argv.slice(2);
 const shotArg = args.includes("--shots") ? args[args.indexOf("--shots") + 1] : null;
-const SHOTS = path.resolve(shotArg || path.join(process.cwd(), "docs", "reports", "assets", "initiative-notes-1.172.0"));
+const SHOTS = path.resolve(shotArg || path.join(process.cwd(), "docs", "reports", "assets", "initiative-notes-1.174.0"));
 mkdirSync(SHOTS, { recursive: true });
 let shotNo = 0;
 const shotPath = (slug) => path.join(SHOTS, `${String((shotNo += 1)).padStart(2, "0")}-${slug}.png`);
@@ -290,7 +290,7 @@ try {
       const assistRes = await fetch(`${panel.base}/api/initiatives/notes/add`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: "init_release", text: "1.172.0 is the version this first ships in", by: "assistant-2" }),
+        body: JSON.stringify({ id: "init_release", text: "1.174.0 is the version this first ships in", by: "assistant-2" }),
       });
       const assistBody = await assistRes.json();
       ok("the assistant's write is accepted by the route an assistant's turn uses", assistRes.status === 201 && assistBody.note?.by === "assistant-2", `HTTP ${assistRes.status}, by ${assistBody.note?.by}`);
@@ -314,7 +314,7 @@ try {
       ok("the assistant's note is drawn as an assistant's", Boolean(attributed) && attributed.cls.includes("is-assistant"), attributed?.cls);
       ok("it names the assistant that logged it", Boolean(attributed) && attributed.head.includes(assistantName("assistant-2")), `${attributed?.head} (${assistantName("assistant-2")})`);
       ok("and it reads differently from the reader's own row, in class and in its rule", Boolean(attributed) && !attributed.mineCls.includes("is-assistant") && attributed.theirRule !== attributed.mineRule, `${attributed?.mineRule} vs ${attributed?.theirRule}`);
-      ok("the assistant's own words are on the row", attributed?.text === "1.172.0 is the version this first ships in", attributed?.text);
+      ok("the assistant's own words are on the row", attributed?.text === "1.174.0 is the version this first ships in", attributed?.text);
       eq("the count counts both writers", (await page.locator(`${CARD} [data-init-notes-count]`).textContent()).trim(), "4");
 
       // ---- 7. A DUPLICATE URL IS ONE ROW ------------------------------------------------------------------------
