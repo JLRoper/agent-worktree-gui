@@ -225,6 +225,56 @@ never starts:
 - **Gateway down or unkeyed** — `503` with the gateway's own message; start it with `hermes gateway restart`.
 - **A brand-new repo** appears on the board on the next discovery pass, so a just-cloned project may take a moment.
 
+### Worktree reuse: the three cases
+
+A worktree is expensive to make and expensive to lose: it holds a branch, the commits on it, the files nobody has
+landed and the list the worker kept. Reusing one is sometimes exactly right and sometimes the defect. There are
+THREE cases, and only the first two are reuse.
+
+**1. Disruption recovery.** A run is cut off (the gateway restarts, the host dies, the turn is lost) and the
+assistant needs that agent working again.
+
+- First choice: re-attach the EXISTING agent in its own tree. A reply continues the same thread and the same
+  session, and it already knows the tree, so nothing is lost.
+- When re-attach is impossible, a NEW agent goes in the SAME tree. That is allowed on two conditions, both
+  enforced by the panel rather than assumed:
+  - the old run resolves **DEAD through the runs API** (`GET /v1/runs/<id>` answers `completed`, `failed`,
+    `cancelled` or `interrupted`). The panel's own card still reading `running` is not the answer, and neither is
+    a run the gateway has forgotten: a missing run is not evidence that one ended. A live run keeps the ordinary
+    refusal, naming the job and thread to wait for.
+  - the new agent's brief says **work already exists in that tree from a previous run**, and that it must be read
+    (`git log`, `git status`, the tree's TODO list) before anything is overwritten.
+- There is **no clean-tree requirement**. A disrupted tree is dirty with the previous run's work by definition.
+  The panel does not refuse it and does not ask for a clean one - it makes the new agent read what is there.
+
+**2. Stage ping-pong.** A coder and a reviewer alternate in a capped loop (a pipeline stage that goes back and
+forth). They hold **two trees**, one each:
+
+- The coder works in its own tree and pushes its branch to the shared repo (usually a local git remote).
+- The reviewer reads that branch from its own tree, so its reports and fixups stay isolated.
+- git refuses **two worktrees on one branch**, so the reviewer does not sit on the coder's branch. Each round it
+  cuts a **per-round review branch** from the coder's branch, inside its own tree, and commits its notes and
+  fixups there: `review/<coder-slug>-r<N>-<sha7>`. The panel derives that name and hands it over with the round's
+  instruction.
+- Every round is **anchored on the SHA the review branch was cut from**, and the branch name carries it. A coder
+  rebase cannot silently move what was reviewed, and the report can say which commit was read.
+- Neither tree is the other's duplicate. Two trees on one lineage are the two stages, not two attempts at one job.
+
+**3. NOT reuse.** A landed or finished tree handed to an unrelated new row. This is the case that is a defect:
+
+- A new row cuts a **fresh tree from current HEAD** and **inherits no attachment** from any earlier tree. A
+  fresh cut says so on the card when the SPAWN carries a row.
+- A cut aimed at a landed or finished tree (the board reads the branch `MERGED`, `ON MAIN`, `ON BASE` or `NO
+  COMMITS`) is **refused by name** when the line carries a queue row, and **warned by name** when it does not.
+  Both name the tree, the branch and the verdict, and say that the tree's initiative attachment belongs to the
+  tree, not to the new run.
+- Row 313 is the shape: it was cut into row 296's landed tree, reviewed itself against a stale base (32 commits
+  ahead, reset by hand) and silently inherited that tree's initiative. That is what the refusal exists to stop.
+
+`GET /api/assistant/spawn-check?task=<id>&tree=<path>` answers all three before the line is written: it asks the
+runs API for the DEAD verdict, reads the board's verdict for a landed tree and recognises a coder/reviewer pair,
+so the pre-flight and the cut cannot disagree.
+
 ### Attachments
 
 Paste or drop a file into the spawn prompt or any reply box. The file is stored by the panel and a chip appears

@@ -104,8 +104,10 @@ export function createSpawnCheckRoutes({ assistant, getProjects = null, config =
         return true;
       }
     }
-    // The checks themselves: the cut's own functions, on the resolved tree.
-    const out = assistant.spawnCheck({
+    // The checks themselves: the cut's own functions, on the resolved tree. `spawnCheck` is ASYNC because the
+    // disruption re-issue is allowed only on the runs API's own DEAD verdict (queue row 323), and the route awaits
+    // that read rather than answering from the card's stale word.
+    const out = await assistant.spawnCheck({
       assistantId: assistantId || null,
       taskId: task || null,
       project: project || resolved?.project || null,

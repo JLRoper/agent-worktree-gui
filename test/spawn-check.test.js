@@ -166,12 +166,16 @@ test("a tree that still holds unlanded commits is reported, with the branch and 
   assert.match(out.body.remedy, /land wtgui\/land-the-review-chip-lane-58597e first, or name a free tree/);
 });
 
-test("a tree the board reads MERGED is not reported as holding work", async (t) => {
+test("a tree the board reads MERGED is not reported as holding work, but is warned by name as a landed tree", async (t) => {
   const p = fixture(t);
   p.rows.push({ path: p.held, branch: "wtgui/landed", ahead: 3, dirty: 0, untracked: 0, project: "proj", verdict: "MERGED (3 commits)" });
   const out = await ask(p, { tree: p.held });
-  assert.equal(out.body.ok, true);
-  assert.deepEqual(out.body.checks, [], "a landed branch is a tree to sweep, not a tree holding work");
+  assert.equal(out.body.ok, true, "no queue row is carried, so this is a warning rather than a refusal");
+  const codes = out.body.checks.map((c) => c.code);
+  assert.equal(codes.includes("tree-unlanded"), false, "a landed branch is a tree to sweep, not a tree holding work");
+  assert.deepEqual(codes, ["tree_landed"], "and it is warned by name: an unrelated new row must not be cut here");
+  assert.match(out.body.reason, /is already finished \(MERGED \(3 commits\), branch wtgui\/landed, 3 commits ahead of main\)/);
+  assert.match(out.body.reason, /inherit that tree's initiative attachment, which it never earned/);
 });
 
 test("a done row and a row in another assistant's queue are refused with their own fix", async (t) => {
