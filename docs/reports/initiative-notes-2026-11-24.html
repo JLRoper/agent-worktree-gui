@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The note log on the initiative card, and the two boxes that were the wrong way round</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 200px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  figure { margin:16px 0 6px; }
+  figure img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
+  figcaption { font-size:13px; color:var(--dim); margin-top:6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The note log on the initiative card, and the two boxes that were the wrong way round</h1>
+<p class="sub">agent-worktree-gui 1.172.0, branch <code>wtgui/read-queue-row-320-first-fd654b</code>, cut from main at <code>dd93fed1</code> (1.171.0). Queue row 320, the UI half: the notes model was already on main in 1.170.0, and this row draws it, fixes the inverted edit form at its cause, and brings the Assistants and History folds up to the waves lane. Every line number is on this branch; every measurement comes from <code>tools/verify-initiative-notes.mjs</code> driving real Chromium against a sandbox panel.</p>
+
+<dl class="facts">
+  <dt>Files in the UI change</dt><dd>public/assistant.js, public/style.css</dd>
+  <dt>Model, routes, lib/</dt><dd>untouched - the row that owns them landed first</dd>
+  <dt>New gate</dt><dd>tools/verify-initiative-notes.mjs (74 checks, 0 failed)</dd>
+  <dt>Version</dt><dd>1.172.0, above main's 1.171.0</dd>
+  <dt>Landing</dt><dd>push and PR only; this branch is not merged into</dd>
+</dl>
+
+<h2>1. The inversion, and the rule that did it</h2>
+<p>The reader's screenshot showed a tall empty title box over a short description with a scrollbar. It was not a styling
+preference: <strong>one inherited flex-basis was being measured on the wrong axis</strong>.</p>
+
+<table>
+  <tr><th>What</th><th>Where</th><th>What it does here</th></tr>
+  <tr>
+    <td class="n">.as-group input[type="text"]</td>
+    <td class="n">public/style.css:4950</td>
+    <td><code>flex: 1 1 250px</code> - the 250px is a flex-BASIS, and a basis is a size on the MAIN axis</td>
+  </tr>
+  <tr>
+    <td class="n">#as-initiatives .init-form</td>
+    <td class="n">public/style.css:5609</td>
+    <td><code>display:flex; flex-direction: column</code> - so the main axis is VERTICAL, and that 250px became the title input's height</td>
+  </tr>
+  <tr>
+    <td class="n">.as-note-box (the textarea)</td>
+    <td class="n">public/style.css:4818, 5643</td>
+    <td>no flex rule of its own, <code>rows=3</code> at 20px line boxes - so it drew exactly three rows and scrolled through the rest</td>
+  </tr>
+</table>
+
+<p>Measured on the sandbox before any change, at a 479px and a 449px pane:</p>
+<pre>title input   height 250.0px   flex "1 1 250px"   flex-basis 250px   scrollHeight 248 / clientHeight 248
+description   height  78.0px   flex "0 1 auto"    flex-basis auto    scrollHeight 356 / clientHeight  76   (a scrollbar through 356px of words)</pre>
+
+<p>The fix is at that cause, not at the symptom: the column's own field rule takes the basis off
+(<code>flex: 0 0 auto</code>) and states the height it means - one control row - while the textarea is given a floor of
+96px and keeps <code>resize: vertical</code>. The same correction the waves lane's field already carries for the same
+reason (<code>public/style.css:5860</code>). After the change, at three widths:</p>
+
+<table>
+  <tr><th>Viewport</th><th>Pane</th><th>Title</th><th>Description</th><th>Title flex-basis</th></tr>
+  <tr><td class="n">1440x900</td><td class="n">479px</td><td class="n">32px (one 32px row)</td><td class="n">96px</td><td class="n">auto</td></tr>
+  <tr><td class="n">900x900</td><td class="n">449px</td><td class="n">32px</td><td class="n">96px</td><td class="n">auto</td></tr>
+  <tr><td class="n">480x900</td><td class="n">239px</td><td class="n">32px</td><td class="n">96px</td><td class="n">auto</td></tr>
+</table>
+<p class="small">Gate claims: "the form is a COLUMN" (so the basis WAS a height), "the title is ONE control row", "the description has the room", "the title's flex-basis is no longer the 250px that became its height", and "the inversion is gone" - one check per width, three widths. The late New-initiative form shares the same rule and gets the same fix.</p>
+
+<h2>2. The note log, drawn from the model that was already there</h2>
+<p>The store's own fields are the whole vocabulary of this half. Nothing was added to the model, and nothing is guessed:</p>
+<table>
+  <tr><th>Field on the read</th><th>What the card does with it</th></tr>
+  <tr><td class="n">notes (newest first), noteCount</td><td>the list and the count on the section head</td></tr>
+  <tr><td class="n">by</td><td><code>reader</code> draws "you"; an assistant draws its NAME from the card's own assistant rows, else its id</td></tr>
+  <tr><td class="n">kind "link", host, label, url</td><td>a chip: the host word in the store's own four values (Jira / Bitbucket / GitHub / link), the label, an anchor with <code>target="_blank" rel="noopener noreferrer"</code></td></tr>
+  <tr><td class="n">at, editedAt, editedBy</td><td>"3m ago", and "edited 2m ago by ..." beside it - the author stamp is never replaced</td></tr>
+  <tr><td class="n">caps.noteText / noteLabel / notes</td><td>the form's <code>maxlength</code> and the sentence under it; an over-cap write is REFUSED by the store and its sentence is drawn, never clipped</td></tr>
+</table>
+<p>Three writes, the three routes: <code>POST /api/initiatives/notes/add | notes/edit | notes/delete</code>. Each answer
+carries the whole document the next GET would answer, so the tab adopts it instead of re-reading. A delete asks once
+("Delete for good?") because a note is memory with no undo in this tab.</p>
+
+<figure>
+  <img src="assets/initiative-notes-1.172.0/02-notes-chips-1440.png" alt="The notes section: a GitHub chip with no label, a Jira chip with the reader's label, a prose note, and the status line under them">
+  <figcaption>A GitHub link and a Jira link as chips - host badge, label, new-tab anchor - over a prose note, with the last write's answer under the list.</figcaption>
+</figure>
+
+<h3>What the gate proves, end to end, in the browser</h3>
+<ul>
+  <li>the empty state is drawn and says what belongs there: <em>ticket, pull request, decision, version</em> (four separate checks);</li>
+  <li>a note typed in the tab is drawn AND is in <code>initiatives.json</code> - the gate reads the file, so a painter cannot pass on a write the route refused;</li>
+  <li>a Jira URL with a label draws host <code>Jira</code> and the label; a GitHub URL draws host <code>GitHub</code>; both are real anchors opening in a new tab; the store recorded <code>host: "jira"</code> at write time;</li>
+  <li>an edit changes the words, keeps <code>by: "reader"</code>, and stamps <code>editedAt</code>/<code>editedBy</code>;</li>
+  <li>the same URL pasted twice is still one row, and the tab says so;</li>
+  <li>a delete asks once, removes on the second press, and the store loses the row;</li>
+  <li>a note logged with <code>by: "assistant-2"</code> - the writer an assistant's turn uses - draws <code>.init-note.is-assistant</code>, names that assistant, and differs from the reader's row in class and in its left-rule colour (<code>rgb(163, 113, 247)</code> against <code>rgb(53, 64, 79)</code>).</li>
+</ul>
+
+<figure>
+  <img src="assets/initiative-notes-1.172.0/03-notes-and-folds-1440.png" alt="Three notes above the write box, with the Assistants fold open onto its task card">
+  <figcaption>An assistant's note (violet, attributed) at the top of the log, a Jira chip, an edited reader note, and the Assistants fold open beneath with a task card in it.</figcaption>
+</figure>
+
+<h2>3. The two folds, in the waves lane's grammar</h2>
+<p>Assistants and History read as body text beside the waves lane: a 12px transparent row with a caret. They are now
+sections - the name at one weight, the count in tabular figures, one sentence saying what the fold holds, a hairline
+over the block, and their rows as cards on a rail
+(<code>public/style.css:6043</code>, <code>public/assistant.js:4491</code>).</p>
+<p><strong>No behaviour moved.</strong> The markup keeps <code>data-init-assist-fold</code>,
+<code>data-init-history-fold</code>, <code>data-init-hist-row</code>, <code>data-init-hist-actor</code>,
+<code>data-init-assistant-row</code> and the <code>init-proj</code>/<code>init-proj-name</code> classes the older
+gates and the measurement tools select on. The gate drives the behaviour rather than the look:</p>
+<table>
+  <tr><th>Behaviour</th><th>Gate result</th></tr>
+  <tr><td>Assistants fold opens and closes</td><td class="ok">aria-expanded false -&gt; true -&gt; false</td></tr>
+  <tr><td>History fold opens and closes</td><td class="ok">aria-expanded false -&gt; true -&gt; false</td></tr>
+  <tr><td>The counts on both heads</td><td class="ok">2 assistants, 6 changes - the read's own numbers</td></tr>
+  <tr><td>The assistant rows and their ask-prefill</td><td class="ok">2 rows, each with its thread and the card's title in <code>data-init-title</code></td></tr>
+  <tr><td>The four count chips per assistant</td><td class="ok">queued / running / completed / parked, always four</td></tr>
+  <tr><td>An assistant's task fold</td><td class="ok">opens, and its task cards are drawn inside it</td></tr>
+  <tr><td>The history entries</td><td class="ok">6 rows, each with actor, time and the module's sentence</td></tr>
+</table>
+<p class="small">The existing unit contract still passes untouched: <code>node --test test/initiative-fold.test.js test/initiative-tasks.test.js test/initiative-history.test.js test/initiatives-*.test.js</code> - 113 tests, 0 failed.</p>
+
+<h2>4. One overflow that was not this row's, fixed in passing</h2>
+<p>At the 239px pane the waves lane's own hint (<code>flex: 0 0 auto; white-space: nowrap</code>) measured 248px of
+section head inside 161px of card and pushed the whole Initiatives pane to 301px. It was already there on main. The
+rule now shrinks and ellipses (<code>public/style.css:5687</code>), which is invisible at any width where it fits. The
+pane measures 239/239 at 480 now, and 479/479 at 1440.</p>
+
+<h2>5. What is deliberately not here</h2>
+<ul>
+  <li><strong>No note list on an archived card.</strong> The read answers <code>noteCount</code> for an archived initiative but not its notes, and this row may not add a field or change the route that would have to carry them. The count is on the record; the list waits for the row that changes the read.</li>
+  <li><strong>No label field toggle.</strong> The label field is always drawn and is simply ignored by the store for prose (a label belongs to a link); hiding it would need a re-render under the caret for a rule the store already enforces.</li>
+  <li><strong>No model, route or lib/ change.</strong> Rows 319 and 320 split that way: the model landed first, this is the half that draws it.</li>
+</ul>
+
+<h2>6. Reproducing it</h2>
+<pre>node tools/verify-initiative-notes.mjs          # boots its own fixture + panel, 74 checks
+node tools/verify-initiative-notes.mjs --shots &lt;dir&gt;   # screenshots somewhere else</pre>
+<p class="small">The sandbox writes its own <code>WAG_HOME</code> under the scratch root (<code>tools/initiatives-fixture.mjs</code>), boots <code>server.js</code> on a free port, and never touches the live panel on 7331. Screenshots for this report: <code>docs/reports/assets/initiative-notes-1.172.0/</code>.</p>
+
+<figure>
+  <img src="assets/initiative-notes-1.172.0/04-notes-480.png" alt="The notes section at a 480px window: chips, rows and the write box, no sideways overflow">
+  <figcaption>The same section at a 480px window (a 239px pane): the chip, the rows and the write box fit, and the head's hint ellipses.</figcaption>
+</figure>
+</main>
+</body>
+</html>
