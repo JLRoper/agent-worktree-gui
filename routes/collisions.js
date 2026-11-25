@@ -67,7 +67,9 @@ export function createCollisionsRoutes({ book, getConfig = () => ({}), sweep = n
     const key = String(pickOne(body, "key", "pairKey", "pair") || "").trim();
     try {
       if (op === "sweep") {
-        const report = typeof sweep === "function" ? sweep({ why: "asked" }) : null;
+        // The sweep is async now (its landing probe asks git without holding the loop): awaiting it here keeps the
+        // route answering with the report it always did, not a promise.
+        const report = typeof sweep === "function" ? await sweep({ why: "asked" }) : null;
         sendJson(res, 200, {
           ok: true,
           say: report

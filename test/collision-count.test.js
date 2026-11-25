@@ -64,16 +64,16 @@ const owners = (rows) => {
 // Two sweeps four seconds apart, which is the pass rule's own spacing: the first files the pair, the second hands it to
 // the reader (nothing stood down, and no merge probe is wired so git has not settled it). The dependencies travel in so
 // the renamed rows are swept with the same owners as the pair was filed under.
-function escalatePair(book, rows, at, deps = owners(rows)) {
-  sweepCollisions({ rows, book, now: at, ...deps });
-  return sweepCollisions({ rows, book, now: at + 4000, ...deps });
+async function escalatePair(book, rows, at, deps = owners(rows)) {
+  await sweepCollisions({ rows, book, now: at, ...deps });
+  return await sweepCollisions({ rows, book, now: at + 4000, ...deps });
 }
 
-test("a ruling survives the panel renaming both trees: one physical pair stays one record", () => {
+test("a ruling survives the panel renaming both trees: one physical pair stays one record", async () => {
   const book = new CollisionBook({});
   const before = [tree(PRE_A), tree(PRE_B)];
   const deps = owners(before);
-  escalatePair(book, before, Date.parse("2026-11-22T09:00:00.000Z"), deps);
+  await escalatePair(book, before, Date.parse("2026-11-22T09:00:00.000Z"), deps);
 
   const [ruledOn] = book.all();
   assert.equal(stateOf(ruledOn), "reader", "the pair reached the reader under the names it was cut with");
@@ -92,9 +92,9 @@ test("a ruling survives the panel renaming both trees: one physical pair stays o
   );
   assert.equal(pairKey(before[0].path, before[1].path), pairKey(after[0].path, after[1].path));
 
-  const renamed = escalatePair(book, after, Date.parse("2026-11-22T09:10:00.000Z"), deps);
+  const renamed = await escalatePair(book, after, Date.parse("2026-11-22T09:10:00.000Z"), deps);
   // A fresh record under the renamed key would need two sweeps to escalate again, which is exactly what the reader saw.
-  const again = escalatePair(book, after, Date.parse("2026-11-22T09:20:00.000Z"), deps);
+  const again = await escalatePair(book, after, Date.parse("2026-11-22T09:20:00.000Z"), deps);
 
   assert.equal(book.all().length, 1, "one physical pair is one record, whatever its directory is called");
   assert.equal(book.get(ruledKey).ruling.pick, "a", "the ruling is still the answer after the rename");
@@ -112,7 +112,7 @@ test("a ruling survives the panel renaming both trees: one physical pair stays o
   assert.equal(book.forTree(renamedPath)[0]?.state, "ruled", "the renamed row reads the ruling");
 });
 
-test("a book written under the old directory keys folds into one record, ruling and all", () => {
+test("a book written under the old directory keys folds into one record, ruling and all", async () => {
   // The reader's book as the shipped build left it: TWO records for one physical pair, both keyed by directory names.
   // The first was ruled on under the names the trees were cut with, then the panel renamed both trees and a second
   // record was minted under the renamed names - which is why the ruling "did not clear" the second one.
@@ -212,8 +212,8 @@ test("a book written under the old directory keys folds into one record, ruling 
 
     // And the very next sweep, with the trees under their new names, asks for nothing.
     const after = [tree(POST_A), tree(POST_B)];
-    const first = escalatePair(book, after, Date.parse("2026-11-22T09:30:00.000Z"));
-    const again = escalatePair(book, after, Date.parse("2026-11-22T09:40:00.000Z"));
+    const first = await escalatePair(book, after, Date.parse("2026-11-22T09:30:00.000Z"));
+    const again = await escalatePair(book, after, Date.parse("2026-11-22T09:40:00.000Z"));
     assert.deepEqual(first.escalated, []);
     assert.deepEqual(again.escalated, [], "a ruled pair is not handed to the reader a second time");
     assert.deepEqual(first.filed, [], "and no notice is filed under the folded key");
@@ -224,7 +224,7 @@ test("a book written under the old directory keys folds into one record, ruling 
   }
 });
 
-test("a shared parent directory is not a shared file: only files BOTH sides touch count", () => {
+test("a shared parent directory is not a shared file: only files BOTH sides touch count", async () => {
   // The measured shape, built on a real disk: two trees, each untracked under the same parent directory, one with 39
   // files under a/ and the other 18 under b/, and no tracked file modified in either.
   const root = mkdtempSync(path.join(os.tmpdir(), "wag-collision-dirs-"));
@@ -263,7 +263,7 @@ test("a shared parent directory is not a shared file: only files BOTH sides touc
   }
 });
 
-test("a record whose every side is gone leaves the reader count with no ruling", () => {
+test("a record whose every side is gone leaves the reader count with no ruling", async () => {
   const book = new CollisionBook({});
   const pairOne = [tree("stale-one-a"), tree("stale-one-b")];
   const pairTwo = [tree("stale-two-a"), tree("stale-two-b")];
@@ -272,8 +272,8 @@ test("a record whose every side is gone leaves the reader count with no ruling",
     tasksFor: () => [],
     fileQueue: () => ({ taskId: null }),
   };
-  escalatePair(book, pairOne, Date.parse("2026-11-22T10:00:00.000Z"), twoOwners);
-  escalatePair(book, pairTwo, Date.parse("2026-11-22T10:00:00.000Z"), twoOwners);
+  await escalatePair(book, pairOne, Date.parse("2026-11-22T10:00:00.000Z"), twoOwners);
+  await escalatePair(book, pairTwo, Date.parse("2026-11-22T10:00:00.000Z"), twoOwners);
   // The reported note whose own tree was removed: its target named nothing, so the note was handed to the reader and
   // only `op:forget` could drop it.
   const goneNoteTree = `${WORKTREES}/reported-note-tree-e85acb`;
@@ -294,7 +294,7 @@ test("a record whose every side is gone leaves the reader count with no ruling",
   // record stays: only a record whose EVERY side is absent is settled without a person.
   const standing = `${WORKTREES}/stale-two-b`;
   const at = Date.parse("2026-11-22T10:05:00.000Z");
-  const report = sweepCollisions({
+  const report = await sweepCollisions({
     rows: [],
     book,
     now: at,

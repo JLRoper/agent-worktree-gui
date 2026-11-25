@@ -83,7 +83,7 @@ const owners = (rows) => {
 const manifestOnly = [{ code: "M", path: "package.json" }];
 
 // ---- 1. THE VERSION LINE ALONE ------------------------------------------------------------------------------------
-test("package.json alone: a land order, not a reader record", () => {
+test("package.json alone: a land order, not a reader record", async () => {
   const root = tempRoot("only");
   const low = cutTree(root, "version-low", { version: "1.155.5" });
   const high = cutTree(root, "version-high", { version: "1.156.0" });
@@ -92,7 +92,7 @@ test("package.json alone: a land order, not a reader record", () => {
   const deps = { ...owners(rows), probeVersionOnly: (pair) => probeVersionOnly(pair) };
   const at = Date.parse("2026-11-22T10:00:00.000Z");
 
-  const first = sweepCollisions({ rows, book, now: at, ...deps });
+  const first = await sweepCollisions({ rows, book, now: at, ...deps });
   assert.equal(first.landOrder.length, 1, "the pair is named as a land order on the sweep that first reads it");
   assert.deepEqual(first.filed, [], "a land order files no notice into either queue");
   assert.deepEqual(first.escalated, [], "and it asks nobody");
@@ -122,14 +122,14 @@ test("package.json alone: a land order, not a reader record", () => {
   assert.doesNotMatch(title, /yours to rule/, "it does not ask the reader for anything");
 
   // A second sweep keeps the same order and announces nothing twice.
-  const second = sweepCollisions({ rows, book, now: at + 10_000, ...deps });
+  const second = await sweepCollisions({ rows, book, now: at + 10_000, ...deps });
   assert.deepEqual(second.landOrder, [], "an order already named is not announced again");
   assert.deepEqual(second.escalated, []);
   assert.equal(book.state().count, 0, "and it is still not the reader's, however many sweeps run");
   assert.equal(book.all().length, 1);
 });
 
-test("a land order survives a restart", () => {
+test("a land order survives a restart", async () => {
   const root = tempRoot("reload");
   const low = cutTree(root, "reload-low", { version: "1.155.5" });
   const high = cutTree(root, "reload-high", { version: "1.156.0" });
@@ -137,7 +137,7 @@ test("a land order survives a restart", () => {
   const file = path.join(root, "collisions.json");
   const deps = { ...owners(rows), probeVersionOnly: (pair) => probeVersionOnly(pair) };
   const book = new CollisionBook({ file });
-  sweepCollisions({ rows, book, now: Date.parse("2026-11-22T10:00:00.000Z"), ...deps });
+  await sweepCollisions({ rows, book, now: Date.parse("2026-11-22T10:00:00.000Z"), ...deps });
   book.save();
   const key = book.all()[0].key;
 
@@ -149,13 +149,13 @@ test("a land order survives a restart", () => {
   assert.equal(rec.landOrder?.files?.[0], "package.json");
   assert.equal(reopened.state().count, 0, "a restart does not put the pair back in front of the reader");
   // The next sweep over the same trees re-reads them and keeps the same answer.
-  const swept = sweepCollisions({ rows, book: reopened, now: Date.parse("2026-11-22T10:01:00.000Z"), ...deps });
+  const swept = await sweepCollisions({ rows, book: reopened, now: Date.parse("2026-11-22T10:01:00.000Z"), ...deps });
   assert.equal(swept.landOrderWithdrawn.length, 0);
   assert.equal(reopened.state().count, 0);
 });
 
 // ---- 2. THE MIXED PAIR: A VERSION LINE AND A SOURCE FILE ----------------------------------------------------------
-test("package.json AND a source file: still a reader record, naming the source file", () => {
+test("package.json AND a source file: still a reader record, naming the source file", async () => {
   const root = tempRoot("mixed");
   const one = cutTree(root, "mixed-one", { version: "1.155.5", shared: "export const shared = 1;\n" });
   const two = cutTree(root, "mixed-two", { version: "1.156.0", shared: "export const shared = 2;\n" });
@@ -171,9 +171,9 @@ test("package.json AND a source file: still a reader record, naming the source f
   assert.equal(read.versionOnly, false, "a source file both sides edited is never a version-only overlap");
   assert.match(String(read.why), /lib\/shared\.js is not a manifest version field/);
 
-  const first = sweepCollisions({ rows, book, now: at, ...deps });
+  const first = await sweepCollisions({ rows, book, now: at, ...deps });
   assert.deepEqual(first.landOrder, [], "no land order for a pair that shares a source file");
-  sweepCollisions({ rows, book, now: at + 4000, ...deps });
+  await sweepCollisions({ rows, book, now: at + 4000, ...deps });
 
   const rec = book.all()[0];
   assert.equal(stateOf(rec), "reader", "the pair reaches the reader, exactly as it did before the classification");
@@ -186,7 +186,7 @@ test("package.json AND a source file: still a reader record, naming the source f
 });
 
 // ---- 3. A LAND ORDER THAT STOPS BEING ONE -------------------------------------------------------------------------
-test("a land order is withdrawn when the overlap stops being a version line", () => {
+test("a land order is withdrawn when the overlap stops being a version line", async () => {
   const root = tempRoot("withdraw");
   const one = cutTree(root, "withdraw-one", { version: "1.155.5", shared: "export const shared = 1;\n" });
   const two = cutTree(root, "withdraw-two", { version: "1.156.0", shared: "export const shared = 1;\n" });
@@ -195,7 +195,7 @@ test("a land order is withdrawn when the overlap stops being a version line", ()
   const deps = { ...owners(rows), probeVersionOnly: (pair) => probeVersionOnly(pair) };
   const at = Date.parse("2026-11-22T10:20:00.000Z");
 
-  sweepCollisions({ rows, book, now: at, ...deps });
+  await sweepCollisions({ rows, book, now: at, ...deps });
   const rec = book.all()[0];
   assert.equal(stateOf(rec), "ruled", "version-only first: a land order");
   assert.equal(book.state().count, 0);
@@ -204,7 +204,7 @@ test("a land order is withdrawn when the overlap stops being a version line", ()
   writeFileSync(path.join(one, "lib", "shared.js"), "export const shared = 2;\n");
   writeFileSync(path.join(two, "lib", "shared.js"), "export const shared = 3;\n");
   const grown = [rowOf(one, [{ code: "M", path: "package.json" }, { code: "M", path: "lib/shared.js" }]), rowOf(two, [{ code: "M", path: "package.json" }, { code: "M", path: "lib/shared.js" }])];
-  const swept = sweepCollisions({ rows: grown, book, now: at + 10_000, ...deps });
+  const swept = await sweepCollisions({ rows: grown, book, now: at + 10_000, ...deps });
 
   assert.equal(swept.landOrderWithdrawn.length, 1, "the order is withdrawn on the sweep that sees the new file");
   assert.equal(rec.landOrder, null, "the card stops naming a version order nobody stands behind");
@@ -222,19 +222,19 @@ const strandedRows = () => {
   return rows;
 };
 
-test("a pair whose tree git no longer registers is absent, not a question", () => {
+test("a pair whose tree git no longer registers is absent, not a question", async () => {
   const rows = strandedRows();
   const book = new CollisionBook({});
   const deps = owners(rows);
   const at = Date.parse("2026-11-22T10:30:00.000Z");
-  sweepCollisions({ rows, book, now: at, ...deps });
-  sweepCollisions({ rows, book, now: at + 4000, ...deps });
+  await sweepCollisions({ rows, book, now: at, ...deps });
+  await sweepCollisions({ rows, book, now: at + 4000, ...deps });
   const rec = book.all()[0];
   assert.equal(stateOf(rec), "reader", "the pair is the reader's while both trees are registered");
   assert.equal(book.state().count, 1);
 
   const leftover = rec.a.name.includes("1d1d2c") ? rec.a : rec.b;
-  const swept = sweepCollisions({
+  const swept = await sweepCollisions({
     rows,
     book,
     now: at + 10_000,
@@ -255,20 +255,20 @@ test("a pair whose tree git no longer registers is absent, not a question", () =
   assert.doesNotMatch(title, /yours to rule/);
 });
 
-test("both trees registered and on disk: the pair stays the reader's", () => {
+test("both trees registered and on disk: the pair stays the reader's", async () => {
   const rows = strandedRows();
   const book = new CollisionBook({});
   const deps = owners(rows);
   const at = Date.parse("2026-11-22T10:40:00.000Z");
-  sweepCollisions({ rows, book, now: at, ...deps });
-  sweepCollisions({ rows, book, now: at + 4000, ...deps });
-  const swept = sweepCollisions({ rows, book, now: at + 10_000, ...deps, treeExists: () => true, treeRegistered: () => true });
+  await sweepCollisions({ rows, book, now: at, ...deps });
+  await sweepCollisions({ rows, book, now: at + 4000, ...deps });
+  const swept = await sweepCollisions({ rows, book, now: at + 10_000, ...deps, treeExists: () => true, treeRegistered: () => true });
   assert.deepEqual(swept.gone, [], "nothing is closed while git still registers both trees");
   assert.equal(book.state().count, 1);
 });
 
 // ---- 5. THE PURE READING, AND THE TWO READS BEHIND IT -------------------------------------------------------------
-test("the classifier answers about manifests only, and only about the version line", () => {
+test("the classifier answers about manifests only, and only about the version line", async () => {
   const same = JSON.stringify({ name: PROJECT, version: "1.155.6", dependencies: { express: "4.18.2" } }, null, 2);
   const bumped = same.replace("1.155.6", "1.156.0");
   const dependency = same.replace("4.18.2", "4.19.0");
@@ -297,7 +297,7 @@ test("the classifier answers about manifests only, and only about the version li
   assert.equal(compareVersionText("1.156.0", "1.156.0"), 0);
 });
 
-test("the probe reads the working copy first, and the tip when the file is not on disk", () => {
+test("the probe reads the working copy first, and the tip when the file is not on disk", async () => {
   const root = tempRoot("probe");
   const repo = path.join(root, "repo").replace(/\\/g, "/");
   const run = (args) =>
