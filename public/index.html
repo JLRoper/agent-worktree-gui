@@ -1438,7 +1438,7 @@
   <!-- THE STALE-PAGE GUARD. A tab can be running an app.js older than the shell that loaded it: the shell is served
        no-store, but every asset URL carries the version the shell was rendered with, so a tab opened while app.js was
        being written (or one holding a cached copy under that URL) keeps the old file. If that old app.js predates the
-       DELIVERABLES block or the CLARIFY HISTORY block or the PERMISSIONS block, the header button is in the page and nothing is wired to it — a
+       DELIVERABLES block or the CLARIFY HISTORY block or the PERMISSIONS block, the header button is in the page and nothing is wired to it - a
        click does nothing and says nothing, which is the worst shape a dead control can take. This block is INLINE, and
        the only reason it is inline, because it must be the one piece of code that is never stale: a core/*.js guard
        would be cached at the same old version as the app.js it is meant to catch. At click time it asks whether
