@@ -9,8 +9,8 @@ text plus a sentence saying why, instead of a guessed URL that 404s.
 | the file you edit | `logs/hosts.json` — created empty on first boot, gitignored |
 | the defaults that ship | `hosts.seed.json` — committed, holds the two hosts this board has |
 | the code | `lib/hosts.js` (templates, precedence, the file pair), `lib/project.js` (`prIndex`, `branchLink`), `lib/scheduler.js` (`decorate`), `lib/merge-prompt.js` (the landing doctrine) |
-| the routes | `GET /api/hosts` (the whole mapping), `POST /api/hosts/propose` (read a remote, propose, write nothing), `POST /api/hosts/mapping` (write one project) |
-| the tests | `test/hosts.test.js` (templates, the seed, the doctrines), `test/pr-cell.test.js` (the row the store keeps) |
+| the routes | `GET /api/hosts` (the whole mapping), `POST /api/hosts/propose` (read a remote, propose, write nothing), `POST /api/hosts/mapping` (write one project), `POST /api/clone` (the folder card's clone, from the chosen host's record) |
+| the tests | `test/hosts.test.js` (templates, the seed, the doctrines), `test/clone-host.test.js` (clone routes for both hosts, a third as data, every refusal), `test/pr-cell.test.js` (the row the store keeps) |
 
 `logs/hosts.json` is merged **over** the seed, per host id and per project. That is what lets a new host record ship in
 the seed and reach an install whose live file already exists without anybody merging JSON by hand. Nothing but this
@@ -23,9 +23,11 @@ pair is read: there is no fallback to `github.com`, and no URL is ever derived f
   "version": 1,
   "hosts": {
     "sefl-bitbucket": {
+      "name": "SEFL Bitbucket",
       "kind": "bitbucket-server",
       "base": "https://git.sefl.com",
       "coordinates": { "projectKey": "IT" },
+      "clone": { "ssh": "ssh://git@git.sefl.com:7999/{projectKeyLower}/{repoSlug}.git" },
       "links": {
         "repo":   "{base}/projects/{projectKey}/repos/{repoSlug}",
         "branch": "{base}/projects/{projectKey}/repos/{repoSlug}/browse?at=refs/heads/{branch}",
@@ -61,6 +63,7 @@ travel to the page with `GET /api/hosts` and are logged at boot.
 | `{base}` | the host record's `base`, trailing slashes trimmed | `https://git.sefl.com` |
 | `{owner}` `{repo}` | coordinates (github shape) | `JLRoper` / `agent-worktree-gui` |
 | `{projectKey}` `{repoSlug}` | coordinates (Bitbucket shape) | `IT` / `email-multi` |
+| `{projectKeyLower}` | `{projectKey}` lower-cased, for a clone path | `it` |
 | `{branch}` | the row's branch as git reports it | `20261023_1724_DMR-44452_internalFrom` |
 | `{sha}` | the row's tip | `d55e04d` |
 | `{pr}` | the PR number a row matched | `10` |
@@ -95,6 +98,37 @@ silently.
 A row finds its PR by three names, cheapest-to-be-wrong first: the branch as it is now, the remote ref its upstream
 names, and the six-hex tag the panel's own rename keeps. The tag is an identity for the **tree**, not for the work, so a
 tag match is only allowed while the tree still carries that PR's own commit.
+
+## Cloning: the record is the route
+
+The folder card's **+** row clones a repo into that folder, and the dropdown beside the name chooses WHICH host's ssh
+route the clone comes from. The list is fed from this store (`state.hosts.hosts`), never from a second list written in
+the page, and the URL is built by `lib/hosts.js` `cloneTarget` from the chosen record's `clone.ssh` over the same
+tokens the links use.
+
+| host | `clone.ssh` | a typed name | the URL it builds |
+|---|---|---|---|
+| GitHub | `git@github.com:{owner}/{repo}.git` | `JLRoper/agent-worktree-gui` | `git@github.com:JLRoper/agent-worktree-gui.git` |
+| SEFL Bitbucket | `ssh://git@git.sefl.com:7999/{projectKeyLower}/{repoSlug}.git` | `citdev/java-ruleset` | `ssh://git@git.sefl.com:7999/citdev/java-ruleset.git` |
+
+The Bitbucket shape is the PROJECT KEY and the repo slug, never `owner/repo`: the board records the key upper case
+(`CITDEV`, `IT`) because that is what its pages and REST calls take, and the ssh path wants it lower case, which is what
+`{projectKeyLower}` exists for. The repo slug keeps its own case (`Menu.git`).
+
+A bare name is still accepted and takes the record's own default - github's `coordinates.owner`, Bitbucket's
+`coordinates.projectKey` - so the owner is no longer a config key with one value for the whole board. A name that is a
+URL, a path, or carries `..` is refused; so is a host id that is not in the file, and so is a record with no
+`clone.ssh`. Every refusal names the host and says what it could not resolve, and no URL is guessed. `clone` is not a
+`links` kind: every link must start from `{base}`, and an ssh route has no https base to start from.
+
+`POST /api/clone` takes `{root, name, host}` and answers `{ok, host, hostName, url, dest, tookMs}`. A `dryRun: true`
+builds the same URL from the same record and clones nothing, which is how the page and the tests prove which route a
+choice would take.
+
+A live `hosts.json` record replaces the seed's record for that id WHOLESALE, so an install that already carried its own
+`github` record has to add `clone.ssh` to it (and, if it wants the dropdown label, `name`) for that host to stay
+cloneable. A record without a clone template is still a valid host for every link; only the clone row refuses it, by
+name.
 
 ## The landing doctrine
 

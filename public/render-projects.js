@@ -310,6 +310,25 @@ function rootRecentButton(root, recentOnly, { hidden = 0, total = 0 } = {}) {
   return `<button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(title)}">${label}</button>`;
 }
 
+// The clone row's host dropdown, fed from the host store the page already holds (`state.hosts.hosts`, lib/hosts.js):
+// never a second list written here, so a host added to hosts.json is an option on the next snapshot with no code
+// change. The label is the record's own `name`; the id is what the route receives. A host without a clone.ssh route
+// still lists, because the route's refusal NAMES it and a missing option would hide the reason.
+function cloneHostOptions(root) {
+  const hosts = state.hosts?.hosts || {};
+  const ids = Object.keys(hosts);
+  if (!ids.length) return `<option value="">no hosts configured</option>`;
+  const remembered = state.cloneHost?.[root];
+  const chosen = ids.includes(remembered) ? remembered : ids[0];
+  return ids
+    .map((id) => {
+      const rec = hosts[id] || {};
+      const label = rec.name || id;
+      return `<option value="${esc(id)}"${id === chosen ? " selected" : ""}>${esc(label)}</option>`;
+    })
+    .join("");
+}
+
 function rootSection(root, allProjects) {
   const open = !state.collapsedRoots.has(root);
   const recentOnly = state.recentRoots.has(root);
@@ -335,12 +354,13 @@ function rootSection(root, allProjects) {
       </span>
       ${rootRecentButton(root, recentOnly, { hidden, total: allProjects.length })}
       <button type="button" class="btn-root-collapse" data-root-collapse="${esc(root)}" title="${anyOpen ? "collapse" : "expand"} every project in ${esc(labelRoot(root))} (${projects.length})">${anyOpen ? "Collapse all" : "Expand all"}</button>
-      <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
+      <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a repo over ssh into ${esc(labelRoot(root))} - pick its host in the row">+</button>
     </div>
     <div class="root-clone" data-clone-form="${esc(root)}"${state.cloneStatus[root] ? "" : " hidden"}>
-      <input type="text" data-clone-input="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="repo name — e.g. agent-worktree-gui, or owner/repo" spellcheck="false">
+      <input type="text" data-clone-input="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="repo name - agent-worktree-gui, JLRoper/agent-worktree-gui or citdev/java-ruleset" spellcheck="false">
+      <select data-clone-host="${esc(root)}" title="which host's clone route builds the URL - the list comes from hosts.json, not from this page">${cloneHostOptions(root)}</select>
       <button type="button" data-clone-go="${esc(root)}">Clone via ssh</button>
-      <button type="button" data-project-new="${esc(root)}" title="create a new local git project in ${esc(labelRoot(root))} — inited on main with one commit, nothing fetched or pushed">New local project</button>
+      <button type="button" data-project-new="${esc(root)}" title="create a new local git project in ${esc(labelRoot(root))} - inited on main with one commit, nothing fetched or pushed">New local project</button>
       <span class="mono dim${state.cloneStatus[root]?.kind === "err" ? " clone-err" : ""}" data-clone-msg="${esc(root)}">${esc(state.cloneStatus[root]?.text || "")}</span>
     </div>
     <div class="root-body">
