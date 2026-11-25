@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Permissions header button: a live count, a popup that answers, a durable history</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --amber:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .am { color:var(--amber); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  figure { margin:16px 0 6px; }
+  figure img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
+  figcaption { font-size:13px; color:var(--dim); margin-top:6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The Permissions header button: a live count, a popup that answers, a durable history</h1>
+<p class="sub">agent-worktree-gui 1.176.0, branch <code>wtgui/build-the-permissions-header-button-here-cff1fc</code>, cut from main at 1.174.0. The feature was carried from <code>036e1e79</code> (<em>feat(header): the Permissions button</em>) on the stopped run's branch <code>wtgui/row-677-detail-is-in-the-queue-file-f1cbe5</code>; that branch's other two commits are assistant-2's pr6-non-dal review report, not this row's, and were left where they are. Every number below comes from <code>test/permissions-history.test.js</code> and <code>tools/verify-permissions-history.mjs</code> driving a real panel and real approvals; every line number is on this branch.</p>
+
+<dl class="facts">
+  <dt>Header control</dt><dd>public/index.html:58, painted at public/app.js:14200, count started at public/app.js:14971</dd>
+  <dt>Badge count</dt><dd>/api/state's <code>approvals</code> (server.js:4729), counted by public/core/permissions-history.js:144 through public/permissions-history.js:377</dd>
+  <dt>Popup read</dt><dd>GET /api/permissions/history (routes/permissions-history.js:33)</dd>
+  <dt>One answer path</dt><dd>POST /api/approvals/answer (public/permissions-history.js:327, server.js:6431)</dd>
+  <dt>Durable store</dt><dd>lib/permissions-history.js (ask:177, answered:221, expired:244, reconcile:262); the file is lib/paths.js:234</dd>
+  <dt>Notifications</dt><dd>the frames plus the slow tick the Clarify button uses (public/permissions-history.js:391)</dd>
+  <dt>Tests</dt><dd>19 unit tests, 0 failed; gate 44 checks, 0 failed</dd>
+  <dt>Version</dt><dd>1.176.0, above main's 1.174.0; 1.175.0 is held by another unmerged branch</dd>
+  <dt>Long dashes</dt><dd>0 em dashes, 0 en dashes in this page</dd>
+</dl>
+
+<h2>1. The acceptance, item by item</h2>
+
+<table>
+  <tr><th>The row asks for</th><th>Where it is</th><th>The gate's own reading</th></tr>
+  <tr>
+    <td>A Permissions button beside Clarify, its badge counting OPEN permission requests sourced from /api/state</td>
+    <td class="n">public/index.html:58<br>public/app.js:14200<br>public/core/permissions-history.js:144</td>
+    <td><span class="ok">PASS</span> the snapshot the board polls carries the waiting request: got <code>["req-live-1"]</code>; the page applied the request from /api/state: got <code>["req-live-1"]</code>; the badge counts that map, not a request of its own: got <code>[1,0,1]</code></td>
+  </tr>
+  <tr>
+    <td>A popup listing each open one with its run and thread</td>
+    <td class="n">public/permissions-history.js<br>routes/permissions-history.js:82</td>
+    <td><span class="ok">PASS</span> the row names the run, the thread and the tree: <code>wt-permissions-thread &hellip; run_gate_permissions wt/permissions</code></td>
+  </tr>
+  <tr>
+    <td>The exact request text and its choices</td>
+    <td class="n">public/permissions-history.js (a <code>&lt;pre class="ph-cmd"&gt;</code>)</td>
+    <td><span class="ok">PASS</span> the popup row shows the command byte for byte: exact. <span class="ok">PASS</span> one button per allowed choice, in the host's order: got <code>["once","session","deny"]</code></td>
+  </tr>
+  <tr>
+    <td>The answer control the panel already has (POST /api/approvals/answer)</td>
+    <td class="n">public/permissions-history.js:327<br>server.js:6424</td>
+    <td><span class="ok">PASS</span> the decision is on the durable record: got <code>["answered","once","reader"]</code></td>
+  </tr>
+  <tr>
+    <td>A durable history in the panel state folder, shaped like the clarify history</td>
+    <td class="n">lib/permissions-history.js<br>lib/paths.js:234</td>
+    <td><span class="ok">PASS</span> the record lives in the panel's state folder: <code>&hellip;/logs/permissions-history.json</code>; the file carries both rows: got 2</td>
+  </tr>
+  <tr>
+    <td>Asked at, by which agent, thread, run, what was asked, what was chosen, when answered or expired, the gateway's policy note</td>
+    <td class="n">lib/permissions-history.js:81</td>
+    <td><span class="ok">PASS</span> it carries the gateway's one-line policy note: <code>writes to a remote (policy: git-push, matched git push --force)</code></td>
+  </tr>
+  <tr>
+    <td>Notifications on the same path the Clarify button uses</td>
+    <td class="n">public/permissions-history.js:391</td>
+    <td>the <code>jobs</code>, <code>approval</code> and <code>approval-answered</code> frames, debounced at 1.2 s, plus the 4 s tick and the visibility read. Same three hooks, same debounce, same painter as the Clarify button; no second notification path.</td>
+  </tr>
+  <tr>
+    <td>Nothing may answer an approval except a person's press</td>
+    <td class="n">server.js:6424<br>lib/approvals.js:80</td>
+    <td><span class="ok">PASS</span> a timeout records an expiry, not a decision; the history still says expired, and never borrows the host's deny. The route that settles rows (<code>reconcile</code>) writes an expiry, never a choice.</td>
+  </tr>
+</table>
+
+<h2>2. The badge, and why it reads /api/state</h2>
+<p>The header button's number is computed from the map the page already holds: <code>/api/state</code> answers <code>approvals</code> from the approval transport's live queue (<code>server.js:4729</code>), <code>public/settings.js:426</code> applies it, and the approval frames keep it current. <code>openCount</code> (<code>public/core/permissions-history.js:144</code>) counts one per id and drops any entry whose deadline has passed, because the gateway has denied the command at that instant even while the panel's 5 s sweep has not run yet.</p>
+<p>A page that has not had its first snapshot still reads <code>GET /api/permissions/history?limit=1</code> (<code>public/permissions-history.js:379</code>), which is the fallback and is also what the popup's own footer counts. The gate proves the direction of the dependency rather than assuming it: it empties the page's map and the number falls to 0 with no fetch, then puts the entry back and the number returns to 1.</p>
+<pre>PASS  the snapshot the board polls carries the waiting request: got ["req-live-1"]
+PASS  the header button draws a badge of 1
+PASS  the page applied the request from /api/state: got ["req-live-1"]
+PASS  the badge counts that map, not a request of its own: got [1,0,1]</pre>
+
+<figure>
+  <img src="../assets/permissions-history/1-badge.png" alt="The header strip: a Permissions button beside Clarify, with an amber badge of 1.">
+  <figcaption>The header strip from the gate's own run: Permissions sits between Clarify and Human, in the permission box's amber, carrying a count of 1 before the popup has been opened.</figcaption>
+</figure>
+
+<h2>3. The record, field by field</h2>
+<p>One row per request id (<code>lib/permissions-history.js:177</code>): a replay of the same id updates the open row in place and cannot erase a settled one. The three states are <code>open</code>, <code>answered</code> and <code>expired</code>; the third is not a courtesy, it is the honest difference between "nobody chose" and "somebody denied", which is exactly the word the host's fail-closed sweep has to send to the waiting caller.</p>
+
+<table>
+  <tr><th>Field</th><th>What it carries</th></tr>
+  <tr><td class="n">seq / key / requestId</td><td>the identity the page sends back, and the request's own id: one record per request, never a second row for one id</td></tr>
+  <tr><td class="n">askedAt</td><td>when the request reached the panel</td></tr>
+  <tr><td class="n">agent / thread</td><td>which agent was blocked, by the thread the transport echoes back, and the name the panel resolves for it</td></tr>
+  <tr><td class="n">runId / jobId</td><td>the gateway run and the turn that parked on it (<code>approvalWhere</code>, server.js:1461)</td></tr>
+  <tr><td class="n">tree / treePath / project</td><td>where the blocked run was working</td></tr>
+  <tr><td class="n">command</td><td>what was asked, byte for byte, never truncated in the store</td></tr>
+  <tr><td class="n">policy / patternKey</td><td>the gateway's one-line policy note and the pattern that matched</td></tr>
+  <tr><td class="n">choices</td><td>the choices the host allowed, in the host's order: the only answers the popup may offer</td></tr>
+  <tr><td class="n">status / choice / answeredBy / answeredAt</td><td>what was chosen, by whom, when</td></tr>
+  <tr><td class="n">closedWhy / closedAt</td><td>for an expiry: the reason (timed out, the panel restarted, the gateway no longer holds it) and the instant, stamped at the deadline rather than when a sweep noticed</td></tr>
+</table>
+
+<h2>4. Nothing answers but a press</h2>
+<p>Three reads happen without a person: the snapshot's count, the popup's list, and the store's reconcile pass. None of them can write a choice. The reconcile pass (<code>lib/permissions-history.js:262</code>) only ever writes <code>expired</code> with a reason, and the one route that writes <code>answered</code> is the POST that carries a press (<code>server.js:6431</code>). The gate presses the popup's own button and then presses it again:</p>
+<pre>PASS  the badge clears once the request is answered
+PASS  the answered row shows the choice that was pressed: Allow once (once)
+PASS  the decision is on the durable record: got ["answered","once","reader"]
+PASS  a second answer is refused by the panel: HTTP 409 unknown or already-resolved request
+PASS  the record still holds exactly one decision: got ["once","2026-11-25T07:11:31.077Z"]
+PASS  no second decision was written for the request: got 1</pre>
+<p>The timeout case is the one that matters for honesty, so the gate holds it against the host's own verdict in the same run:</p>
+<pre>PASS  nobody answered it: got 0
+PASS  the record reads expired, not answered: got "expired"
+PASS  the expiry carries no choice at all: got ["","",null]
+PASS  the expiry says why: got "timed out"
+PASS  the host's fail-closed verdict is the deny the sweep had to send: got ["answered","deny"]
+PASS  the history still says expired, and never borrows the host's deny: got "expired"</pre>
+<p>And the history is a file, not a memory: the gate stops the panel, boots it again on the same state folder, and reads the same two rows back with the same decision and the same expiry.</p>
+<pre>PASS  the restarted panel still answers both rows: got 2
+PASS  the decision survived with its choice, who and when: got ["answered","once","reader","2026-11-25T07:11:31.077Z"]
+PASS  the expiry survived as an expiry: got ["expired","timed out",""]
+PASS  the restarted panel keeps the exact request text
+PASS  nothing is waiting after the restart: got 0</pre>
+
+<figure>
+  <img src="../assets/permissions-history/2-popup-waiting.png" alt="The Permissions popup with one waiting request: the exact command in a pre block, the policy note, the run and thread, and one button per allowed choice.">
+  <figcaption>One waiting request: the exact command, the gateway's policy note, the run and thread it belongs to, the countdown, and three buttons for the three choices the host allowed. Nothing else on the row answers.</figcaption>
+</figure>
+
+<figure>
+  <img src="../assets/permissions-history/3-answered.png" alt="The same popup after the press: the row stands on the choice Allow once, and the badge has cleared.">
+  <figcaption>After one press: the row stands on the decision and says who made it and when, and the header badge clears in the same tick.</figcaption>
+</figure>
+
+<h2>5. The Human button, and why the two do not double-count</h2>
+<p>The Human tab in Settings (public/index.html:713) says what that button counts: "a run stopped on a command it wants to run: the panel's permission box, or a gateway approval", counted on the Human badge, named in its title and stepped into by H, in a rotation that also carries clarify questions, review items and collisions. Two facts keep the new button from being a second count of anything:</p>
+<ul>
+  <li><strong>One map, one entry.</strong> The Human button's dock group walks <code>state.approvals</code> and turns each entry into exactly one <code>approval</code> entry keyed <code>dock:&lt;id&gt;</code> (public/app.js:13864). The Permissions badge counts the same map, one per id (<code>openCount</code>). A request is therefore one entry in each list; neither list can carry it twice.</li>
+  <li><strong>The switch is the Human button's, not the popup's.</strong> Turning the Human Permissions switch off removes that kind from the Human badge, its title and the H rotation, exactly as the Review row already says for the Review control in the header. The Permissions button is its own control: it keeps counting, and the request stays answerable in it. That is the same split the panel already documents between Review and the Human button's review kind.</li>
+</ul>
+<p>They also cannot answer for each other: both press the one route, <code>POST /api/approvals/answer</code>, the request leaves the live queue on the first press, and a second press is refused 409 (section 4). A prompt the panel draws on a card from a run's own feed is counted by Human and is not in this popup, because the popup's one answer path is the approval transport's route; the row does not claim it.</p>
+
+<h2>6. What was run, and what was not</h2>
+<table>
+  <tr><th>Check</th><th>Command</th><th>Result</th></tr>
+  <tr><td>Unit</td><td class="n">node --test --test-concurrency=1 test/permissions-history.test.js</td><td class="ok">19 tests, 19 pass, 0 fail</td></tr>
+  <tr><td>Live gate</td><td class="n">node tools/verify-permissions-history.mjs</td><td class="ok">44 checks, 44 pass, 0 fail</td></tr>
+  <tr><td>Neighbours</td><td class="n">node --test test/approval-command-summary.test.js test/approvals-window.test.js test/clarify-history.test.js test/absolute-paths.test.js (with the file above)</td><td class="ok">89 tests, 89 pass, 0 fail</td></tr>
+  <tr><td>Absolute-path gate</td><td class="n">node tools/absolute-paths.mjs --draft</td><td class="ok">nothing to draft</td></tr>
+  <tr><td>Full suite</td><td class="n">not run</td><td>the row scopes the verification to the files it touched</td></tr>
+</table>
+
+<h2>7. What was left alone</h2>
+<ul>
+  <li>The stopped run's branch <code>wtgui/row-677-detail-is-in-the-queue-file-f1cbe5</code>: only its <code>036e1e79</code> was carried here. Its two other commits (assistant-2's pr6-non-dal review report) are not this row's and stay on it, along with its worktree and its three modified captures.</li>
+  <li><code>1.175.0</code>: held by <code>wtgui/in-c-projectdevelopment-agent-worktree-e39b44</code>, whose tag names a commit that has not landed. This branch takes <code>1.176.0</code>, and <code>version.mjs apply</code> made that choice by reading the tag.</li>
+  <li>The changelog: rendered at the merged tip, never on the branch, so this page does not quote it.</li>
+</ul>
+
+<p class="small">Written for queue row "Build the Permissions header button here, carrying the work already done, on a clean branch". The images are the gate's own captures, regenerated by <code>tools/verify-permissions-history.mjs</code> on the run that produced these numbers.</p>
+</main>
+</body>
+</html>
