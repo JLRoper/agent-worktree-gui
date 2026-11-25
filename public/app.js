@@ -14191,9 +14191,9 @@ function paintClarifyButton() {
 }
 
 // The Permissions button's count: how many permission requests are WAITING on a person. The number comes from
-// public/permissions-history.js (`permissionsPendingCount`), which reads `outstanding` off that route - the live
-// requests the panel can still answer, so a request that was answered or whose window closed counts nothing. Painted
-// by the same `paintCountBadge` as Human's and Clarify's, in the permission box's own amber.
+// public/permissions-history.js (`permissionsPendingCount`), which counts the live requests /api/state carries in
+// `approvals` - the same map the Human button's dock counts - so a request that was answered or whose window closed
+// counts nothing. Painted by the same `paintCountBadge` as Human's and Clarify's, in the permission box's own amber.
 const PERMISSIONS_PROSE = String(document.getElementById("btn-permissions")?.title || "").trim();
 
 let permissionsBadgeSig = "";

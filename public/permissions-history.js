@@ -355,8 +355,12 @@ async function permissionsAnswer(id, choice, btn) {
 
 // ---- the count the header button carries -----------------------------------------------------------------------
 // The button says how many requests are WAITING, and it is painted by the same code as Human's and Clarify's
-// (app.js `paintCountBadge`). The number is `outstanding` from this same route: the live requests whose window has not
-// closed, never the stored rows, so one request counts once and an answered or expired one counts nothing.
+// (app.js `paintCountBadge`). THE SOURCE IS /api/state: the snapshot carries the approval transport's live queue in
+// `approvals`, public/settings.js applies it, and the approval frames keep that map current - so the badge is a fact
+// the board has already received, on the same map the Human button's dock counts, not a request of its own. Only a
+// request whose window has not closed counts, so one request counts once and an answered or expired one counts
+// nothing. The route read below is the fallback for a page that has not had its first snapshot yet (and it is what
+// the popup's own footer counts), so the two never disagree about what is open for longer than one frame.
 const PH_COUNT_MS = 4000;
 const PH_COUNT_AFTER_FRAME_MS = 1200;
 
@@ -371,6 +375,12 @@ function setPermissionsPending(n) {
 
 /** How many permission requests are waiting. Read by the header button's painting code. */
 function permissionsPendingCount() {
+  // /api/state's own list. `approvalsSeen.count` is below zero until the first snapshot has applied `approvals`, so a
+  // page that has not painted the board yet reads the route instead of claiming that nothing is waiting.
+  if (typeof state !== "undefined" && Number(state?.approvalsSeen?.count) >= 0) {
+    const C = phCore();
+    return C.openCount(state.approvals instanceof Map ? [...state.approvals.values()] : [], Date.now());
+  }
   return Math.max(0, Math.floor(Number(permissionsHist.pendingCount) || 0));
 }
 

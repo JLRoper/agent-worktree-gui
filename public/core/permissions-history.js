@@ -135,6 +135,28 @@
   }
 
   /**
+   * How many requests are waiting on a person, off the LIVE list the board already carries: /api/state's `approvals`,
+   * which is the approval transport's own queue (lib/approvals.js `list()`), applied by public/settings.js and kept
+   * current by the approval frames. A request whose deadline has passed is NOT waiting - the gateway has denied the
+   * command by then - so it counts nothing even while the panel's sweep has not removed it yet. One entry per id,
+   * because one request is one question however many frames carried it.
+   */
+  function openCount(list, now = Date.now()) {
+    const rows = Array.isArray(list) ? list : list && typeof list === "object" ? Object.values(list) : [];
+    const seen = new Set();
+    let n = 0;
+    for (const r of rows) {
+      const id = String(r?.id || "").trim();
+      if (!id || seen.has(id)) continue;
+      const deadline = Number(r?.deadline) || 0;
+      if (deadline && Number(now) >= deadline) continue;
+      seen.add(id);
+      n += 1;
+    }
+    return n;
+  }
+
+  /**
    * The page of rows the popup draws, with the honest total. `limit` is a render cap, never a filter: `total` is what
    * the caller handed in, `shown` is what will be drawn, and `more` says whether anything is held back.
    */
@@ -171,6 +193,7 @@
     policyLine,
     leftText,
     namesOf,
+    openCount,
     capOf,
     footText,
   };
