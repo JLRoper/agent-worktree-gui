@@ -4,16 +4,48 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.173.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.174.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-750 releases from v0.1.0 (2026-10-20) to v1.173.1 (2026-11-24), 2661 commits between the tags. Every release is anchored by an
+752 releases from v0.1.0 (2026-10-20) to v1.174.0 (2026-11-25), 2667 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.174.0 — 2026-11-25 · 3 commits
+
+[`d51397e`](https://github.com/JLRoper/agent-worktree-gui/commit/d51397e907aa20dded2dd6b94b9fb29e99929987) · [compare v1.173.2...v1.174.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.173.2...v1.174.0)
+
+### Added
+
+- feat(initiatives): the note log above the Assistants fold, and the two boxes the right way round ([`44b82c6`](https://github.com/JLRoper/agent-worktree-gui/commit/44b82c62e79400d0c304eaf51fe0f007192f3f21))
+
+### Docs & tests
+
+- docs: the note log report, with the four screenshots its gate produced ([`95bec32`](https://github.com/JLRoper/agent-worktree-gui/commit/95bec321ca66d2a3db9180803b7b8d68ef04355e))
+
+### Other
+
+- chore: 1.174.0 - the version this landing carries ([`d51397e`](https://github.com/JLRoper/agent-worktree-gui/commit/d51397e907aa20dded2dd6b94b9fb29e99929987))
+
+## v1.173.2 — 2026-11-24 · 3 commits
+
+[`7a8227c`](https://github.com/JLRoper/agent-worktree-gui/commit/7a8227c53e016407e892c64fdbf95553af9704a9) · [compare v1.173.1...v1.173.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.173.1...v1.173.2)
+
+### Fixed
+
+- fix: the four console corner defects the gate could not see ([`138670f`](https://github.com/JLRoper/agent-worktree-gui/commit/138670feddc8fe49d446eed1accd4df62baf0cea))
+
+### Docs & tests
+
+- docs: render the changelog - 750 releases ([`02ba621`](https://github.com/JLRoper/agent-worktree-gui/commit/02ba6219d280b0ddabc80c3f5212d2e7af48b401))
+
+### Other
+
+- chore: 1.173.2 - the version this landing carries ([`7a8227c`](https://github.com/JLRoper/agent-worktree-gui/commit/7a8227c53e016407e892c64fdbf95553af9704a9))
 
 ## v1.173.1 — 2026-11-24 · 2 commits
 
