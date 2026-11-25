@@ -7876,11 +7876,15 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ...out, name: path.basename(out.path), namedLine: describeNaming(out.named) });
     }
 
-    // Clone a GitHub repo over SSH into ONE of the configured scan roots — what the folder
-    // accordion's "+" uses: the root is the folder you clicked, the name is the repo
-    // (`name` or `owner/name`). The destination is inside that root and must not exist yet.
-    // Responds as soon as git finishes; discovery picks the new repo up on the next pass (the
-    // refresh below is deliberately not awaited — probing 94 repos would stall the response).
+    // Clone a repo over SSH into ONE of the configured scan roots - what the folder accordion's "+" uses: the root is
+    // the folder you clicked, the name is the repo, and `host` is the dropdown beside the input. The URL comes from the
+    // CHOSEN HOST'S OWN RECORD (lib/hosts.js `cloneTarget`): `clone.ssh` on that record, over the same tokens the links
+    // use, so github's route and git.sefl.com's route are data and a third host is a record rather than a patch.
+    // Nothing here builds a URL from a literal, and no host is assumed: a missing id, an id that is not in the file, a
+    // record with no clone.ssh, or a name that is a URL / a path / carries `..` is refused with a sentence naming the
+    // host and what it could not resolve. `host` and `hostName` ride every answer so a failure names the route tried.
+    // Responds as soon as git finishes; discovery picks the new repo up on the next pass (the refresh below is
+    // deliberately not awaited - probing 94 repos would stall the response).
     if (route === "/api/clone" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
@@ -7890,33 +7894,45 @@ const server = createServer(async (req, res) => {
       if (!rootNorm || !roots.some((r) => r.toLowerCase() === rootNorm.toLowerCase())) {
         return sendJson(res, 400, { error: `root must be one of scanRoots: ${rootNorm || "(none)"}` });
       }
-      // Only a plain repo name, optionally prefixed by an owner: no paths, no `..`, no URLs.
-      const m = /^(?:([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/)?([A-Za-z0-9._-]+?)(?:\.git)?$/.exec(String(body.name || "").trim());
-      if (!m) return sendJson(res, 400, { error: `not a repo name: ${String(body.name || "").trim()}` });
-      const owner = m[1] || String(config.cloneOwner || "JLRoper");
-      const repo = m[2];
-      const url = `git@github.com:${owner}/${repo}.git`;
-      const dest = path.join(rootNorm, repo);
+      const typed = String(body.name || "").trim();
+      const target = hosts.clone(String(body.host || "").trim(), typed);
+      if (!target.url) {
+        return sendJson(res, 400, { error: target.why, host: target.host || String(body.host || "").trim() || null, name: typed });
+      }
+      const dest = path.join(rootNorm, target.destName);
       try {
         await stat(dest);
-        return sendJson(res, 409, { error: `${dest} already exists`, dest });
+        return sendJson(res, 409, { error: `${dest} already exists`, dest, host: target.host, hostName: target.hostName, url: target.url });
       } catch {
         /* good: nothing there yet */
       }
-      const t0 = Date.now();
-      const r = await gitIn(rootNorm, ["clone", "--no-single-branch", url, dest], 300000);
-      if (!r.ok) {
-        return sendJson(res, 502, { error: String(r.err || r.out || "git clone failed").split("\n").slice(-4).join(" "), url, dest, tookMs: Date.now() - t0 });
+      // A dry run answers what the route WOULD do, from the same record, without a network call: it is how the page
+      // and the tests prove which host a choice builds for. Nothing is cloned and nothing on disk changes.
+      if (body.dryRun) {
+        return sendJson(res, 200, { dryRun: true, ok: true, host: target.host, hostName: target.hostName, url: target.url, dest, coordinates: target.coordinates });
       }
-      log(`cloned ${url} -> ${dest} (${Date.now() - t0}ms)`);
+      const t0 = Date.now();
+      const r = await gitIn(rootNorm, ["clone", "--no-single-branch", target.url, dest], 300000);
+      if (!r.ok) {
+        const reason = String(r.err || r.out || "git clone failed").split("\n").slice(-4).join(" ");
+        return sendJson(res, 502, {
+          error: `clone from ${target.hostName} (${target.host}) failed at ${target.url}: ${reason}`,
+          host: target.host,
+          hostName: target.hostName,
+          url: target.url,
+          dest,
+          tookMs: Date.now() - t0,
+        });
+      }
+      log(`cloned ${target.url} from ${target.host} -> ${dest} (${Date.now() - t0}ms)`);
       void registry
         .refresh()
         .then(() => broadcastSnapshot())
         .catch(() => {});
-      return sendJson(res, 200, { ok: true, url, dest, tookMs: Date.now() - t0 });
+      return sendJson(res, 200, { ok: true, host: target.host, hostName: target.hostName, url: target.url, dest, tookMs: Date.now() - t0 });
     }
 
-    // Create a NEW local git project inside ONE of the configured scan roots — the second action in
+    // Create a NEW local git project inside ONE of the configured scan roots - the second action in
     // the folder accordion's "+" row, beside the clone. Nothing is fetched, cloned or pushed: `git
     // init` on `main` plus ONE commit, because a repo with an unborn HEAD scans as NO BASE REF and
     // every spawn off it is refused until something is committed.

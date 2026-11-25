@@ -541,6 +541,12 @@ const state = {
   // proportions to it, so one number scales the whole "it moved / you are here" animation.
   flashSeconds: loadFlashSeconds(),
   cloneStatus: {},
+  // Which host each folder's clone row last chose, by scan root. Kept on state because a snapshot repaint rebuilds
+  // every folder section; the dropdown is drawn from this, and the list itself comes from state.hosts (lib/hosts.js).
+  cloneHost: {},
+  // Roots where the reader has picked a host themselves. A typed coordinate may only move the dropdown while this is
+  // false: an explicit pick is the reader's ruling, and a default that overruled it would be a correction.
+  cloneHostTouched: {},
   approvals: new Map(),
   // Instrumentation for the permission-prompt proof: the last count `/api/state` carried in `approvals`, when it
   // changed, and the ids. An empty `/api/approvals` beside a non-zero count here says the page's own run feed
@@ -1477,8 +1483,12 @@ async function cloneIntoRoot(root) {
   const form = document.querySelector(`[data-clone-form="${CSS.escape(root)}"]`);
   if (!form) return;
   const input = form.querySelector("[data-clone-input]");
+  const pick = form.querySelector("[data-clone-host]");
   const btn = form.querySelector("[data-clone-go]");
   const name = String(input?.value || "").trim();
+  // The host travels with the name: the route builds the URL from THAT record, so a SEFL repo clones from
+  // git.sefl.com and a GitHub one from github.com without this page knowing either URL.
+  const host = String(pick?.value || "").trim();
 
   const setStatus = (text, kind = "busy") => setCloneStatus(form, root, text, kind);
 
@@ -1487,19 +1497,19 @@ async function cloneIntoRoot(root) {
     return;
   }
   btn.disabled = true;
-  setStatus("cloning over ssh…");
+  setStatus("cloning over ssh...");
   try {
     const res = await apiFetch("/api/clone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ root, name }),
+      body: JSON.stringify({ root, name, host }),
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
       setStatus(j.error || `HTTP ${res.status}`, "err");
       return;
     }
-    setStatus(`cloned → ${j.dest} (${Math.round((j.tookMs || 0) / 1000)}s, ${j.url})`, "ok");
+    setStatus(`cloned to ${j.dest} from ${j.hostName || j.host} (${Math.round((j.tookMs || 0) / 1000)}s, ${j.url})`, "ok");
     if (input) input.value = "";
     // Discovery re-runs server-side and broadcasts a snapshot when it is done; this second
     // resync covers a missed event so the new project appears without waiting for the timer.
@@ -1510,6 +1520,51 @@ async function cloneIntoRoot(root) {
     btn.disabled = false;
   }
 }
+
+// Which host a typed coordinate names, when it names exactly one. The first segment of the name is compared against
+// the host records' own coordinates (github's owner, Bitbucket's project key) AND the coordinates of the projects
+// already mapped to each host, because the key in `citdev/java-ruleset` is a project's ruling rather than the host's
+// default. Anything ambiguous, or no match, leaves the dropdown where the reader put it: this is a default, never a
+// correction. Both sources are the store the page already has, so no host name is written into this function.
+function hostMatchingTypedName(text) {
+  const first = String(text || "").trim().split("/")[0].toLowerCase();
+  if (!first) return null;
+  const doc = state.hosts || {};
+  const matches = [];
+  for (const [id, rec] of Object.entries(doc.hosts || {})) {
+    const own = [rec.coordinates?.owner, rec.coordinates?.projectKey];
+    const mapped = Object.values(doc.projects || {})
+      .filter((p) => p?.host === id)
+      .flatMap((p) => [p.coordinates?.owner, p.coordinates?.projectKey]);
+    if ([...own, ...mapped].some((v) => String(v || "").toLowerCase() === first)) matches.push(id);
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// A pick is the reader's, and it survives the snapshot repaints that rebuild every folder section. It also stops the
+// typed-name default below: once a host has been chosen by hand, typing must not move it out from under them.
+document.addEventListener("change", (e) => {
+  const pick = e.target?.closest?.("[data-clone-host]");
+  if (!pick) return;
+  state.cloneHost[pick.dataset.cloneHost] = pick.value;
+  state.cloneHostTouched[pick.dataset.cloneHost] = true;
+});
+
+// Typing a coordinate that belongs to exactly one host moves the dropdown to it, so `JLRoper/...` and `citdev/...`
+// arrive at the right route without the reader hunting for the name. A bare repo name matches nothing and leaves the
+// choice alone, and a host the reader picked by hand is never moved.
+document.addEventListener("input", (e) => {
+  const input = e.target?.closest?.("[data-clone-input]");
+  if (!input) return;
+  const root = input.dataset.cloneInput;
+  if (state.cloneHostTouched[root]) return;
+  const form = input.closest("[data-clone-form]");
+  const pick = form?.querySelector("[data-clone-host]");
+  const id = hostMatchingTypedName(input.value);
+  if (!pick || !id || pick.value === id) return;
+  pick.value = id;
+  state.cloneHost[root] = id;
+});
 
 // The row's second action: a brand-new LOCAL git project, inited on `main` with one commit so the
 // board has a base ref to read. Same name field and same status line as the clone beside it — a

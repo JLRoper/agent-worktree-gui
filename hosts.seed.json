@@ -3,10 +3,14 @@
   "note": "Seed for logs/hosts.json: where this board's projects keep their branches and pull requests. The live file (logs/hosts.json) overrides this one per host id and per project, and is the one the reader edits. docs/hosts.md explains the tokens, the api block and the landing doctrine.",
   "hosts": {
     "github": {
+      "name": "GitHub",
       "kind": "github",
       "base": "https://github.com",
       "coordinates": {
         "owner": "JLRoper"
+      },
+      "clone": {
+        "ssh": "git@github.com:{owner}/{repo}.git"
       },
       "links": {
         "repo": "{base}/{owner}/{repo}",
@@ -24,10 +28,14 @@
       "landing": "This repo lives on GitHub and main is protected: a change lands through a pull request, never a push of the branch to {main}.\n\n1. Push the branch, never {main}:  git push -u origin {branch}\n2. Open ONE pull request from {branch} into {main}:\n     gh pr create --base {main} --head {branch} --title \"<a subject a reviewer can read>\" --body-file <a file written outside the repo>\n   --fill drops the reason a version bump gave, so when this branch carries a bump, pass --title and --body-file and put the\n   level and its reason into the body.\n3. Read it back before reporting it: gh pr view <n> --json state,headRefOid,baseRefName, and confirm headRefOid is the\n   commit you just pushed.\n4. Merge it yourself when the host's rules let you - this repo's owner bypass is live: gh pr merge <n> --rebase --admin -\n   and read it back: gh pr view <n> --json state,mergeCommit must read MERGED. A PR left OPEN is a landing that has not\n   happened. Do not open a second PR for the same branch.\n5. The landing's LAST step is the changelog at the merged tip: after the PR reads MERGED, fetch {main}, bring the base\n   checkout to the merged tip and run npm run land (PHASE 4). That render is the one commit this landing makes to {main}\n   directly - a docs-only fast-forward, not a second PR and not a follow-up row. A rebase merge rewrites the branch's\n   shas, so a render made before the merge names commits {main} never had and the tip is red.\n6. If the PR is already open and its base moved, rebase onto origin/{main} and push --force-with-lease. That rewrite is\n   the only one allowed on a published branch, and only for the PR this run opened."
     },
     "sefl-bitbucket": {
+      "name": "SEFL Bitbucket",
       "kind": "bitbucket-server",
       "base": "https://git.sefl.com",
       "coordinates": {
         "projectKey": "IT"
+      },
+      "clone": {
+        "ssh": "ssh://git@git.sefl.com:7999/{projectKeyLower}/{repoSlug}.git"
       },
       "links": {
         "repo": "{base}/projects/{projectKey}/repos/{repoSlug}",

@@ -356,9 +356,15 @@ is showing only the last seven days.
   plus a handful of `.git` files - and read when something moves, or when you open one. The chip count says how
   many are hidden.
 - **Collapse all / Expand all** — folds or opens every project inside that folder, not the whole board.
-- **+** — the folder's own row, with two actions. **Clone via ssh** clones a GitHub repo over SSH into that folder:
-  type `name` or `owner/name` and press `Enter` (or click the button); `Escape` closes the row. The owner defaults to
-  `cloneOwner` in `config.json`. **New local project** makes a brand-new repository in that folder instead: `git init`
+- **+** - the folder's own row, with two actions. **Clone via ssh** clones a repo over SSH into that folder: pick the
+  HOST from the dropdown beside the name (its list is the `hosts.json` / `hosts.seed.json` store, so a third host is a
+  record on the next snapshot and not a code change), then type a name and press `Enter` (or click the button);
+  `Escape` closes the row. The name may be bare (`agent-worktree-gui`), `owner/repo` (`JLRoper/agent-worktree-gui`,
+  mixed-case owner kept) or `project-key/repo` (`citdev/java-ruleset`, upper-cased to the project key the board
+  records and lower-cased in the host's ssh path). A bare name takes the chosen record's own default - github's
+  `coordinates.owner`, Bitbucket's `coordinates.projectKey`. The URL is built from that record's `clone.ssh`, never
+  from a literal, and a host with no clone template, an unknown host id, a URL, a path or a `..` is refused in the row
+  with a sentence naming the host. **New local project** makes a brand-new repository in that folder instead: `git init`
   on `main` plus one `README.md` commit, so the folder is a project the board can read and spawn from — an empty
   repository with an unborn HEAD scans as `NO BASE REF` and refuses every spawn. Refusals (a name that is not one path
   segment, a folder that already exists, a folder that is no longer a scan root) print in the row and leave the cursor
