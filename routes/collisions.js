@@ -19,6 +19,10 @@
 import { COLLISION_STATES, stateOf } from "../lib/collisions.js";
 
 export const COLLISIONS_PATH = "/api/collisions";
+// The history the header's Collisions button reads: every record the book holds, waiting ones first, filtered by row,
+// branch or file. A separate path because it is a different question from the live state and a different shape - the
+// popup wants every pair with its reason, while /api/collisions answers the board's live view.
+export const COLLISIONS_HISTORY_PATH = "/api/collisions/history";
 
 const pickOne = (body, ...names) => {
   for (const name of names) {
@@ -40,6 +44,23 @@ export function createCollisionsRoutes({ book, getConfig = () => ({}), sweep = n
   };
   return async function handle(req, res, { url } = {}) {
     const route = String(url?.pathname || req.url || "").split("?")[0].replace(/\/+$/, "") || "/";
+    // ---- the HISTORY ---------------------------------------------------------------------------------------------
+    // The read the header's Collisions button makes: every record, settled ones included, with the reason field on each.
+    // `waiting` counts ONLY the pairs a person has to rule on - an auto-ruled pair, a land order, a superseded pair and
+    // a verdict are all settled and never raise the badge. `limit` is the popup's render cap and never a filter.
+    if (route === COLLISIONS_HISTORY_PATH) {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { error: `only GET on ${route}` });
+        return true;
+      }
+      const params = url?.searchParams || new URL(req.url || "/", "http://127.0.0.1").searchParams;
+      const raw = Number(params.get("limit"));
+      const limit = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null;
+      const q = String(params.get("q") || "");
+      const out = book.history({ q, limit });
+      sendJson(res, 200, { ...out, counts: book.state().byState, states: COLLISION_STATES });
+      return true;
+    }
     if (route !== COLLISIONS_PATH) {
       sendJson(res, 404, { error: `no such route: ${route}` });
       return true;

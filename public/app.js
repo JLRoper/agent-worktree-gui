@@ -14229,6 +14229,30 @@ function paintClarifyButton() {
     : `Clarify - nothing is waiting on you. ${CLARIFY_PROSE}`.trim();
 }
 
+// The Collisions button's count: how many PAIRS are waiting on a person. The number comes from
+// public/collision-history.js (`collisionPendingCount`), which reads `waiting` off /api/collisions/history - the store's
+// own predicate (`lib/collisions.js` `waitingOf`: state reader, no finished side). An auto-ruled pair, a land order, a
+// superseded pair and a verdict all count ZERO: that is the whole point of this button, and the reason it is not the
+// Human count. Painted by the same `paintCountBadge` as Human's, Clarify's and Permissions', in the collision violet.
+const COLLISIONS_PROSE = String(document.getElementById("btn-collisions")?.title || "").trim();
+
+let collisionsBadgeSig = "";
+function paintCollisionsButton() {
+  const btn = $("btn-collisions");
+  if (!btn) return;
+  const n = typeof collisionPendingCount === "function" ? collisionPendingCount() : 0;
+  paintCountBadge(btn, $("collisions-badge"), n, "has-waiting");
+  // The count is the only thing in this button that changes, so the same count must not rewrite the title every tick.
+  const sig = String(n);
+  if (sig === collisionsBadgeSig) return;
+  collisionsBadgeSig = sig;
+  const line = n
+    ? `Collisions - ${n} pair${n === 1 ? "" : "s"} waiting on you: two live trees touching the same work, which nothing has stopped yet but which will cost one of them its edits if nobody rules.`
+    : `Collisions - nothing is waiting on you: every pair this panel has seen is settled by a rule, a landing or a verdict. Auto-ruled pairs are in the history, never in this count.`;
+  btn.setAttribute("aria-label", `${line} ${COLLISIONS_PROSE}`.trim());
+  btn.title = `${line} ${COLLISIONS_PROSE}`.trim();
+}
+
 // The Permissions button's count: how many permission requests are WAITING on a person. The number comes from
 // public/permissions-history.js (`permissionsPendingCount`), which counts the live requests /api/state carries in
 // `approvals` - the same map the Human button's dock counts - so a request that was answered or whose window closed
@@ -14983,6 +15007,51 @@ document.addEventListener("keydown", (e) => {
 
 window.addEventListener("resize", clarifyHistoryReposition);
 // ---- end clarify history wiring
+
+// ---- collisions wiring: the page's half, which calls public/collision-history.js --------------------------
+// The popup itself (the panel, the rows, both sides' links, the ruling presses, the filter, the read and the remembered
+// size) is in public/collision-history.js, a classic script the shell loads before this one. What stays here is only the
+// wiring that must run at THIS file's load, after `state` exists: the button's press and its `data-wired` mark (the
+// shell's stale-page guard reads it), the outside press, Escape, and the resize that puts a remembered panel back
+// inside a window that changed size. A ruling is pressed INSIDE the popup and goes through POST /api/collisions; nothing
+// here answers anything.
+const collisionsBtn = $("btn-collisions");
+collisionsBtn?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  try {
+    collisionHistoryToggle();
+  } catch (err) {
+    // Same rule as Clarify: a control that can be pressed must never be a silent no-op.
+    const why = String((err && err.message) || err);
+    console.error(`[panel] COLLISIONS could not open on this page: ${why}`);
+    window.__panelStaleBuild?.report?.(`Opening the collisions history threw: ${why}.`);
+  }
+});
+if (collisionsBtn) collisionsBtn.dataset.wired = "1";
+
+// The button's count starts here, not when the popup opens: the whole point is that a reader can see whether any pair
+// is actually theirs to rule without opening anything. Same slow tick and same read-after-frame as the Clarify button.
+collisionHistoryCountStart();
+paintCollisionsButton();
+
+// An outside press closes it, mousedown so the reader's next click lands where they aimed.
+document.addEventListener("mousedown", (e) => {
+  if (!collisionHist.open) return;
+  if (collisionHist.el?.contains(e.target)) return;
+  if (e.target.closest?.("#btn-collisions")) return;
+  collisionHistoryClose();
+});
+
+// Escape from anywhere closes it and hands the caret back to the button. The popup's own keydown handles it first and
+// stops the event, so this is the path for a caret that wandered outside the panel (a repaint can take it).
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !collisionHist.open) return;
+  e.preventDefault();
+  collisionHistoryClose({ focus: true });
+});
+
+window.addEventListener("resize", collisionHistoryReposition);
+// ---- end collisions wiring
 
 // ---- permissions wiring: the page's half, which calls public/permissions-history.js ---------------------
 // The popup itself (the panel, the rows, the answer press, the read, the keyboard and the remembered size) is in
