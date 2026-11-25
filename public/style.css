@@ -4741,6 +4741,148 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   border-radius: 6px;
 }
 
+/* ---- the COLLISIONS control ------------------------------------------------------------------------------------
+   The Clarify button's mechanics in the collision marker's violet: the same count badge, the same slow tick and
+   repaint, the same resizable remembered panel, a different question. Violet is not a decoration here - a colliding
+   row wears #6b4f9e and its diamond is #c9a0ff - so the button that lists the same pairs reads as the same thing.
+   The BADGE is only the pairs waiting on a person: an auto-ruled pair is history and never raises it. */
+.topbar #btn-collisions {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #c9a0ff;
+  border-color: #4b3a6e;
+  background: #191326;
+}
+.topbar #btn-collisions .co-glyph { display: block; }
+.topbar #btn-collisions .co-label { color: inherit; }
+.topbar #btn-collisions:hover { color: #e2c9ff; border-color: #8a63d2; background: #211a33; }
+.topbar #btn-collisions[aria-expanded="true"] { color: #efe2ff; border-color: #8a63d2; background: #2a1f45; box-shadow: 0 0 0 1px rgba(138, 99, 210, .40) inset; }
+.topbar #btn-collisions:focus-visible { outline: 1px solid #8a63d2; outline-offset: 1px; }
+.topbar #btn-collisions.has-waiting { color: #efe2ff; border-color: #8a63d2; background: #2a1f45; }
+.topbar #btn-collisions.has-waiting:hover { border-color: #b98cff; background: #332452; }
+#collisions-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: #8a63d2; color: #150f22;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #8a63d255;
+}
+#collisions-badge[hidden] { display: none; }
+
+/* The panel is Clarify's own shell (`.ch-pop`, head, close, foot, resize). What a collision adds is the filter row and
+   a row with two linked trees, the evidence, the reason and the two ruling presses. */
+.co-pop { width: min(620px, calc(100vw - 16px)); }
+.co-pop .co-dot { border-radius: 4px; background: #2a1f45; color: #c9a0ff; }
+.co-pop .co-filter {
+  flex: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 9px;
+  border-bottom: 1px solid #2a2340;
+  background: #120f1d;
+}
+.co-pop .co-filter input {
+  flex: 1 1 auto; min-width: 0;
+  font: 10.5px/1.7 var(--mono);
+  color: var(--text);
+  background: #181326;
+  border: 1px solid #372b52;
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.co-pop .co-filter input:focus { outline: none; border-color: #8a63d2; }
+.co-pop .co-filter input::placeholder { color: var(--dimmer); }
+.co-pop .co-q-clear {
+  flex: none; font: 10px/1.6 var(--mono); color: var(--dim);
+  background: none; border: 1px solid transparent; border-radius: 4px; padding: 0 5px; cursor: pointer;
+}
+.co-pop .co-q-clear:hover { color: var(--text); border-color: var(--line); }
+.co-pop .co-q-clear[hidden] { display: none; }
+.co-pop .co-q-count { flex: none; font: 9.5px/1.6 var(--mono); color: #9d8bc4; }
+.co-pop .co-q-count[hidden] { display: none; }
+
+/* A row is a column, not a grid: a collision carries a pair, an evidence line, a reason and a control bar, and a grid
+   with two columns would break a long worktree path into the gap. */
+.co-pop .co-row { display: flex; flex-direction: column; gap: 4px; }
+.co-pop .co-row.is-waiting { border-left-color: #8a63d2; background: #171224; }
+.co-pop .co-row.is-waiting:hover { background: #1d1730; }
+.co-pop .co-row.is-waiting.is-active { border-color: #b98cff; background: #211a38; }
+.co-pop .co-row.is-ruled { background: #101419; border-left-color: #3a4150; }
+.co-pop .co-row.is-superseded, .co-pop .co-row.is-absent { background: #11141a; border-left-color: #4a4458; opacity: .9; }
+.co-pop .co-mark { grid-column: auto; justify-self: start; font: 600 9.5px/1.7 var(--mono); letter-spacing: .04em; text-transform: uppercase; padding: 0 5px; border-radius: 3px; }
+.co-pop .co-mark-waiting { color: #efe2ff; background: #3b2a5c; }
+.co-pop .co-mark-ruled { color: #9fe0b4; background: #1a2a20; }
+.co-pop .co-mark-history { color: #b9aed0; background: #221f2c; text-transform: none; }
+.co-pop .co-mark-queued { color: #a9b2c0; background: #1c222b; text-transform: none; }
+.co-pop .co-reason { font: 500 11.5px/1.55 var(--ui); color: #e8ddff; overflow-wrap: anywhere; }
+.co-pop .co-row.is-ruled .co-reason { color: #c9d2de; }
+.co-pop .co-row.is-superseded .co-reason, .co-pop .co-row.is-absent .co-reason { color: #a9a1bb; }
+.co-pop .co-pair { display: flex; flex-direction: column; gap: 3px; }
+.co-pop .co-side {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 7px;
+  padding: 3px 6px;
+  border: 1px solid #2f3a4a; border-radius: 5px; background: #12161d;
+  min-width: 0;
+}
+.co-pop .co-side.is-empty { border-style: dashed; color: var(--dimmer); font: 10px/1.6 var(--mono); }
+.co-pop .co-open {
+  font: 600 11.5px/1.5 var(--ui);
+  color: #d9c6ff;
+  background: none; border: none; padding: 0;
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+  text-decoration: underline dotted #6d5a95;
+  text-underline-offset: 2px;
+}
+.co-pop .co-open:hover, .co-pop .co-open:focus-visible { color: #fff; text-decoration-color: #b98cff; outline: none; }
+.co-pop .co-branch { font: 9.5px/1.6 var(--mono); color: #8fa0b5; overflow-wrap: anywhere; }
+.co-pop .co-task { font: 9.5px/1.6 var(--mono); color: var(--dimmer); }
+.co-pop .co-vs { font: 9px/1.4 var(--mono); color: var(--dimmer); letter-spacing: .08em; text-transform: uppercase; }
+.co-pop .co-evidence { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; }
+.co-pop .co-files { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.co-pop .co-file {
+  font: 9.5px/1.6 var(--mono); color: #cdb6ff;
+  background: #1c1730; border: 1px solid #3b2f5c; border-radius: 4px; padding: 0 5px;
+  overflow-wrap: anywhere;
+}
+.co-pop .co-file.is-more { color: #9d8bc4; border-style: dashed; }
+.co-pop .co-files-none { font: 9.5px/1.6 var(--mono); color: var(--dimmer); }
+.co-pop .co-rel { font: 9.5px/1.6 var(--mono); color: #9d8bc4; }
+.co-pop .co-filed { font: 9.5px/1.6 var(--mono); color: #a08a55; }
+.co-pop .co-rulebar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 2px; }
+.co-pop .co-note {
+  flex: 1 1 190px; min-width: 0;
+  font: 10px/1.7 var(--mono);
+  color: var(--text);
+  background: #181326;
+  border: 1px solid #40326a;
+  border-radius: 4px;
+  padding: 1px 7px;
+}
+.co-pop .co-note:focus { outline: none; border-color: #b98cff; }
+.co-pop .co-note::placeholder { color: var(--dimmer); }
+.co-pop .co-rule {
+  flex: none;
+  font: 600 10px/1.7 var(--ui);
+  color: #efe2ff;
+  background: #2a1f45;
+  border: 1px solid #6d4bb0;
+  border-radius: 4px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+.co-pop .co-rule:hover, .co-pop .co-rule:focus-visible { background: #3b2a5c; border-color: #b98cff; outline: none; }
+.co-pop .co-rule[disabled] { opacity: .5; cursor: progress; }
+.co-pop .co-note-read { font: 10px/1.6 var(--mono); color: #c9b6e8; overflow-wrap: anywhere; }
+.co-pop .co-meta { font: 9.5px/1.6 var(--mono); color: var(--dimmer); }
+
+/* The landing ring: a side's press opens the tree's board row, and the row (and its card) takes the collision violet,
+   the same 900ms the worktree links flash in, so the row that was opened is the row the eye lands on. */
+@keyframes flashrow-collision {
+  0% { box-shadow: inset 0 0 0 2px #b98cff, 0 0 0 1px #8a63d255; background: #241a38; }
+  100% { box-shadow: inset 0 0 0 0 rgba(185, 140, 255, 0), 0 0 0 0 rgba(138, 99, 210, 0); }
+}
+tbody tr.row.co-flash { animation: flashrow-collision var(--flash-row, 900ms) ease-out; }
+.job.co-flash { animation: flashrow-collision 1300ms ease-out; }
+
 /* ---- the PERMISSIONS control -------------------------------------------------------------------------------------
    The Clarify button's mechanics in the permission box's amber: the same shape, the same count badge and the same
    painting code, a different question and a different colour. Amber is not a decoration here - a permission box on a

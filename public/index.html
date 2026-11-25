@@ -44,6 +44,15 @@
            GET /api/clarify/history (routes/clarify-history.js). A row answers nothing by itself: it opens the
            question, switches to the agent that asked it and pages in the turn it was asked in. -->
       <button id="btn-clarify" type="button" class="btn-clarify" aria-haspopup="dialog" aria-expanded="false" aria-controls="clarify-pop" title="Clarify history - every question this panel has asked you, newest first. Unanswered rows are in full colour with their choices; answered rows are greyed with the answer you chose standing out; a card that was cancelled or timed out says so instead of looking answered. Click a row to open that question, switch to the agent that asked it, and page in the turn it was asked in. Up and Down step the rows, Enter opens one, Escape closes."><svg class="cl-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.2 2.4h11.6v7.7H7.5L4.2 13.1v-3H2.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.6 5.2c.15-.75.75-1.2 1.55-1.2.9 0 1.55.5 1.55 1.25 0 .6-.35.95-.85 1.28-.4.27-.5.47-.5.87v.2" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><circle cx="8.35" cy="9.4" r=".78" fill="currentColor"/></svg><span class="cl-label">Clarify</span><span id="clarify-badge" hidden>0</span></button>
+      <!-- The Collisions control: every pair of live trees this panel has seen touching the same work, with the reason
+           each one was settled - auto-ruled ones included - and only the pairs still WAITING ON A PERSON on its badge.
+           Violet like the collision marker a row wears. Built on the Clarify button's own mechanism (the same header
+           count, the same slow tick, the same resizable remembered panel), and its read is
+           GET /api/collisions/history (routes/collisions.js). The reason is a FIELD on the record, not prose in a page:
+           rule, pair, relation, who ruled and when, and the outcome (lib/collisions.js `reasonOf`). The queue rows the
+           panel files for the two owning assistants stay the ASSISTANTS' notice, and each row here names the task ids it
+           filed, so the two surfaces are never silent about each other. A row links to both trees' board rows. -->
+      <button id="btn-collisions" type="button" class="btn-collisions" aria-haspopup="dialog" aria-expanded="false" aria-controls="collisions-pop" title="Collisions - every pair of live trees this panel has seen touching the same work: the same file, two children of one branch changing one file, or one tree's branch being the other's merge target. The count is ONLY the pairs waiting on a person - an auto-ruled pair never raises it. Waiting rows name both trees and link to both rows, the files and the relation that caused the pair, and the reason the panel would pick if nobody ruled (git's one clean direction, or the standing order: older cut, then fewer commits, then branch name). Ruling takes one press and one line saying why: who ruled, when, the rule and the line are stored on the pair and it moves to history. Every collision is kept, auto-ruled ones included, and the box filters by row, branch or file. Up and Down step the rows, Enter opens one, Escape closes."><svg class="co-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.2 2.2 9 6 5.2 9.8 1.4 6z" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="M10.6 6.2 14.2 9.8 10.6 13.4 7 9.8z" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/></svg><span class="co-label">Collisions</span><span id="collisions-badge" hidden>0</span></button>
       <!-- The Permissions control: every permission request this panel's approval transport has held, waiting ones
            first, built on the Clarify button's own mechanism rather than a second design. Amber, because it is the
            same question the permission box on a card asks and its own chrome is amber; it sits between Clarify and
@@ -736,13 +745,14 @@
           <span class="settings-unit mono">a finished row</span>
         </label>
 
-        <label class="settings-row" for="human-kind-collisions" title="Two live trees in one project touching the same work: the same file, one tree's branch being the other's merge target, or two children of one turnover branch changing the same file. Each row wears a violet marker naming the counterpart, and the pair is filed into both assistants' queues before it ever reaches you. On (the default) it is counted, named in the title and stepped into by H after the three earlier kinds. Off, it is not counted, not named and H skips it - the violet markers and the collision card under each row stay exactly as they are, and the pair still goes to the assistants, so you can keep the overlap visible without it being a standing to-do on the button. Saved in this browser.">
+        <label class="settings-row" for="human-kind-collisions" title="Two live trees in one project touching the same work: the same file, one tree's branch being the other's merge target, or two children of one turnover branch changing the same file. Each row wears a violet marker naming the counterpart, and the pair is filed into both assistants' queues before it ever reaches you. On (the default) it is counted, named in the title and stepped into by H after the three earlier kinds. Off, it is not counted, not named and H skips it - the violet markers and the collision card under each row stay exactly as they are, and the pair still goes to the assistants, so you can keep the overlap visible without it being a standing to-do on the button. UNTIL THIS BUTTON IS REMOVED (#340) THE HEADER'S COLLISIONS CONTROL COUNTS THE SAME WAITING PAIRS from the same store, and it is where they are listed and ruled: this switch narrows the Human rotation only, and neither badge can count a pair the other cannot see. Saved in this browser.">
           <span>Collisions <span class="settings-info">ⓘ</span></span>
           <input id="human-kind-collisions" type="checkbox" checked>
           <span class="settings-unit mono">two trees, one file</span>
         </label>
 
         <div class="settings-preview mono" id="human-kinds-preview">all four counted - badge, title and H</div>
+        <div class="settings-preview mono" id="human-kinds-collisions-note">The Collisions control in the header (beside Clarify) lists every pair this panel has seen and is where a waiting pair is ruled; its count is only the pairs waiting on a person. This tab keeps the Human button's own collision step until that button is removed (#340).</div>
       </div>
 
       <div class="settings-group" id="settings-panel-repo" data-settings-group="repo" role="tabpanel" aria-labelledby="settings-tab-repo" hidden>
@@ -1432,6 +1442,11 @@
   <!-- The Clarify history's pure half: the three states, the order, the honest cap. No DOM; imported by
        test/clarify-history.test.js. -->
   <script src="/core/clarify-history.js"></script>
+  <!-- The Collisions history's pure half: the five states (waiting, queued, ruled, superseded, absent), the one
+       `isWaiting` predicate the header badge counts, the rule wording, the filter by row/branch/file, the order and the
+       honest cap. No DOM; lib/collisions.js imports it for the history route and the store's own waiting count, and
+       test/collision-history.test.js imports it the same way. -->
+  <script src="/core/collision-history.js"></script>
   <!-- The Permissions history's pure half: the three states (open, answered, expired), the order, the choice words and
        the honest cap. No DOM; imported by test/permissions-history.test.js. -->
   <script src="/core/permissions-history.js"></script>
@@ -1447,7 +1462,7 @@
        same reporter if either popover throws for the same reason (an old page against a new API). -->
   <script>
     (() => {
-      const buttons = ["btn-deliver", "btn-clarify", "btn-permissions"].map((id) => ({ id, el: document.getElementById(id) })).filter((b) => b.el);
+      const buttons = ["btn-deliver", "btn-clarify", "btn-permissions", "btn-collisions"].map((id) => ({ id, el: document.getElementById(id) })).filter((b) => b.el);
       if (!buttons.length) return;
       const meta = document.querySelector('meta[name="panel-build"]');
       const loaded = ((meta && meta.getAttribute("content")) || "").trim() || "unknown";
@@ -1494,7 +1509,7 @@
           if (!hit || hit.el.dataset.wired === "1") return;
           e.preventDefault();
           e.stopPropagation();
-          report("Nothing is wired to the button.", hit.id === "btn-clarify" ? "The clarify history" : hit.id === "btn-permissions" ? "The permissions list" : "DELIVERABLES");
+          report("Nothing is wired to the button.", hit.id === "btn-clarify" ? "The clarify history" : hit.id === "btn-permissions" ? "The permissions list" : hit.id === "btn-collisions" ? "The collisions history" : "DELIVERABLES");
         },
         true,
       );
@@ -1529,6 +1544,11 @@
        keyboard, and the place/size it remembers in localStorage. public/app.js wires the button and the outside
        press; nothing else reaches into it. -->
   <script src="/clarify-history.js"></script>
+  <!-- The header's Collisions popup: one panel built once, a row per pair (waiting ones with both sides, the files, the
+       relation, the reason the panel would pick and the two ruling presses; settled ones with the rule that settled
+       them, who and when), the read of /api/collisions/history, the filter box, the keyboard, and the place and size it
+       remembers. public/app.js wires the button and the outside press; nothing else reaches into it. -->
+  <script src="/collision-history.js"></script>
   <!-- The header's Permissions popup: one panel built once, a row per request by state (the waiting ones with the exact
        request text and one button per allowed choice), the read of /api/permissions/history, the one answer path
        (POST /api/approvals/answer), the keyboard, and the place/size it remembers in localStorage.
