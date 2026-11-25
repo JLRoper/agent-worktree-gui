@@ -4,16 +4,37 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.176.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.176.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-755 releases from v0.1.0 (2026-10-20) to v1.176.2 (2026-11-25), 2681 commits between the tags. Every release is anchored by an
+756 releases from v0.1.0 (2026-10-20) to v1.176.3 (2026-11-25), 2686 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.176.3 — 2026-11-25 · 5 commits
+
+[`18276b8`](https://github.com/JLRoper/agent-worktree-gui/commit/18276b8671cfc36264b0922fbf91c23b9673b611) · [compare v1.176.2...v1.176.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.176.2...v1.176.3)
+
+### Added
+
+- feat(header): the Human button is gone, its four kinds keep their own controls ([`78a2181`](https://github.com/JLRoper/agent-worktree-gui/commit/78a218186dc909dc3843ef13ca3f7aa0ca829e2d))
+
+### Fixed
+
+- fix(collisions): a note with no counterpart names no rule, not an invented order ([`ea0320e`](https://github.com/JLRoper/agent-worktree-gui/commit/ea0320e845cff33f23e588b65537454f1c390dbd))
+
+### Docs & tests
+
+- test(header): the order test names Collisions and Permissions ([`89b1c9f`](https://github.com/JLRoper/agent-worktree-gui/commit/89b1c9f5d20ac6ff7642367a79fb2ed0ad261336))
+- docs: render the changelog - 755 releases ([`36fb301`](https://github.com/JLRoper/agent-worktree-gui/commit/36fb3017a2021128d230bb3404e5f597bf9a2900))
+
+### Other
+
+- chore: 1.176.3 - the version this landing carries ([`18276b8`](https://github.com/JLRoper/agent-worktree-gui/commit/18276b8671cfc36264b0922fbf91c23b9673b611))
 
 ## v1.176.2 — 2026-11-25 · 4 commits
 
