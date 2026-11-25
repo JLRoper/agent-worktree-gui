@@ -6397,6 +6397,9 @@ function tickApprovals() {
   // from the number it last read - so the badge and the purple highlight follow an answer, a cancel or a timeout on this
   // page's own clock, not on whichever frame happened to arrive.
   paintClarifyButton();
+  // The PERMISSIONS count is the same kind of live fact on the same clock: a request answered in the popup, on a card
+  // or by its window closing has to leave the amber badge without waiting for a frame that may never come.
+  paintPermissionsButton();
   // The HOT marker is a live fact of the same kind: a turn starts and stops on the gateway's own clock, and a bolt
   // that waited for the next job frame would be drawn after the agent had already begun (or leave a finished one up).
   paintHotButton();
@@ -14187,6 +14190,29 @@ function paintClarifyButton() {
     : `Clarify - nothing is waiting on you. ${CLARIFY_PROSE}`.trim();
 }
 
+// The Permissions button's count: how many permission requests are WAITING on a person. The number comes from
+// public/permissions-history.js (`permissionsPendingCount`), which reads `outstanding` off that route - the live
+// requests the panel can still answer, so a request that was answered or whose window closed counts nothing. Painted
+// by the same `paintCountBadge` as Human's and Clarify's, in the permission box's own amber.
+const PERMISSIONS_PROSE = String(document.getElementById("btn-permissions")?.title || "").trim();
+
+let permissionsBadgeSig = "";
+function paintPermissionsButton() {
+  const btn = $("btn-permissions");
+  if (!btn) return;
+  const n = typeof permissionsPendingCount === "function" ? permissionsPendingCount() : 0;
+  paintCountBadge(btn, $("permissions-badge"), n, "has-waiting");
+  // The count is the only thing in this button that changes, so the same count must not rewrite the title every tick.
+  const sig = String(n);
+  if (sig === permissionsBadgeSig) return;
+  permissionsBadgeSig = sig;
+  const line = n
+    ? `Permissions - ${n} request${n === 1 ? "" : "s"} waiting on you.`
+    : `Permissions - nothing is waiting on you: every request this panel held has an answer or a reason.`;
+  btn.setAttribute("aria-label", `${line} ${PERMISSIONS_PROSE}`.trim());
+  btn.title = `${line} ${PERMISSIONS_PROSE}`.trim();
+}
+
 function paintHumanButton() {
   const btn = $("btn-human");
   if (!btn) return;
@@ -14918,6 +14944,50 @@ document.addEventListener("keydown", (e) => {
 
 window.addEventListener("resize", clarifyHistoryReposition);
 // ---- end clarify history wiring
+
+// ---- permissions wiring: the page's half, which calls public/permissions-history.js ---------------------
+// The popup itself (the panel, the rows, the answer press, the read, the keyboard and the remembered size) is in
+// public/permissions-history.js, a classic script the shell loads before this one. What stays here is only the wiring
+// that must run at THIS file's load, after `state` exists: the button's press and its `data-wired` mark (the shell's
+// stale-page guard reads it), the outside press, Escape, and the resize that puts a remembered panel back inside a
+// window that changed size. The button toggles; a choice button inside the popup answers, and a row press lands on the
+// agent. Nothing here answers anything.
+const permissionsBtn = $("btn-permissions");
+permissionsBtn?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  try {
+    permissionsHistoryToggle();
+  } catch (err) {
+    // Same rule as Clarify and the deliverables: a control that can be pressed must never be a silent no-op.
+    const why = String((err && err.message) || err);
+    console.error(`[panel] PERMISSIONS could not open on this page: ${why}`);
+    window.__panelStaleBuild?.report?.(`Opening the permissions list threw: ${why}.`);
+  }
+});
+if (permissionsBtn) permissionsBtn.dataset.wired = "1";
+
+// The count starts here, not when the popup opens: the whole point is that a reader can see that a run is stopped
+// without opening anything. Same slow tick and same read-after-frame as the Clarify button.
+permissionsHistoryCountStart();
+paintPermissionsButton();
+
+// An outside press closes it, mousedown so the reader's next click lands where they aimed.
+document.addEventListener("mousedown", (e) => {
+  if (!permissionsHist.open) return;
+  if (permissionsHist.el?.contains(e.target)) return;
+  if (e.target.closest?.("#btn-permissions")) return;
+  permissionsHistoryClose();
+});
+
+// Escape from anywhere closes it and hands the caret back to the button.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !permissionsHist.open) return;
+  e.preventDefault();
+  permissionsHistoryClose({ focus: true });
+});
+
+window.addEventListener("resize", permissionsHistoryReposition);
+// ---- end permissions wiring
 
 // ---- fonts: two settings, not one ----------------------------------------------
 // Panel font: the page's own labels, headings and buttons (--ui).

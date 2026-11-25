@@ -44,6 +44,17 @@
            GET /api/clarify/history (routes/clarify-history.js). A row answers nothing by itself: it opens the
            question, switches to the agent that asked it and pages in the turn it was asked in. -->
       <button id="btn-clarify" type="button" class="btn-clarify" aria-haspopup="dialog" aria-expanded="false" aria-controls="clarify-pop" title="Clarify history - every question this panel has asked you, newest first. Unanswered rows are in full colour with their choices; answered rows are greyed with the answer you chose standing out; a card that was cancelled or timed out says so instead of looking answered. Click a row to open that question, switch to the agent that asked it, and page in the turn it was asked in. Up and Down step the rows, Enter opens one, Escape closes."><svg class="cl-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.2 2.4h11.6v7.7H7.5L4.2 13.1v-3H2.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.6 5.2c.15-.75.75-1.2 1.55-1.2.9 0 1.55.5 1.55 1.25 0 .6-.35.95-.85 1.28-.4.27-.5.47-.5.87v.2" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><circle cx="8.35" cy="9.4" r=".78" fill="currentColor"/></svg><span class="cl-label">Clarify</span><span id="clarify-badge" hidden>0</span></button>
+      <!-- The Permissions control: every permission request this panel's approval transport has held, waiting ones
+           first, built on the Clarify button's own mechanism rather than a second design. Amber, because it is the
+           same question the permission box on a card asks and its own chrome is amber; it sits between Clarify and
+           Human in the header's order. The popup is public/permissions-history.js (a fixed panel, resizable and
+           remembered), its read is GET /api/permissions/history (routes/permissions-history.js), and its ONE answer
+           path is the panel's own POST /api/approvals/answer - nothing here answers an approval by itself. The
+           records live in the panel's state folder (lib/permissions-history.js), so a decision outlives the run, the
+           pending map and a restart. The Human button's Permissions switch counts the same waiting requests until
+           that button is removed (queue row 340); the two never answer for each other, because both press the one
+           route and the request leaves it when either does. -->
+      <button id="btn-permissions" type="button" class="btn-permissions" aria-haspopup="dialog" aria-expanded="false" aria-controls="permissions-pop" title="Permissions - every permission request this panel has held, the ones still waiting first. A waiting row keeps the exact text the gateway sent, the gateway's own policy note and one button per choice it allowed; pressing one answers through the panel's own approval route, exactly as the permission box on a card does, and nothing else ever answers one. Answered rows say what you chose and when; a request nobody answered says that it expired and why, never that a person denied it. Click a row to open the agent, the thread and the run it belongs to. Up and Down step the rows, Escape closes."><svg class="pm-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="3.2" y="7" width="9.6" height="6.6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.4 7V5.2a2.6 2.6 0 0 1 5.2 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="10.1" r=".9" fill="currentColor"/></svg><span class="pm-label">Permissions</span><span id="permissions-badge" hidden>0</span></button>
       <button id="btn-human" type="button" title="Human — every open permission and clarify question on the board, in one rotation. Click or press H to step through them: each agent is opened, its prompt (the permission box or the agent's own question) centred and flashed red, and its answer control focused. The red count is how many are waiting on you; a question that is answered, expires or whose turn ends drops out of the rotation."><span id="human-label">🙋 Human</span><span id="human-badge" hidden>0</span></button>
       <button id="btn-deliver" type="button" aria-haspopup="dialog" aria-expanded="false" title="Deliverables — every deliverable produced on this panel, newest first, each with how long ago it was handed back. Click or press D to open the list. Each row has one Open control: a link, or a file this panel serves, opens in a new browser tab; a file it cannot serve opens in the browser this machine is registered to use, and names that browser (or the fallback that took it) on the row; and a row that cannot be opened says why on the row itself. Clicking the row opens the agent that produced it. An agent hands something back with one line in its final message: DELIVER <link|file|image> <target> | <title>."><span id="deliver-label">📦 Deliverables</span></button>
       <button id="btn-review" type="button" class="btn-review" aria-pressed="false" title="Review — every finished row whose result you have not checked yet, counted from the rows on the board. A row lands here when its run ends with something to read (what it said last, plus the report path and next steps it named), and leaves when you press ✓ Reviewed on it or Mark all reviewed. Click the count to filter the table to exactly those rows; click it again to show everything. The amber ▣ on a row is this lane — it is not the yellow lock (a tree held by a live run) and not the blue turnover marker. Press H to step into the oldest one: the row opens, the report anchor and the next steps are brought into view, and ✓ Reviewed takes focus so one more key clears it."><span id="review-label">▣ Review</span><span id="review-badge" hidden>0</span></button>
@@ -1420,10 +1431,13 @@
   <!-- The Clarify history's pure half: the three states, the order, the honest cap. No DOM; imported by
        test/clarify-history.test.js. -->
   <script src="/core/clarify-history.js"></script>
+  <!-- The Permissions history's pure half: the three states (open, answered, expired), the order, the choice words and
+       the honest cap. No DOM; imported by test/permissions-history.test.js. -->
+  <script src="/core/permissions-history.js"></script>
   <!-- THE STALE-PAGE GUARD. A tab can be running an app.js older than the shell that loaded it: the shell is served
        no-store, but every asset URL carries the version the shell was rendered with, so a tab opened while app.js was
        being written (or one holding a cached copy under that URL) keeps the old file. If that old app.js predates the
-       DELIVERABLES block or the CLARIFY HISTORY block, the header button is in the page and nothing is wired to it — a
+       DELIVERABLES block or the CLARIFY HISTORY block or the PERMISSIONS block, the header button is in the page and nothing is wired to it — a
        click does nothing and says nothing, which is the worst shape a dead control can take. This block is INLINE, and
        the only reason it is inline, because it must be the one piece of code that is never stale: a core/*.js guard
        would be cached at the same old version as the app.js it is meant to catch. At click time it asks whether
@@ -1432,7 +1446,7 @@
        same reporter if either popover throws for the same reason (an old page against a new API). -->
   <script>
     (() => {
-      const buttons = ["btn-deliver", "btn-clarify"].map((id) => ({ id, el: document.getElementById(id) })).filter((b) => b.el);
+      const buttons = ["btn-deliver", "btn-clarify", "btn-permissions"].map((id) => ({ id, el: document.getElementById(id) })).filter((b) => b.el);
       if (!buttons.length) return;
       const meta = document.querySelector('meta[name="panel-build"]');
       const loaded = ((meta && meta.getAttribute("content")) || "").trim() || "unknown";
@@ -1479,7 +1493,7 @@
           if (!hit || hit.el.dataset.wired === "1") return;
           e.preventDefault();
           e.stopPropagation();
-          report("Nothing is wired to the button.", hit.id === "btn-clarify" ? "The clarify history" : "DELIVERABLES");
+          report("Nothing is wired to the button.", hit.id === "btn-clarify" ? "The clarify history" : hit.id === "btn-permissions" ? "The permissions list" : "DELIVERABLES");
         },
         true,
       );
@@ -1514,6 +1528,11 @@
        keyboard, and the place/size it remembers in localStorage. public/app.js wires the button and the outside
        press; nothing else reaches into it. -->
   <script src="/clarify-history.js"></script>
+  <!-- The header's Permissions popup: one panel built once, a row per request by state (the waiting ones with the exact
+       request text and one button per allowed choice), the read of /api/permissions/history, the one answer path
+       (POST /api/approvals/answer), the keyboard, and the place/size it remembers in localStorage.
+       public/app.js wires the button and the outside press; nothing else reaches into it. -->
+  <script src="/permissions-history.js"></script>
   <!-- The turn's own face, cut out of app.js (step 4 of the same order of work): the list a card pages through,
        the fold book's three names, the origin and session-replaced chips, the head and the two ways a turn is
        drawn shut, and the two display switches (thinking and one stream). Loaded before app.js, which calls them
