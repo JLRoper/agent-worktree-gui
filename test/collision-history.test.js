@@ -324,6 +324,28 @@ test("the page half counts only waiting records, orders them first, and words ev
   assert.equal(Core.badgeText(2), "2 collisions waiting on you");
 });
 
+test("a reported note with no counterpart says no rule can pick, not an invented order", () => {
+  const book = new CollisionBook({ file: null });
+  const mine = TREE("worker-one");
+  const out = book.recordNote({
+    project: PROJECT,
+    treePath: mine.path,
+    branch: mine.branch,
+    target: "a-tree-that-is-not-on-this-board",
+    text: "it is rewriting lib/shared.js under me",
+    rows: [],
+    queues: [],
+    at: Date.parse("2026-11-25T09:20:00.000Z"),
+  });
+  assert.ok(out.record, "the note is recorded in the book");
+  assert.equal(book.history().total, 1);
+  const rec = book.history().records[0];
+  assert.equal(rec.reason.rule, "none", "a note with no second side has no rule to name");
+  assert.equal(rec.reason.would, null);
+  assert.equal(rec.reason.pair.b, null);
+  assert.match(Core.reasonLine(rec), /no row on this board/);
+});
+
 test("an older ruling without the rule field still reads as the rule that settled it", () => {
   assert.equal(ruleOfRuling({ auto: true, basis: "older cut" }), "older-cut");
   assert.equal(ruleOfRuling({ auto: true, basis: "fewer commits" }), "fewer-commits");

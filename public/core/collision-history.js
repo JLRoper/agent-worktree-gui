@@ -133,6 +133,8 @@
         return `${lead} · if nobody rules: ${would.name || (would.pick === "a" ? sideName(rec?.a) : sideName(rec?.b))} would go first (${ruleLabel(would.rule || rule)})`;
       }
       if (would) return `${lead} · if nobody rules: nothing can pick (${ruleLabel(would.rule || rule)})`;
+      // A reported note is waiting because of the report's own verdict, not because a rule declined: say that.
+      if (rec?.readerWhy) return `${lead} · ${String(rec.readerWhy)}`;
       return `${lead} · ${ruleLabel(rule)}`;
     }
     if (state === "ruled") {
