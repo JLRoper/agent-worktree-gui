@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.176.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.176.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-754 releases from v0.1.0 (2026-10-20) to v1.176.1 (2026-11-25), 2677 commits between the tags. Every release is anchored by an
+755 releases from v0.1.0 (2026-10-20) to v1.176.2 (2026-11-25), 2681 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.176.2 — 2026-11-25 · 4 commits
+
+[`25f3906`](https://github.com/JLRoper/agent-worktree-gui/commit/25f39067a384f89fd0196a16cc0dd41d3f1d635a) · [compare v1.176.1...v1.176.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.176.1...v1.176.2)
+
+### Added
+
+- feat(collisions): a Collisions button beside Clarify, with the reason as a field ([`eafb1ad`](https://github.com/JLRoper/agent-worktree-gui/commit/eafb1addc67131ccd01cfdb065057288503f8163))
+
+### Docs & tests
+
+- test(gate): the corner gate runs at the reader's screen height and names a missed press ([`666658b`](https://github.com/JLRoper/agent-worktree-gui/commit/666658b340cabae21b91a2189fe9138108083827))
+- docs: render the changelog - 754 releases ([`8e78227`](https://github.com/JLRoper/agent-worktree-gui/commit/8e78227e759439a0694b5a19f791347978ea0270))
+
+### Other
+
+- chore: 1.176.2 - the version this landing carries ([`25f3906`](https://github.com/JLRoper/agent-worktree-gui/commit/25f39067a384f89fd0196a16cc0dd41d3f1d635a))
 
 ## v1.176.1 — 2026-11-25 · 3 commits
 
