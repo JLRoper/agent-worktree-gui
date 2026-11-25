@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.169.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.169.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-735 releases from v0.1.0 (2026-10-20) to v1.169.2 (2026-11-24), 2617 commits between the tags. Every release is anchored by an
+736 releases from v0.1.0 (2026-10-20) to v1.169.4 (2026-11-24), 2621 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.169.4 — 2026-11-24 · 4 commits
+
+[`08725ea`](https://github.com/JLRoper/agent-worktree-gui/commit/08725eaf930a8313f399e2725d65ca0e240b722c) · [compare v1.169.2...v1.169.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.169.2...v1.169.4)
+
+### Docs & tests
+
+- test(clarify): a live gate that raises three real cards and answers each one ([`7525a16`](https://github.com/JLRoper/agent-worktree-gui/commit/7525a16390abb456cea352d59d6fea4a5f210e90))
+- docs: render the changelog - 735 releases ([`6a6da6b`](https://github.com/JLRoper/agent-worktree-gui/commit/6a6da6b7da7a3a3f2115e5f08109c1efda4d028c))
+- docs(report): the console corner, read as code - one cause behind the glitchy drag ([`166a2d2`](https://github.com/JLRoper/agent-worktree-gui/commit/166a2d2ec281640eb3a3d0e789eea692fe25c55f))
+
+### Other
+
+- chore: 1.169.4 - the version this landing carries ([`08725ea`](https://github.com/JLRoper/agent-worktree-gui/commit/08725eaf930a8313f399e2725d65ca0e240b722c))
 
 ## v1.169.2 — 2026-11-24 · 5 commits
 
