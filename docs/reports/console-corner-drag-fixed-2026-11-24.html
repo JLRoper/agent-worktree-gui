@@ -50,8 +50,8 @@ are on this branch.</p>
 
 <dl class="facts">
   <dt>the cause</dt><dd>the console's height is inside the transcript's scrollHeight, so the top edge the gesture froze was a function of the height it was changing</dd>
-  <dt>the gesture</dt><dd>height = pointer + grab - frozenTop (public/app.js:10583), one write per move, and now one offset per move</dd>
-  <dt>the frozen offset</dt><dd>d.bodyTop, read at the press (public/app.js:10644 to 10668) and re-asserted on every move (public/app.js:10727)</dd>
+  <dt>the gesture</dt><dd>height = pointer + grab - frozenTop (public/app.js:10575), one write per move, and now one offset per move</dd>
+  <dt>the frozen offset</dt><dd>d.bodyTop, read at the press (public/app.js:10644 to 10668), re-asserted on every move (public/app.js:10736) and held against drift every frame (public/app.js:10750)</dd>
   <dt>the release</dt><dd>clamps once and records the truth instead of writing the foot (public/app.js:10801 to 10808)</dd>
   <dt>the floor</dt><dd>the sheet's min-height or the console's padding box, whichever is larger (public/app.js:10639)</dd>
   <dt>the gate</dt><dd>tools/verify-console-corner-drag.mjs, <code>npm run verify:console-corner-drag</code>, now with <code>--serve &lt;checkout&gt;</code> (line 55)</dd>
@@ -91,15 +91,16 @@ release:      setScroll(body, scrollHeight) moves the top edge back up by the dr
       for it again, so the corner returns to the hand. Measured in the gate's crossing shape: 36px lost at 1600 and 100px
       at 820 without this write, 0 with it;</li>
   <li>the anchor had to go. It is the loop that holds the reader's place when a row lands above, and the old design kept
-      it on for exactly that reason (the note at public/board/console.js:3656 to 3662). Measured, it is also the writer that cancels
+      it on for exactly that reason (public/board/console.js:3650 to 3660). Measured, it is also the writer that cancels
       the reader's drag: the same slow drag at 1600 wrote the height 60 and moved the corner 0, and at 820 followed
       perfectly, because at 1600 the anchor had picked a node below the box. Standing it down for the length of the drag
       wins the case that happens every time over the one that happens when a row lands mid-drag.</li>
 </ul>
-<p>A row that lands ABOVE the box during a drag is not the anchor's job any more: the frame after each move reads the box
-once and scrolls the transcript by exactly the drift it measures (public/app.js:10735), which the growth itself made room
-for. Measured: a state poll landing under the hand moved the top edge 24.3px, and this is what brings it back without
-re-deriving the height (the size stays the pointer's travel, not the drift's).</p>
+<p>A row that lands ABOVE the box during a drag is not the anchor's job any more: a watch runs for the whole gesture
+(public/app.js:10750), reads the box once a frame, and scrolls the transcript by exactly the drift it measures - which the
+growth itself made room for. Measured: a state poll landing under the hand moved the top edge 24.3px, and this brings it
+back in the same frame without re-deriving the height (the size stays the pointer's travel, not the drift's). It runs every
+frame rather than once per move because a poll paints BETWEEN two moves, which is exactly where the gate's own read lands.</p>
 
 <h3>2.2 The release stops undoing the drag</h3>
 <p>The release clamped, stored, and then wrote the foot - a scroll of exactly the drag's travel, in the same task as the
@@ -140,7 +141,7 @@ and is described in section 4:</p>
     <td>the move returned early on a detached console and kept the record: the grip dead, every board rebuild deferring
         to a gesture nobody could end</td>
     <td>public/app.js:10706 ends the gesture with the node, and <code>lostpointercapture</code> and <code>blur</code> end
-        it through the same door as a release (public/app.js:10822)</td>
+        it through the same door as a release (public/app.js:10825)</td>
   </tr>
 </table>
 
@@ -187,15 +188,15 @@ stream, the row scans - come from the running panel. One gate, one set of live d
 <tr><td class="n">past-min@1600/140</td><td class="n">-400</td><td class="n">-35.59</td><td class="n">0</td><td class="n">400.41</td><td class="no">FAIL</td><td class="n">-122</td><td class="n">0</td><td class="n">400.41</td><td class="n">18</td><td class="ok">PASS</td></tr>
 <tr><td class="n">past-max@1600/140</td><td class="n">+900</td><td class="n">+220</td><td class="n">0</td><td class="n">-900</td><td class="ok">PASS</td><td class="n">+220</td><td class="n">0</td><td class="n">-680</td><td class="n">360</td><td class="ok">PASS</td></tr>
 <tr><td class="n">crossing@1600/140</td><td class="n">+0</td><td class="n">+0</td><td class="n">100</td><td class="n">0</td><td class="no">FAIL</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="ok">PASS</td></tr>
-<tr><td class="n">interrupt-poll@1600/140</td><td class="n">+36</td><td class="n">+36</td><td class="n">23.7</td><td class="n">-35.7</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0.3</td><td class="n">0.3</td><td class="n">176</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@1600/140</td><td class="n">+36</td><td class="n">+36</td><td class="n">23.7</td><td class="n">-35.7</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="ok">PASS</td></tr>
 <tr><td class="n">interrupt-repaint@1600/140</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="ok">PASS</td></tr>
 <tr><td class="n">no-move@1600/140</td><td class="n">+0</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="ok">PASS</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="ok">PASS</td></tr>
-<tr><td class="n">slow@1600/460</td><td class="n">+60</td><td class="n">+60</td><td class="n">60</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0</td><td class="n">0</td><td class="n">520</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@1600/460</td><td class="n">+60</td><td class="n">+60</td><td class="n">60</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0.3</td><td class="n">0.3</td><td class="n">520</td><td class="ok">PASS</td></tr>
 <tr><td class="n">flick@1600/460</td><td class="n">+120</td><td class="n">+120</td><td class="n">120</td><td class="n">-120</td><td class="no">FAIL</td><td class="n">+120</td><td class="n">0</td><td class="n">0</td><td class="n">580</td><td class="ok">PASS</td></tr>
-<tr><td class="n">past-min@1600/460</td><td class="n">-400</td><td class="n">-379.89</td><td class="n">0</td><td class="n">400.11</td><td class="no">FAIL</td><td class="n">-400</td><td class="n">0</td><td class="n">400.41</td><td class="n">60</td><td class="ok">PASS</td></tr>
-<tr><td class="n">past-max@1600/460</td><td class="n">+900</td><td class="n">+900</td><td class="n">900</td><td class="n">-900</td><td class="no">FAIL</td><td class="n">+220</td><td class="n">0</td><td class="n">-680</td><td class="n">680</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@1600/460</td><td class="n">-400</td><td class="n">-379.89</td><td class="n">0</td><td class="n">400.11</td><td class="no">FAIL</td><td class="n">-400</td><td class="n">0</td><td class="n">400.11</td><td class="n">60</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@1600/460</td><td class="n">+900</td><td class="n">+900</td><td class="n">900</td><td class="n">-900</td><td class="no">FAIL</td><td class="n">+220</td><td class="n">0</td><td class="n">-680.3</td><td class="n">680</td><td class="ok">PASS</td></tr>
 <tr><td class="n">crossing@1600/460</td><td class="n">+0</td><td class="n">+0</td><td class="n">100</td><td class="n">0</td><td class="no">FAIL</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="ok">PASS</td></tr>
-<tr><td class="n">interrupt-poll@1600/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0.3</td><td class="n">0.3</td><td class="n">496</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@1600/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="ok">PASS</td></tr>
 <tr><td class="n">interrupt-repaint@1600/460</td><td class="n">+36</td><td class="n">+0</td><td class="n">36</td><td class="n">-36</td><td class="no">FAIL</td><td class="n">+36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="ok">PASS</td></tr>
 <tr><td class="n">no-move@1600/460</td><td class="n">+0</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="ok">PASS</td><td class="n">+0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="ok">PASS</td></tr>
 <tr><td class="n">slow@820/140</td><td class="n">+60</td><td class="n">+60</td><td class="n">0</td><td class="n">-60</td><td class="no">FAIL</td><td class="n">+60</td><td class="n">0</td><td class="n">0</td><td class="n">200</td><td class="ok">PASS</td></tr>
@@ -305,12 +306,12 @@ ranked followers the gate proves.</p>
       paint ask the gesture, and a sized console does not grow into the slack.</li>
   <li><code>npm test</code>, once, on the final tree: <strong>cancelled at 21 minutes</strong> with 3,690 passing and 18
       failing. One of the 18 was this tree's own: <code>test/reports-are-tracked.test.js</code> named this page as
-      "on disk and not in the index" (the clone's <code>.git/info/exclude</code> hides
-      <code>docs/reports/*.html</code>), and the page is now added with <code>-f</code> and the test passes. The other 17
-      reproduce on a clean <code>git archive</code> of <code>origin/main</code> in this same environment, file for file:
-      paths-http 1, harness 1, initiative-tier-route 3, junctioned-node-modules 1, project-rules 1, rebase-route 1, and
-      the release and reconcile families - the config.json a worktree does not have, the panel's own paths, and a
-      junctioned checkout. Nothing under <code>public/</code> is named by any of them.</li>
+      "on disk and not in the index" (this clone's <code>.git/info/exclude</code> hides <code>docs/reports/*.html</code>),
+      and the page is now added with <code>-f</code> and that test passes. The other 17 reproduce on a clean
+      <code>git archive</code> of <code>origin/main</code> in this same environment, file for file: paths-http 1,
+      harness 1, initiative-tier-route 3, junctioned-node-modules 1, project-rules 1, rebase-route 1, and the release and
+      reconcile families - the config.json a worktree does not have, the panel's own paths, and a junctioned checkout.
+      Nothing under <code>public/</code> is named by any of them.</li>
   <li><code>npm run land:check</code> - the changelog is current at 739 releases and the tree is clean.</li>
 </ul>
 
