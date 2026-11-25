@@ -138,6 +138,47 @@ test("a restart that genuinely changes nothing is still refused, by the version 
   assert.deepEqual(exits, [], "and it starts nothing");
 });
 
+test("an explicit force is accepted for the version already served, and prose is still not the flag", async (t) => {
+  // The same checkout, the same served version: the request is a deliberate bounce anyway (a port or helper fix,
+  // not a new build), and only `force: true` says so. A reason that merely SAYS the word is not the flag.
+  const jobs = fakeJobs([{ thread: "held", status: "running" }]);
+  const { controller } = makeController({ version: "0.104.0", packageVersion: () => "0.104.0", jobs });
+  t.after(() => drain(controller));
+  assert.throws(
+    () => controller.request({ target: "panel", reason: "force 0.104.0 back up", waitFor: "held" }),
+    (e) => e.status === 409 && /already serves/.test(e.message),
+    "the word 'force' in the reason is prose, not a flag",
+  );
+  const rec = controller.request({ target: "panel", reason: "the port helper is in this tree and the running build has the old one", waitFor: "held", force: true });
+  assert.equal(rec.accepted, true, "the forced request is accepted");
+  assert.equal(rec.force, true, "and the entry says it was forced");
+  assert.equal(controller.state().queued[0].state, "waiting", "it still waits for the thread it named");
+  assert.equal(controller.state().queued[0].force, true, "the status says so too");
+  assert.ok(controller.state().journal.some((j) => /forced past the same-version refusal/.test(j.text)), "and the journal says why the refusal did not fire");
+
+  // The one-at-a-time guard is untouched by the flag: a second entry is refused while the first is still queued.
+  assert.throws(
+    () => controller.request({ target: "panel", reason: "and again", waitFor: "held", force: true }),
+    (e) => e.status === 409 && /already queued/.test(e.message),
+    "a forced request is still one at a time",
+  );
+  controller.cancel(rec.id);
+});
+
+test("a forced request with no version reader skips only the reason-named refusal", (t) => {
+  // server.js always supplies `packageVersion`; a controller without one decides the same-version question from
+  // the reason alone, and the forced flag reaches that half too.
+  const { controller } = makeController({ version: "0.104.0", jobs: fakeJobs([{ thread: "held", status: "running" }]) });
+  t.after(() => drain(controller));
+  assert.throws(
+    () => controller.request({ target: "panel", reason: "serve 0.104.0 again", waitFor: "held" }),
+    (e) => e.status === 409 && /the reason names/.test(e.message),
+  );
+  const rec = controller.request({ target: "panel", reason: "serve 0.104.0 again", waitFor: "held", force: true });
+  assert.equal(rec.accepted, true);
+  controller.cancel(rec.id);
+});
+
 test("the provider refusal still comes first, and a reason is still required", async (t) => {
   // The two refusals this change must not touch: no key in HERMES_HOME, and no reason in the request.
   const noKey = path.join(dir, "no-key");

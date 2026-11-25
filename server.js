@@ -8444,7 +8444,7 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 400, { ok: false, error: REASON_REQUIRED, restart: restart.state() });
       }
       try {
-        const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
+        const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread, force: body.force === true });
         log(`restart queued: ${record.target} (${record.id}) — ${record.thread ? `it runs once ${record.thread} has no turn running` : "nothing was named to wait for, so it starts now"}`);
         return sendJson(res, 202, { ok: true, restart: record, provider: record.provider, assistant: assistant.state() });
       } catch (e) {

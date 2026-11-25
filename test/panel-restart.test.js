@@ -22,6 +22,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  bindingAnswers,
   listeningPids,
   listeningPidsFromNetstat,
   panelEvidence,
@@ -40,13 +41,18 @@ const SERVER = path.join(ROOT, "server.js");
 
 // ---- the helper, driven the way lib/restart.js drives it -----------------------------------------------
 
-function runHelper({ parentPid, port, dir, env = {} }) {
+function runHelper({ parentPid, port, dir, env = {}, graceful = false }) {
   const logs = path.join(dir, "logs");
   const pidFile = path.join(logs, "server.pid");
   const out = [];
+  const argv = [HELPER, SERVER, pidFile, path.join(logs, "server.out.log"), path.join(logs, "server.err.log"), String(parentPid), String(port), "127.0.0.1"];
+  // The word lib/restart.js passes when the panel asked to exit: only then is there a flush window to wait out.
+  if (graceful) argv.push("graceful");
+  const started = Date.now();
+  let launchedAt = null;
   const child = spawn(
     process.execPath,
-    [HELPER, SERVER, pidFile, path.join(logs, "server.out.log"), path.join(logs, "server.err.log"), String(parentPid), String(port), "127.0.0.1"],
+    argv,
     {
       cwd: ROOT,
       env: {
@@ -57,7 +63,7 @@ function runHelper({ parentPid, port, dir, env = {} }) {
         // five seconds for a port it is only just about to be given.
         API_SERVER_KEY: "",
         PANEL_PORT_WAIT_MS: "6000",
-        // The waits this test is about: the outgoing panel is given 1.2 s to leave, the replacement 15 s to bind.
+        // The waits this test is about: the flush window a graceful bounce is given, the replacement's bind window.
         HERMES_PANEL_RESTART_WAIT_MS: "1200",
         HERMES_PANEL_RESTART_BIND_MS: "15000",
         ...env,
@@ -68,10 +74,14 @@ function runHelper({ parentPid, port, dir, env = {} }) {
   );
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (d) => out.push(d));
-  child.stderr.on("data", (d) => out.push(d));
+  const take = (d) => {
+    out.push(d);
+    if (launchedAt === null && /panel-restart: launched /.test(out.join(""))) launchedAt = Date.now();
+  };
+  child.stdout.on("data", take);
+  child.stderr.on("data", take);
   const exited = new Promise((resolve) => child.once("exit", (code) => resolve(code)));
-  return { child, pidFile, out: () => out.join(""), exited };
+  return { child, pidFile, out: () => out.join(""), exited, started, launchedAt: () => launchedAt };
 }
 
 // The pid the helper was told to wait for, after it is gone: a process that ran and exited, as the outgoing panel
@@ -99,9 +109,9 @@ async function listenerPids(port) {
 
 // ---- the three restarts ------------------------------------------------------------------------------
 
-test("a restart stops the panel still holding the port, and the replacement serves it", async () => {
+test("a graceful bounce waits only its flush window, stops the panel, and the replacement serves the port", async () => {
   const old = await startPanel({ keep: true });
-  const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir });
+  const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir, graceful: true });
   let replacement = 0;
   try {
     await helper.exited;
@@ -113,8 +123,45 @@ test("a restart stops the panel still holding the port, and the replacement serv
     assert.equal(pidAlive(replacement), true, "the replacement is running");
     assert.equal((await fetch(`${old.base}/api/health`)).ok, true, "the port answers again");
     assert.deepEqual(await listenerPids(old.port), [replacement], "the replacement is the only listener on the port");
-    assert.match(helper.out(), /still running 1s after the restart was asked for — stopped it/, "and the log says the old pid was stopped");
+    assert.match(helper.out(), /still running 1s after the restart was asked for - stopped it/, "and the log says the old pid was stopped");
     assert.match(helper.out(), new RegExp(`pid ${replacement} is serving on 127\\.0\\.0\\.1:${old.port}`), "and that the replacement took the port");
+  } finally {
+    if (replacement) await stopPid(replacement);
+    await old.stop();
+  }
+});
+
+test("with no graceful shutdown asked for, a bounce takes the port at once instead of waiting", async () => {
+  // The measured bounce at 04:30:43Z: 20 s of blind waiting for a pid nobody had asked to leave, then a kill,
+  // then a bind. The wait protects nothing but the panel's own JSON stores, so with no shutdown requested there
+  // is nothing to flush and the helper takes the port at once. The default flush window is left at 2000 ms in
+  // this case (the env var is emptied), so a helper that still blind-waited would miss the 3 s mark by far.
+  //
+  // "Takes the port" is the moment the old holder is gone - the replacement's own boot (a server.js start) is
+  // seconds on any machine and is not what this boundary is about.
+  const old = await startPanel({ keep: true });
+  const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir, env: { HERMES_PANEL_RESTART_WAIT_MS: "" } });
+  let replacement = 0;
+  let goneAt = null;
+  const watch = (async () => {
+    while (goneAt === null && Date.now() - helper.started < 20_000) {
+      if (!pidAlive(old.pid)) { goneAt = Date.now() - helper.started; break; }
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  })();
+  try {
+    await helper.exited;
+    await watch;
+    replacement = pidIn(helper.pidFile);
+
+    assert.ok(goneAt !== null && goneAt < 3000, `the outgoing panel let go of the port at ${goneAt}ms, not after a 20 s wait`);
+    assert.ok(helper.launchedAt(), "the helper launched the replacement");
+    assert.equal(pidAlive(old.pid), false, "the outgoing panel is gone");
+    assert.match(helper.out(), /no graceful shutdown was asked for - took the port at once/, "and the log says which path it took");
+    assert.doesNotMatch(helper.out(), /still running \d+s after the restart was asked for/, "nothing was waited out");
+    assert.equal(pidAlive(replacement), true, "the replacement is running");
+    assert.equal((await fetch(`${old.base}/api/health`)).ok, true, "the port answers again");
+    assert.deepEqual(await listenerPids(old.port), [replacement], "the replacement is the only listener");
   } finally {
     if (replacement) await stopPid(replacement);
     await old.stop();
@@ -135,7 +182,7 @@ test("a stray server.js on the port is stopped even when the pid the helper wait
     assert.equal(pidAlive(replacement), true, "the replacement is running");
     assert.equal((await fetch(`${stray.base}/api/health`)).ok, true, "the port answers again");
     assert.deepEqual(await listenerPids(stray.port), [replacement], "the stray is not listening any more — only the replacement is");
-    assert.match(helper.out(), new RegExp(`port ${stray.port}: stopped pid ${stray.pid} \\(server\\.js\\)`), "and the log names the stray it stopped");
+    assert.match(helper.out(), new RegExp(`port ${stray.port}: stopped pid ${stray.pid} \\((server\\.js|node \\(no command line to read\\))\\)`), "and the log names the stray it stopped, with the evidence the OS gave");
   } finally {
     if (replacement) await stopPid(replacement);
     await stray.stop();
@@ -182,6 +229,57 @@ test("netstat rows name the listener for the port asked about, and no other", ()
   assert.deepEqual(listeningPidsFromNetstat(rows, 9999), []);
 });
 
+test("a listener on 0.0.0.0 is the holder a 127.0.0.1 probe met", async () => {
+  // The helper probes loopback, and a wildcard bind answers there - that is the whole collision lib/port-guard.js
+  // describes. The lookup is made for the address that answered, so the wildcard socket is named (it is this
+  // panel) while a socket bound to an address the probe never reached is not.
+  const rows = [
+    "  TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       111",
+    "  TCP    10.0.0.5:7331          0.0.0.0:0              LISTENING       222",
+  ].join("\r\n");
+  const exec = async (bin, args) => (bin === "netstat" ? { ok: true, out: rows } : { ok: false, out: "" });
+  assert.deepEqual(await listeningPids(7331, { platform: "win32", exec, host: "127.0.0.1" }), [111], "the wildcard answers loopback; the 10.0.0.5 socket does not");
+  assert.deepEqual(await listeningPids(7331, { platform: "win32", exec, host: "10.0.0.5" }), [111, 222], "on 10.0.0.5 both sockets answer");
+  assert.deepEqual(await listeningPids(7331, { platform: "win32", exec }), [111, 222], "no host named: every binding is reported");
+  assert.equal(bindingAnswers("0.0.0.0", "127.0.0.1"), true);
+  assert.equal(bindingAnswers("[::]", "127.0.0.1"), true);
+  assert.equal(bindingAnswers("127.0.0.1", "::1"), true, "the loopback aliases are the same address");
+  assert.equal(bindingAnswers("10.0.0.5", "127.0.0.1"), false);
+  assert.equal(bindingAnswers("", "127.0.0.1"), true, "an unreadable bind never hides a holder");
+});
+
+test("an answer nobody reports as LISTENING is waited out, not called both occupied and free", async () => {
+  // The measured report printed "answers on 127.0.0.1" and "still not free" in the same second: the probe met a
+  // socket, nothing named its pid, and the release gave up at once. A socket that outlives its pid is the ordinary
+  // cause, so the answer is waited out inside the window; only the deadline says it did not go.
+  const log = [];
+  let answers = 3;
+  const out = await releasePort({
+    port: 7331,
+    waitMs: 900,
+    stepMs: 20,
+    probe: async () => answers-- > 0,
+    pids: async () => [],
+    onLog: (l) => log.push(l),
+  });
+  assert.equal(out.freed, true, "the answer stopped inside the window, so the port came free");
+  assert.equal(out.killed.length, 0, "nothing was stopped - there was nothing to name");
+  assert.equal(log.length, 0, "and no contradiction was written");
+
+  const stuck = [];
+  const never = await releasePort({
+    port: 7331,
+    waitMs: 200,
+    stepMs: 20,
+    probe: async () => true,
+    pids: async () => [],
+    onLog: (l) => stuck.push(l),
+  });
+  assert.equal(never.freed, false, "an answer that never goes is still reported as occupied");
+  assert.match(stuck.join("\n"), /port 7331 answered on 127\.0\.0\.1 but no process reports as LISTENING/, "and the line says the socket outlived its pid");
+  assert.equal(stuck.length, 1, "one line, written at the deadline - never 'answers' beside 'not free' in the same breath");
+});
+
 test("only a process that reads as this panel is ours to stop", () => {
   // The command lines are shaped, not copied: one Windows-shaped with a quoted exe and backslashes, one POSIX,
   // and the near-misses. No drive letter appears in any of them — a landing may not name a folder that exists on
@@ -206,6 +304,7 @@ test("releasePort stops a server.js holder, and leaves a stranger alone", async 
     stepMs: 5,
     probe: async () => answering,
     pids: async () => [11],
+    alive: () => true,
     info: async (pid) => ({ pid, command: "node srv/repo/server.js", image: "node.exe" }),
     stop: async (pid) => {
       killed.push(pid);
@@ -226,6 +325,7 @@ test("releasePort stops a server.js holder, and leaves a stranger alone", async 
     stepMs: 5,
     probe: async () => true,
     pids: async () => [22],
+    alive: () => true,
     info: async (pid) => ({ pid, command: '"node" "srv/elsewhere/other-listener.js"', image: "node.exe" }),
     stop: async () => {
       throw new Error("releasePort must never stop a process that does not read as this panel");
@@ -262,10 +362,11 @@ test("the wait for a pid that will not leave is bounded, and says so", async () 
 // The controller is the one link these three cases do not drive (a panel bounce exits the process that would be
 // doing the asserting). The helper's argv is the contract between them, and losing the port there would silently
 // turn the freeing step back off, so it is pinned.
-test("the controller tells the helper the outgoing pid and the port to free", () => {
+test("the controller tells the helper the outgoing pid, the port to free, and that it may flush", () => {
   const src = readSource("lib/restart.js");
   const call = /panel-restart\.cjs[\s\S]{0,700}?String\(this\.config\.port/.exec(src);
   assert.ok(call, "the spawn of lib/panel-restart.cjs carries the parent pid and this panel's port");
+  assert.match(src, /\[helper,[^\]]*?"graceful"\]/, "and the word that says the panel asked to exit, so only a real bounce may wait");
 });
 
 // ONE pid, never the tree — the form the restart helper must use. The helper is a CHILD of the panel it is
