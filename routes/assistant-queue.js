@@ -47,12 +47,16 @@ export function createQueueRoutes({ assistant, config = {}, sendJson, readBody, 
 
     if (req.method === "GET") {
       try {
+        // ONE CONTEXT FOR THE WHOLE ANSWER. It is a summary of every job plus an index of every row, and the list form
+        // below asks for every assistant's queue - so building it per queue multiplied the same work by the number of
+        // assistants on the panel. It does not change between these reads: nothing here writes.
+        const context = assistant.queueContext();
         if (id) {
-          sendJson(res, 200, { queue: assistant.queueView(id), assistant: assistant.state() });
+          sendJson(res, 200, { queue: assistant.queueView(id, context), assistant: assistant.state() });
         } else {
           // The list form: one view per assistant, the same shape a single read returns. The digest is computed here
           // rather than in the page so the preamble and the tab cannot disagree about what "top of the queue" means.
-          const queues = (assistant.assistants || []).map((rec) => assistant.queueView(rec.id));
+          const queues = (assistant.assistants || []).map((rec) => assistant.queueView(rec.id, context));
           sendJson(res, 200, { queues, assistant: assistant.state() });
         }
       } catch (err) {
