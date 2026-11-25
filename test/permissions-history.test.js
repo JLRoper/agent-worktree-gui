@@ -245,6 +245,28 @@ test("the route counts only requests the panel can still answer, and settles the
   assert.equal(body.entries.find((e) => e.requestId === "req-3").status, "answered");
 });
 
+test("the badge counts /api/state's own approvals: one per live request, a closed window counting nothing", () => {
+  const now = Date.UTC(2026, 0, 1, 2);
+  // The shape /api/state carries in `approvals` (lib/approvals.js `list()`): one entry per live request, keyed by id.
+  const snapshot = [
+    { id: "req-1", thread: "thread-1", deadline: now + 60_000 },
+    { id: "req-2", thread: "thread-2", deadline: now + 30_000 },
+    { id: "req-3", thread: "thread-3", deadline: now - 1 }, // past its deadline: the gateway has already denied it
+    { id: "", thread: "thread-4", deadline: now + 60_000 }, // no id, so nothing could ever answer it
+  ];
+  assert.equal(Core.openCount(snapshot, now), 2, "two windows are still open; the expired one and the id-less one count nothing");
+  // The page keeps the snapshot in a Map, so the same reading has to hold for the map's values.
+  const map = new Map(snapshot.map((r) => [r.id, r]));
+  assert.equal(Core.openCount([...map.values()], now), 2);
+  // A frame that carries the same request twice is still one question.
+  assert.equal(Core.openCount([...snapshot, snapshot[0]], now), 2);
+  // A request with no deadline at all is waiting (the panel never gave it a window to expire on).
+  assert.equal(Core.openCount([{ id: "req-9", deadline: 0 }], now), 1);
+  // Nothing waiting, and a snapshot that has not arrived, both read zero rather than throwing.
+  assert.equal(Core.openCount([], now), 0);
+  assert.equal(Core.openCount(null, now), 0);
+});
+
 test("the route's limit is a render cap, never a filter on the total", () => {
   const h = routeHarness();
   for (let n = 1; n <= 60; n += 1) ask(h.store, n);

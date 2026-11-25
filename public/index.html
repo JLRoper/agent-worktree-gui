@@ -47,10 +47,11 @@
       <!-- The Permissions control: every permission request this panel's approval transport has held, waiting ones
            first, built on the Clarify button's own mechanism rather than a second design. Amber, because it is the
            same question the permission box on a card asks and its own chrome is amber; it sits between Clarify and
-           Human in the header's order. The popup is public/permissions-history.js (a fixed panel, resizable and
-           remembered), its read is GET /api/permissions/history (routes/permissions-history.js), and its ONE answer
-           path is the panel's own POST /api/approvals/answer - nothing here answers an approval by itself. The
-           records live in the panel's state folder (lib/permissions-history.js), so a decision outlives the run, the
+           Human in the header's order. The badge counts the live requests /api/state already carries in `approvals`, so
+           it is a fact the board has rather than a poll of its own. The popup is public/permissions-history.js (a fixed
+           panel, resizable and remembered), its read is GET /api/permissions/history (routes/permissions-history.js),
+           and its ONE answer path is the panel's own POST /api/approvals/answer - nothing here answers an approval by
+           itself. The records live in the panel's state folder (lib/permissions-history.js), so a decision outlives the run, the
            pending map and a restart. The Human button's Permissions switch counts the same waiting requests until
            that button is removed (queue row 340); the two never answer for each other, because both press the one
            route and the request leaves it when either does. -->

@@ -10,8 +10,9 @@
 // THE BRIEF, and the section that proves each line:
 //
 //   1. A WAITING REQUEST RAISES THE BADGE. The request is POSTed to /api/approvals with the fields the plugin sends
-//      (request_id, command, description, pattern_key, allowed_choices, timeout_seconds, surface, thread). The route's
-//      `outstanding` is 1 and the header button draws "1" in its badge, without the popup ever being opened.
+//      (request_id, command, description, pattern_key, allowed_choices, timeout_seconds, surface, thread). /api/state
+//      carries it in `approvals`, the page applies that list, and the header button draws "1" from it without the popup
+//      ever being opened - and without a read of its own (emptying the page's map is what moves the number).
 //   2. IT OPENS WITH ITS EXACT TEXT AND CHOICES. The popup row carries the command byte for byte (a <pre>), the
 //      gateway's policy note, the run and the thread it belongs to, and one button per choice the HOST allowed - and
 //      only those.
@@ -157,6 +158,19 @@ is("the live request offers exactly the host's choices", liveRow.choices, ["once
 is("it names the gateway run behind it", liveRow.runId, RUN);
 is("it names the thread that is blocked", liveRow.thread, THREAD);
 is("it carries the gateway's one-line policy note", liveRow.policy, POLICY);
+// THE BADGE'S SOURCE. The brief names /api/state: the snapshot the board already polls carries the approval
+// transport's live queue in `approvals`, and the header button counts THAT, not a request of its own. The snapshot
+// text is served from the board's own cache and rebuilt on a short floor, so the read waits for the rebuild rather
+// than sampling the text built before the request arrived.
+await waitFor(
+  async () => {
+    const s = await req(base, "GET", "/api/state");
+    return (s.body?.approvals || []).some((r) => r.id === "req-live-1");
+  },
+  { timeoutMs: 10_000, what: "/api/state carrying the waiting approval", silent: true },
+);
+const snap = await req(base, "GET", "/api/state");
+is("the snapshot the board polls carries the waiting request", (snap.body?.approvals || []).map((r) => r.id), ["req-live-1"]);
 
 const verdict = await withBrowser(
   async ({ page, pageErrors, consoleErrors }) => {
@@ -172,6 +186,21 @@ const verdict = await withBrowser(
       return b && !b.hidden && b.textContent.trim() === "1";
     }, null, { timeout: 20_000 });
     ok("the header button draws a badge of 1", true);
+    // ...AND THE NUMBER IS THE SNAPSHOT'S OWN. The page applies /api/state's `approvals` as its first full snapshot
+    // lands (a second or so after the shell paints), so the map is waited for and then emptied: that drops the count
+    // to zero with no fetch, and putting the entry back restores it. A count that came from a second read of the route
+    // would not move.
+    await page.waitForFunction(() => state.approvalsSeen.count >= 0 && state.approvals.size > 0, null, { timeout: 15_000 });
+    const fromState = await page.evaluate(() => {
+      const saved = [...state.approvals.values()];
+      const before = permissionsPendingCount();
+      state.approvals.clear();
+      const emptied = permissionsPendingCount();
+      for (const r of saved) state.approvals.set(r.id, r);
+      return { ids: saved.map((r) => r.id), before, emptied, restored: permissionsPendingCount() };
+    });
+    is("the page applied the request from /api/state", fromState.ids, ["req-live-1"]);
+    is("the badge counts that map, not a request of its own", [fromState.before, fromState.emptied, fromState.restored], [1, 0, 1]);
     await page.screenshot({ path: shot("1-badge.png"), clip: { x: 0, y: 0, width: 1440, height: 160 } });
 
     // ---- 2. the popup opens with the exact text and choices ----
