@@ -961,6 +961,34 @@ test("a resume writes the new run id on the row it retries, and not on a row tha
   assert.equal(assistant.linkResumedRun("T1", { id: "job-new", runId: "run_new" }), null);
 });
 
+// ---- one context per read, not one per queue ---------------------------------------------------------------
+// `queueContext()` summarises every job and indexes every row, and the list form asks for EVERY assistant's queue.
+// Building it inside `queueView` therefore multiplied that work by the number of assistants on the panel - measured
+// 2026-11-25 in a real browser, /api/assistant/queue was the slowest call the page made at 373 KB and 5.5s. The route
+// now builds it once and passes it in, and this pins that: three assistants, one context.
+test("the list form builds ONE queue context for every assistant's queue", async (t) => {
+  const { assistant } = await panelAssistant(t, "queue-ctx-");
+  for (const name of ["Reviewer", "Builder"]) assistant.createAssistant({ name });
+  const { call } = queueTransport(assistant);
+
+  let built = 0;
+  const real = assistant.queueContext.bind(assistant);
+  assistant.queueContext = (...args) => {
+    built += 1;
+    return real(...args);
+  };
+
+  const { status, payload } = await call({ method: "GET" });
+  assert.equal(status, 200);
+  assert.equal((payload.queues || []).length, 3, "every assistant is answered");
+  assert.equal(built, 1, "one summary of the jobs and rows for the whole answer, not one per queue");
+
+  // and a single-assistant read still builds exactly one, through the same seam
+  built = 0;
+  await call({ method: "GET", query: "?assistantId=assistant-1" });
+  assert.equal(built, 1);
+});
+
 // ---- a row filed by ANOTHER assistant: the route's designed mechanism ---------------------------------------
 // POST /api/assistant/queue takes the target from `payload.assistantId` and the filer from `payload.by`, and nothing
 // verifies the caller. That is the design, not a gap: naming the filer in `by` is how a cross-assistant write says who

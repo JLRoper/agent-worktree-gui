@@ -1,6 +1,6 @@
 {
   "name": "agent-worktree-gui",
-  "version": "1.171.0",
+  "version": "1.170.5",
   "private": true,
   "type": "module",
   "description": "Local GUI panel that monitors git worktrees across one or more projects (branches, merge status vs remote main, PR state, dirty work, live activity).",
@@ -176,7 +176,6 @@
     "test:changed": "node tools/test-changed.mjs",
     "test:module": "node tools/test-module.mjs",
     "test:e2e:task-window": "node --test --test-reporter=spec test/e2e/task-window.spec.mjs",
-    "test:e2e:initiative-ask-row": "node --test --test-reporter=spec test/e2e/initiative-ask-row.spec.mjs",
     "test:e2e:minimized-composer": "node --test --test-reporter=spec test/e2e/minimized-composer.spec.mjs",
     "test:e2e:deliverables-window": "node --test --test-reporter=spec test/e2e/deliverables-window.spec.mjs",
     "test:e2e:assistant-rail-width": "node --test --test-reporter=spec test/e2e/assistant-rail-width.spec.mjs",
