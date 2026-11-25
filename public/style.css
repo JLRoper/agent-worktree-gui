@@ -1740,8 +1740,13 @@ body.is-out-gripping * { cursor: nwse-resize; }
 .jl-think.think-row:focus-visible { outline: 1px solid #55407a; outline-offset: 1px; }
 .jl-think .think-text { display: block; max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
 .jl-think.think-row.is-open .think-text { max-height: none; }
-/* The dots that say "more is hidden" are part of the thought's own text run: an inline span, so they never start a
-   line of their own, and they are absent whenever the row is fully shown. */
+/* The measuring surface a FOLDED row's four-line cut is found on (thinkLidCut/thinkProbe in
+   public/board/console.js): one hidden box on <body>, given the row's own computed text properties and the box's width
+   in px. It sits outside the console on purpose - a hidden element inside the console would still join its
+   `textContent`, and a copy or a search would find the thought twice. Out of flow and invisible, so it changes no
+   geometry and paints nothing. */
+.think-measure { position: fixed; left: -10000px; top: 0; width: 0; height: 0; overflow: visible; visibility: hidden; pointer-events: none; }
+.think-measure-text { display: block; max-height: none; overflow: visible; }
 .jl-think .think-more { white-space: nowrap; }
 /* The clip is the ROW's too, for a row that has no .think-text box of its own (a painter that had to set the row's
    own innerHTML - see drawRowText). The rule is the same one either way: four lines kept from the TOP, the bottom

@@ -15,11 +15,16 @@
 //   (4) the row is dim and clipped to a few lines, and a press opens it in place; the console is still readable at a
 //       narrow viewport;
 //   (5) a settled reload reproduces the same order with ONE copy of each block: the store's blocks are merged by `at`
-//       and the live preview rows are taken out.
+//       and the live preview rows are taken out;
+//   (6) a FOLDED row never paints past its four-line lid, at any painted frame: not while the stream grows it, not
+//       while the page measures its cut, and not when a card rebuild draws the row again mid-stream. It never gains
+//       is-open on its own; only the reader's press opens it. Sampled every animation frame (window.__lid), because
+//       a row that is over the lid for one frame is exactly the flash the reader reported, and no poll can see it.
 //
 // WHAT IS DRIVEN. A sandbox panel of its own on a spare port (tools/panel-testkit.mjs: own PANEL_CONFIG / HERMES_HOME
 // / jobs.json, no reader's store touched), with a stub Runs API playing a scripted turn over REAL SSE:
-// reasoning.delta x3, tool.started/terminal, tool.completed, reasoning.delta x2, message.delta, run.completed. The card
+// reasoning.delta x8 (one console line each), tool.started/terminal, tool.completed, reasoning.delta x2,
+// message.delta, run.completed - with one card rebuild forced in the middle of the live window. The card
 // is spawned through the panel's own POST /api/agents into a fixture repo, so the console is a real run drawn by the
 // page's own painters. /api/thinking is answered by this gate (the sandbox has no session store); the settled read is
 // driven with the block stamps the page itself recorded, so the merge under test is the shipped one.
@@ -53,15 +58,15 @@ const THOUGHT_B = "The read came back; the heading is what the answer needs.";
 const ANSWER = "The fixture's heading is Title and the body is one line.";
 
 // ---- a scripted turn over the real Runs SSE -----------------------------------------------------------
-// One event per 320 ms. The reasoning is three deltas, then a call and its result, then two more deltas, then the
-// answer and the terminal event. That is the shape a reasoning model produces: a thought, the call it led to, the
-// next thought after the result.
+// One event per 320 ms. The reasoning is EIGHT deltas - one console line each, so the row is over its four-line lid
+// while the stream is still writing it - then a call and its result, then two more deltas, then the answer and the
+// terminal event. That is the shape a reasoning model produces: a thought, the call it led to, the next thought after
+// the result. Splitting the thought finer than four deltas is what gives the lid case in the middle of the live
+// window its own frames to judge: a row that only reached the lid on the last delta would be judged after it stopped.
+const THOUGHT_LINES = THOUGHT_A.split("\n");
 function nextEvent(rec) {
   const script = [
-    { event: "reasoning.delta", delta: "First, read the fixture: one file, one heading.\n" },
-    { event: "reasoning.delta", delta: "The row is clipped at four lines of the console's own leading, so this thought is longer than that on purpose.\n" },
-    { event: "reasoning.delta", delta: "Line three says the same thing again, so the scrollHeight is measurably past the clip.\n" },
-    { event: "reasoning.delta", delta: "Line four is still on screen.\nLine five is hidden until the reader presses the row.\nLine six is hidden too.\nLine seven ends the thought." },
+    ...THOUGHT_LINES.map((line, i) => ({ event: "reasoning.delta", delta: i < THOUGHT_LINES.length - 1 ? `${line}\n` : line })),
     { event: "tool.started", tool: "read_file", preview: "docs/a.md" },
     { event: "tool.completed", tool: "read_file", duration: 0.21, preview: "# Title\n\nbody line\n" },
     { event: "reasoning.delta", delta: "The read came back; " },
@@ -262,6 +267,50 @@ const main = async () => {
 
     browser = await pw.chromium.launch({ headless: true });
     const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+    // The folded row's own instrument: one sample per PAINTED frame of the first thinking row, so a row that is
+    // over its lid for a single frame is counted rather than missed between two polls. It reads the row's drawn
+    // height, its box's content height (what the row would paint if the lid were not there), the open state and the
+    // number of characters in the box. A frame is "over the lid" when the content the row holds is taller than the
+    // four-line lid by more than 1 px - which on the pre-fix tree happens on every card paint and every measurement.
+    await ctx.addInitScript(
+      ({ thread }) => {
+        const lid = (window.__lid = { frames: [], sampling: false, thread });
+        const row = () => document.querySelector(`.job[data-thread="${CSS.escape(lid.thread)}"] pre.job-out .jl-think[data-think-row]`);
+        lid.measure = () => {
+          const r = row();
+          if (!r) return null;
+          const box = r.querySelector(":scope > .think-text");
+          if (!box) return null;
+          const cs = getComputedStyle(box);
+          const maxH = parseFloat(cs.maxHeight);
+          return {
+            rowH: r.clientHeight,
+            boxH: box.clientHeight,
+            boxSH: box.scrollHeight,
+            maxH: Number.isFinite(maxH) ? maxH : null,
+            open: r.classList.contains("is-open"),
+            aria: r.getAttribute("aria-expanded"),
+            drawn: box.textContent.length,
+            dots: box.textContent.endsWith("...."),
+          };
+        };
+        lid.start = () => {
+          lid.frames = [];
+          const tick = () => {
+            const m = lid.measure();
+            if (m) lid.frames.push({ t: Math.round(performance.now()), ...m });
+            if (lid.sampling) requestAnimationFrame(tick);
+          };
+          lid.sampling = true;
+          requestAnimationFrame(tick);
+        };
+        lid.stop = () => {
+          lid.sampling = false;
+          return lid.frames;
+        };
+      },
+      { thread },
+    );
     const page = await ctx.newPage();
     page.on("pageerror", (e) => out.errors.push(String((e && e.message) || e).slice(0, 240)));
     // The sandbox has no session store. Empty until the settled phase, which answers with the stamps the page recorded.
@@ -287,6 +336,9 @@ const main = async () => {
     const jobId = await spawn();
     await reveal();
     await page.waitForSelector(`.job[data-thread="${thread}"] pre.job-out`, { timeout: 60_000 });
+    // The row's frames are collected from here, before the first delta, so the whole growth of the folded row is
+    // sampled and not only the moment a poll happened to look.
+    await page.evaluate(() => window.__lid.start());
 
     // ---- the live mark starts with the first delta ------------------------------------------------------
     const started = Date.now();
@@ -364,6 +416,64 @@ const main = async () => {
       two?.clip ? JSON.stringify({ ends: two.clip.ends, source: two.clip.source === THOUGHT_A, clientHeight: two.clip.clientHeight, maxHeight: two.clip.maxHeight }) : "no row",
     );
     check("the row's clip is finite at the console's leading", Boolean(two?.clip) && /px$/.test(two.clip.maxHeight) && parseFloat(two.clip.maxHeight) > 0, two?.clip ? two.clip.maxHeight : "no row");
+    // ---- the folded row never paints past its lid ---------------------------------------------------------
+    // The reader's bug: a FOLDED thinking row flashes the whole thought and re-folds on the reasoning events. The
+    // invariant is about what the row PAINTS at every frame the stream drew, not about what a poll happens to catch:
+    // the row's drawn height and the content its box holds are both inside the four-line lid, and the row never gains
+    // is-open on its own. `boxSH` is the content height of the box, i.e. what the row would paint if the lid were not
+    // there, so a box holding the whole section - the measuring write, or a card rebuild that drew the source text -
+    // counts as over the lid even though the CSS clip holds the row itself at four lines.
+    const lidStats = (frames) => {
+      const lids = frames.map((f) => f.maxH).filter((n) => Number.isFinite(n) && n > 0);
+      const lid = lids.length ? Math.min(...lids) : null;
+      const over = lid == null ? [] : frames.filter((f) => f.boxSH > lid + 1);
+      const tall = lid == null ? [] : frames.filter((f) => f.rowH > lid + 1);
+      const opened = frames.filter((f) => f.open || f.aria === "true");
+      return {
+        lid,
+        frames: frames.length,
+        overLid: over.length,
+        tall: tall.length,
+        opened: opened.length,
+        peakContent: frames.length ? Math.max(...frames.map((f) => f.boxSH)) : null,
+        peakRow: frames.length ? Math.max(...frames.map((f) => f.rowH)) : null,
+        peakDrawn: frames.length ? Math.max(...frames.map((f) => f.drawn)) : null,
+        firstOver: over[0] ? { boxSH: over[0].boxSH, boxH: over[0].boxH, drawn: over[0].drawn, dots: over[0].dots, maxH: over[0].maxH } : null,
+      };
+    };
+    // The row reaches its lid while the thought is still arriving - the moment the reader's report is about - and a
+    // card rebuild is forced THERE, in the middle of the stream: a rebuild is how the row is drawn again from its
+    // source text whenever the page is handed a new version of the card, which is once per state frame of a live turn.
+    const lidAt = Date.now();
+    let reached = null;
+    while (Date.now() - lidAt < 25_000) {
+      const s = await readConsole(page, thread);
+      const m = await page.evaluate(() => window.__lid.measure());
+      if (s.thinkRows > 0 && s.liveMarks === 0) break;
+      if (m && m.maxH && m.rowH >= m.maxH - 1 && s.liveMarks > 0) {
+        reached = m;
+        break;
+      }
+      await sleep(60);
+    }
+    out.phases.lidReached = reached;
+    check("the live row reaches its four-line lid while the thought is still arriving", Boolean(reached), JSON.stringify(reached));
+    await page.evaluate((t) => {
+      const el = document.querySelector(`.job[data-thread="${CSS.escape(t)}"]`);
+      if (el) delete el.dataset.sig; // a signature is the card's own reason to repaint; a caller may not fake one
+      renderConversation(t);
+    }, thread);
+    await sleep(700);
+    const liveLid = lidStats(await page.evaluate(() => window.__lid.stop()));
+    out.phases.liveLid = liveLid;
+    out.folded = liveLid;
+    check(
+      "no frame painted the folded row past its lid, across the stream and the card rebuild in it",
+      liveLid.frames > 0 && liveLid.overLid === 0 && liveLid.tall === 0 && liveLid.opened === 0,
+      JSON.stringify(liveLid),
+    );
+    if (liveLid.overLid) await page.screenshot({ path: path.join(OUT, "folded-row-over-lid.png") }).catch(() => {});
+
     await page.click(`.job[data-thread="${thread}"] .jl-think .think-text`);
     const opened = await readConsole(page, thread);
     out.phases.opened = opened;

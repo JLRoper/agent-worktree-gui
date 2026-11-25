@@ -812,6 +812,9 @@ function renderJobs() {
     restoreScrolls($("jobs"), prevScrolls);
     applyStoredScrolls($("jobs"));
     for (const c of listed) restoreReplyDraft(c.thread);
+    // The rebuilt list's folded thought rows are fitted before any height is read below (the scroll restores and the
+    // new-card jump both measure this list).
+    fitThinkRows($("jobs"));
     // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
     // preventScroll, so a restore never drags the page to the box.
     restoreTyping($("jobs"), typing);
@@ -1119,6 +1122,11 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   const fresh = holder.firstElementChild;
   fresh.dataset.sig = sig;
   el.replaceWith(fresh);
+  // The rebuilt card's folded thought rows carry their source section until something measures them (the cut is a
+  // measurement, see fitThinkRows): fit them HERE, in the task that drew the card, so the repaint the reader sees is
+  // already folded. Fitting after the scroll restores would move every console by the rows' height after it was put
+  // back, so it comes first.
+  fitThinkRows(fresh);
   restoreTyping(fresh, typing);
   restoreCardSelection(heldSelection);
   if (window.scrollY !== pageY) {
