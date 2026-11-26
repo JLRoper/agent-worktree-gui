@@ -4112,6 +4112,11 @@
   const initNoteEdit = new Map(); // initiative id -> { noteId, text, label } - the one note being amended
   const initNoteStatus = new Map(); // initiative id -> { text, bad } - what the last note write answered
   const initNoteBusy = new Set(); // initiative ids with a note write in flight, so a double press is one write
+  // THE NOTES FOLD, per initiative. Absent means OPEN: a card first painted shows its log, and only a press puts it
+  // away. Module state rather than the element's own, for the reason every fold beside it is module state - the pane
+  // repaints from a snapshot every few seconds, and a fold that lived on the <section> would pop open on the next one.
+  // A note arriving while the log is folded is just a bigger count: nothing here is written by the write paths.
+  const initNotesFold = new Map(); // initiative id -> true when the reader has folded the notes
   let initNoteArm = ""; // the note id whose Delete has been pressed once and waits for the second
 
   // The four host names the store can carry, as words: the chip says which reference system a link belongs to, and
@@ -4224,20 +4229,30 @@
           <b>Nothing remembered here yet</b>
           <span>What belongs in this log: the ticket the work started from, the pull request that ships a slice, the decision that closed a fork, the version it first went out in. A URL pasted on its own becomes a chip you can open.</span>
         </div>`;
-    return `<section class="init-notesfold" data-init-notes="${esc(init.id)}" aria-label="${esc(`notes on ${init.title}`)}">
-      <div class="init-sechead">
+    // THE HEAD IS THE CONTROL. A real <button>, so a press, Enter and Space are one press in the browser's own hands
+    // rather than three listeners this pane has to keep honest; aria-expanded carries the same answer the body's
+    // `hidden` does. The count sits INSIDE the head on purpose: folded, the log is a number the reader can still read
+    // without opening it. The body is the list, the write box and the last write's status - everything the fold puts
+    // away - and the body's hidden attribute is what the gate measures, not a class the CSS could outvote.
+    const notesOpen = initNotesFold.get(String(init.id)) !== true;
+    const bodyId = `init-notes-body-${String(init.id)}`;
+    return `<section class="init-notesfold${notesOpen ? "" : " is-folded"}" data-init-notes="${esc(init.id)}" aria-label="${esc(`notes on ${init.title}`)}">
+      <button type="button" class="init-proj init-foldhead init-noteshead" data-init-notes-fold="${esc(init.id)}" aria-expanded="${notesOpen ? "true" : "false"}" aria-controls="${esc(bodyId)}" title="${notesOpen ? "fold the notes - the head keeps the count, and a note that arrives while it is folded only moves the count" : "unfold the notes - the log and the write box come back, and the draft you left is still in it"}">
+        <span class="init-caret" aria-hidden="true">${notesOpen ? "▾" : "▸"}</span>
         <span class="init-sechead-name">Notes</span>
         <span class="chip init-notes-count${count ? "" : " is-zero"}" data-init-notes-count="${esc(init.id)}" title="${count} note${count === 1 ? "" : "s"} on this initiative - the log holds ${capNotes}, and a full log refuses rather than dropping the oldest">${count}</span>
-        <span class="as-hint init-notes-note">tickets, PRs, decisions, versions</span>
-      </div>
-      ${list}
-      ${status ? `<div class="init-note-status${status.bad ? " is-bad" : ""}" role="status">${esc(status.text)}</div>` : ""}
-      <div class="init-notewrite" data-init-noteform="${esc(init.id)}">
-        <textarea class="init-notebox" data-init-notefield="text" rows="3" maxlength="${capText}" spellcheck="false" aria-label="${esc(`write a note on ${init.title}`)}" placeholder="Write down what this work should not forget: a decision, a ticket id, a version. A URL on its own becomes a link."${blocked ? " disabled" : ""}>${esc(draft.text)}</textarea>
-        <div class="init-note-write-row">
-          <input type="text" class="init-notefield init-notelabel" data-init-notefield="label" maxlength="${capLabel}" spellcheck="false" aria-label="label for the link this note holds" placeholder="label for a link (optional)" value="${esc(draft.label)}"${blocked ? " disabled" : ""}>
-          <button type="button" class="init-mini primary init-notesave" data-init-notesave="${esc(init.id)}"${blocked || busy ? " disabled" : ""} title="append this to the log - a note is never overwritten, and the whole write is refused if it is over its cap">Save note</button>
-          <span class="as-hint init-note-cap" data-init-note-cap>${capText} characters at most - an over-cap note is refused, never trimmed</span>
+        <span class="as-hint init-notes-note">${notesOpen ? "tickets, PRs, decisions, versions" : "folded - press to unfold"}</span>
+      </button>
+      <div class="init-notesbody" id="${esc(bodyId)}"${notesOpen ? "" : " hidden"}>
+        ${list}
+        ${status ? `<div class="init-note-status${status.bad ? " is-bad" : ""}" role="status">${esc(status.text)}</div>` : ""}
+        <div class="init-notewrite" data-init-noteform="${esc(init.id)}">
+          <textarea class="init-notebox" data-init-notefield="text" rows="3" maxlength="${capText}" spellcheck="false" aria-label="${esc(`write a note on ${init.title}`)}" placeholder="Write down what this work should not forget: a decision, a ticket id, a version. A URL on its own becomes a link."${blocked ? " disabled" : ""}>${esc(draft.text)}</textarea>
+          <div class="init-note-write-row">
+            <input type="text" class="init-notefield init-notelabel" data-init-notefield="label" maxlength="${capLabel}" spellcheck="false" aria-label="label for the link this note holds" placeholder="label for a link (optional)" value="${esc(draft.label)}"${blocked ? " disabled" : ""}>
+            <button type="button" class="init-mini primary init-notesave" data-init-notesave="${esc(init.id)}"${blocked || busy ? " disabled" : ""} title="append this to the log - a note is never overwritten, and the whole write is refused if it is over its cap">Save note</button>
+            <span class="as-hint init-note-cap" data-init-note-cap>${capText} characters at most - an over-cap note is refused, never trimmed</span>
+          </div>
         </div>
       </div>
     </section>`;
@@ -4602,6 +4617,7 @@
     "data-init-save", "data-init-cancel", "data-init-field", "data-init-about", "data-init-density",
     "data-init-up", "data-init-down", "data-init-archive", "data-init-restore", "data-init-filter", "data-init-search",
     "data-init-notesave", "data-init-noteeditsave", "data-init-noteedit", "data-init-notedel", "data-init-notecancel",
+    "data-init-notes-fold",
   ];
   let initKeyboardModality = false;
   document.addEventListener("keydown", (e) => {
@@ -5405,7 +5421,7 @@
         return;
       }
       if (kind !== "self") return;
-      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh], [data-init-about], [data-init-density], [data-wave-add], [data-wave-edit], [data-wave-save], [data-wave-cancel], [data-wave-up], [data-wave-down], [data-wave-del]");
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-notes-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh], [data-init-about], [data-init-density], [data-wave-add], [data-wave-edit], [data-wave-save], [data-wave-cancel], [data-wave-up], [data-wave-down], [data-wave-del]");
       if (!el) return;
       // THE WAVE'S OWN CONTROLS (public/core/waves-lane.js). Each one posts a record's fields and repaints from the
       // answer's lane, so the words on the card are always the server's fold. Add opens a form; it never creates a
@@ -5518,6 +5534,15 @@
         const id = String(el.dataset.initHistoryFold);
         if (initHistoryOpen.has(id)) initHistoryOpen.delete(id);
         else initHistoryOpen.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      // THE NOTES FOLD. The one book is keyed by the initiative, so two cards fold apart; the write is a flip of that
+      // entry and nothing else, which is why a note that lands while the log is shut cannot open it.
+      if (el.dataset.initNotesFold) {
+        const id = String(el.dataset.initNotesFold);
+        if (initNotesFold.get(id) === true) initNotesFold.delete(id);
+        else initNotesFold.set(id, true);
         renderAssistantInitiatives(true);
         return;
       }

@@ -86,6 +86,7 @@
     "verify:initiative-branch-link": "node tools/verify-initiative-branch-link.mjs",
     "verify:initiative-chip": "node tools/verify-initiative-chip.mjs",
     "verify:initiative-notes": "node tools/verify-initiative-notes.mjs",
+    "verify:initiative-notes-fold": "node tools/verify-initiative-notes-fold.mjs",
     "verify:task-refs": "node tools/verify-task-refs.mjs",
     "verify:round-tree-names": "node tools/verify-round-tree-names.mjs",
     "verify:settings-tabs": "node tools/verify-settings-tabs.mjs",
