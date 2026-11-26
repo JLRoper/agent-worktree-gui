@@ -7815,13 +7815,15 @@ async function renameWorktreePrompt(btn) {
 // the server's: it is the tree's identity through every later rename.
 const childPresses = new Map(); // row key -> when its + was last taken, so a double click is one tree
 
-// ---- the cut dialog: WHICH KIND of tree this child is ---------------------------------------------
-// A cut records what kind of tree it made (lib/branch-kind.js): a turnover child, cut from a turnover branch the
-// reader asked for, or a research tree, cut from the project's main parent and local only. The dialog offers exactly
-// those two, read from the server, and carries no default of its own: when the reader does not choose, the server
-// decides from the parent's name, and when NEITHER kind matches it answers with a clarify card which this draws in
-// place of the form - nothing is cut until the reader answers. A silent default here is the failure the rule exists
-// to prevent: a tree filed under a kind nobody chose is a push decision nobody made.
+// ---- the cut dialog: WHICH KIND of tree this child is, and WHERE it starts --------------------------------
+// A cut records what kind of tree it made (lib/branch-kind.js): a research tree or an implementation tree. Turnover
+// is NOT offered - that kind is the feature CONTAINER itself, never a child (a child of a turnover branch is research
+// or implementation by its brief). The kinds come from the server, so the page carries no second vocabulary.
+//
+// The PARENT is the second question, and only a row standing on main has a real choice: the feature's turnover branch
+// is preselected (research prefers it), with main still offered as the top-level alternative. A row on a turnover
+// branch cuts from it; a row on any other tree cuts a nested child from its own branch. The server answers the list
+// (`/api/branch-kinds?project=&parent=`) and refuses a parent that is none of those.
 let cutDialog = null; // { el, key, project, path, parent }
 
 function closeCutDialog() {
@@ -7834,7 +7836,7 @@ function closeCutDialog() {
   cutDialog = null;
 }
 
-function cutDialogHtml(choices, { parent, question = "", name = "", note = "" }) {
+function cutDialogHtml(choices, { parent, parents = [], question = "", name = "", note = "" }) {
   const offered = String(parent).split("/").filter(Boolean).pop().replace(/-[0-9a-f]{6}$/i, "");
   const options = (choices || [])
     .map(
@@ -7842,25 +7844,39 @@ function cutDialogHtml(choices, { parent, question = "", name = "", note = "" })
         `<label class="cut-kind" title="${esc(c.label)}"><input type="radio" name="cut-kind" value="${esc(c.value)}" /> <strong>${esc(c.value)}</strong><span>${esc(c.label)}</span></label>`,
     )
     .join("");
+  // ONE parent is a statement; two or more are the reader's choice, preselected from the server's answer.
+  const rows = (parents || []).filter((p) => p && p.branch);
+  const parentHtml =
+    rows.length > 1
+      ? `<div class="cut-kinds cut-parents" role="radiogroup" aria-label="where the cut starts"><span class="cut-note">from</span>` +
+        rows
+          .map(
+            (p) =>
+              `<label class="cut-kind" title="${esc(p.label || p.branch)}"><input type="radio" name="cut-parent" value="${esc(p.branch)}"${p.preselected ? " checked" : ""} /> <span>${esc(p.label || p.branch)}</span></label>`,
+          )
+          .join("") +
+        `</div>`
+      : `<div class="cut-note">from ${esc(parent)}${rows[0]?.role === "turnover" ? " - the feature's turnover branch" : ""}.</div>`;
   const tail = question
-    ? "nothing has been cut. choose one of the three kinds and press Cut."
-    : `its branch: wtgui/&lt;name&gt;-&lt;tag&gt;, cut from ${parent}. nothing is started in it and nothing is pushed. leave the kind unchosen and the panel decides: a turnover parent makes a turnover child, otherwise the brief reads as research (answer only) or implementation (merges locally, never pushes) - and the cut always goes ahead.`;
+    ? "nothing has been cut. choose one of the two kinds and press Cut."
+    : `its branch: wtgui/&lt;name&gt;-&lt;tag&gt;, cut from the branch above. nothing is started in it and nothing is pushed. leave the kind unchosen and the panel decides: the brief reads as research (answer only) or implementation (merges into its turnover branch locally, never pushes) - and the cut always goes ahead. An implementation asked for with main as its parent first cuts the feature's turnover tree, then cuts this child from it.`;
   return (
     `<div class="cut-head">${question ? esc(question) : `cut a child worktree off ${esc(parent)}`}</div>` +
-    `<div class="cut-kinds">${options || `<span class="cut-note">reading the three kinds…</span>`}</div>` +
+    parentHtml +
+    `<div class="cut-kinds">${options || `<span class="cut-note">reading the two kinds…</span>`}</div>` +
     `<label class="cut-row">name <input class="cut-name" type="text" value="${esc(name)}" placeholder="(empty = ${esc(offered)})" /></label>` +
     `<div class="cut-note">${note ? `${esc(note)} ` : ""}${esc(tail)}</div>` +
     `<div class="cut-actions"><button type="button" class="mc-choice cut-go">Cut</button><button type="button" class="mc-choice cut-cancel">Cancel</button></div>`
   );
 }
 
-function openCutDialog({ project, path, parent, key, choices, name = "", question = "", note = "" }) {
+function openCutDialog({ project, path, parent, key, choices, parents = [], name = "", question = "", note = "" }) {
   closeCutDialog();
   const el = document.createElement("div");
   el.className = "cut-dialog";
   el.setAttribute("role", "dialog");
-  el.setAttribute("aria-label", "which kind of tree this cut is");
-  el.innerHTML = cutDialogHtml(choices, { parent, question, name, note });
+  el.setAttribute("aria-label", "which kind of tree this cut is, and where it starts");
+  el.innerHTML = cutDialogHtml(choices, { parent, parents, question, name, note });
   document.body.appendChild(el);
   el.style.left = `${Math.max(8, Math.round((window.innerWidth - el.offsetWidth) / 2))}px`;
   el.style.top = `${Math.max(8, Math.round((window.innerHeight - el.offsetHeight) / 2))}px`;
@@ -7874,6 +7890,8 @@ async function cutSubmit(dialog) {
   const el = dialog.el;
   const name = String(el.querySelector(".cut-name")?.value || "").trim();
   const chosen = el.querySelector('input[name="cut-kind"]:checked')?.value || "";
+  // The parent the reader left selected; one row means no radios and the row's own branch stands.
+  const parent = String(el.querySelector('input[name="cut-parent"]:checked')?.value || dialog.parent || "").trim();
   const go = el.querySelector(".cut-go");
   if (go) {
     go.disabled = true;
@@ -7885,23 +7903,25 @@ async function cutSubmit(dialog) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: dialog.project, path: dialog.path, name, kind: chosen || undefined }),
+        body: JSON.stringify({ project: dialog.project, path: dialog.path, name, kind: chosen || undefined, parent: parent || undefined }),
       },
       { timeoutMs: 120000 },
     );
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      // Neither kind applies, so the server refused to guess: it answered with the card and cut nothing. Draw the
-      // card in place of the form, with the name the reader typed still in it.
-      if (d.clarify) {
-        openCutDialog({ project: dialog.project, path: dialog.path, parent: dialog.parent, key: dialog.key, choices: d.clarify.choices || [], name, question: String(d.clarify.question || ""), note: "" });
-        return;
-      }
-      throw new Error(d.error || `HTTP ${r.status}`);
-    }
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     childPresses.set(dialog.key, Date.now());
     closeCutDialog();
-    showBanner(`cut ${d.branch} from ${dialog.parent} as a ${d.kind || "tree"}${d.localOnly ? " (local only)" : ""} - ${d.name || d.branch} is a row now`);
+    if (d.asked) {
+      // The project's turnover policy parks the feature's container on the permission card. Allowing it cuts the
+      // container AND this child; nothing is cut until the reader answers.
+      showBanner(`${d.project}: the feature's turnover branch ${d.branch} waits on your permission card - allowing it cuts the container and the ${d.kind || "implementation"} tree`);
+      await resync();
+      return;
+    }
+    const cut = d.container
+      ? `cut ${d.branch} from ${d.parent} as ${d.kind || "a tree"}, and its feature container ${d.container.branch} from ${d.container.parent}`
+      : `cut ${d.branch} from ${d.parent} as a ${d.kind || "tree"}${d.localOnly ? " (local only)" : ""}`;
+    showBanner(`${cut} - ${d.name || d.branch} is a row now`);
     await resync();
   } catch (err) {
     showBanner(`could not cut a child of ${dialog.parent}: ${String((err && err.message) || err)}`);
@@ -7920,20 +7940,25 @@ async function cutChildTree(btn) {
   // One press, one tree. A second child of the same branch is a second press - a double click is not.
   if (Date.now() - (childPresses.get(key) || 0) < 3000) return;
   let choices = [];
+  let parents = [];
   try {
-    const r = await apiFetch("/api/branch-kinds", { method: "GET" }, { timeoutMs: 15000 });
+    const q = new URLSearchParams({ project, parent });
+    const r = await apiFetch(`/api/branch-kinds?${q.toString()}`, { method: "GET" }, { timeoutMs: 15000 });
     const d = await r.json().catch(() => ({}));
     choices = Array.isArray(d.choices) ? d.choices : [];
+    parents = Array.isArray(d.parents) ? d.parents : [];
   } catch {
     choices = [];
+    parents = [];
   }
-  openCutDialog({ project, path, parent, key, choices });
+  openCutDialog({ project, path, parent, key, choices, parents });
 }
 // ---- end a child worktree off this row's branch
 
-// ---- lifting a research tree's local-only kind: the R on the row, its confirm, and the one request ----------
-// THE MISSING CONTROL. A cut records what kind of tree it made (lib/branch-kind.js): a turnover child has a
-// destination on the remote, a research tree is local only and its push meets a refusal until the reader lifts it.
+// ---- lifting a local-only kind: the R or I on the row, its confirm, and the one request ---------------------
+// THE MISSING CONTROL. A cut records what kind of tree it made (lib/branch-kind.js): a research or implementation
+// tree is local only and its push meets a refusal until the reader lifts it; a turnover tree is the feature
+// container and has a destination already, so it has no local-only kind to lift.
 // Both facts were already written, read by the push rule and answerable by POST /api/worktree/kind-lift - and the
 // route had NO control in the page at all, so finishing a landing on a research tree meant opening
 // ~/.wag/state/branch-parents.json or hand-calling the API.
@@ -7969,7 +7994,7 @@ function showKindConfirm(key, trigger = null) {
   const rowEl = (trigger && typeof trigger.closest === "function" && trigger.closest("tr.row")) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   if (!row || !rowEl) return;
   const kind = String(row.branchKind || "").toLowerCase();
-  // BOTH LOCAL KINDS LIFT, and only those: a turnover child has no local-only kind to lift.
+  // BOTH LOCAL KINDS LIFT, and only those: a turnover tree is the feature container, so it has no local-only kind.
   if (kind !== "research" && kind !== "implementation") return;
   if (row.branchKindLifted === true) return;
   closeKindConfirm(key);

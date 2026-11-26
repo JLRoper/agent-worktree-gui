@@ -90,6 +90,11 @@ test("a main branch, a missing branch and a taken name are refused in sentences"
   assert.equal(onMain.ok, false);
   assert.match(onMain.error, /main branch — a child of it has no roll-up to arrive at/);
 
+  // A RESEARCH tree is the exception and says so: it never merges, so a top-level tree beside main is exactly right.
+  const researchOnMain = await cutChildWorktree({ repoDir: repo, parentBranch: "main", mainBranch: "main", allowMainParent: true, name: "the question" });
+  assert.equal(researchOnMain.ok, true, researchOnMain.error);
+  assert.equal(researchOnMain.parent, "main", "the research tree's parent is main itself");
+
   // `develop` is a main name even when the project calls its base something else.
   const develop = await cutChildWorktree({ repoDir: repo, parentBranch: "develop" });
   assert.equal(develop.ok, false, "a missing branch and a main name are both refusals, and this one is the name");

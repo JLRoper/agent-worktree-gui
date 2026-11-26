@@ -75,9 +75,9 @@ import { DEFAULT_HIDDEN_COLUMNS, chartColumnsFrom } from "./lib/chart-columns.js
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
-import { ParentBook } from "./lib/parents.js";
+import { ParentBook, isMainName } from "./lib/parents.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
-import { BRANCH_KINDS, KIND_LABELS, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
+import { BRANCH_KINDS, CHILD_KINDS, KIND_LABELS, cutParentChoices, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/restart.js";
 import { readPipelineDocument } from "./lib/pipeline-doc.js";
@@ -132,7 +132,7 @@ import { artefactPaths, collectWaveEvidence, prByNumber } from "./lib/wave-evide
 import { countOperation, noteFact } from "./lib/read-profile.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
-import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverBranchesOf, turnoverLookup, turnoverPolicyOf, validateBaseRefKind, validateTurnoverBranch, validateTurnoverBranches, TURNOVER_POLICIES } from "./lib/project-turnover.js";
+import { baseRefKindLookup, baseRefKindOf, planTurnoverCut, projectTurnoverRow, turnoverBranchForKey, turnoverBranchFrom, turnoverBranchOf, turnoverBranchesOf, turnoverKeyFrom, turnoverLookup, turnoverPolicyOf, validateBaseRefKind, validateTurnoverBranch, validateTurnoverBranches, TURNOVER_POLICIES } from "./lib/project-turnover.js";
 import { BASE_REF_KIND_LABELS, LOCAL_TURNOVER_KIND } from "./lib/base-ref-kind.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-turnover.js";
 // The cleanup chip's one route (routes/project-cleanup.js): POST /api/projects/:id/cleanup, a dry run that returns
@@ -1413,6 +1413,39 @@ jobs.turnoverBranchFor = turnoverLookup({ registry, config });
 // local turnover branch the panel finds (lib/turnover-base.js). Read per cut for the same reason as the branch name -
 // the settings save updates the registry's record and the very next SPAWN must obey the new kind.
 jobs.baseRefKindFor = baseRefKindLookup({ registry, config });
+// WHICH TURNOVER BRANCH A FEATURE'S CONTAINER IS, and the policy that decides whether a cut makes one. Read per cut,
+// like the two lookups above: the settings save updates the record the very next cut reads. `lib/project-turnover.js`
+// `planTurnoverCut` answers reuse (the project files a branch under this key), cut (free) or ask (the card).
+jobs.turnoverCutFor = (name, key = "", opts = {}) => {
+  const project = (registry.projects || []).find((p) => p && p.name === name) || (config.projects || []).find((p) => p && p.name === name) || null;
+  return planTurnoverCut({ project, key, name: opts.name || "", at: opts.at instanceof Date ? opts.at : new Date() });
+};
+// THE CARD a spawn's auto-cut parks on under `ask`/`one-per-feature`: the answer creates the feature's container, and
+// the next press reuses it for the implementation child. The resume runs the same container cut the direct path does
+// (`jobs.cutTurnoverTreeFor`), then joins the branch to the project's list.
+jobs.requestTurnoverBranch = ({ project, key = "", branch = "", policy = "" } = {}) => {
+  const found = (registry.projects || []).find((p) => p && p.name === project) || null;
+  return remoteWrites.request({
+    kind: "turnover",
+    worktree: String(found?.path || ""),
+    project,
+    branch,
+    title: `${project}: new turnover branch ${branch}`,
+    command: `add the feature's turnover branch ${branch} to ${project}${key ? ` (key ${key})` : ""}`,
+    description:
+      `this project's turnover policy is ${policy}, so a new turnover branch waits for you. Allow creates the feature container, so the implementation tree is cut from it; Deny cuts nothing and leaves the project as it is.`,
+    allowed: ["once", "deny"],
+    grants: false,
+    resume: async () => {
+      const made = await jobs.cutTurnoverTreeFor({ repoDir: found?.path, project, branch, base: String(found?.mainBranch || "main"), mainBranch: found?.mainBranch || null, key });
+      if (made.ok) await rememberTurnoverBranch(project, made.branch || branch, key);
+      return made;
+    },
+  });
+};
+// The container is a ROW, not just a branch: the same adoption a spawn's own tree gets, so it draws (and its children
+// hang under it) on the next snapshot rather than the next slow scan.
+jobs.adoptTree = (name, treePath) => scheduler.adoptWorktree(name, treePath).catch(() => false);
 // Where the work of a card whose run the gateway has forgotten still is: the tree the turn ran in, and the PR its
 // branch has. Read from the board's own rows — a scan already carries the PR per branch (lib/scheduler.js), so this
 // is a lookup, not a measurement: no git call, no gh call, and nothing the boot reconcile would have to pay per
@@ -1966,6 +1999,19 @@ async function setProjectTurnover(name, value, { by = "reader", baseRefKind = un
         ? `${name}: turnover branch ${branch}`
         : `${name}: ${branches.length} turnover branches (${branches.map((b) => b.branch).join(", ")})`;
   return { ok: true, project: name, turnoverBranch: branch, turnoverBranches: branches, turnoverPolicy: chosenPolicy, baseRefKind: kind, note };
+}
+
+// ONE FEATURE'S TURNOVER BRANCH, joined to the project's list by a cut that just made it. This is the record the NEXT
+// cut reads: `planTurnoverCut` reuses it for the same task or initiative key, so `one-per-feature` answers with the
+// branch the feature already has and two cuts for one feature cannot make two containers. The save goes through
+// `setProjectTurnover`, the one writer, so the file, the live config, the registry and the snapshot all move together.
+async function rememberTurnoverBranch(name, branch, key = "") {
+  const project = (registry.projects || []).find((p) => p.name === name) || null;
+  if (!project || !branch) return { status: 404, error: `unknown project or no branch: ${name || "(none)"} ${branch || ""}`.trim() };
+  const list = turnoverBranchesOf(project).map((entry) => (entry.key ? { branch: entry.branch, key: entry.key } : { branch: entry.branch }));
+  if (list.some((entry) => String(entry.branch || entry).toLowerCase() === String(branch).toLowerCase())) return { ok: true, unchanged: true };
+  list.push(key ? { branch, key } : { branch });
+  return setProjectTurnover(name, list, { by: `the cut (the feature's turnover tree ${branch})` });
 }
 
 // "Always allow" in the permission box is the same fact as the two controls saying allow-all for the project that
@@ -6086,11 +6132,28 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
-    // ---- the two kinds a cut may be ------------------------------------------------------------------------------
-    // Read from lib/branch-kind.js so the page carries no second copy of the vocabulary: the dialog offers exactly
-    // what the rule defines, and a kind added or removed there moves here without an edit in public/.
+    // ---- what a cut may be, and where it may start ----------------------------------------------------------
+    // Read from lib/branch-kind.js so the page carries no second copy of the vocabulary: a cut makes a RESEARCH or
+    // IMPLEMENTATION tree (turnover is the feature container, never a child), and it may start from the row's own
+    // branch, from the feature's turnover branch, or - for a research tree - from main. `?project=` and `?parent=`
+    // ask for those parent options, with the feature's turnover branch preselected when the project has one.
     if (route === "/api/branch-kinds" && req.method === "GET") {
-      return sendJson(res, 200, { ok: true, kinds: BRANCH_KINDS, choices: kindChoices() });
+      const q = new URL(req.url || "/", "http://127.0.0.1").searchParams;
+      const name = String(q.get("project") || "").trim();
+      const parent = String(q.get("parent") || "").trim();
+      const key = turnoverKeyFrom(q.get("key"));
+      const project = name ? (registry.projects || []).find((p) => p.name === name) || null : null;
+      const feature = project ? turnoverBranchForKey(project, key) || turnoverBranchOf(project) : "";
+      return sendJson(res, 200, {
+        ok: true,
+        kinds: CHILD_KINDS,
+        choices: kindChoices(),
+        project: project?.name || null,
+        parent: parent || null,
+        turnoverBranch: feature || null,
+        key: key || null,
+        parents: parent ? cutParentChoices({ parent, mainBranch: project?.mainBranch || null, turnoverBranch: feature }) : [],
+      });
     }
 
     // ---- cutting a child worktree off a row's own branch --------------------------------------------------------
@@ -6118,83 +6181,173 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 409, { error: `refused: ${project.path} is the project's own checkout, not a worktree — start that work from the New-agent card` });
       }
       if (!row.branch) return sendJson(res, 409, { error: `refused: ${row.path} is on a detached HEAD, so there is no branch to cut from` });
-      // THE KIND is decided before anything is cut, and it never blocks the cut: a stated kind wins, a turnover-shaped
-      // parent is a turnover child, and otherwise the brief (the name the reader typed, else the parent) decides
-      // research or implementation (lib/branch-kind.js `planCut`). Nothing is cut under a guessed kind that the reader
-      // can point at later: the answer says which rule chose it.
-      const plan = planCut({
-        project: project.name,
-        parent: row.branch,
-        mainBranch: project.mainBranch || null,
-        kind: kindFromAnswer(body.kind),
-        brief: String(body.name || body.brief || row.branch || ""),
-      });
-      const out = await cutChildWorktree({
-        repoDir: project.path,
-        parentBranch: row.branch,
-        mainBranch: project.mainBranch || null,
-        name: body.name ? String(body.name).slice(0, 60) : "",
-      });
-      if (!out.ok) return sendJson(res, 409, { error: out.error, parent: row.branch, path: row.path });
-      // The two records a parent is read from, and the naming ledger's one line. Nothing here may fail the cut: the
-      // tree exists and git's answer is the truth; a book that cannot be read back is a child shown as a guess
-      // rather than a child that was never made, which is the safe direction.
-      try {
-        parents.record({
+      // THE PARENT. The row's own branch by default. A body may name the feature's turnover branch or the project's
+      // main parent instead - the two the dialog offers - but nothing else: a body cannot promote an arbitrary branch
+      // to a cut parent. A research tree prefers the turnover branch; main stays the top-level alternative.
+      const askedParent = String(body.parent || "").trim() || row.branch;
+      const allowedParents = new Set(
+        [row.branch, ...turnoverBranchesOf(project).map((entry) => entry.branch), project.mainBranch || "", "main", "master", "trunk", "develop"]
+          .map((name) => String(name || "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+      if (String(body.parent || "").trim() && !allowedParents.has(askedParent.toLowerCase())) {
+        return sendJson(res, 409, {
+          error: `refused: ${askedParent} is not this row's branch, this project's turnover branch or its main parent - nothing was cut`,
+          parent: row.branch,
+          path: row.path,
+        });
+      }
+      // THE KIND is decided before anything is cut, and it never blocks the cut: a stated CHILD kind wins, and the
+      // brief (the name the reader typed, else the parent) decides research or implementation. A child of a turnover
+      // branch is never turnover - that kind is the container itself (lib/branch-kind.js `planCut`).
+      const brief = String(body.name || body.brief || row.branch || "");
+      let plan = planCut({ project: project.name, parent: askedParent, mainBranch: project.mainBranch || null, kind: kindFromAnswer(body.kind), brief });
+      // AN IMPLEMENTATION IS ALWAYS A CHILD OF A TURNOVER BRANCH. Asked for with a main parent, the feature's turnover
+      // tree is made (or found) FIRST, under the project's turnover policy, and the child is cut from IT: one press,
+      // two trees, and the child's parent is the container. `ask` parks the whole press on the permission card - the
+      // answer cuts the container and the child it was asked about, and `one-per-feature` reuses the branch the
+      // feature already has.
+      const parentIsMain = isMainName(askedParent, project.mainBranch || null);
+      const autoContainer = plan.kind === "implementation" && parentIsMain;
+      const feature = autoContainer ? planTurnoverCut({ project, key: turnoverKeyFrom(body.turnoverKey), name: brief }) : null;
+      // The branch joins the project's list when the container is really cut, so a second cut for this feature REUSES
+      // it and `one-per-feature` can answer with the branch the project already has.
+      const rememberFeature = async (branch, key) => {
+        const saved = await rememberTurnoverBranch(project.name, branch, key);
+        if (saved.error) log(`child: ${branch} was cut but its record on ${project.name} failed (${saved.error})`);
+      };
+      // The whole press as ONE function: the answer's resume and the direct path run the same cuts and the same
+      // records. It throws on the first refusal; the direct path turns that into a 409 and the parked one records it
+      // on the answer.
+      const cutAll = async () => {
+        let parentBranch = askedParent;
+        let container = null;
+        if (autoContainer) {
+          const made = await jobs.cutTurnoverTreeFor({
+            repoDir: project.path,
+            project: project.name,
+            branch: feature.branch,
+            base: askedParent,
+            mainBranch: project.mainBranch || null,
+            key: feature.key || "",
+          });
+          if (!made.ok) throw new Error(made.error);
+          await rememberFeature(made.branch, feature.key);
+          parentBranch = made.branch;
+          container = { branch: made.branch, path: made.path, parent: made.parent || askedParent, reused: made.reused === true, kind: "turnover" };
+          await scheduler.adoptWorktree(project.name, made.path).catch(() => false);
+          log(`child: the feature container ${made.branch} is a tree at ${made.path}${made.reused ? " (reused)" : `, cut from ${askedParent}`}`);
+          // The child's parent is the container now, so the record's reason names it.
+          plan = planCut({ project: project.name, parent: parentBranch, mainBranch: project.mainBranch || null, kind: plan.stated ? plan.kind : null, brief });
+        }
+        const out = await cutChildWorktree({
+          repoDir: project.path,
+          parentBranch,
+          mainBranch: project.mainBranch || null,
+          name: body.name ? String(body.name).slice(0, 60) : "",
+          // A research tree may stand beside main: it never merges, so it has no roll-up to arrive at. An
+          // implementation asked for with main has already been re-pointed at its container above.
+          allowMainParent: plan.kind === "research",
+        });
+        if (!out.ok) throw new Error(out.error);
+        // The two records a parent is read from, and the naming ledger's one line. Nothing here may fail the cut: the
+        // tree exists and git's answer is the truth; a book that cannot be read back is a child shown as a guess
+        // rather than a child that was never made, which is the safe direction.
+        try {
+          parents.record({
+            project: project.name,
+            branch: out.branch,
+            path: out.path,
+            startRef: parentBranch,
+            startSha: out.parentSha,
+            by: `the reader (＋ a child of ${parentBranch} from its row)`,
+          });
+        } catch (e) {
+          log(`child: ${out.branch} was cut but its parent record failed (${String((e && e.message) || e)})`);
+        }
+        try {
+          // AWAITED: the kind is part of the record this file IS, and the answer below is what the page draws the new
+          // row from. saveParents returns its write for exactly this caller (lib/jobs.js); a cut that answered first
+          // was a row whose R or I could be missing for one frame, and a push decided against a record not yet written.
+          await jobs.rememberParent(out.path, out.branch, parentBranch, { kind: plan.kind, lifted: plan.localOnly && body.landing === true });
+        } catch {
+          /* the landing paragraph falls back to git's upstream for this tree; nothing about the cut depends on it */
+        }
+        // The rung. §3 is unconditional — every tree is `local` at cut time, whichever cut path made it — so the second
+        // cut path writes the same record `makeWorktree` writes, through the same writer, at the same moment the landing
+        // parent goes down. It cannot fail a cut that has already happened, and it must not claim one either.
+        let pipeline = null;
+        try {
+          pipeline = jobs.recordCutPipeline(out.path);
+        } catch (e) {
+          log(`child: ${out.branch} was cut but its pipeline record failed (${String((e && e.message) || e)})`);
+        }
+        if (!pipeline) log(`child: ${out.branch} was cut but its pipeline record was refused — the tree has no rung, and this answer does not claim one`);
+        try {
+          treeNames.settle(treeKey({ project: project.name, path: out.path, branch: out.branch }), {
+            name: out.name,
+            dir: out.path,
+            branch: out.branch,
+            tag: out.tag,
+            by: `the reader (＋ a child of ${parentBranch})`,
+            how: `cut from ${parentBranch} by the row's ＋ — this name is the one it was created with`,
+            at: new Date().toISOString(),
+          });
+        } catch {
+          /* the ledger is a guard: an unrecorded name is one a later run's title may replace, never a failed cut */
+        }
+        // Boarded now rather than on the next discovery pass (slowSeconds is minutes away), so the child is a row the
+        // reader can press straight away. Same door a spawn's tree comes through.
+        await scheduler.adoptWorktree(project.name, out.path).catch(() => false);
+        log(`child: cut ${out.branch} from ${parentBranch} at ${out.path} (${project.name}, ${plan.kind})`);
+        broadcastSnapshot();
+        return { out, parentBranch, container, kind: plan.kind, localOnly: Boolean(plan.localOnly && body.landing !== true), pipeline };
+      };
+      // THE ASK. Under `ask` (and `one-per-feature` with no branch for this key) the container's creation is the
+      // reader's answer; the card is the press's next step, not a refusal.
+      if (feature?.action === "ask" && remoteWrites && typeof remoteWrites.request === "function") {
+        const request = remoteWrites.request({
+          kind: "turnover",
+          worktree: row.path,
           project: project.name,
-          branch: out.branch,
-          path: out.path,
-          startRef: row.branch,
-          startSha: out.parentSha,
-          by: `the reader (＋ a child of ${row.branch} from its row)`,
+          branch: feature.branch,
+          title: `${project.name}: new turnover branch ${feature.branch}`,
+          command: `add the feature's turnover branch ${feature.branch} to ${project.name}${feature.key ? ` (key ${feature.key})` : ""}, then cut the ${plan.kind} tree from it`,
+          description: `this project's turnover policy is ${feature.policy}, so a new turnover branch waits for you. Allow adds exactly this branch to the project and cuts the feature container, then cuts the ${plan.kind} tree you asked for from it; Deny cuts nothing.`,
+          allowed: ["once", "deny"],
+          grants: false,
+          resume: cutAll,
         });
-      } catch (e) {
-        log(`child: ${out.branch} was cut but its parent record failed (${String((e && e.message) || e)})`);
-      }
-      try {
-        // AWAITED: the kind is part of the record this file IS, and the answer below is what the page draws the new
-        // row from. saveParents returns its write for exactly this caller (lib/jobs.js); a cut that answered first
-        // was a row whose T or R could be missing for one frame, and a push decided against a record not yet written.
-        await jobs.rememberParent(out.path, out.branch, row.branch, { kind: plan.kind, lifted: plan.localOnly && body.landing === true });
-      } catch {
-        /* the landing paragraph falls back to git's upstream for this tree; nothing about the cut depends on it */
-      }
-      // The rung. §3 is unconditional — every tree is `local` at cut time, whichever cut path made it — so the second
-      // cut path writes the same record `makeWorktree` writes, through the same writer, at the same moment the landing
-      // parent goes down. It cannot fail a cut that has already happened, and it must not claim one either: a book
-      // that refused the write (unreadable, full, locked) answers null here, the log says the tree has no rung, and
-      // the answer carries that null rather than a record nobody could read back.
-      let pipeline = null;
-      try {
-        pipeline = jobs.recordCutPipeline(out.path);
-      } catch (e) {
-        log(`child: ${out.branch} was cut but its pipeline record failed (${String((e && e.message) || e)})`);
-      }
-      if (!pipeline) log(`child: ${out.branch} was cut but its pipeline record was refused — the tree has no rung, and this answer does not claim one`);
-      try {
-        treeNames.settle(treeKey({ project: project.name, path: out.path, branch: out.branch }), {
-          name: out.name,
-          dir: out.path,
-          branch: out.branch,
-          tag: out.tag,
-          by: `the reader (＋ a child of ${row.branch})`,
-          how: `cut from ${row.branch} by the row's ＋ — this name is the one it was created with`,
-          at: new Date().toISOString(),
+        log(`child: asked (${request.id}) to cut the feature container ${feature.branch} on ${project.name} (policy ${feature.policy}) before the ${plan.kind} child`);
+        return sendJson(res, 202, {
+          ok: true,
+          asked: true,
+          id: request.id,
+          deadline: request.deadline,
+          timeoutSeconds: request.timeoutSeconds,
+          project: project.name,
+          parent: askedParent,
+          branch: feature.branch,
+          kind: plan.kind,
+          container: { branch: feature.branch, action: "ask", key: feature.key || null, policy: feature.policy },
+          note: "the question is in the dock, bottom right - allowing it cuts the feature's turnover tree and this child",
         });
-      } catch {
-        /* the ledger is a guard: an unrecorded name is one a later run's title may replace, never a failed cut */
       }
-      // Boarded now rather than on the next discovery pass (slowSeconds is minutes away), so the child is a row the
-      // reader can press straight away. Same door a spawn's tree comes through.
-      await scheduler.adoptWorktree(project.name, out.path).catch(() => false);
-      log(`child: cut ${out.branch} from ${row.branch} at ${out.path} (${project.name})`);
-      broadcastSnapshot();
+      let done;
+      try {
+        done = await cutAll();
+      } catch (e) {
+        return sendJson(res, 409, { error: String((e && e.message) || e), parent: askedParent, path: row.path });
+      }
+      const { out, parentBranch, container, pipeline } = done;
       return sendJson(res, 200, {
         ...out,
         pipeline,
         project: project.name,
-        kind: plan.kind,
-        localOnly: Boolean(plan.localOnly && body.landing !== true),
+        parent: parentBranch,
+        kind: done.kind,
+        localOnly: done.localOnly,
+        container,
         row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(out.path)) || null,
       });
     }

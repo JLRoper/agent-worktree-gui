@@ -24,6 +24,7 @@ import test from "node:test";
 import {
   DEFAULT_TURNOVER_POLICY,
   TURNOVER_MAX_CHARS,
+  planTurnoverCut,
   planTurnoverSave,
   projectTurnoverRow,
   turnoverBranchFrom,
@@ -31,11 +32,15 @@ import {
   turnoverBranchOf,
   turnoverBranchesOf,
   turnoverLookup,
+  turnoverNameFor,
   turnoverPolicyFrom,
   turnoverPolicyOf,
+  turnoverSlugFrom,
+  turnoverTicketFrom,
   validateTurnoverBranch,
   validateTurnoverBranches,
 } from "../lib/project-turnover.js";
+import { isTurnoverBranchName } from "../lib/turnover-base.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes, turnoverOut } from "../routes/project-turnover.js";
 import { configureRepo, git, startPanel } from "../tools/panel-testkit.mjs";
 
@@ -184,6 +189,43 @@ test("the policy decides whether a new branch is free, asks, or is refused for a
   });
   assert.equal(other.ok, true);
   assert.equal(other.ask, true);
+});
+
+// ---- 3c: the feature container's branch and the policy that makes one -------------------------------------------
+test("a cut's feature container is reused, cut or asked for by the project's policy", () => {
+  // The name is derived and legal: the key's ticket, the cut's own words, and the minute of the cut.
+  const at = new Date(2026, 10, 26, 18, 0); // local time, which is how turnoverNameFor stamps it
+  assert.equal(turnoverTicketFrom("task 186"), "TASK-186");
+  assert.equal(turnoverTicketFrom("dmr-44001"), "DMR-44001");
+  assert.match(turnoverTicketFrom("menu sso"), /^KEY-[0-9]+$/, "a key with no number gets a stable one");
+  assert.equal(turnoverTicketFrom("menu sso"), turnoverTicketFrom("menu sso"), "and the same feature keeps it");
+  assert.equal(turnoverSlugFrom("Fix the seam!"), "fix-the-seam");
+  assert.equal(turnoverSlugFrom("   "), "work");
+  const name = turnoverNameFor({ key: "task 186", name: "Fix the seam", at });
+  assert.equal(name, "20261126_1800_TASK-186_fix-the-seam");
+  assert.equal(isTurnoverBranchName(name), true, "the name is one the turnover predicate recognises");
+
+  // reuse: the branch the project already files under this task or initiative key.
+  const filed = { turnoverBranches: [{ branch: "20261101_0900_TASK-7_old", key: "task 7" }], turnoverPolicy: "one-per-feature" };
+  const reuse = planTurnoverCut({ project: filed, key: "task 7", name: "another cut" });
+  assert.equal(reuse.action, "reuse");
+  assert.equal(reuse.branch, "20261101_0900_TASK-7_old");
+  assert.equal(reuse.existing, true);
+  assert.match(reuse.why, /already has/);
+
+  // free: cut at once, named for the feature.
+  const free = planTurnoverCut({ project: { turnoverPolicy: "free" }, key: "task 186", name: "Fix the seam", at });
+  assert.equal(free.action, "cut");
+  assert.equal(free.branch, name);
+  assert.equal(free.key, "task 186");
+
+  // ask (the default), and one-per-feature without the key's branch: the permission card.
+  assert.equal(planTurnoverCut({ project: {}, key: "task 186", name: "Fix the seam", at }).action, "ask");
+  const one = planTurnoverCut({ project: { turnoverPolicy: "one-per-feature" }, key: "task 186", name: "Fix the seam", at });
+  assert.equal(one.action, "ask");
+  assert.equal(one.policy, "one-per-feature");
+  // A DIFFERENT key under one-per-feature does not steal another feature's branch: it asks for its own.
+  assert.equal(planTurnoverCut({ project: filed, key: "task 8", name: "another", at }).action, "ask");
 });
 
 test("the config row writes the list beside the old single key, and a policy-only save leaves the branch alone", () => {

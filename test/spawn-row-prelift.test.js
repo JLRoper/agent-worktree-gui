@@ -16,8 +16,8 @@
 //   3. a tree cut by hand (no SPAWN at all): `research` and unlifted, and a person's lift later writes `lifted` with
 //      no preLiftedBy.
 //
-// A fourth pins the boundary: a row SPAWN cut from a TURNOVER branch is a turnover child, which is not local only and
-// is never lifted - the row changes nothing about the kind.
+// A fourth pins the boundary: a row SPAWN cut from a TURNOVER branch classifies by its brief like any other child -
+// the branch is the feature CONTAINER, never the child's kind - and a row SPAWN still pre-lifts that local-only kind.
 //
 // Driven through the REAL assistant spawn path (`startSpawn`), the REAL spawner (lib/features/spawn.js
 // `assistantSpawnRun`), the REAL `Jobs.create`/`makeWorktree` and a real repository. A stub gateway only accepts the
@@ -230,17 +230,17 @@ test("a tree cut by hand stays unlifted, and a person's lift writes no row", asy
   assert.equal(plainRec.preLiftedBy ?? null, null);
 });
 
-// ---- 4: a row on a turnover parent changes nothing about the kind -----------------------------------------------
-test("a SPAWN carrying a row from a turnover branch is a turnover child, never lifted", async (t) => {
+// ---- 4: a row on a turnover parent changes nothing about the CHILD's kind ---------------------------------------
+test("a SPAWN carrying a row from a turnover branch classifies by its brief, never turnover", async (t) => {
   const p = await panel(t, { turnover: true });
   p.project.turnoverBranch = TURNOVER;
   const task = p.row("roll the turnover work up");
   const job = await p.assistant.startSpawn({ target: "demo", project: "demo", taskId: task.id, prompt: "roll the turnover work up" }, { source: "assistant" });
   assert.ok(job?.id);
   const rec = p.kindOf(job.cwd, job.branch);
-  assert.equal(rec.kind, "turnover", "cut from the project's turnover branch");
-  assert.notEqual(rec.lifted, true, "a turnover child is not local only, so there is nothing to lift");
-  assert.equal(rec.preLiftedBy ?? null, null);
+  assert.equal(rec.kind, "research", "a child of a turnover branch is research or implementation by its brief");
+  assert.equal(rec.lifted, true, "a row SPAWN pre-lifts the local-only kind");
+  assert.equal(rec.preLiftedBy, `row ${task.id}`, "and the record says which row pre-lifted it");
   assert.deepEqual(p.guardLandings, [false]);
   assert.match(p.gw.last(), /this project's turnover branch/, "and the worker is still told to roll up locally");
 });

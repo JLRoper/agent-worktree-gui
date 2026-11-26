@@ -44,7 +44,7 @@ const RESEARCH = [
   "Read your queue row 292 first - it carries the report the reader wants.",
   "Research how the push guard decides a branch, and write up what you find.",
   "Investigate why the permission button stays at zero while a request is parked, and report the cause.",
-  "What is the difference between a turnover child and a research tree? Answer in the chat.",
+  "What is the difference between a turnover tree and a research tree? Answer in the chat.",
   // Near-misses a loose stem match would misread as code words.
   "Write an addendum to the README about the release.",
   "The testament of the old guard, in prose.",
