@@ -13391,6 +13391,49 @@ document.addEventListener("click", (e) => {
   });
 });
 
+// THE INITIATIVE CHIP IS THE WAY INTO THE INITIATIVES MAP. render-projects.js draws one chip per initiative in the
+// chart's initiative column (and the assistant's Worktrees tab reuses that row builder); the map itself belongs to
+// public/assistant.js, so that file publishes the opener. A press opens the float if it is shut, brings the
+// Initiatives tab on screen, unfolds THAT initiative's card, scrolls it into view and flashes it once
+// (window.__assistantOpenInitiative says the same in its own comment).
+//
+// IT IS A CHIP, NOT A BUTTON, so the keyboard is wired by hand: the span carries role="button" and a tabindex, and
+// Enter or Space make the same press a click makes - Space with preventDefault, or the page scrolls out from under
+// the card the press just opened. The click listener is in the CAPTURE phase because the chip sits inside a chart row
+// whose own delegated press (on #projects, below) folds the row: a bubbling listener here would run after that fold
+// and take the press second.
+const initiativeChipOf = (e) => (e.target?.closest ? e.target.closest(".initiative-chip[data-initiative-id]") : null);
+function pressInitiativeChip(chip) {
+  // A page whose assistant half has not parsed yet still folds nothing and throws nothing: the chip is a plain span
+  // until the opener exists, and the next press works.
+  if (typeof window.__assistantOpenInitiative !== "function") return;
+  window.__assistantOpenInitiative(chip.dataset.initiativeId);
+}
+document.addEventListener(
+  "click",
+  (e) => {
+    const chip = initiativeChipOf(e);
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    pressInitiativeChip(chip);
+  },
+  true,
+);
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+    if (e.repeat) return;
+    const chip = initiativeChipOf(e);
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    pressInitiativeChip(chip);
+  },
+  true,
+);
+
 $("projects").addEventListener("click", (e) => {
   // The agent badge inside a row opens the row (and its agents block) instead of toggling blindly.
   const badgeBtn = e.target.closest("[data-open-row]");

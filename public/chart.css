@@ -143,6 +143,15 @@ td.initiative { overflow: hidden; white-space: nowrap; }
   background: #16202b;
 }
 .initiative-chip:last-child { margin-right: 0; }
+/* THE CHIP IS PRESSABLE (public/app.js delegates the press, public/assistant.js opens the map on that card). It has to
+   look like something a press does something to, and the keyboard's focus has to be visible on a span the browser does
+   not draw a focus ring for - a 2px green ring outside the chip, the same green the chart's own flash uses, so a
+   reader tabbing the column can see where they are. The chip keeps its one-line ellipsis and its tone: this adds no
+   padding and no colour of its own. */
+.initiative-chip[role="button"] { cursor: pointer; }
+.initiative-chip[role="button"]:hover { color: #e6eef8; border-color: #4d6a8a; background: #1b2937; }
+.initiative-chip[role="button"]:active { transform: translateY(1px); }
+.initiative-chip[role="button"]:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
 .owner-tag {
   display: inline-block;
   max-width: 100%;
