@@ -295,7 +295,7 @@ const CHART_COLUMNS = [
     min: 46,
     give: 1.2,
     title:
-      "the kind a cut recorded for this tree: T for a turnover child (its destination on the remote already exists), R for a research tree (local only - press it to lift the research refusal, and a lifted tree keeps its R with a tick). An empty cell means no record was written, which is the normal case for a tree cut before the kind rule. The mark lives here rather than in the Verdict cell so the branch status keeps its whole words. Off means the header and the cell are not emitted on any row; the Verdict cell is untouched either way. Switch it off in Settings -> Board -> Chart columns.",
+      "the kind a cut recorded for this tree: T for a turnover child (its destination on the turnover branch already exists), R for a research tree (local only - commits, is copied out and released, never merges or pushes), I for an implementation tree (local only - merges into its turnover branch, or into main only on your grant). Press R or I to lift that tree's local-only kind; a lifted tree keeps its letter with a tick. An empty cell means no record was written, which is the normal case for a tree cut before the kind rule. The mark lives here rather than in the Verdict cell so the branch status keeps its whole words. Off means the header and the cell are not emitted on any row; the Verdict cell is untouched either way. Switch it off in Settings -> Board -> Chart columns.",
   },
   { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
   {

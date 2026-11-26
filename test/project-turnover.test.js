@@ -22,12 +22,19 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  DEFAULT_TURNOVER_POLICY,
   TURNOVER_MAX_CHARS,
+  planTurnoverSave,
   projectTurnoverRow,
   turnoverBranchFrom,
+  turnoverBranchForKey,
   turnoverBranchOf,
+  turnoverBranchesOf,
   turnoverLookup,
+  turnoverPolicyFrom,
+  turnoverPolicyOf,
   validateTurnoverBranch,
+  validateTurnoverBranches,
 } from "../lib/project-turnover.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes, turnoverOut } from "../routes/project-turnover.js";
 import { configureRepo, git, startPanel } from "../tools/panel-testkit.mjs";
@@ -97,6 +104,103 @@ test("the config row keeps every field it had, invents no path, and drops the ke
   const cleared = projectTurnoverRow(saved, "alpha", "");
   assert.equal(Object.hasOwn(cleared, "turnoverBranch"), false);
   assert.equal(cleared.path, "repos/alpha", "the rest of the row survives a clear");
+});
+
+// ---- 3b: the list, the policy and the one-per-feature rule -----------------------------------------------------
+test("the turnover list is read forgivingly, strict on write, and the old single key is one entry", () => {
+  // READ: absence is [], the old single key is one entry, junk is dropped, duplicates keep the first spelling.
+  assert.deepEqual(turnoverBranchesOf({}), []);
+  assert.deepEqual(turnoverBranchesOf(null), []);
+  assert.deepEqual(turnoverBranchesOf({ turnoverBranch: " feature/turnover " }), [{ branch: "feature/turnover", key: null }]);
+  assert.deepEqual(turnoverBranchesOf({ turnoverBranches: ["a/b", { branch: "c/d", key: "task 7" }, 3, { branch: "" }, "a/b"] }), [
+    { branch: "a/b", key: null },
+    { branch: "c/d", key: "task 7" },
+  ]);
+  // Both shapes in one record: the list first, the old key added when the list does not already carry it.
+  assert.deepEqual(turnoverBranchesOf({ turnoverBranches: ["a/b"], turnoverBranch: "c/d" }).map((e) => e.branch), ["a/b", "c/d"]);
+  assert.deepEqual(turnoverBranchesOf({ turnoverBranches: ["a/b"], turnoverBranch: "a/b" }).map((e) => e.branch), ["a/b"]);
+  assert.equal(turnoverBranchOf({ turnoverBranches: ["a/b", "c/d"] }), "a/b", "the first entry is the primary branch");
+  assert.equal(turnoverBranchForKey({ turnoverBranches: [{ branch: "a/b", key: "task 7" }] }, "task 7"), "a/b");
+  assert.equal(turnoverBranchForKey({ turnoverBranches: [{ branch: "a/b", key: "task 7" }] }, " task 8 "), "");
+
+  // WRITE: an array of names or { branch, key }, each branch git can carry, no duplicates, a key one line.
+  assert.match(validateTurnoverBranches("a/b").error, /must be an array/);
+  assert.match(validateTurnoverBranches(["main"]).error, /landing branch, not a turnover branch/);
+  assert.match(validateTurnoverBranches(["a/b", "A/B"]).error, /twice/);
+  assert.match(validateTurnoverBranches([{ key: "task 7" }]).error, /branch name or \{ branch, key \}/);
+  assert.deepEqual(validateTurnoverBranches([" feature/a ", { branch: "feature/b", key: " task 7 " }]).entries, [
+    { branch: "feature/a" },
+    { branch: "feature/b", key: "task 7" },
+  ]);
+  assert.deepEqual(validateTurnoverBranches([]).entries, [], "[] clears the list");
+  assert.deepEqual(validateTurnoverBranches(null).entries, []);
+
+  // POLICY: three values, default ask, anything unreadable is the default rather than a guess.
+  assert.equal(DEFAULT_TURNOVER_POLICY, "ask");
+  assert.equal(turnoverPolicyFrom(undefined), "ask");
+  assert.equal(turnoverPolicyFrom(" FREE "), "free");
+  assert.equal(turnoverPolicyFrom("one-per-feature"), "one-per-feature");
+  assert.equal(turnoverPolicyFrom("nonsense"), "ask");
+  assert.equal(turnoverPolicyOf({ turnoverPolicy: "one-per-feature" }), "one-per-feature");
+  assert.equal(turnoverPolicyOf({}), "ask");
+});
+
+test("the policy decides whether a new branch is free, asks, or is refused for a key that already has one", () => {
+  // free adds without asking.
+  const free = planTurnoverSave({ project: { turnoverPolicy: "free" }, entries: [{ branch: "a/b" }] });
+  assert.deepEqual({ ok: free.ok, ask: free.ask, added: free.added.map((e) => e.branch) }, { ok: true, ask: false, added: ["a/b"] });
+  // ask (and the default) parks the card.
+  const ask = planTurnoverSave({ project: {}, entries: [{ branch: "a/b" }] });
+  assert.equal(ask.ok, true);
+  assert.equal(ask.ask, true);
+  // A save that adds nothing never asks - editing the list or re-saving a name is not a creation.
+  const again = planTurnoverSave({ project: { turnoverBranch: "a/b" }, entries: [{ branch: "a/b" }] });
+  assert.equal(again.ask, false);
+  assert.deepEqual(again.added, []);
+  // one-per-feature: the FIRST branch for a key still asks, a SECOND one is refused by name and offers the existing.
+  const first = planTurnoverSave({ project: { turnoverPolicy: "one-per-feature" }, entries: [{ branch: "a/b", key: "task 7" }] });
+  assert.equal(first.ok, true);
+  assert.equal(first.ask, true);
+  const second = planTurnoverSave({
+    project: { turnoverPolicy: "one-per-feature", turnoverBranches: [{ branch: "a/b", key: "task 7" }] },
+    entries: [{ branch: "c/d", key: "task 7" }],
+  });
+  assert.equal(second.ok, false);
+  assert.equal(second.refused, "one-per-feature");
+  assert.equal(second.existing, "a/b");
+  assert.match(second.error, /task 7/);
+  assert.match(second.error, /a\/b/, "the refusal offers the branch that already exists");
+  // The same key's OWN branch is not a second branch: re-saving it is a no-op, not a refusal.
+  const same = planTurnoverSave({
+    project: { turnoverPolicy: "one-per-feature", turnoverBranches: [{ branch: "a/b", key: "task 7" }] },
+    entries: [{ branch: "a/b", key: "task 7" }],
+  });
+  assert.equal(same.ok, true);
+  assert.equal(same.ask, false);
+  // A different key may add its own branch.
+  const other = planTurnoverSave({
+    project: { turnoverPolicy: "one-per-feature", turnoverBranches: [{ branch: "a/b", key: "task 7" }] },
+    entries: [{ branch: "a/b", key: "task 7" }, { branch: "c/d", key: "task 8" }],
+  });
+  assert.equal(other.ok, true);
+  assert.equal(other.ask, true);
+});
+
+test("the config row writes the list beside the old single key, and a policy-only save leaves the branch alone", () => {
+  const existing = { name: "alpha", path: "repos/alpha", turnoverBranch: "old/branch" };
+  const listed = projectTurnoverRow(existing, "alpha", [{ branch: "feature/a" }, { branch: "feature/b", key: "task 7" }], undefined, { policy: "one-per-feature" });
+  assert.deepEqual(listed.turnoverBranches, ["feature/a", { branch: "feature/b", key: "task 7" }]);
+  assert.equal(Object.hasOwn(listed, "turnoverBranch"), false, "the list replaces the old key");
+  assert.equal(listed.turnoverPolicy, "one-per-feature");
+  assert.equal(listed.path, "repos/alpha", "the rest of the row survives");
+  // A single-name save is the whole list: the stale array goes.
+  const single = projectTurnoverRow(listed, "alpha", "feature/c");
+  assert.equal(single.turnoverBranch, "feature/c");
+  assert.equal(Object.hasOwn(single, "turnoverBranches"), false);
+  // A policy-only save (`branch` undefined) leaves the branch exactly as it was.
+  const policyOnly = projectTurnoverRow(single, "alpha", undefined, undefined, { policy: "ask" });
+  assert.equal(policyOnly.turnoverBranch, "feature/c");
+  assert.equal(Object.hasOwn(policyOnly, "turnoverPolicy"), false, "the default policy is absence, not a stored word");
 });
 
 // ---- 4: the route's own contract, with a recorder instead of a socket ------------------------------------------
@@ -217,19 +321,119 @@ test("the route answers the shapes a caller can send, and its read carries the c
   }
 });
 
+// A new turnover branch is a branch CREATION, and the project's policy decides whether it is free, waits on the
+// permission card, or is refused because the feature already has one. The card's answer runs exactly the save it was
+// asked about - one grant, one branch creation.
+test("the route asks for a new turnover branch, refuses a second one for a key, and asks nothing under free", async () => {
+  const sent = [];
+  const calls = [];
+  const asked = [];
+  const registry = {
+    projects: [
+      { name: "free", turnoverPolicy: "free" },
+      { name: "asking", turnoverPolicy: "ask" },
+      { name: "one", turnoverPolicy: "one-per-feature", turnoverBranches: [{ branch: "feature/a", key: "task 7" }] },
+    ],
+  };
+  const remoteWrites = {
+    request: (input) => {
+      asked.push(input);
+      return { id: `rw_${asked.length}`, deadline: Date.now() + 60_000, timeoutSeconds: 65 };
+    },
+  };
+  const setProjectTurnover = async (name, value, options) => {
+    calls.push({ name, value, options });
+    const list = Array.isArray(value) ? value : value ? [{ branch: String(value) }] : [];
+    return { ok: true, project: name, turnoverBranch: list[0]?.branch || "", turnoverBranches: list, turnoverPolicy: "ask" };
+  };
+  const run = async (body) => {
+    const routes = createProjectTurnoverRoutes({
+      getConfig: () => ({}),
+      registry,
+      setProjectTurnover,
+      sendJson: (res, status, payload) => sent.push({ status, payload }),
+      readBody: async () => body,
+      authorised: () => true,
+      remoteWrites,
+    });
+    await routes({ method: "POST", url: TURNOVER_PATH }, {}, TURNOVER_PATH, new URL(`http://x${TURNOVER_PATH}`));
+    return sent[sent.length - 1];
+  };
+
+  // free: applied at once, no card.
+  const freeOut = await run({ project: "free", turnoverBranches: ["feature/x"] });
+  assert.equal(freeOut.status, 200);
+  assert.equal(asked.length, 0, "free adds without asking");
+  assert.deepEqual(calls[0].value, [{ branch: "feature/x" }]);
+
+  // ask: parked, with the once/deny answer and a resume that runs the same save.
+  const askOut = await run({ project: "asking", turnoverBranches: ["feature/y"], turnoverKey: "task 9" });
+  assert.equal(askOut.status, 202);
+  assert.equal(askOut.payload.asked, true);
+  assert.match(askOut.payload.note, /in the dock/);
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].kind, "turnover");
+  assert.equal(asked[0].grants, false, "the answer grants no push");
+  assert.deepEqual(asked[0].allowed, ["once", "deny"]);
+  assert.match(asked[0].command, /feature\/y/);
+  assert.match(asked[0].description, /exactly this branch/);
+  calls.length = 0;
+  const resumed = await asked[0].resume();
+  assert.equal(resumed.ok, true, "the granted save runs");
+  assert.deepEqual(calls[0], { name: "asking", value: [{ branch: "feature/y" }], options: { by: "the turnover bar", baseRefKind: undefined, policy: undefined } });
+
+  // one-per-feature: a second branch for a key that already has one is refused by name, with no card.
+  const askedBefore = asked.length;
+  const second = await run({ project: "one", turnoverBranches: [{ branch: "feature/b", key: "task 7" }] });
+  assert.equal(second.status, 409);
+  assert.equal(second.payload.refused, "one-per-feature");
+  assert.equal(second.payload.existing, "feature/a", "the refusal offers the existing branch");
+  assert.match(second.payload.error, /task 7/);
+  assert.equal(asked.length, askedBefore, "a refusal parks nothing");
+
+  // …but a NEW key's first branch still asks.
+  const first = await run({ project: "one", turnoverBranches: [{ branch: "feature/c", key: "task 8" }] });
+  assert.equal(first.status, 202);
+  assert.equal(asked.length, askedBefore + 1);
+
+  // A branch name git cannot carry is refused BEFORE a card is parked.
+  const bad = await run({ project: "asking", turnoverBranches: ["main"] });
+  assert.equal(bad.status, 400);
+  assert.match(bad.payload.error, /landing branch, not a turnover branch/);
+  assert.equal(asked.length, askedBefore + 1, "a save that could only fail never becomes a question");
+
+  // A POLICY-only save writes the policy and touches no branch: no card, and `value` is undefined.
+  calls.length = 0;
+  const policyOut = await run({ project: "asking", turnoverPolicy: "one-per-feature" });
+  assert.equal(policyOut.status, 200);
+  assert.equal(calls[0].value, undefined, "the branch list is not rewritten by a policy save");
+  assert.equal(calls[0].options.policy, "one-per-feature");
+});
+
 test("turnoverOut is the read's one shape, and a project it cannot find says why", () => {
   const registry = { projects: [{ name: "alpha", turnoverBranch: "feature/turnover" }, { name: "beta" }] };
-  // The read gained the THREE KINDS and their labels (lib/base-ref-kind.js): the bar draws its select from this
-  // answer, so a page never carries a second copy of the list or of the words the reader picks from.
+  // The read gained the THREE KINDS and their labels (lib/base-ref-kind.js), the three POLICIES with theirs, and the
+  // branch LIST beside the old single name: the bar draws its selects from this answer, so a page never carries a
+  // second copy of a list or of the words the reader picks from.
   assert.deepEqual(turnoverOut(registry, "beta"), {
     maxChars: TURNOVER_MAX_CHARS,
     kinds: ["checkout", "turnover", "local-turnover"],
     kindLabels: { checkout: "the checkout's own branch", turnover: "the named turnover branch", "local-turnover": "local turnover branch - ask if none exist" },
+    policies: ["free", "ask", "one-per-feature"],
+    policyLabels: {
+      free: "free - add a turnover branch without asking",
+      ask: "ask - a new turnover branch waits for your answer",
+      "one-per-feature": "one per feature - ask, and refuse a second branch for the same key",
+    },
+    defaultPolicy: "ask",
     project: "beta",
     turnoverBranch: "",
+    turnoverBranches: [],
+    turnoverPolicy: "ask",
     baseRefKind: "checkout",
   });
   assert.deepEqual(turnoverOut(registry, "alpha").turnoverBranch, "feature/turnover");
+  assert.deepEqual(turnoverOut(registry, "alpha").turnoverBranches, [{ branch: "feature/turnover", key: null }], "the old single key reads as one entry");
   const missing = turnoverOut(registry, "nope");
   assert.equal(missing.turnoverBranch, null);
   assert.match(missing.error, /unknown project/);
@@ -278,8 +482,8 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
     config: {
       scanRoots: [repos.replace(/\\/g, "/")],
       projects: [
-        { name: "alpha", path: paths.alpha, mainBranch: "main", turnoverBranch: "feature/turnover" },
-        { name: "beta", path: paths.beta, mainBranch: "main" },
+        { name: "alpha", path: paths.alpha, mainBranch: "main", turnoverBranch: "feature/turnover", turnoverPolicy: "free" },
+        { name: "beta", path: paths.beta, mainBranch: "main", turnoverPolicy: "free" },
       ],
       assistant: { enabled: false },
       worktreeSeconds: 60,
@@ -328,13 +532,33 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
     assert.equal(beta.path, paths.beta, "the row keeps the path it already had");
     assert.deepEqual(file.projects.find((p) => p.name === "alpha").turnoverBranch, "feature/turnover", "a sibling's branch is untouched");
 
-    // A save on a DISCOVERED project: a new row, the branch, and NO invented path.
+    // A save on a DISCOVERED project is a NEW branch under the default `ask`: it parks on the permission card, the
+    // file is untouched, and the Permissions history counts the question. Answering once runs exactly that save.
     const discovered = await postTurnover("gamma", "feature/roll-up");
-    assert.equal(discovered.status, 200);
+    assert.equal(discovered.status, 202, "the default policy asks before adding a branch");
+    assert.equal(discovered.json.asked, true);
+    assert.match(discovered.json.note, /in the dock/);
+    file = JSON.parse(await readFile(cfgPath, "utf8"));
+    assert.equal(file.projects.some((p) => p.name === "gamma"), false, "nothing is written while the question waits");
+    // The card is a permission the header's button counts, and it is in the durable history by name.
+    const historyBefore = await (await fetch(`${panel.base}/api/permissions/history?limit=1`)).json();
+    assert.equal(historyBefore.outstanding, 1, "the Permissions button counts the card");
+    assert.equal(historyBefore.entries[0].surface, "permission card");
+    assert.match(historyBefore.entries[0].command, /feature\/roll-up/);
+    const answered = await fetch(`${panel.base}/api/remote-write/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: discovered.json.id, choice: "once" }),
+    });
+    assert.equal(answered.status, 200, "one grant answers the one branch creation");
     file = JSON.parse(await readFile(cfgPath, "utf8"));
     const gamma = file.projects.find((p) => p.name === "gamma");
     assert.equal(gamma.turnoverBranch, "feature/roll-up");
     assert.equal(Object.hasOwn(gamma, "path"), false, "the row invents no path");
+    const historyAfter = await (await fetch(`${panel.base}/api/permissions/history?limit=1`)).json();
+    assert.equal(historyAfter.outstanding, 0, "the answered card stops counting");
+    assert.equal(historyAfter.entries[0].status, "answered");
+    assert.equal(historyAfter.entries[0].choice, "once");
 
     // Clearing removes the key rather than storing "" beside the reader's other project facts.
     const cleared = await postTurnover("alpha", "");
@@ -355,11 +579,22 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
     assert.equal((await get("?project=nope")).status, 404);
 
     // WHAT THE CHIP DRAWS: the project record on `/api/state` carries the branch, so a save has to reach it before the
-    // next discovery pass or the chip lies until then.
-    const state = await (await fetch(`${panel.base}/api/state`)).json();
-    const record = (state.projects || []).find((p) => p.name === "beta");
-    assert.equal(record.turnoverBranch, "feature/roll-up");
-    assert.equal((state.projects || []).find((p) => p.name === "gamma").turnoverBranch, "feature/roll-up");
+    // next discovery pass or the chip lies until then. The read itself is the poll's cached copy (3s floor), so this
+    // waits for the refresh a reader's next poll would get rather than reading the copy built before the save.
+    const waitForState = async (name, branch) => {
+      let seen = null;
+      for (let i = 0; i < 50; i += 1) {
+        const state = await (await fetch(`${panel.base}/api/state`)).json();
+        seen = (state.projects || []).find((p) => p.name === name) || null;
+        if (seen && seen.turnoverBranch === branch) return seen;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return seen;
+    };
+    const record = await waitForState("beta", "feature/roll-up");
+    assert.equal(record.turnoverBranch, "feature/roll-up", `the snapshot carries it: ${JSON.stringify(record)}`);
+    assert.deepEqual(record.turnoverBranches, [{ branch: "feature/roll-up", key: null }], "and the list beside it");
+    assert.equal((await waitForState("gamma", "feature/roll-up")).turnoverBranch, "feature/roll-up");
     // ...and the route agrees with the snapshot, which is the pair of answers the chip and the bar are drawn from.
     assert.equal((await get("?project=beta")).json.turnoverBranch, "feature/roll-up");
   } finally {

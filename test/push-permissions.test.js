@@ -29,7 +29,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { BRANCH_NAME_GATE_PATTERN, branchNamePassesGate, branchesInPushRefs, permissionForPush, projectPushRow, pushChoiceFrom, repoKeyForProject, repoKeyForRemoteUrl, resolvePushPermissions } from "../lib/push-permissions.js";
+import { BRANCH_NAME_GATE_PATTERN, branchNamePassesGate, branchesInPushRefs, permissionForPush, projectPushRow, pushChoiceFrom, repoKeyForProject, repoKeyForRemoteUrl, resolvePushPermissions, treeKindAsk } from "../lib/push-permissions.js";
+import { RemoteWrites } from "../lib/remote-writes.js";
 import { commonDirOf, guardPaths, guardState, installGuard } from "../lib/push-guard.js";
 import { configureRepo, git as runGit, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
 
@@ -295,6 +296,41 @@ test("a push list is read per ref: new when the remote has no sha, existing when
     { branch: "main", isNew: false },
     { branch: "20261102_1431_ABC-1_x", isNew: true },
   ]);
+});
+
+// ---- 5b: the permission box's own precedence for a recorded local-only kind -------------------------------------
+// `permissionForPush` decides the CONTROL; this is the box that PARKS the question, and the two must agree: a recorded
+// research or implementation kind asks even where the project's controls would allow the push, `never` still refuses
+// with no card, and a grant the reader already gave answers it rather than asking again.
+test("the box asks for a local-only tree's push even under an allow control, and a grant still answers", async () => {
+  const box = new RemoteWrites({ getPolicy: () => "local-only" });
+  const kindAsk = treeKindAsk({ tree: "/w/alpha", kind: "implementation" });
+  assert.match(kindAsk, /implementation/);
+  // The control says allow, the recorded kind says ask: the kind wins, and the sentence names the tree.
+  const asked = box.decision("/w/alpha", null, { pushMode: "allow", kindAsk });
+  assert.equal(asked.allowed, false);
+  assert.equal(asked.ask, true);
+  assert.match(asked.why, /\/w\/alpha/);
+  // `never` is absolute and offers no card, whatever the kind says.
+  const refused = box.decision("/w/alpha", null, { pushMode: "refuse", kindAsk });
+  assert.equal(refused.allowed, false);
+  assert.equal(refused.ask, false);
+  // The reader's own lift is the standing grant: the kind sentence is gone, so the control decides again.
+  assert.equal(treeKindAsk({ tree: "/w/alpha", kind: "implementation", lifted: true }), null);
+  assert.equal(box.decision("/w/alpha", null, { pushMode: "allow", kindAsk: null }).allowed, true);
+  // A session grant answers the card: one answer, not a question per push.
+  const request = box.request({ kind: "push", worktree: "/w/alpha", branch: "wtgui/x", title: "push wtgui/x", description: "d" });
+  assert.equal((await box.answer(request.id, "session")).ok, true);
+  const granted = box.decision("/w/alpha", null, { pushMode: "ask", kindAsk });
+  assert.equal(granted.allowed, true);
+  assert.match(granted.why, /this session/);
+  // A question that grants NOTHING (a branch creation) leaves no push grant behind: one grant, one branch creation.
+  const creation = box.request({ kind: "turnover", worktree: "/w/beta", branch: "feature/x", title: "new branch", description: "d", allowed: ["once", "deny"], grants: false });
+  assert.equal((await box.answer(creation.id, "once")).ok, true);
+  const afterCreation = box.decision("/w/beta", null, { pushMode: "ask" });
+  assert.equal(afterCreation.allowed, false, "one grant for one branch creation is not a standing push grant");
+  assert.equal(afterCreation.ask, true);
+  box.stop();
 });
 
 // ---- 6: the routes, on a real server -------------------------------------------------------------------------

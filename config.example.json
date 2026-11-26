@@ -66,6 +66,7 @@
       "defaultTurnover": "github-force-merge",
       "defaultInvestigation": "github-investigate",
       "releaseWorktrees": true,
+      "turnoverPolicy": "free",
       "worktrees": null,
       "landingRules": "One wtgui/* branch per worktree, cut from main. Push the branch, open one pull request, and land it with gh pr merge <n> --rebase --admin - never a merge commit and never a push to main. Report the merge commit, then render the changelog at the merged tip and re-anchor the release tag with node tools/version.mjs tag --ref origin/main --force."
     },

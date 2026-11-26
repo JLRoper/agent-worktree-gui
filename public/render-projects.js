@@ -410,7 +410,7 @@ function projectSection(name) {
     <div class="wt-scroll">
       <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently - a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · the kind column: <span class="kind-mark kind-turnover" role="img" aria-label="turnover child">T</span> turnover child, <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R in the Kind column to lift the refusal, and a lifted tree keeps its R with a tick) · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight - a fold only hides, every chip and open panel stays as it was</div>
+    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently - a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · the kind column: <span class="kind-mark kind-turnover" role="img" aria-label="turnover child">T</span> turnover child, <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R to lift it), <span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick) · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight - a fold only hides, every chip and open panel stays as it was</div>
   </section>`;
 }
 
@@ -914,25 +914,34 @@ function rowHtml(row, forceOwner = false) {
 // side by side and neither can clip the other. The column is one more switch in Settings > Board > Chart columns,
 // ON by default, and off means the whole cell is absent rather than an empty one.
 //
-// T is a statement: a turnover child has a destination on the remote already. R is a BUTTON while the record is
-// unlifted: pressing it opens the inline confirm (public/app.js `showKindConfirm`) that lifts the research refusal
-// through POST /api/worktree/kind-lift. A lifted tree keeps its R with a tick - the kind never changes, only the
-// reader's answer to it does. A tree with no record draws nothing at all, and the cell stays empty.
+// T is a statement: a turnover child has a destination on its turnover branch already. R and I are BUTTONS while the
+// record is unlifted: pressing one opens the inline confirm (public/app.js `showKindConfirm`) that lifts the
+// local-only kind through POST /api/worktree/kind-lift. A lifted tree keeps its letter with a tick - the kind never
+// changes, only the reader's answer to it does. A tree with no record draws nothing at all, and the cell stays empty.
+const KIND_MARK = { turnover: "T", research: "R", implementation: "I" };
+
 function kindMarkHtml(row) {
   const kind = String(row?.branchKind || "").toLowerCase();
-  if (kind !== "turnover" && kind !== "research") return "";
-  const label = String(row.branchKindLabel || (kind === "research" ? "research tree" : "turnover child"));
-  const parent = String(row.branchKindParent || "").trim() || (kind === "research" ? "the project's main parent" : "a turnover branch");
-  if (kind === "research") {
-    if (row.branchKindLifted === true) {
-      const says = `${label} - cut from ${parent}, lifted by the reader: its push meets the ordinary controls. The kind stays research.`;
-      return `<span class="kind-mark kind-research is-lifted" role="img" aria-label="${esc(`${label}, lifted`)}" title="${esc(says)}">R<span class="kind-tick" aria-hidden="true">\u2713</span></span>`;
-    }
-    const says = `${label} - cut from ${parent}, local only: its push meets the research refusal until you lift it. Press to lift: the kind stays research, the record keeps your answer, and nothing is pushed and no branch moves.`;
-    return `<button class="kind-mark kind-research" type="button" data-kind-lift="${esc(keyOf(row.project, row.path))}" aria-label="${esc(`${label}, local only - press to lift the research refusal`)}" title="${esc(says)}">R</button>`;
+  const mark = KIND_MARK[kind];
+  if (!mark) return "";
+  const label = String(row.branchKindLabel || (kind === "research" ? "research tree" : kind === "implementation" ? "implementation tree" : "turnover child"));
+  const parent = String(row.branchKindParent || "").trim() || (kind === "turnover" ? "a turnover branch" : "the project's main parent");
+  if (kind === "turnover") {
+    const says = `${label} - cut from ${parent}, with a destination on the remote: its push meets the ordinary controls, and its work merges back into that branch locally.`;
+    return `<span class="kind-mark kind-turnover" role="img" aria-label="${esc(label)}" title="${esc(says)}">${mark}</span>`;
   }
-  const says = `${label} - cut from ${parent}, with a destination on the remote: its push meets the ordinary controls.`;
-  return `<span class="kind-mark kind-turnover" role="img" aria-label="${esc(label)}" title="${esc(says)}">T</span>`;
+  // BOTH LOCAL KINDS LIFT THE SAME WAY. The kind is what the cut recorded; the lift is the reader's per-tree grant
+  // that makes a push meet the ordinary controls, and it is written on the same record. Research and implementation
+  // differ in what they DO with the work (release it, or merge it locally), not in how the lift works.
+  if (row.branchKindLifted === true) {
+    const says = `${label} - cut from ${parent}, lifted by the reader: its push meets the ordinary controls. The kind stays ${kind}.`;
+    return `<span class="kind-mark kind-${kind} is-lifted" role="img" aria-label="${esc(`${label}, lifted`)}" title="${esc(says)}">${mark}<span class="kind-tick" aria-hidden="true">\u2713</span></span>`;
+  }
+  const says =
+    kind === "research"
+      ? `${label} - cut from ${parent}, local only: it commits, is copied out and released, and never merges or pushes until you lift it. Press to lift: the kind stays research, the record keeps your answer, and nothing is pushed and no branch moves.`
+      : `${label} - cut from ${parent}, local only: its work merges into its turnover branch, or into main only on your grant, and a push parks on the permission card. Press to lift: the kind stays implementation, the record keeps your answer, and nothing is pushed and no branch moves.`;
+  return `<button class="kind-mark kind-${kind}" type="button" data-kind-lift="${esc(keyOf(row.project, row.path))}" aria-label="${esc(`${label}, local only - press to lift`)}" title="${esc(says)}">${mark}</button>`;
 }
 
 // The row's turnover mark, drawn beside the lock. `turnoverFor` (public/board-scaffold.js) is the branch the project's

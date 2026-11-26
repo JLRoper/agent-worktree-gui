@@ -5961,16 +5961,18 @@ function remoteWriteBoxHtml(r) {
   const deadline = Number(r.deadline) || 0;
   const windowMs = (Number(r.timeoutSeconds) || 0) * 1000;
   const closed = Boolean(deadline) && deadline - Date.now() <= 0;
-  // THREE KINDS, ONE BOX. A push and the panel's merge both write to a remote, so the head says "is local-only". An
-  // initiative move writes nothing outside the panel: its title already names the tree and the initiative, and the
-  // head must not claim a push is waiting when what waits is a change to the reader's own map.
+  // FOUR KINDS, ONE BOX. A push and the panel's merge both write to a remote, so the head says "is local-only". An
+  // initiative move and a new turnover branch write nothing outside the panel: their titles already name what is
+  // waiting, and the head must not claim a push is waiting when what waits is a change to the reader's own project.
   const isMove = r.kind === "initiative";
-  const kind = r.kind === "merge" ? "the panel's own merge flow" : isMove ? "a change to your initiative map" : "a push from this worktree";
+  const isTurnover = r.kind === "turnover";
+  const cardOnly = isMove || isTurnover;
+  const kind = r.kind === "merge" ? "the panel's own merge flow" : isMove ? "a change to your initiative map" : isTurnover ? "a new turnover branch" : "a push from this worktree";
   return permissionBoxHtml({
     id: r.id,
     requestId: r.id,
     forAttr: `data-remote-write="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}"`,
-    head: isMove ? `⚠ waiting on you - ${esc(r.title || kind)}` : `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
+    head: cardOnly ? `⚠ waiting on you - ${esc(r.title || kind)}` : `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
     note: r.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(r.note)}</div>` : "",
     command: r.command || "",
     // The dock knows which tree is asking, so the summary can say whether the push writes outside it.
@@ -5979,22 +5981,33 @@ function remoteWriteBoxHtml(r) {
     deadline,
     windowMs,
     closed,
-    closedHead: isMove ? "⚠ no answer inside the panel's window - the map was left as it was" : "⚠ no answer inside the panel's window — this write has been denied",
+    closedHead: isMove
+      ? "⚠ no answer inside the panel's window - the map was left as it was"
+      : isTurnover
+        ? "⚠ no answer inside the panel's window - the turnover branch was not added"
+        : "⚠ no answer inside the panel's window — this write has been denied",
     closedNote: isMove
       ? `<div class="ta-note mono">the panel stopped waiting and made no change; the worktree stays where it was</div>`
-      : `<div class="ta-note mono">the panel stopped waiting and told the writer no; nothing was pushed</div>`,
+      : isTurnover
+        ? `<div class="ta-note mono">the panel stopped waiting and made no change; the project's turnover branches stay as they were</div>`
+        : `<div class="ta-note mono">the panel stopped waiting and told the writer no; nothing was pushed</div>`,
     what: "write",
     titles: isMove
       ? {
           once: "allow this one move - the panel writes it and the Initiatives tab re-reads",
           deny: "refuse: the initiative is left exactly as it is",
         }
-      : {
-          once: "allow this one write — the waiting push is told to go ahead",
-          session: "allow writes from this worktree until the panel restarts",
-          always: "allow remote writes from now on — this WRITES the panel's setting, so the box stops asking",
-          deny: "refuse: nothing is pushed and the remote is left exactly as it is",
-        },
+      : isTurnover
+        ? {
+            once: "allow this one branch creation - the panel adds it to the project",
+            deny: "refuse: no turnover branch is added and the project stays as it is",
+          }
+        : {
+            once: "allow this one write — the waiting push is told to go ahead",
+            session: "allow writes from this worktree until the panel restarts",
+            always: "allow remote writes from now on — this WRITES the panel's setting, so the box stops asking",
+            deny: "refuse: nothing is pushed and the remote is left exactly as it is",
+          },
   });
 }
 
@@ -6004,7 +6017,7 @@ function remoteWriteDecidedHtml(d) {
   const id = String(d.id || "");
   const denied = String(d.choice || "") === "deny";
   const verb = denied ? (d.expired ? "not answered — denied" : "denied") : `allowed ${d.choice}`;
-  const what = d.kind === "initiative" ? "initiative move" : "remote write";
+  const what = d.kind === "initiative" ? "initiative move" : d.kind === "turnover" ? "turnover branch" : "remote write";
   const note = d.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(d.note)}</div>` : "";
   return `<div class="rw-record mono${denied ? " is-deny" : ""}" data-rw-record="${esc(id)}" data-rw-tree="${esc(d.worktree || "")}" data-rw-branch="${esc(d.branch || "")}" title="${esc(d.why || "remote write")} — click to go to the agent this write was about">
     <span class="rw-record-text">${denied ? "✕" : "✓"} ${what} ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</span>
@@ -7830,11 +7843,11 @@ function cutDialogHtml(choices, { parent, question = "", name = "", note = "" })
     )
     .join("");
   const tail = question
-    ? "nothing has been cut. choose one of the two kinds and press Cut."
-    : `its branch: wtgui/&lt;name&gt;-&lt;tag&gt;, cut from ${parent}. nothing is started in it and nothing is pushed. leave the kind unchosen and the panel decides from the parent's own name; if that names neither kind it asks you in this card, and cuts nothing.`;
+    ? "nothing has been cut. choose one of the three kinds and press Cut."
+    : `its branch: wtgui/&lt;name&gt;-&lt;tag&gt;, cut from ${parent}. nothing is started in it and nothing is pushed. leave the kind unchosen and the panel decides: a turnover parent makes a turnover child, otherwise the brief reads as research (answer only) or implementation (merges locally, never pushes) - and the cut always goes ahead.`;
   return (
     `<div class="cut-head">${question ? esc(question) : `cut a child worktree off ${esc(parent)}`}</div>` +
-    `<div class="cut-kinds">${options || `<span class="cut-note">reading the two kinds…</span>`}</div>` +
+    `<div class="cut-kinds">${options || `<span class="cut-note">reading the three kinds…</span>`}</div>` +
     `<label class="cut-row">name <input class="cut-name" type="text" value="${esc(name)}" placeholder="(empty = ${esc(offered)})" /></label>` +
     `<div class="cut-note">${note ? `${esc(note)} ` : ""}${esc(tail)}</div>` +
     `<div class="cut-actions"><button type="button" class="mc-choice cut-go">Cut</button><button type="button" class="mc-choice cut-cancel">Cancel</button></div>`
@@ -7955,7 +7968,10 @@ function showKindConfirm(key, trigger = null) {
   // not looking at.
   const rowEl = (trigger && typeof trigger.closest === "function" && trigger.closest("tr.row")) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   if (!row || !rowEl) return;
-  if (row.branchKind !== "research" || row.branchKindLifted === true) return;
+  const kind = String(row.branchKind || "").toLowerCase();
+  // BOTH LOCAL KINDS LIFT, and only those: a turnover child has no local-only kind to lift.
+  if (kind !== "research" && kind !== "implementation") return;
+  if (row.branchKindLifted === true) return;
   closeKindConfirm(key);
   const el = document.createElement("tr");
   el.className = "row-confirm row-kind-confirm";
@@ -7967,7 +7983,7 @@ function showKindConfirm(key, trigger = null) {
   el.dataset.kindBranch = row.branch || "";
   el.innerHTML = `<td colspan="${wtColspan()}">
       <div class="row-confirm-cell">
-        <span class="rc-msg"><span class="rc-kind">Lift the research kind</span> on <b>${esc(row.name || row.branch || key)}</b><span class="dimmer">?</span> The tree's push stops meeting the research refusal: the kind stays research and the record keeps lifted: true, so a restart keeps it. Nothing is pushed and no branch moves.</span>
+        <span class="rc-msg"><span class="rc-kind">Lift the ${esc(kind)} kind</span> on <b>${esc(row.name || row.branch || key)}</b><span class="dimmer">?</span> The tree's push stops being parked on the permission card: the kind stays ${esc(kind)} and the record keeps lifted: true, so a restart keeps it. Nothing is pushed and no branch moves.</span>
         <span class="rc-actions"><button class="btn-del-no" type="button" data-kind-lift-no="${esc(key)}">Cancel</button><button class="btn-refresh-yes" type="button" data-kind-lift-yes="${esc(key)}">Lift</button></span>
       </div>
     </td>`;
@@ -8030,7 +8046,8 @@ async function confirmKindLift(key, btn = null) {
   try {
     const d = await ask();
     closeKindConfirm(key);
-    const label = String(d?.branchKind || row.branchKind || "research").toLowerCase() === "research" ? "research tree" : "tree";
+    const kind = String(d?.branchKind || row.branchKind || "").toLowerCase();
+    const label = kind === "research" ? "research tree" : kind === "implementation" ? "implementation tree" : "tree";
     // The row first, the note second: the note is what the reader checks the row against, so it must not start its
     // four seconds while the snapshot is still landing. A resync that fails does not turn a written lift into a
     // refusal - the record is the truth and the next frame will draw it.

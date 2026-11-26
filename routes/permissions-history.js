@@ -1,8 +1,9 @@
 // The header's Permissions popup, one read: every permission request this panel has held, newest first, with the
 // live ones the popup may answer and the honest total beside the page of rows. The store is
-// lib/permissions-history.js; the live queue is BOTH feeds a person can answer - the CLI approval transport
-// (lib/approvals.js) and the approvals RUNS are parked on (lib/jobs.js, bridged by lib/run-permissions.js). This
-// adapter owns only the wire shape.
+// lib/permissions-history.js; the live queue is EVERY feed a person can answer - the CLI approval transport
+// (lib/approvals.js), the approvals RUNS are parked on (lib/jobs.js, bridged by lib/run-permissions.js), and the
+// cards the panel's own permission box parked (lib/remote-writes.js: a push from a local-only tree, a new turnover
+// branch, a merge, an initiative move). This adapter owns only the wire shape.
 //
 //   GET /api/permissions/history?limit=50
 //     -> { at, entries, pending, total, outstanding, kept, cap }
@@ -46,6 +47,9 @@ export function createPermissionsHistoryRoutes({
   // The run-mirrored half: a function returning the approvals a run is parked on right now (lib/run-permissions.js).
   // Optional, so a caller that only has the transport still works.
   runApprovals = null,
+  // …and the cards the panel's own permission box parked (lib/remote-writes.js `list`): a push from a local-only
+  // tree, a new turnover branch, a merge, an initiative move. Same shape, `allowed` instead of `choices`.
+  cardApprovals = null,
   permissions,
   describe = null,
   nameForAssistant = null,
@@ -57,6 +61,7 @@ export function createPermissionsHistoryRoutes({
   const where = typeof describe === "function" ? describe : () => ({});
   const nameFor = typeof nameForAssistant === "function" ? nameForAssistant : () => null;
   const runsLive = typeof runApprovals === "function" ? runApprovals : () => [];
+  const cardsLive = typeof cardApprovals === "function" ? cardApprovals : () => [];
 
   return async function permissionsHistoryRoutes(req, res, route, url) {
     if (route !== PERMISSIONS_HISTORY_PATH) return false;
@@ -87,9 +92,18 @@ export function createPermissionsHistoryRoutes({
     } catch {
       mirrored = [];
     }
+    // …and the panel's own cards. A card parked by the permission box is a request a person can answer right now just
+    // as much as a gateway approval is, and its `resume` is what makes the answer do something; leaving it out is what
+    // kept the button at zero while the box counted down on the board.
+    let cards = [];
+    try {
+      cards = cardsLive();
+    } catch {
+      cards = [];
+    }
     const seenLive = new Set();
     const liveIn = [];
-    for (const r of [...(Array.isArray(live) ? live : []), ...(Array.isArray(mirrored) ? mirrored : [])]) {
+    for (const r of [...(Array.isArray(live) ? live : []), ...(Array.isArray(mirrored) ? mirrored : []), ...(Array.isArray(cards) ? cards : [])]) {
       const id = String(r?.id || "").trim();
       if (!id || seenLive.has(id)) continue;
       seenLive.add(id);
