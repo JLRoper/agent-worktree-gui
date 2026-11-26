@@ -10,11 +10,12 @@ text plus a sentence saying why, instead of a guessed URL that 404s.
 | the defaults that ship | `hosts.seed.json` — committed, holds the two hosts this board has |
 | the code | `lib/hosts.js` (templates, precedence, the file pair), `lib/project.js` (`prIndex`, `branchLink`), `lib/scheduler.js` (`decorate`), `lib/merge-prompt.js` (the landing doctrine) |
 | the routes | `GET /api/hosts` (the whole mapping), `POST /api/hosts/propose` (read a remote, propose, write nothing), `POST /api/hosts/mapping` (write one project), `POST /api/clone` (the folder card's clone, from the chosen host's record) |
-| the tests | `test/hosts.test.js` (templates, the seed, the doctrines), `test/clone-host.test.js` (clone routes for both hosts, a third as data, every refusal), `test/pr-cell.test.js` (the row the store keeps) |
+| the tests | `test/hosts.test.js` (templates, the seed, the doctrines, a fresh clone's own remote, one discovery pass), `test/clone-host.test.js` (clone routes for both hosts, a third as data, every refusal), `test/pr-cell.test.js` (the row the store keeps) |
 
 `logs/hosts.json` is merged **over** the seed, per host id and per project. That is what lets a new host record ship in
 the seed and reach an install whose live file already exists without anybody merging JSON by hand. Nothing but this
-pair is read: there is no fallback to `github.com`, and no URL is ever derived from a host record that cannot resolve.
+pair, and the project's own remote (below), is read: there is no fallback to `github.com`, and no URL is ever derived
+from a host record that cannot resolve.
 
 ## A host record
 
@@ -85,6 +86,29 @@ Most specific last:
 That is how one repo in `IT` and another in `SA` are told apart without a second host record: `fleet-kafka` above
 overrides `projectKey` and inherits everything else.
 
+## A project neither file names: its own remote
+
+An agent clones a repo this board has never seen. The seed does not name it, `logs/hosts.json` has no entry, and nobody
+has pressed the chip, yet its origin plainly says where it lives. The mapping is therefore derived at read time from
+the project's own remote: discovery reads it with `git remote get-url` and keeps it on the project record as
+`remoteUrl` (`lib/projects.js`), and `resolveMapping` reads that URL when neither file names the project
+(`remoteMapping` in `lib/hosts.js`).
+
+Precedence, most specific last:
+
+1. a project entry in `hosts.seed.json` or `logs/hosts.json` - a written mapping is a ruling, and it wins over the
+   remote even when the two disagree;
+2. otherwise the project's own remote, matched against the host records by hostname and read for its last two path
+   segments: `{projectKey}/{repoSlug}` for a `bitbucket-server` record, `{owner}/{repo}` otherwise. The remote's
+   coordinates beat the host record's defaults, so a repo under `SA` maps to `SA` whatever the record defaults to;
+3. otherwise no mapping, with the same sentence as before.
+
+The derivation writes nothing: `logs/hosts.json` stays the reader's file, and pressing the chip still proposes the
+mapping for the reader to confirm. It refuses rather than guesses. A project with no remote, a remote that is a local
+path, a hostname no record has, a hostname TWO records share, and a URL that does not carry two path segments all leave
+the project unmapped with the `no host mapping` sentence. The chip's tooltip says `read from this project's own remote`
+when the mapping was derived, so a derived mapping is never mistaken for one the reader wrote.
+
 ## The api block, or: what the board fetches to know a PR
 
 `transport` says how the panel reads the list: `gh` for a GitHub checkout with the CLI installed (`gh pr list --state all`
@@ -143,12 +167,14 @@ A project with no mapping gets a prompt that says no host is mapped, and that PH
 ## From the page
 
 The project header carries a **host chip** — `host: sefl-bitbucket IT/email-multi`, or `no host` with the reason in its
-tooltip. Pressing it opens the Discover strip:
+tooltip. A project in neither hosts file whose remote discovery has read already carries its host, marked `read from
+this project's own remote` in the tooltip, with no press at all. Pressing the chip opens the Discover strip:
 
 - the server reads the project's own remote (`git remote get-url`), parses host `+` two path segments out of
   `ssh://git@host/it/repo.git`, `https://host/scm/IT/repo.git` and `git@host:owner/repo.git`, and matches the hostname
   against the host records it already has;
-- it proposes a host id and coordinates, or says why it cannot (a local path, an unknown hostname, one path segment);
+- it proposes a host id and coordinates, or says why it cannot (a local path, an unknown hostname, two records on one
+  hostname, one path segment);
 - nothing is written until **Use this mapping** is pressed, which writes only that one project into `logs/hosts.json`,
   leaving every host record and every other project exactly as it was.
 

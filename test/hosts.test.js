@@ -4,6 +4,7 @@
 // project reads like, and what a landing agent is told. None of it needs a server, a browser or a network: the module
 // is pure over a loaded document, and the prompt is a string function.
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -20,13 +21,17 @@ import {
   prListing,
   proposeMapping,
   readHostsFile,
+  remoteMapping,
   renderProse,
   renderTemplate,
   resolveMapping,
   saveProjectMapping,
   validateHostRecord,
 } from "../lib/hosts.js";
+import { ProjectRegistry } from "../lib/projects.js";
+import { Store } from "../lib/store.js";
 import { mergePrompt } from "../lib/merge-prompt.js";
+import { git } from "../tools/panel-testkit.mjs";
 
 // The seed this repo ships: the real github and git.sefl.com records, read from disk so a change to them is judged
 // here rather than kept in step by hand.
@@ -229,6 +234,133 @@ test("the header view says which host a project resolves to, and why when it doe
   const none = mappingView(seed, { name: "unmapped" });
   assert.equal(none.host, null);
   assert.match(none.why, /no host mapping/);
+});
+
+// ---- a project neither hosts file names: its own remote is the mapping -------------------------------------------
+//
+// The defect this covers: an agent clones a repo the board has never seen. Discovery reads its `remoteUrl` on the pass
+// that finds it, but the seed has never heard of it and the reader has not pressed the chip, so the header read
+// "no host" while the clone's origin plainly named one. The mapping is now derived from the remote on every read,
+// against the reader's own hosts.json; nothing is written, and a remote that cannot name exactly one host and one
+// repository keeps the sentence it always had.
+
+// The reader's file, created empty the way `ensureHostsFile` creates it, against the seed this repo ships.
+async function emptyHosts(t, tag) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), `wtgui-hosts-${tag}-`));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "hosts.json");
+  await writeFile(file, `${JSON.stringify({ version: 1, hosts: {}, projects: {} }, null, 2)}\n`, "utf8");
+  return { file, hosts: new Hosts({ file, seedFile: DEFAULT_SEED_FILE, ttlMs: 0 }) };
+}
+
+test("a project neither hosts file names is mapped from its own remote, with no reader click", async (t) => {
+  const { hosts } = await emptyHosts(t, "remote");
+  // A github remote: the owner and the repo are the remote's path, not the host record's default owner.
+  const gh = hosts.view({ name: "fresh-thing", remoteUrl: "https://github.com/another-org/fresh-thing.git", mainBranch: "main" });
+  assert.equal(gh.host, "github");
+  assert.deepEqual(gh.coordinates, { owner: "another-org", repo: "fresh-thing" });
+  assert.equal(gh.links.repo, "https://github.com/another-org/fresh-thing");
+  assert.equal(gh.derived, true, "the view says the mapping came from the remote, not from a hosts file");
+  // The scp form a clone leaves behind, and a bitbucket project key the seed's host record does not default to.
+  const scp = hosts.view({ name: "fresh-gh-scp", remoteUrl: "github.com:JLRoper/fresh-gh-scp.git", mainBranch: "main" });
+  assert.equal(scp.host, "github");
+  assert.deepEqual(scp.coordinates, { owner: "JLRoper", repo: "fresh-gh-scp" });
+  const bb = hosts.view({ name: "fresh-fleet", remoteUrl: "https://git.sefl.com/scm/SA/fresh-fleet.git", mainBranch: "master" });
+  assert.equal(bb.host, "sefl-bitbucket");
+  assert.deepEqual(bb.coordinates, { projectKey: "SA", repoSlug: "fresh-fleet" });
+  assert.equal(bb.links.repo, "https://git.sefl.com/projects/SA/repos/fresh-fleet");
+  assert.equal(bb.landing, true, "the host's landing doctrine travels with a derived mapping");
+  // The resolution the backoff and the PR path key on is the same one the chip draws.
+  assert.equal(hostIdFor(hosts, { name: "fresh-fleet", remoteUrl: "https://git.sefl.com/scm/SA/fresh-fleet.git" }), "sefl-bitbucket");
+  assert.match(prListing(hosts.doc(), { name: "fresh-fleet", remoteUrl: "https://git.sefl.com/scm/SA/fresh-fleet.git" }).url, /projects\/SA\/repos\/fresh-fleet\/pull-requests/);
+});
+
+test("a mapping the reader wrote in hosts.json still wins over the remote", async (t) => {
+  const { file, hosts } = await emptyHosts(t, "reader");
+  const written = {
+    version: 1,
+    hosts: {},
+    projects: { "fresh-bb": { host: "github", coordinates: { owner: "reader", repo: "picked" } } },
+  };
+  await writeFile(file, `${JSON.stringify(written, null, 2)}\n`, "utf8");
+  const view = hosts.view({ name: "fresh-bb", remoteUrl: "https://git.sefl.com/scm/SA/fresh-bb.git" });
+  assert.equal(view.host, "github", "the reader's host id wins, even against a remote on another host");
+  assert.deepEqual(view.coordinates, { owner: "reader", repo: "picked" });
+  assert.equal(view.derived, false);
+  // Reading a project never writes the derivation into the reader's file.
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), written);
+});
+
+test("a seed entry is a written mapping too: a disagreeing remote does not replace it", async (t) => {
+  const { hosts } = await emptyHosts(t, "seed-entry");
+  const view = hosts.view({ name: "Menu", remoteUrl: "https://github.com/JLRoper/Menu.git", mainBranch: "master" });
+  assert.equal(view.host, "sefl-bitbucket", "the seed's entry is consulted before the remote is");
+  assert.equal(view.derived, false);
+});
+
+test("an ambiguous or unmatched remote keeps the measured why and never becomes a guess", async (t) => {
+  const { file, hosts } = await emptyHosts(t, "ambiguous");
+  // Two host records on one hostname. A remote URL says which host, never which record.
+  const mirrored = {
+    version: 1,
+    hosts: { mirror: { ...seed.hosts["sefl-bitbucket"], name: "mirror" } },
+    projects: {},
+  };
+  await writeFile(file, `${JSON.stringify(mirrored, null, 2)}\n`, "utf8");
+  const ambiguous = hosts.view({ name: "fresh-bb", remoteUrl: "https://git.sefl.com/scm/SA/fresh-bb.git" });
+  const unmatched = hosts.view({ name: "fresh-elsewhere", remoteUrl: "https://gitlab.example/team/thing.git" });
+  const localPath = hosts.view({ name: "fresh-local", remoteUrl: "~/mirrors/not-a-remote" });
+  assert.equal(ambiguous.host, null);
+  assert.equal(unmatched.host, null);
+  assert.equal(localPath.host, null);
+  // The same sentence, character for character, as the same project with no remote at all: nothing the remote cannot
+  // decide is allowed to replace it. The names differ, so each is compared against its own no-remote answer.
+  assert.equal(ambiguous.why, hosts.view({ name: "fresh-bb" }).why);
+  assert.equal(unmatched.why, hosts.view({ name: "fresh-elsewhere" }).why);
+  assert.equal(localPath.why, hosts.view({ name: "fresh-local" }).why);
+  assert.match(ambiguous.why, /has no host mapping/);
+  // remoteMapping is the one place a derivation is made, and it answers null for each of them.
+  assert.equal(remoteMapping(hosts.doc(), { name: "fresh-bb", remoteUrl: "https://git.sefl.com/scm/SA/fresh-bb.git" }), null);
+  assert.equal(remoteMapping(hosts.doc(), { name: "fresh-elsewhere", remoteUrl: "https://gitlab.example/team/thing.git" }), null);
+  // The proposal path refuses an ambiguous hostname by name instead of taking the first record, which is the guess
+  // this module exists to refuse.
+  const proposal = proposeMapping(hosts.doc(), {}, "https://git.sefl.com/scm/SA/fresh-bb.git");
+  assert.equal(proposal.ok, false);
+  assert.match(proposal.why, /sefl-bitbucket, mirror/);
+  assert.match(proposal.why, /cannot say which one/);
+});
+
+test("one discovery pass gives a fresh clone's view its host", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-hosts-discovery-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const scanRoot = path.join(root, "repos").replace(/\\/g, "/");
+  const repo = path.join(scanRoot, "fresh-thing").replace(/\\/g, "/");
+  mkdirSync(repo, { recursive: true });
+  // A repo an agent would have cloned: a commit, and an origin that names the project key and slug.
+  git(repo, "init", "-q", "-b", "main");
+  writeFileSync(path.join(repo, "README.md"), "# fresh-thing\n", "utf8");
+  git(repo, "remote", "add", "origin", "https://git.sefl.com/scm/IT/fresh-thing.git");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-q", "-m", "first");
+  const stateDir = path.join(root, "state");
+  mkdirSync(stateDir, { recursive: true });
+  const registry = new ProjectRegistry({
+    getConfig: () => ({ scanRoots: [scanRoot], projects: [], tierDays: 7, tierBuckets: 1, tierCheckSeconds: 1 }),
+    store: new Store(),
+    onLog: () => {},
+    cacheFile: path.join(stateDir, "projects.json"),
+    tierFile: path.join(stateDir, "tiers.json"),
+  });
+  const list = await registry.discover();
+  const project = list.find((p) => p.name === "fresh-thing");
+  assert.ok(project, "the pass found the clone");
+  assert.equal(project.remoteUrl, "https://git.sefl.com/scm/IT/fresh-thing.git", "discovery read the origin URL");
+  const { hosts } = await emptyHosts(t, "discovery-hosts");
+  const view = hosts.view(project);
+  assert.equal(view.host, "sefl-bitbucket");
+  assert.deepEqual(view.coordinates, { projectKey: "IT", repoSlug: "fresh-thing" });
+  assert.equal(view.links.repo, "https://git.sefl.com/projects/IT/repos/fresh-thing");
+  assert.equal(view.derived, true);
 });
 
 test("Hosts reads the seed and the live file together, and a fresh save shows up on the next read", async (t) => {
