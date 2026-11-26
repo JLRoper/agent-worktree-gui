@@ -388,11 +388,12 @@ The line beneath it says where local `main` is against the remote (`0 behind / 0
 PID, the remote tip with its subject and age, and when the project was last fetched.
 
 **The host chip** (`host: sefl-bitbucket IT/email-multi`, or `no host`) says where this project's branch and PR links
-go. Click it and the panel reads the project's own remote and offers the mapping that remote implies — the host id and
-the coordinates — with **Use this mapping** to write it and **Cancel** to keep what is there; a project nobody has
-mapped says `no host` and offers the strip the same way. Nothing is written until you press the button, and a remote
-the panel cannot read is refused with the reason rather than guessed at. The tokens and the file behind it are in
-[docs/hosts.md](hosts.md).
+go. A project neither hosts file names whose remote discovery has read already carries its host - the chip's tooltip
+says it was read from the project's own remote, and no press is needed. Click it and the panel reads the project's own
+remote and offers the mapping that remote implies (the host id and the coordinates), with **Use this mapping** to write
+it and **Cancel** to keep what is there; a project nobody has mapped says `no host` and offers the strip the same way.
+Nothing is written until you press the button, and a remote the panel cannot read is refused with the reason rather
+than guessed at. The tokens and the file behind it are in [docs/hosts.md](hosts.md).
 
 **The turnover chip** (`turnover: feature/optym-turnover`, `turnover: local turnover`, or `turnover: none`) says where
 a tree cut for this project **starts**, and the field behind it has three kinds:

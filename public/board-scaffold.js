@@ -405,7 +405,7 @@ function hostChipHtml(name) {
   const coords = v.coordinates ? Object.values(v.coordinates).filter(Boolean).join("/") : "";
   const label = v.host ? `host: ${v.host}` : "no host";
   const title = v.host
-    ? `links come from ${v.host}${coords ? ` (${coords})` : ""}${v.landing ? " · its landing doctrine is in the merge prompt" : " · no landing doctrine"}${v.links?.repo ? ` · ${v.links.repo}` : ""} — click to change or re-discover the mapping`
+    ? `links come from ${v.host}${coords ? ` (${coords})` : ""}${v.derived ? " · read from this project's own remote, not written in hosts.json" : ""}${v.landing ? " · its landing doctrine is in the merge prompt" : " · no landing doctrine"}${v.links?.repo ? ` · ${v.links.repo}` : ""} - click to change or re-discover the mapping`
     : `${v.why} — click to read this project's remote and propose a mapping for you to confirm`;
   return `<button type="button" class="btn-host${v.host ? " is-mapped" : " is-unmapped"}" data-host-project="${esc(name)}" title="${esc(title)}">${esc(label)}${coords ? ` <span class="host-coords">${esc(coords)}</span>` : ""}</button>`;
 }
