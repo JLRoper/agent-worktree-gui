@@ -31,7 +31,7 @@ const esc = (v) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-const MANAGER_DESCRIPTION = "The board manager: drives every agent it starts to an approved PR ready to merge.";
+const MANAGER_DESCRIPTION = "The board manager: drives every agent it starts to its landing.";
 const MANAGER = {
   id: "assistant-agent-manager",
   name: "Agent Manager",
@@ -207,7 +207,7 @@ test("the boxes hold the role the read landed, and the picker lists the library"
   assert.match(html, /<option value="assistant-agent-manager" selected>Agent Manager<\/option>/, "the picker selects the role the pane shows");
   assert.match(html, /<option value="reviewer">Reviewer<\/option>/, "and lists the rest of the library");
   assert.match(html, /id="as-role-name"[^>]*value="Agent Manager"/, "the name box holds the role's name");
-  assert.match(html, /id="as-role-description"[^>]*>The board manager: drives every agent it starts to an approved PR ready to merge\.<\/textarea>/, "the description box holds its remit");
+  assert.match(html, /id="as-role-description"[^>]*>The board manager: drives every agent it starts to its landing\.<\/textarea>/, "the description box holds its remit");
   assert.match(html, /id="as-role-prompt"[^>]*>Be brief, and never approve your own work\.<\/textarea>/, "the prompt box holds its prompt");
   assert.match(html, /id="as-role-text"[^>]*># The manager charter\n\nDRIVES-THE-BOARD\n<\/textarea>/, "the charter box holds its text, byte for byte");
   assert.match(html, /data-as-rolesize>40\/20000 chars/, "the size is judged against the cap");

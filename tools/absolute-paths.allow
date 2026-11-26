@@ -214,7 +214,7 @@ tools/verify-two-folder-cards.mjs | 5 | fixture: the real review folder this har
 tools/verify-wake-ladder.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
 tools/verify-whole-tool-stream.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
 tools/verify_cli_session_limit.py | 1 | probe: the tree this script was last run against, kept as its default argument
-config.example.json | 6 | template: the shipped copy of the reader config.json, whose folders are this machine's examples
+config.example.json | 7 | template: the shipped copy of the reader config.json, whose folders are this machine's examples
 docs/perf/backend-2026-11-06.md | 5 | evidence: the perf audit records the live panel's data dir, its scratch folder and the exact commands it ran, which is what it reports
 docs/reviews/ping-pong-round-7-dossier-2026-11-09.html | 2 | review record: the two stage prompts verbatim, each naming the tree it ran in
 test/remote-backoff.test.js | 2 | test fixture: a placeholder repository path that does not exist, and prIndex never opens it

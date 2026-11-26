@@ -76,6 +76,14 @@
       "landingRules": "One turnover branch per feature, named YYYYMMDD_HHMM_<TICKET>_<description>, cut from master. Worker branches are cut from that turnover branch and each is rolled back into it LOCALLY with git -C <checkout holding it> merge --no-ff <worker branch> - never pushed and never given a PR of its own. Only the turnover branch is pushed, by explicit refspec, and its pull request goes to master through Bitbucket's REST API (gh pr create does not work on git.sefl.com). Prove a local roll-back with git log --oneline -2, an empty git diff --stat <turnover> <worker> and git ls-remote --heads origin <turnover> still naming the old sha."
     },
     {
+      "name": "python-ruleset",
+      "path": "C:/ProjectDevelopment/python-ruleset",
+      "remote": "origin",
+      "mainBranch": "main",
+      "turnoverBranch": "20261126_1915_ROPER_pythonRulesetV1",
+      "remoteBranchPolicy": "local-only"
+    },
+    {
       "name": "menu",
       "baseRefKind": "local-turnover"
     }
