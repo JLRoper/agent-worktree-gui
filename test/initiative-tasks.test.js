@@ -327,8 +327,8 @@ test("the expand control is a real button with aria-expanded and the tab's own c
   assert.match(pane, /if \(el\.dataset\.initTaskFold\) \{/, "the press handler answers it");
   assert.match(
     pane,
-    /\[data-init-fold\], \[data-init-assist-fold\], \[data-init-task-fold\], \[data-init-history-fold\], \[data-init-task-card\], \[data-init-tasks-more\]/,
-    "and the control selector includes the card's own press and the fold's more",
+    /\[data-init-fold\], \[data-init-assist-fold\], \[data-init-task-fold\], \[data-init-history-fold\], \[data-init-notes-fold\], \[data-init-task-card\], \[data-init-tasks-more\]/,
+    "and the control selector includes the card's own press, the notes fold and the fold's more",
   );
 });
 
