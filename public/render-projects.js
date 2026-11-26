@@ -756,6 +756,11 @@ function toggleChildFold(key) {
 // a dash with the reason in its tooltip, not as a scolding zero. More than one chip is legal: an initiative is a way to
 // hold a piece of work together across projects, and two pieces of work can share a tree. The value comes from the
 // side store keyed by tree path (lib/initiatives.js), overlaid by the server, so nothing here has to survive a scan.
+// THE CHIP IS PRESSABLE, AND THE KEYBOARD REACHES IT. public/app.js delegates the press (a click, or Enter and Space
+// on the focused chip) and public/assistant.js publishes the opener: the float on its Initiatives tab, that card
+// unfolded, scrolled to and flashed. So the chip is a role="button" with a tabindex and nothing else changes - it is
+// still one chip per initiative, still ellipsised to the cell's one line, and a tree with none still draws the dash
+// below rather than an empty box.
 function initiativeCellHtml(row) {
   const list = Array.isArray(row?.initiatives) ? row.initiatives.filter((i) => i && i.title) : [];
   if (!list.length) {
@@ -764,7 +769,7 @@ function initiativeCellHtml(row) {
   const chips = list
     .map(
       (i) =>
-        `<span class="chip initiative-chip" data-initiative-id="${esc(i.id)}" title="initiative: ${esc(i.title)} - the Initiatives tab beside Role holds the whole piece of work">${esc(i.title)}</span>`,
+        `<span class="chip initiative-chip" role="button" tabindex="0" data-initiative-id="${esc(i.id)}" title="initiative: ${esc(i.title)} - the Initiatives tab beside Role holds the whole piece of work">${esc(i.title)}</span>`,
     )
     .join("");
   return `<td class="initiative">${chips}</td>`;

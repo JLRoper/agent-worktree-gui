@@ -4861,6 +4861,12 @@
     paintInitTaskLists(host);
     restoreInitScroll(keepScroll);
     restoreInitFocus(host, focusToken);
+    // THE CHIP'S LANDING (openInitiativeCard above). Landed HERE, after the paint and the scroll restore, and not in a
+    // rAF from the opener: this is the task that placed the card's node, so the scroll and the flash act on the node
+    // the reader is looking at rather than on one a repaint is about to replace. A press that arrives before the read
+    // leaves `initLandId` set and the render that follows the read lands it - unless the read took longer than the
+    // press is worth remembering (INIT_LAND_MS), in which case it is dropped here.
+    if (initLandId && (landInitCard(initLandId) || Date.now() - initLandAt > INIT_LAND_MS)) initLandId = "";
     scheduleInitRefresh();
   }
 
@@ -4890,6 +4896,92 @@
       return true;
     };
     if (!land()) requestAnimationFrame(land);
+    return true;
+  }
+
+  // THE CHART'S INITIATIVE CHIP, PRESSED (public/app.js delegates the press - a click, or Enter and Space on the
+  // focused chip): this float, on the Initiatives tab, with THAT initiative's card unfolded, scrolled to and flashed
+  // once. The chip is one fact about one row; the card is the whole piece of work behind it, so the press is the
+  // shortest walk from the board to the map, and it takes the page's one record of where the float is (setView) and
+  // the tab's own open book (initOpen) rather than growing a second opinion about either.
+  //
+  // THE CARD MAY NOT BE DRAWN YET. A press before this tab has ever read the store draws "reading the initiatives…"
+  // and there is no node to scroll to or flash, so the id is parked in `initLandId` and renderAssistantInitiatives'
+  // own tail lands it - the render that follows the read paints the card and then scrolls and flashes the node that
+  // paint placed. A press after a read lands it in the same task. Cleared once it lands, so a later snapshot repaint
+  // does not flash the card again under a reader who has moved on.
+  let initLandId = "";
+  // When the press asked for that landing. A card that arrives long after the press (a store read that failed and was
+  // retried a minute later) is not what the reader pressed, so the landing expires rather than flashing a card at
+  // somebody who has moved on.
+  let initLandAt = 0;
+  const INIT_LAND_MS = 20_000;
+  const INIT_FLASH = "is-flash";
+  // The same clock as the sheet's `initcardflash` (public/style.css). The animation is what draws the highlight; this
+  // number is only the fallback for a card whose animation never runs.
+  const INIT_FLASH_MS = 1400;
+  function flashInitCard(card) {
+    // `restartClassAnimation` is the page's own answer to "flash this again": a card that is already flashing has its
+    // animation's clock rewound rather than a class removed and re-added for nothing (public/dom.js).
+    const prev = card._initFlashEnd;
+    if (prev) {
+      card.removeEventListener("animationend", prev);
+      clearTimeout(card._initFlashT);
+    }
+    restartClassAnimation(card, INIT_FLASH, "initcardflash");
+    // THE CLASS IS TAKEN BACK BY THE ANIMATION ITSELF, which is what makes the flash fade instead of sticking: a class
+    // left on the node would be a highlight that outlives the press. The timer is the second line of defence for a
+    // card whose animation never starts or never ends (reduced motion, a tab in the background, a repaint that
+    // replaced the node mid-flash) - either way the next press starts from a card with no class on it.
+    function clear() {
+      card.removeEventListener("animationend", onEnd);
+      if (card._initFlashEnd === onEnd) card._initFlashEnd = null;
+      clearTimeout(card._initFlashT);
+      card.classList.remove(INIT_FLASH);
+    }
+    const onEnd = (ev) => {
+      if (ev.target !== card) return; // a child's own animation is not this flash
+      clear();
+    };
+    card._initFlashEnd = onEnd;
+    card.addEventListener("animationend", onEnd);
+    card._initFlashT = setTimeout(clear, INIT_FLASH_MS + 400);
+  }
+  function landInitCard(id) {
+    const card = document.querySelector(`#as-initiatives [data-init-card="${CSS.escape(String(id))}"]`);
+    if (!card) return false;
+    // THE CARD'S TITLE AT THE PANE'S READING EDGE, and the PANE ALONE MOVES. `scrollIntoView` would be one line, but it
+    // scrolls every scrollable ancestor - the board behind the float included - so a press on a chip left the chart's
+    // row where the reader was not: measured as a 173px jump of the window on the press that opened this card. So the
+    // offset is computed inside the pane's own scroll content and only the pane's scrollTop is written.
+    //
+    // The TOP edge, not the centre: an open card can be taller than the pane, and centering one puts its title above
+    // the reading edge - the reader who pressed a name lands in the middle of a card whose name they cannot see.
+    const pane = card.closest(".as-pane");
+    if (pane) {
+      const delta = card.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
+      pane.scrollTop = Math.max(0, Math.round(delta));
+    } else {
+      // A card outside a pane is not a shape this page draws; scrolling it into view is still better than doing nothing.
+      card.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+    flashInitCard(card);
+    return true;
+  }
+  function openInitiativeCard(id) {
+    const want = String(id || "").trim();
+    if (!want) return false;
+    if (!state.assistantOpen) toggleAssistant(true);
+    // The chart counts the ACTIVE map, so the tab goes back to that list: a press from a row whose card was filed
+    // under Archived would otherwise open a tab that cannot draw the card it was asked for.
+    initView = "active";
+    // The open state goes in BEFORE the paint, so the card the reader lands on is the unfolded one rather than a
+    // title card that unfolds a frame later.
+    initOpen.add(want);
+    setView({ assistant: "initiatives" });
+    initLandId = want;
+    initLandAt = Date.now();
+    renderAssistantInitiatives(true);
     return true;
   }
 
@@ -8764,6 +8856,10 @@
     renderAssistantChat(rec ? rec.id : activeSessionId());
   };
   window.__assistantToggle = toggleAssistant;
+  // The chart's initiative chip (public/app.js delegates its press): the float on the Initiatives tab, that
+  // initiative's card unfolded, scrolled to and flashed once. Nothing is written to the store and no question is
+  // asked - the press only moves the reader to what is already there.
+  window.__assistantOpenInitiative = openInitiativeCard;
   // The chart's owner column chip: app.js hands the four fields it drew on the chip (the assistant, the project, the
   // worktree, the branch) and this opens that assistant's Chat with "Regarding <project> <worktree> <branch>: " in the
   // box, the caret at the end and the box focused. Nothing is sent.

@@ -5688,6 +5688,26 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 #as-initiatives .init-card.is-titlecard.has-init-hue:hover { background: hsl(var(--init-hue) 26% 13%); }
 #as-initiatives .init-card.has-init-hue .init-title { color: hsl(var(--init-hue) 78% 82%); }
 #as-initiatives .init-card.has-init-hue .init-head-btn .init-caret { color: hsl(var(--init-hue) 55% 62%); }
+/* THE CHIP'S LANDING FLASH (public/assistant.js `flashInitCard`): the card a chart chip press just opened takes one
+   green-gold wash that fades back to the card's own surface. Green because the chart's own pulse is green and this is
+   the same walk (a press that lands the reader on a row); gold in the ring because a landing is a confirmation rather
+   than a sign of life, and the two must not read as the same event. The RING and the WASH are box shadows, not a
+   background: an inset shadow paints above the card's fill and below its text, so the wash cannot dim a word of the
+   description, and it ends at alpha 0 - the card's own background, hue or no hue, is what the last frame reveals. The
+   class is added by the page and removed on animationend, so nothing sticks (this sheet never keeps it on its own).
+   Both keyframe lists carry three shadows, or the browser would drop the interpolation and snap between frames. */
+@keyframes initcardflash {
+  0% {
+    box-shadow: 0 0 0 2px rgba(198, 206, 84, .72), 0 0 22px rgba(126, 231, 135, .30), inset 0 0 0 999px rgba(154, 178, 76, .16);
+  }
+  55% {
+    box-shadow: 0 0 0 2px rgba(198, 206, 84, .34), 0 0 14px rgba(126, 231, 135, .14), inset 0 0 0 999px rgba(154, 178, 76, .07);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(198, 206, 84, 0), 0 0 10px rgba(126, 231, 135, 0), inset 0 0 0 999px rgba(154, 178, 76, 0);
+  }
+}
+#as-initiatives .init-card.is-flash { animation: initcardflash 1400ms ease-out; }
 /* THE STATUS WORD: the current wave and its state, or the honest "no waves" / "waves unreadable". A pill, because it
    is the shortest answer the tab gives, and a word as well as a colour. */
 #as-initiatives .init-status {
