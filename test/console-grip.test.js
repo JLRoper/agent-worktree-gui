@@ -37,8 +37,11 @@ function grab(src, name) {
 
 const context = { Math, Number };
 vm.createContext(context);
-vm.runInContext([grab(appSrc, "outGripStep"), grab(appSrc, "outGripRelease")].join("\n"), context);
-const { outGripStep, outGripRelease } = context;
+vm.runInContext(
+  [grab(appSrc, "outGripStep"), grab(appSrc, "outGripLimit"), grab(appSrc, "outGripRelease")].join("\n"),
+  context,
+);
+const { outGripStep, outGripLimit, outGripRelease } = context;
 
 // ---- the arithmetic of one move -------------------------------------------------------------------------------
 test("a step is the pointer expressed from the top edge the press froze", () => {
@@ -98,14 +101,39 @@ test("the grip is a touch-action: none nwse band, and the console has no native 
   assert.equal(consoleRule[0].includes("resize:"), false, "and it no longer asks the browser for a resize handle");
 });
 
-test("the clamp is called once, at the release - never on a move", () => {
+test("the limit is ONE function, applied by every move and again by the release", () => {
+  // The bounce this ended: the move ran free and the release clamped to the room, so a past-room drag drew a height
+  // the pointerup took back (120px). Now the move holds the box to the same band, so the release's call returns the
+  // height already on the box. A second arithmetic is how the two came to disagree; a clamp that never ran on a move
+  // is how the corner came to show a size it would lose.
+  assert.equal(appSrc.split("outGripRelease(").length - 1, 2, "one definition and one call: the release commits the number");
+  assert.ok(grab(appSrc, "endOutGrip").includes("outGripRelease(d.h, d.min, d.room)"), "and the call is the release's, on the room the press read");
   assert.equal(
-    appSrc.split("outGripRelease(").length - 1,
-    2,
-    "one definition and one call: a clamp in the move handler is the box stopping while the pointer travels",
+    appSrc.split("outGripLimit(").length - 1,
+    3,
+    "one definition and two callers: outGripRelease delegates to it, and the move handler holds the box to it",
   );
-  assert.ok(grab(appSrc, "endOutGrip").includes("outGripRelease("), "and the call is the release's");
+  assert.ok(grab(appSrc, "outGripRelease").includes("outGripLimit(h, min, max)"), "the release IS the limit, not a second arithmetic");
+  const move = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
+  assert.ok(move.includes("outGripLimit(want, d.min, d.room)"), "the move stops the box on the floor and the room under the frozen top");
+  assert.ok(move.includes("d.want = want"), "and keeps the pointer's own request for the gates to judge the corner by");
   assert.equal(appSrc.split("outGripStep(").length - 1, 2, "a step is written in one place too");
+});
+
+test("a limit clamped on a move is the height the release would keep", () => {
+  // The band, driven as the page drives it: the same height, floor and room answer the same number whether the move
+  // asks or the release does - including the rounding, because the writer rounds to an inline pixel.
+  for (const [h, min, max] of [
+    [892, 18, 772],
+    [772, 18, 772],
+    [420.6, 18, 772],
+    [4, 18, 772],
+    [900, 18, 0],
+  ]) {
+    assert.equal(outGripLimit(h, min, max), outGripRelease(h, min, max), `${h}px inside [${min}, ${max}]`);
+  }
+  assert.equal(outGripLimit(892, 18, 772), 772, "a past-room move stops on the room");
+  assert.equal(outGripLimit(420.6, 18, 772), 421, "and a height inside the band is kept, rounded once");
 });
 
 test("the height is written through the one owner, and a move is the pointer from the frozen top", () => {
@@ -212,7 +240,7 @@ function gripCapPage() {
     getComputedStyle: (el) => ({ maxHeight: el.style.maxHeight || el.sheetCap || "" }),
   });
   vm.runInContext(
-    [grab(appSrc, "outGripCap"), grab(appSrc, "outGripCapStyle"), grab(appSrc, "outGripRelease")].join("\n"),
+    [grab(appSrc, "outGripCap"), grab(appSrc, "outGripCapStyle"), grab(appSrc, "outGripLimit"), grab(appSrc, "outGripRelease")].join("\n"),
     context,
   );
   return context;
@@ -301,7 +329,9 @@ test("every length the gesture keeps is a layout length, and the pointer is divi
   const move = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
   assert.ok(move.includes("e.clientY / d.z"), "the move's pointer is divided by it");
   assert.ok(grab(appSrc, "outGripEdgeWatch").includes("getBoundingClientRect().top / d.z"), "so is the edge watch's drift");
-  assert.ok(grab(appSrc, "endOutGrip").includes("r.top / d.z"), "and the room the release clamps to");
+  assert.ok(press.includes("Math.round(window.innerHeight - r.top / z - OUT_GRIP_ROOM)"), "the press reads the room under the frozen top edge");
+  assert.ok(press.includes("room,"), "and keeps it on the record");
+  assert.ok(grab(appSrc, "endOutGrip").includes("outGripRelease(d.h, d.min, d.room)"), "which the release clamps to, not a fresh read");
   assert.equal(
     /setOutHeight\(out, r\.height\)/.test(appSrc),
     false,

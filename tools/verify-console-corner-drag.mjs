@@ -219,6 +219,9 @@ const PAGE_HELPERS = (gripInset) => {
         paneW: Math.round(pane().getBoundingClientRect().width),
         held: typeof outDragging === "function" ? outDragging(o) : null,
         dragH: typeof outGripDrag !== "undefined" && outGripDrag ? +Number(outGripDrag.h).toFixed(2) : null,
+        // The pointer's own request BEFORE the gesture's band was applied (public/app.js outGripLimit): past the room
+        // the box is held at the limit and cannot follow, and that is a clamp rather than a corner the gesture lost.
+        dragWant: typeof outGripDrag !== "undefined" && outGripDrag && outGripDrag.want != null ? +Number(outGripDrag.want).toFixed(2) : null,
         dragTop: typeof outGripDrag !== "undefined" && outGripDrag ? +Number(outGripDrag.top).toFixed(2) : null,
         moved: typeof outGripDrag !== "undefined" && outGripDrag ? Boolean(outGripDrag.moved) : null,
         same: o === W.node,
@@ -682,7 +685,11 @@ function verdictOf(run) {
   let prevGrip = down.gripBottom;
   for (const r of rows) {
     const asked = r.dragH;
-    const inRange = asked == null ? true : asked > minH + 0.5 && asked >= followFloor - 0.5 && asked <= room + 1;
+    // THE HAND'S OWN REQUEST, not the height the box was allowed to draw. Since the move holds the box to the room
+    // (public/app.js outGripLimit), `dragH` saturates at the limit while the pointer travels on; judging the corner
+    // by `dragH` would read a deliberate stop as a lost corner.
+    const hand = r.dragWant == null ? asked : r.dragWant;
+    const inRange = hand == null ? true : hand > minH + 0.5 && hand >= followFloor - 0.5 && hand <= room + 1;
     const err = Math.abs(r.gripBottom - (r.pointerY + grab));
     worstAll = Math.max(worstAll, err);
     if (inRange) worstInRange = Math.max(worstInRange, err);
@@ -740,14 +747,16 @@ function verdictOf(run) {
   // 6. THE CORNER AFTER THE RELEASE. The release used to put a following transcript back on its foot, and that is a
   //    scroll write of exactly the drag's travel: the box came back to the pixel it started from (measured, pre-fix:
   //    60px down and final -60, 120px down and final -120, 400px up and final 400). Judged only when the release KEPT
-  //    the number the pointer asked for AND the transcript's floor let the box follow there: a drag past the floor or
-  //    past the room is a clamp, and there the corner comes to rest where the box does, by design.
+  //    the number the pointer asked for AND the transcript's floor and the room both let the box follow there: a drag
+  //    past the floor or past the room is a clamp, and there the corner comes to rest where the box does, by design.
+  const handAtEnd = last.dragWant == null ? last.dragH : last.dragWant;
   const keptAsked =
     name !== "no-move" &&
     last.dragH != null &&
     Math.abs(after.h - last.dragH) <= SIZE_TOLERANCE_PX &&
     last.dragH > minH + 0.5 &&
-    last.dragH >= followFloor - 0.5;
+    last.dragH >= followFloor - 0.5 &&
+    (handAtEnd == null || handAtEnd <= room + CORNER_TOLERANCE_PX);
   numbers.cornerReleaseChecked = keptAsked;
   if (keptAsked && Math.abs(numbers.cornerAtReleasePx) > CORNER_TOLERANCE_PX) {
     fails.push(`the corner stood ${numbers.cornerAtReleasePx}px from the hand after the release (the drag's travel was undone)`);

@@ -10627,9 +10627,13 @@ for (const type of ["gesturestart", "gesturechange"]) {
 //     a floor rather than as a lost corner;
 //   - it writes an explicit pixel height through `setOutHeight` (the ONE writer of `--out-h`), with the sheet's cap
 //     lifted off it for the length of the gesture;
-//   - the min/max clamps are applied ONCE, on release. A clamp applied mid-gesture is a box that stops while the
-//     pointer keeps going, which is the jump in its other form. The floor of the gesture is the console's own padding
-//     box (measured: `--out-h: 1px` drew 18px), so the number the drag stops on is one the box can actually draw;
+//   - the min/max band is applied on EVERY move and again at the release, from ONE number read at the press
+//     (outGripLimit): the box stops on the room under its frozen top edge while the pointer keeps going, the way a
+//     window resize stops at the screen edge, and the release then commits the height already on the box. The older
+//     shape - a free-running draw clamped only at the release - drew a height the release took back (measured: 120px
+//     of bounce on a past-room drag, tools/verify-console-resize-release.mjs). The floor of the gesture is the
+//     console's own padding box (measured: `--out-h: 1px` drew 18px), so the number the drag stops on is one the box
+//     can actually draw;
 //   - THE POINTER IS VISUAL AND THE WRITER IS LAYOUT, and Settings > Display's zoom is the scale between them. One
 //     scale, read at the press (outGripZoom below); every number the gesture keeps is a layout length, and the
 //     pointer is divided by that scale where it enters. Written straight through, a press on a 90% page pinned the
@@ -10643,10 +10647,12 @@ for (const type of ["gesturestart", "gesturechange"]) {
 //     pixel it started from). The release records the truth instead (noteCardBodyScroll), so the transcript stops
 //     following until the reader is back on its foot.
 //
-// The clamps read at release are the sheet's own `min-height`, and the ROOM the box has under its top edge in the
-// viewport. The room rather than the sheet's `max-height`, because the cap is what a console sits on when nobody has
-// resized it, and a drag that carries it past the cap is the reader asking for a taller box - which is the number
-// applyStoredHeight puts back on the next rebuild (public/board/console.js lifts the cap to match it).
+// The band the box is held to is the sheet's own `min-height` (or the console's padding box, whichever is larger) and
+// the ROOM it has under its top edge in the viewport, read ONCE at the press (the frozen edge and the viewport are what
+// the room is a function of) and applied by every move and by the release alike. The room rather than the sheet's
+// `max-height`, because the cap is what a console sits on when nobody has resized it, and a drag that carries it past
+// the cap is the reader asking for a taller box - which is the number applyStoredHeight puts back on the next rebuild
+// (public/board/console.js lifts the cap to match it).
 const OUT_GRIP_ROOM = 8; // px kept under the box at the viewport's bottom edge, so the grip is not on the very edge
 let outGripDrag = null;
 
@@ -10675,12 +10681,27 @@ function outGripStep(top, grab, clientY) {
   return Number.isFinite(h) && h > 0 ? h : 0;
 }
 
-// The height a release keeps: at or above the sheet's floor, and inside the room under the box's top edge. Applied
-// HERE and nowhere else, because a clamp on every move stops the corner while the pointer keeps travelling.
-function outGripRelease(h, min, max) {
+// THE ONE LIMIT, and it is the same number on a move as on the release. A box that drew a height the release would
+// not keep was the corner showing the reader a size it was about to take back: measured at 120px of bounce when a
+// downward drag carried the corner past the room under the box's frozen top edge, at page zoom 100, 90 and 110
+// (tools/verify-console-resize-release.mjs). So the move holds the box to this band while the pointer keeps
+// travelling - the way a window resize stops at the screen edge - and the release's call lands on the height the
+// corner is already drawing. Applied per move from the pointer's own position (outGripStep), never accumulated, so a
+// hand that comes back up takes the corner back with it the moment it is inside the band again.
+function outGripLimit(h, min, max) {
   const lo = Number.isFinite(Number(min)) && Number(min) > 0 ? Number(min) : 0;
-  const hi = Number.isFinite(Number(max)) && Number(max) > lo ? Number(max) : lo;
+  // A limit under 1px is not a limit: the ONE writer refuses a height of 0 (setOutHeight, public/board/console.js),
+  // so a band whose top collapsed would be a box that stops answering the pointer.
+  const hi = Math.max(lo, Number.isFinite(Number(max)) ? Number(max) : lo, 1);
   return Math.max(lo, Math.min(hi, Math.round(Number(h) || lo)));
+}
+
+// The height a release keeps. The moves have already held the box to outGripLimit, so for every drag that reached a
+// limit this is the height already on the box and nothing moves at the pointerup. It stays a named call because the
+// release is the one place the number is committed to the store, and because a press that already sat past the limit
+// (a window shrunk under a stored height) must still land inside it.
+function outGripRelease(h, min, max) {
+  return outGripLimit(h, min, max);
 }
 
 // THE SHEET'S CAP, NOT THE ONE THE LAST GESTURE LEFT. A box dragged past its cap carries `max-height: none` inline, and
@@ -10762,7 +10783,13 @@ document.addEventListener(
     // drawable height: the used height becomes the padding box (measured: `--out-h: 1px` drew 18px, 8px of padding
     // top and bottom plus the two borders), so a drag that "reached" 1px was a store of 1 and a box of 18 - the number
     // the gesture wrote, the store kept and the next restore put back was not the box on screen. The floor is the
-    // larger of the sheet's `min-height` and that padding box.
+    // larger of the sheet's `min-height` and that padding box, and the room is the same one the
+    // release has always kept - `max(sheet cap, viewport under the frozen top - OUT_GRIP_ROOM)`. Both are read here,
+    // once, and kept on the record: the room because the move and the release must stop the box on ONE number (a
+    // second read at the release is how a drag came to draw a height it gave back), and the cap because a drag past
+    // it is the reader asking for a taller box.
+    const cap = outGripCap(out, cs);
+    const room = Math.max(Number.isFinite(cap) ? cap : 0, Math.round(window.innerHeight - r.top / z - OUT_GRIP_ROOM));
     outGripDrag = {
       out,
       grip,
@@ -10786,7 +10813,14 @@ document.addEventListener(
       // the sheet when an earlier drag's `max-height: none` is still on the box: parseFloat of that computed value is
       // NaN, and a cap destroyed by one over-cap drag is a release with nothing to clamp back to.
       min: outFloor(cs),
-      cap: outGripCap(out, cs),
+      // The sheet's own cap and the room under the frozen top edge, both read above: the band every move and the
+      // release hold the box to (outGripLimit).
+      cap,
+      room,
+      // The pointer's own request at the last move, BEFORE the band was applied (null until the first move). Nothing
+      // writes a height from it: it is the witness a gate reads to tell a box that stopped on the limit from a box
+      // that failed to follow the hand.
+      want: null,
       hadVar: out.style.getPropertyValue("--out-h"),
       styleMax: out.style.maxHeight,
       styleMin: out.style.minHeight,
@@ -10844,12 +10878,14 @@ window.addEventListener(
     // no pin may move while the hand is down. See outGripStep and cardBodyHeld (public/board/console.js). The pointer
     // arrives in visual px and the edge it is expressed from is a layout length, so it is divided here, by the scale
     // the press read.
-    let h = outGripStep(d.top, d.grab, e.clientY / d.z);
-    // A height below the console's own floor is not a height, so the box stops on the floor (the sheet's min-height,
-    // or the padding box, whichever is larger). The pointer goes on past it; the box does not, and the release keeps
-    // the floor rather than a number nothing could draw.
-    if (h < d.min) h = d.min;
+    const want = outGripStep(d.top, d.grab, e.clientY / d.z);
+    // THE LIMIT IS APPLIED HERE, WHILE THE POINTER KEEPS GOING. The box stops on the console's floor and on the room
+    // under the frozen top edge, so the height it draws is always one the release will keep - there is no height left
+    // for the pointerup to take back (the 120px bounce a past-room drag measured before this). `want` is kept on the
+    // record for the gates, which judge the corner only where the box was free to follow the hand.
+    let h = outGripLimit(want, d.min, d.room);
     if (h < 1) h = 1;
+    d.want = want;
     d.y = e.clientY;
     d.h = h;
     if (Math.abs(h - d.from) >= 1) d.moved = true;
@@ -10926,15 +10962,12 @@ function endOutGrip(e) {
       d.out.style.maxHeight = d.styleMax;
       d.out.style.minHeight = d.styleMin;
     } else {
-      // The clamps, here and only here: the number the gesture reached, held to the sheet's floor and to the room the
-      // box has under its top edge. The corner comes to rest where the box does, once, instead of tracking a box that
-      // was clamped under it mid-drag. The sheet's own `min-height` goes back with them, so the floor is the sheet's
-      // again rather than the 0 the gesture needed to follow the pointer down to it. The room is a layout length like
-      // the height and the floor: `innerHeight` is layout px, the box's top is visual, so the top is divided by the
-      // press's scale before it is subtracted.
-      const r = d.out.getBoundingClientRect();
-      const room = Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(window.innerHeight - r.top / d.z - OUT_GRIP_ROOM));
-      const h = outGripRelease(d.h, d.min, room);
+      // The limit, here and only here on the release: the number the gesture reached, held to the sheet's floor and
+      // to the room the box has under its top edge. The room was read at the press and every move has already been
+      // held to it (outGripLimit), so for a drag that reached a limit this call returns the height the box is already
+      // drawing - the release commits a size, it does not change one. The sheet's own `min-height` goes back with it,
+      // so the floor is the sheet's again rather than the 0 the gesture needed to follow the pointer down to it.
+      const h = outGripRelease(d.h, d.min, d.room);
       setOutHeight(d.out, h);
       d.out.style.minHeight = d.styleMin;
       // The cap the press read off the SHEET (outGripCap), so a box an earlier drag took over the cap and this one
