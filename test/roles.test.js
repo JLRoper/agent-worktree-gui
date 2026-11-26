@@ -5,9 +5,10 @@
 //   1. the seed — the panel's own `state/assistant-charter.md` copied verbatim to `data/roles/assistant-agent-manager.md`, so
 //      seeding the Agent Manager role loses NOTHING of a charter a reader already wrote. Asserted by bytes: the
 //      seeded charter is strictly equal to the file, and both sha256s are the same string;
-//   2. the remit — the manager's one-line description names the end state it drives to (an approved PR ready to
-//      merge) and each of the five wakes it exists for (a settle, an EXITED run, a loop, a quiet agent, leftover
-//      work), because that line is what the preamble carries on every turn;
+//   2. the remit — the manager's one-line description names the end state it drives to (its landing: a commit on
+//      the project's turnover branch when one is configured, or an approved PR when it has none) and each of the
+//      five wakes it exists for (a settle, an EXITED run, a loop, a quiet agent, leftover work), because that line
+//      is what the preamble carries on every turn;
 //   3. the seam — each assistant's preamble is built from ITS OWN charter and ITS OWN rules. The item that asked
 //      for roles says it plainly: Assistant #2's edit must not change one byte of what Assistant #1 is told;
 //   4. the copies — an assistant made from a role gets the role's bytes as its own file, a fresh thread number, and
@@ -82,7 +83,9 @@ test("the Agent Manager role is the panel's own charter, byte for byte", async (
 });
 
 test("the remit says what the manager drives to and what it wakes on", () => {
-  assert.match(ASSISTANT_AGENT_MANAGER_DESCRIPTION, /approved PR ready to merge/i, "the end state is an approved, mergeable PR");
+  assert.match(ASSISTANT_AGENT_MANAGER_DESCRIPTION, /drives every agent it starts to its landing/i, "the end state is the agent's landing, not a PR by definition");
+  assert.match(ASSISTANT_AGENT_MANAGER_DESCRIPTION, /commit on the project's turnover branch when one is configured/i, "…a commit on the turnover branch when the project names one");
+  assert.match(ASSISTANT_AGENT_MANAGER_DESCRIPTION, /approved PR when it has none/i, "…and an approved PR when it does not");
   for (const w of ["settle", "EXITED", "loop", "quiet", "leftover"]) {
     assert.ok(ASSISTANT_AGENT_MANAGER_DESCRIPTION.includes(w), `…and it names the ${w} wake`);
   }

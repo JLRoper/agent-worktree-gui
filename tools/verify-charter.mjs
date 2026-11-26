@@ -305,7 +305,7 @@ console.log("GET and PUT /api/assistant/charter, over a real instance on a scrat
       const rd = await r1.json();
       eq(r1.status, 200, "GET /api/assistant/role answers 200");
       eq(rd.role.name, "Agent Manager", "Assistant #1 runs the seeded role");
-      ok(rd.role.description.includes("approved PR ready to merge"), "whose remit names the end state", rd.role.description);
+      ok(rd.role.description.includes("its landing"), "whose remit names the end state", rd.role.description);
       eq(rd.roles.length, 1, "the picker is handed the library");
       eq(rd.target.threadId, "panel-assistant", "#1's thread is unchanged");
       // The payload carries the ASSISTANT's copy, which the tab edits; the role's own text is the library's, and it

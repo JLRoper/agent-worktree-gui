@@ -5293,7 +5293,7 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 .as-group h4 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 .as-group .as-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; }
 /* The role editor's name and remit are one-line fields, but the label owns the row so the box takes the group's
-   width: a 250px input clips a 400-character remit at "drives every agent it starts to an appro". */
+   width: a 250px input clips a 400-character remit at "drives every agent it starts to its land". */
 .as-group .as-line label.as-role-field { flex: 1 1 100%; }
 .as-group .as-line label.as-role-field input { width: 100%; }
 /* The role picker is the same row as the name box: a labelled control in a .as-group, so its label starts on the
