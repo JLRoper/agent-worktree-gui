@@ -37,7 +37,8 @@ test("the General tab carries the short index, and it points at the two tabs tha
   assert.match(general, /id="glossary-index-row"/, "the index has a heading row of its own");
   const index = block("settings-glossary-index");
   const said = words(index);
-  assert.match(said, /turnover child/);
+  assert.match(said, /turnover tree/, "the container is named a turnover tree, not a child");
+  assert.match(said, /feature container/, "and the index says what it is");
   assert.match(said, /research tree/);
   assert.match(said, /turnover: rules: cleanup:/);
   assert.match(said, /board:/);
@@ -50,21 +51,23 @@ test("the General tab carries the short index, and it points at the two tabs tha
 test("the Repo tab explains T, R and I, and what a lift does and does not change", () => {
   assert.match(repo, /id="kinds-heading"/, "the kinds have a heading row");
   const kinds = words(block("settings-glossary-kinds"));
-  assert.match(kinds, /turnover child/);
-  assert.match(kinds, /rolls up into that branch locally/);
+  assert.match(kinds, /turnover tree/, "T is the container, not a turnover child");
+  assert.match(kinds, /feature container/);
+  assert.match(kinds, /research and implementation trees are cut from it/i, "and the glossary says where its children come from");
   assert.match(kinds, /research tree/);
   assert.match(kinds, /implementation tree/);
-  assert.match(kinds, /a stated kind wins/, "the cut's own order is spelled out");
+  assert.match(kinds, /the brief decides/, "the cut's own order is spelled out");
+  assert.match(kinds, /A child of a turnover branch is never turnover/, "the retired category is said out loud");
   assert.match(kinds, /LOCAL ONLY/);
   assert.match(kinds, /never pushes/, "the research tree's push rule is named");
-  assert.match(kinds, /merges LOCALLY into the turnover branch it was cut from/, "and where an implementation tree lands");
+  assert.match(kinds, /merges LOCALLY into that branch/, "and where an implementation tree lands");
   assert.match(kinds, /POST \/api\/worktree\/kind-lift/, "the lift's route is named");
   assert.match(kinds, /keeps its letter with a tick/, "a lifted tree keeps its kind mark");
   assert.match(kinds, /The kind stays research or implementation/, "the kind is never rewritten");
   assert.match(kinds, /What a lift does not do/);
   assert.match(kinds, /does not beat a repository's never/, "never outranks a lift");
   assert.match(kinds, /does not skip the branch-name gate/);
-  assert.match(kinds, /does not turn the tree into a turnover child/);
+  assert.match(kinds, /does not change the tree's kind/);
   assert.match(kinds, /No push is made, no branch or commit moves/, "a lift moves nothing");
 });
 

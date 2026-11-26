@@ -410,7 +410,7 @@ function projectSection(name) {
     <div class="wt-scroll">
       <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently - a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · the kind column: <span class="kind-mark kind-turnover" role="img" aria-label="turnover child">T</span> turnover child, <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R to lift it), <span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick) · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight - a fold only hides, every chip and open panel stays as it was</div>
+    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently - a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · the kind column: <span class="kind-mark kind-turnover" role="img" aria-label="turnover tree">T</span> turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally), <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R to lift it), <span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick) · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight - a fold only hides, every chip and open panel stays as it was</div>
   </section>`;
 }
 
@@ -904,8 +904,8 @@ function rowHtml(row, forceOwner = false) {
 // IT IS ONE LETTER, IN THE `kind` COLUMN (CHART_COLUMNS), immediately to the LEFT of the verdict. The name line
 // already carries the row's own controls and marks, and the landing before this one had to move a review chip into a
 // cell of its own because two chips squeezed the name out. This answers that with the smallest thing that can be
-// read: T for a turnover child, R for a research tree, a title and an aria-label that spell the kind out, and the
-// chart's legend decoding the pair.
+// read: T for the turnover tree (the feature container), R for a research tree, a title and an aria-label that spell
+// the kind out, and the chart's legend decoding the pair.
 //
 // IT IS NOT IN THE VERDICT CELL, and a source comment that says it belongs there is what shipped the defect this
 // column repairs: the letter led the badge, and the verdict cell clipped the words the reader needs (his screenshot
@@ -914,20 +914,21 @@ function rowHtml(row, forceOwner = false) {
 // side by side and neither can clip the other. The column is one more switch in Settings > Board > Chart columns,
 // ON by default, and off means the whole cell is absent rather than an empty one.
 //
-// T is a statement: a turnover child has a destination on its turnover branch already. R and I are BUTTONS while the
-// record is unlifted: pressing one opens the inline confirm (public/app.js `showKindConfirm`) that lifts the
-// local-only kind through POST /api/worktree/kind-lift. A lifted tree keeps its letter with a tick - the kind never
-// changes, only the reader's answer to it does. A tree with no record draws nothing at all, and the cell stays empty.
+// T is a STATEMENT: a turnover tree is the feature container - research and implementation trees are cut from it, and
+// an implementation tree's work merges back into it locally. R and I are BUTTONS while the record is unlifted:
+// pressing one opens the inline confirm (public/app.js `showKindConfirm`) that lifts the local-only kind through POST
+// /api/worktree/kind-lift. A lifted tree keeps its letter with a tick - the kind never changes, only the reader's
+// answer to it does. A tree with no record draws nothing at all, and the cell stays empty.
 const KIND_MARK = { turnover: "T", research: "R", implementation: "I" };
 
 function kindMarkHtml(row) {
   const kind = String(row?.branchKind || "").toLowerCase();
   const mark = KIND_MARK[kind];
   if (!mark) return "";
-  const label = String(row.branchKindLabel || (kind === "research" ? "research tree" : kind === "implementation" ? "implementation tree" : "turnover child"));
-  const parent = String(row.branchKindParent || "").trim() || (kind === "turnover" ? "a turnover branch" : "the project's main parent");
+  const label = String(row.branchKindLabel || (kind === "research" ? "research tree" : kind === "implementation" ? "implementation tree" : "turnover tree"));
+  const parent = String(row.branchKindParent || "").trim() || (kind === "turnover" ? "the project's base" : "the project's main parent");
   if (kind === "turnover") {
-    const says = `${label} - cut from ${parent}, with a destination on the remote: its push meets the ordinary controls, and its work merges back into that branch locally.`;
+    const says = `${label} - the feature container${parent ? ` (cut from ${parent})` : ""}: research and implementation trees are cut from it, and an implementation tree's work merges back into it locally. How the turnover tree itself lands is the project's own rule, and its push meets the ordinary controls.`;
     return `<span class="kind-mark kind-turnover" role="img" aria-label="${esc(label)}" title="${esc(says)}">${mark}</span>`;
   }
   // BOTH LOCAL KINDS LIFT THE SAME WAY. The kind is what the cut recorded; the lift is the reader's per-tree grant

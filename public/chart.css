@@ -81,7 +81,8 @@ td.row-actions { padding-left: 4px; padding-right: 10px; }
 td.age { overflow: hidden; }
 td.verdict .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 /* ---- the kind a cut recorded: ONE LETTER in a column of its own --------------------------------
-   T = turnover child (a destination on the remote already), R = research tree (local only). The cell is the column
+   T = turnover tree (the feature container: its children are cut from it and merge back into it locally), R =
+   research tree (local only). The cell is the column
    `kind` (public/charts.js CHART_COLUMNS), immediately LEFT of the verdict, because it used to lead the verdict cell
    and the badge's words (ON MAIN, MERGED) were the part that got clipped. The letter is a chip the size of the branch
    cell's `local` one, never a word: the name line's controls already compete for the row's width,
@@ -105,7 +106,7 @@ button.kind-mark { appearance: none; cursor: pointer; }
 button.kind-mark.kind-research:hover { color: #ffe2ae; border-color: #a5762a; background: #2f2410; }
 button.kind-mark.kind-research:focus-visible { outline: 2px solid #ffb454; outline-offset: 1px; }
 /* Implementation is local only for the same reason research is, and its own ink keeps the two readable side by side:
-   a turnover child is the plain blue chip, research amber, implementation a cooler steel. */
+   the turnover container is the plain blue chip, research amber, implementation a cooler steel. */
 .kind-mark.kind-implementation { color: #9fd0ff; border-color: #2a4664; background: #0f1a26; }
 button.kind-mark.kind-implementation:hover { color: #c8e6ff; border-color: #4a7aa8; background: #16273a; }
 button.kind-mark.kind-implementation:focus-visible { outline: 2px solid #6cb6ff; outline-offset: 1px; }

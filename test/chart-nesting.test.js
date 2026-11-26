@@ -528,3 +528,59 @@ test("the project's own checkout keeps the folder's name whatever the record say
   nameState.projects = new Map([["demo", { path: ROOT }]]);
   assert.equal(treeTitleOf({ project: "demo", path: `${ROOT}/`, name: "demo", round: { role: "parent", display: "a round name" } }), "");
 });
+
+// THE TURNOVER CONTAINER'S PLACE IN THE PICTURE. A turnover tree is the feature container: it draws at the TOP LEVEL
+// beside main (main is never a row's parent), and the research and implementation trees cut from it hang under IT -
+// one indent in, with the container's fold covering them. A nested child (an implementation cut from another
+// implementation) hangs under its own parent tree, one indent further in.
+test("a turnover container draws beside main, and its research and implementation children hang under it", () => {
+  const root = "/repo/demo";
+  const containerBranch = "20261126_1800_TASK-186_fix-the-seam";
+  const containerPath = `${root}/.worktrees/${containerBranch}`;
+  const implPath = `${root}/.worktrees/fix-the-seam-abc123`;
+  const researchPath = `${root}/.worktrees/what-is-the-seam-def456`;
+  const nestedPath = `${root}/.worktrees/nested-fix-777777`;
+  const rows = [
+    { project: "demo", path: root, branch: "main", parent: null },
+    { project: "demo", path: containerPath, branch: containerBranch, parent: "main", parentSource: "cut", branchKind: "turnover" },
+    { project: "demo", path: implPath, branch: "wtgui/fix-the-seam-abc123", parent: containerBranch, parentSource: "cut", branchKind: "implementation" },
+    { project: "demo", path: researchPath, branch: "wtgui/what-is-the-seam-def456", parent: containerBranch, parentSource: "cut", branchKind: "research" },
+    { project: "demo", path: nestedPath, branch: "wtgui/nested-fix-777777", parent: "wtgui/fix-the-seam-abc123", parentSource: "cut", branchKind: "implementation" },
+  ];
+  state.rows = new Map(rows.map((row) => [keyOf(row.project, row.path), row]));
+  state.foldedParents = new Set();
+  const tree = childTreeOf("demo");
+  const mainKey = keyOf("demo", root);
+  const containerKey = keyOf("demo", containerPath);
+  const implKey = keyOf("demo", implPath);
+  const researchKey = keyOf("demo", researchPath);
+  const nestedKey = keyOf("demo", nestedPath);
+
+  assert.equal(tree.parentOf.get(containerKey), undefined, "the container is top-level, BESIDE main");
+  assert.deepEqual(tree.childrenOf.get(mainKey) || [], [], "main gains no children: the container is its sibling");
+  assert.equal(tree.parentOf.get(implKey), containerKey, "the implementation tree hangs under the container");
+  assert.equal(tree.parentOf.get(researchKey), containerKey, "and so does the research tree");
+  assert.equal(tree.parentOf.get(nestedKey), implKey, "a nested child hangs under its own parent tree");
+
+  // The drawing order: main and the container at the top, the container's two children directly under it, the nested
+  // child under its own parent - whatever order the chart's top-N list arrived in.
+  const order = nestRowKeys(tree.parentOf, [nestedKey, researchKey, implKey, mainKey, containerKey]);
+  assert.deepEqual(order, [mainKey, containerKey, researchKey, implKey, nestedKey], "the container groups its children, and the nested child follows its parent");
+
+  const ctx = groupCtxOf(tree, containerKey);
+  assert.equal(ctx.parentKey, null);
+  assert.equal(ctx.depth, 0, "the container is not one indent in");
+  assert.equal(ctx.childCount, 2, "the container's fold covers both children");
+  assert.equal(groupCtxOf(tree, researchKey).parentKey, containerKey);
+  assert.equal(groupCtxOf(tree, researchKey).depth, 1);
+  assert.equal(groupCtxOf(tree, implKey).depth, 1);
+  assert.equal(groupCtxOf(tree, nestedKey).parentKey, implKey);
+  assert.equal(groupCtxOf(tree, nestedKey).depth, 2, "a nested child steps in once more");
+
+  // The reader's fold reaches the container's children, and only them.
+  state.foldedParents.add(containerKey);
+  assert.equal(groupCtxOf(tree, researchKey).hidden, true, "folding the container hides the research tree");
+  assert.equal(groupCtxOf(tree, implKey).hidden, true, "and the implementation tree");
+  assert.equal(groupCtxOf(tree, containerKey).hidden, false, "the container stays on screen");
+  assert.equal(groupCtxOf(tree, mainKey).hidden, false, "and main is untouched by the container's fold");
+});
