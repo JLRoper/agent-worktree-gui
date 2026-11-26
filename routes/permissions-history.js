@@ -1,6 +1,8 @@
 // The header's Permissions popup, one read: every permission request this panel has held, newest first, with the
 // live ones the popup may answer and the honest total beside the page of rows. The store is
-// lib/permissions-history.js and the live queue is lib/approvals.js; this adapter owns only the wire shape.
+// lib/permissions-history.js; the live queue is BOTH feeds a person can answer - the CLI approval transport
+// (lib/approvals.js) and the approvals RUNS are parked on (lib/jobs.js, bridged by lib/run-permissions.js). This
+// adapter owns only the wire shape.
 //
 //   GET /api/permissions/history?limit=50
 //     -> { at, entries, pending, total, outstanding, kept, cap }
@@ -11,9 +13,11 @@
 // Approvals queue, filtered to those whose window has not closed - decorated with the same names as the rows, so the
 // popup's answer control and the history it draws agree about one request.
 //
-// `outstanding` is the header button's count: the number of live requests, never the number of stored rows. A request
-// past its deadline is not counted even while the Approvals sweep has not yet removed it (the sweep runs every 5 s),
-// because the gateway has already denied it and a button offering it would send the reader to a refusal.
+// `outstanding` is the header button's count: the number of live requests on BOTH feeds, never the number of stored
+// rows. A request past its deadline is not counted even while the Approvals sweep has not yet removed it (the sweep
+// runs every 5 s), because the gateway has already denied it and a button offering it would send the reader to a
+// refusal. A run's own approval was the half this count used to miss: it never reaches the transport, so the button
+// read zero while a live card counted down on the board (measured 2026-11-26).
 //
 // `limit` is the RENDER cap the page asks for, never a filter on the total: `total` always counts what the store
 // holds, so "showing 50 of 137" cannot become a silent truncation. With no limit every kept row is returned (the
@@ -39,6 +43,9 @@ const oneLine = (s, n = 400) => {
 
 export function createPermissionsHistoryRoutes({
   approvals,
+  // The run-mirrored half: a function returning the approvals a run is parked on right now (lib/run-permissions.js).
+  // Optional, so a caller that only has the transport still works.
+  runApprovals = null,
   permissions,
   describe = null,
   nameForAssistant = null,
@@ -49,6 +56,7 @@ export function createPermissionsHistoryRoutes({
   if (typeof sendJson !== "function") throw new Error("createPermissionsHistoryRoutes needs sendJson from the server's transport");
   const where = typeof describe === "function" ? describe : () => ({});
   const nameFor = typeof nameForAssistant === "function" ? nameForAssistant : () => null;
+  const runsLive = typeof runApprovals === "function" ? runApprovals : () => [];
 
   return async function permissionsHistoryRoutes(req, res, route, url) {
     if (route !== PERMISSIONS_HISTORY_PATH) return false;
@@ -69,9 +77,27 @@ export function createPermissionsHistoryRoutes({
     } catch {
       live = [];
     }
+    // ...and the run-mirrored half. An approval a RUN is parked on is drawn from the job's own record and was never
+    // presented to the CLI transport, so `approvals.list()` cannot carry it. Both feeds are requests a person can
+    // answer right now, so ONE list is built from both, deduped by the id the answer route addresses: when the same
+    // request somehow reached both doors the transport's row wins, because it carries the host's own text and surface.
+    let mirrored = [];
+    try {
+      mirrored = runsLive();
+    } catch {
+      mirrored = [];
+    }
+    const seenLive = new Set();
+    const liveIn = [];
+    for (const r of [...(Array.isArray(live) ? live : []), ...(Array.isArray(mirrored) ? mirrored : [])]) {
+      const id = String(r?.id || "").trim();
+      if (!id || seenLive.has(id)) continue;
+      seenLive.add(id);
+      liveIn.push(r);
+    }
     const openIds = new Set();
     const liveRows = [];
-    for (const r of Array.isArray(live) ? live : []) {
+    for (const r of liveIn) {
       const id = String(r?.id || "").trim();
       if (!id) continue;
       const deadline = Number(r.deadline) || 0;

@@ -375,13 +375,19 @@ function setPermissionsPending(n) {
 
 /** How many permission requests are waiting. Read by the header button's painting code. */
 function permissionsPendingCount() {
-  // /api/state's own list. `approvalsSeen.count` is below zero until the first snapshot has applied `approvals`, so a
-  // page that has not painted the board yet reads the route instead of claiming that nothing is waiting.
+  // TWO FEEDS, ONE NUMBER. /api/state carries the CLI transport's live queue, and `approvalsSeen` marks that list as
+  // applied. A run parked on a gateway approval is NOT on it: its box is drawn from the run's own record
+  // (lib/jobs.js), so the snapshot's count is zero for it - measured 2026-11-26, a live "waiting on you" card beside
+  // a badge with no number. The history route's `outstanding` counts BOTH feeds (routes/permissions-history.js) and
+  // the popup's footer reads the same number, so the button paints the larger of the two: a read that has not landed
+  // yet can only make the button late, never make a waiting request invisible.
+  const fromRoute = Math.max(0, Math.floor(Number(permissionsHist.pendingCount) || 0));
   if (typeof state !== "undefined" && Number(state?.approvalsSeen?.count) >= 0) {
     const C = phCore();
-    return C.openCount(state.approvals instanceof Map ? [...state.approvals.values()] : [], Date.now());
+    const fromSnapshot = C.openCount(state.approvals instanceof Map ? [...state.approvals.values()] : [], Date.now());
+    return Math.max(fromRoute, fromSnapshot);
   }
-  return Math.max(0, Math.floor(Number(permissionsHist.pendingCount) || 0));
+  return fromRoute;
 }
 
 async function permissionsHistoryRefreshCount() {

@@ -83,6 +83,10 @@ import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/rest
 import { readPipelineDocument } from "./lib/pipeline-doc.js";
 import { Approvals } from "./lib/approvals.js";
 import { PermissionsHistory } from "./lib/permissions-history.js";
+// The run's half of the permission history: an approval a RUN is parked on never reaches the CLI transport, so this
+// is what writes it to the store the header's popup reads, and what routes the popup's press back to the run
+// (lib/run-permissions.js).
+import { createRunApprovalBridge, placeOfJob } from "./lib/run-permissions.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel, allowPushWithoutAskingFor } from "./lib/remote-writes.js";
 import {
   PUSH_CHOICES,
@@ -1468,22 +1472,27 @@ function approvalWhere(thread) {
     job = null;
   }
   if (!job) return {};
-  const treePath = String(job.worktreePath || job.cwd || "").replace(/\\/g, "/").replace(/\/+$/, "");
-  const projectPath = String(job.projectPath || "").replace(/\\/g, "/").replace(/\/+$/, "");
-  const assistantId = job.assistantId ? String(job.assistantId) : null;
+  // ONE placement for both feeds (lib/run-permissions.js `placeOfJob`): a transport request and a run's own request
+  // name the same turn, tree and assistant in the same words, because both read the job's own record.
+  const place = placeOfJob(job);
   return {
-    jobId: job.id || null,
-    runId: job.runId || null,
-    // The panel's own name for the session first (a rename is what the reader sees), then the gateway's title, then the
-    // thread: the row always names the agent, and never prints an empty cell where its name belongs.
-    agent: job.label || job.title || t,
-    tree: job.branch || (treePath ? treePath.split("/").pop() : ""),
-    treePath,
-    project: projectPath ? projectPath.split("/").pop() : "",
-    assistantId,
-    assistantName: assistantId ? jobs.assistantNameFor?.(assistantId) || "" : "",
+    ...place,
+    assistantName: place.assistantId ? jobs.assistantNameFor?.(place.assistantId) || "" : "",
   };
 }
+
+// THE RUN-MIRRORED HALF of the same record. An approval a RUN is parked on is drawn from the job (lib/jobs.js
+// `j.approval`) and is never presented to the transport above, so that transport's hook can never write it. This is
+// the one bridge: `onApproval` records the ask, the answer and the expiry; `live` is the run approvals the popup may
+// answer right now; `answer` sends the popup's press through the same `jobs.approve` the board's card uses. Wired
+// here because the store must exist first; a hook that throws is a log line, never a lost event.
+const runApprovals = createRunApprovalBridge({
+  jobs,
+  permissions: permissionsHistory,
+  nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null,
+  log,
+});
+jobs.onApproval = (evt) => guard("run approval history", () => runApprovals.onApproval(evt));
 
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
@@ -2273,6 +2282,9 @@ const PREFIX_MOUNTS = [
     prefix: PERMISSIONS_HISTORY_PATH,
     handles: createPermissionsHistoryRoutes({
       approvals,
+      // The second feed: a run's own approval is not on the transport's queue, and the popup's pending list and the
+      // button's count must carry both (lib/run-permissions.js).
+      runApprovals: () => runApprovals.live(),
       permissions: permissionsHistory,
       describe: approvalWhere,
       nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null,
@@ -6445,6 +6457,15 @@ const server = createServer(async (req, res) => {
     if (route === "/api/approvals/answer" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
+      // A RUN's own approval comes FIRST: the card the reader sees is drawn from the job and was never presented to
+      // the CLI transport below, so its press belongs to `jobs.approve`, the same call the board's own box makes. Its
+      // record settles through the bridge's hook at the moment the gateway takes (or refuses) the answer, so the
+      // popup, the card and the history cannot disagree. `null` means "not a run approval": fall through.
+      const runAnswer = await runApprovals.answer(body.id, body.choice, body.by || "reader");
+      if (runAnswer) {
+        const status = runAnswer.ok ? 200 : runAnswer.gone || runAnswer.code === "approval_not_pending" || runAnswer.code === "answer_in_flight" ? 409 : 400;
+        return sendJson(res, status, runAnswer);
+      }
       const r = approvals.answer(body.id, body.choice, body.by || "ui");
       // A PERSON'S PRESS, written down: the store records the choice that was accepted, who sent it and when, from the
       // same call that closed the request. A refused answer records nothing - no decision was made, and the history
