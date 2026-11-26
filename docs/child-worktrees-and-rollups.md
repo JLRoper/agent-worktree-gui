@@ -9,6 +9,14 @@ never a branch the panel had made, and the chip offered an outcome most rows cou
 Everything below was measured on a test instance of its own (see [the worked example](#a-worked-example-on-a-test-instance));
 the numbers are its own.
 
+> **The kind model changed after this page was measured.** `turnover` now names the FEATURE CONTAINER - the tree
+> standing on a turnover branch - and a cut makes a research or implementation tree by its brief, never turnover. An
+> implementation asked for with `main` as its parent first cuts the feature's turnover tree under the project's
+> `turnoverPolicy` and then cuts the child from it; a research tree may still stand beside `main`; and a cut is never
+> blocked on a card. The authority is README's **Tree kinds and the turnover policy**, beside `lib/branch-kind.js`.
+> The paragraphs below that still say "two kinds" or "a parent that names neither kind is refused" are the
+> measurements' own history; read them with that section in hand.
+
 ## The ＋ in the last column
 
 It is the leftmost of the row's three controls — **＋ ⟳ ✕** — and it is drawn only where it can act:
@@ -31,8 +39,8 @@ the order, the two suppressions and the wiring.
 
    | kind | what it means |
    |---|---|
-   | **turnover child** | cut from a turnover branch (`YYYYMMDD_HHMM_<TICKET>_<desc>`) the reader asked for; it has a destination on the remote |
-   | **research tree** | cut from the project's main parent; **local only**, and it never lands until the reader lifts it |
+   | **research tree** | cut to answer a question; **local only** - it commits, is copied out and released, never merges and never pushes. It may be cut from `main` |
+   | **implementation tree** | cut to change code; **local only** too, and always a child of a turnover branch - it merges into that branch locally and never pushes without a per-tree grant |
 
    The name is **optional**. Empty means "name it after the branch it was cut from" (the branch's last word, minus its
    six-hex tag); anything typed goes through the same slug pass (`Child two` → `child-two`, capped at 24 characters).
@@ -88,7 +96,7 @@ controls exactly as before.
 |---|---|
 | the project's own checkout | **409** `…is the project's own checkout, not a worktree — start that work from the New-agent card` |
 | a detached HEAD | **409** `…is on a detached HEAD, so there is no branch to cut from` |
-| a branch the panel calls main (`main`, `master`, `trunk`, `develop`, or the project's own base) | **409** `…is a main branch — a child of it has no roll-up to arrive at; start that work from the New-agent card` |
+| a branch the panel calls main (`main`, `master`, `trunk`, `develop`, or the project's own base) | **409 for an implementation** `…is a main branch — a child of it has no roll-up to arrive at`; the cut dialog's implementation asks for a turnover parent, which is cut for it. A **research** tree may be cut from main: it never merges, so there is nothing to roll up |
 | a branch git does not have locally | **409** `…is not a local branch of this repository, so no child can be cut from it` |
 | the name is taken (directory **or** ref) | **409** `…is already there — pick another name` / `…already exists — pick another name` |
 
