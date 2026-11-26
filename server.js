@@ -100,7 +100,7 @@ import {
   pushModeFor,
   permissionForPush,
   pushPermissionFor,
-  treeKindRefusal,
+  treeKindAsk,
   branchesInPushRefs,
   branchPermission,
   strictestPermission,
@@ -132,7 +132,7 @@ import { artefactPaths, collectWaveEvidence, prByNumber } from "./lib/wave-evide
 import { countOperation, noteFact } from "./lib/read-profile.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
-import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
+import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverBranchesOf, turnoverLookup, turnoverPolicyOf, validateBaseRefKind, validateTurnoverBranch, validateTurnoverBranches, TURNOVER_POLICIES } from "./lib/project-turnover.js";
 import { BASE_REF_KIND_LABELS, LOCAL_TURNOVER_KIND } from "./lib/base-ref-kind.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-turnover.js";
 // The cleanup chip's one route (routes/project-cleanup.js): POST /api/projects/:id/cleanup, a dry run that returns
@@ -961,9 +961,11 @@ function scheduleSnapshotRefresh() {
     // One build at a time: a chunked build still in flight means the next tick would queue behind it, not shorten it.
     if (snapshotCache.stats().textBuilding) return scheduleSnapshotRefresh();
     snapshotRefreshLastAt = Date.now();
-    // Both frames are refreshed together: they share the invalidation, and the stream sends the board first.
-    void snapshotCache.textAsync().catch(() => {});
-    void boardCache.textAsync().catch(() => {});
+    // Both frames are refreshed together: they share the invalidation, and the stream sends the board first. A build
+    // that throws is LOGGED rather than swallowed: a silent catch leaves /api/state serving the last text forever, and
+    // the board looks healthy while every poll is a lie.
+    void snapshotCache.textAsync().catch((e) => log(`snapshot refresh failed: ${String((e && e.stack) || e)}`));
+    void boardCache.textAsync().catch((e) => log(`board refresh failed: ${String((e && e.stack) || e)}`));
   }, wait);
   if (typeof snapshotRefreshTimer.unref === "function") snapshotRefreshTimer.unref();
 }
@@ -1872,17 +1874,37 @@ async function setProjectRules(name, value, { by = "reader" } = {}) {
   return { ok: true, project: name, rules };
 }
 
-// ONE PROJECT'S TURNOVER BRANCH, set or cleared. The same four-place write `setProjectRules` performs, because the
-// same three readers have to agree immediately: the file (what a restart boots), the in-memory config (what the next
-// cut asks `jobs.turnoverBranchFor`), the registry's record (what `/api/project-turnover` and the settings bar draw),
-// and the store's project record (what the snapshot carries, so every other tab repaints the chip).
+// ONE PROJECT'S TURNOVER BRANCHES, their policy, set or cleared. The same four-place write `setProjectRules`
+// performs, because the same three readers have to agree immediately: the file (what a restart boots), the in-memory
+// config (what the next cut asks `jobs.turnoverBranchFor`), the registry's record (what `/api/project-turnover` and
+// the settings bar draw), and the store's project record (what the snapshot carries, so every other tab repaints the
+// chip).
 //
-// Clearing is a real save: `""` removes the key, and the project goes back to cutting from its checkout's own branch.
-async function setProjectTurnover(name, value, { by = "reader", baseRefKind = undefined } = {}) {
+// `value` is the LIST (an array of names or `{ branch, key }`), the OLD single name, or `undefined` when the save only
+// changes the policy or the base-ref kind. Clearing is a real save: `[]` (or `""`) removes the keys, and the project
+// goes back to cutting from its checkout's own branch. The policy is written only when the caller names one.
+async function setProjectTurnover(name, value, { by = "reader", baseRefKind = undefined, policy = undefined } = {}) {
   const project = (registry.projects || []).find((p) => p.name === name) || null;
   if (!project) return { status: 404, error: `unknown project: ${name || "(none)"} - a turnover branch belongs to a project on this board` };
-  const checked = validateTurnoverBranch(value);
-  if (checked.error) return { status: 400, error: checked.error, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+  // The branches, checked BEFORE anything is written: `undefined` leaves them exactly as they are, an array replaces
+  // the list, and a string is the old one-entry save.
+  let entries;
+  if (value === undefined) entries = undefined;
+  else if (Array.isArray(value)) {
+    const checked = validateTurnoverBranches(value);
+    if (checked.error) return { status: 400, error: checked.error, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+    entries = checked.entries;
+  } else {
+    const checked = validateTurnoverBranch(value);
+    if (checked.error) return { status: 400, error: checked.error, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+    entries = checked.branch ? [{ branch: checked.branch }] : [];
+  }
+  if (policy !== undefined) {
+    const asked = String(policy ?? "").trim().toLowerCase();
+    if (!TURNOVER_POLICIES.includes(asked)) {
+      return { status: 400, error: `turnoverPolicy must be one of ${TURNOVER_POLICIES.join(", ")}`, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+    }
+  }
   // The KIND is checked before anything is written, and a typo is refused rather than read as `checkout`: the kind
   // decides where the next cut starts, so storing a guess would move a tree nobody asked to move.
   const kindChecked = validateBaseRefKind(baseRefKind);
@@ -1894,7 +1916,10 @@ async function setProjectTurnover(name, value, { by = "reader", baseRefKind = un
   if (!Array.isArray(raw.projects)) raw.projects = [];
   const at = raw.projects.findIndex((p) => p && p.name === name);
   const existing = at >= 0 ? raw.projects[at] : null;
-  const entry = projectTurnoverRow(existing, name, checked.branch, askedKind);
+  // A string save keeps writing the OLD single field, and a list save writes `turnoverBranches`: the file keeps the
+  // shape its caller asked for, and the two never both stand.
+  const rowBranch = value === undefined ? undefined : Array.isArray(value) ? entries : String(value);
+  const entry = projectTurnoverRow(existing, name, rowBranch, askedKind, { policy });
   if (at >= 0) raw.projects[at] = entry;
   else raw.projects.push(entry);
   try {
@@ -1908,22 +1933,39 @@ async function setProjectTurnover(name, value, { by = "reader", baseRefKind = un
     live = { name };
     config.projects.push(live);
   }
-  if (entry.turnoverBranch) live.turnoverBranch = entry.turnoverBranch;
-  else delete live.turnoverBranch;
+  // The live config mirrors the row exactly: absence is the empty value, and the two shapes never both stand.
+  if ("turnoverBranches" in entry) {
+    live.turnoverBranches = entry.turnoverBranches;
+    delete live.turnoverBranch;
+  } else if (entries !== undefined) {
+    delete live.turnoverBranches;
+    if (entry.turnoverBranch) live.turnoverBranch = entry.turnoverBranch;
+    else delete live.turnoverBranch;
+  }
+  if (policy !== undefined) {
+    if (entry.turnoverPolicy) live.turnoverPolicy = entry.turnoverPolicy;
+    else delete live.turnoverPolicy;
+  }
   if (entry.baseRefKind) live.baseRefKind = entry.baseRefKind;
   else delete live.baseRefKind;
-  const branch = turnoverBranchFrom(checked.branch);
-  project.turnoverBranch = branch;
+  const branches = turnoverBranchesOf(entry);
+  const branch = branches[0]?.branch || "";
+  const chosenPolicy = turnoverPolicyOf(entry);
   const kind = baseRefKindOf({ turnoverBranch: branch, baseRefKind: entry.baseRefKind });
+  project.turnoverBranches = branches;
+  project.turnoverBranch = branch;
+  project.turnoverPolicy = chosenPolicy;
   project.baseRefKind = kind;
-  store.patchProject(name, { turnoverBranch: branch, baseRefKind: entry.baseRefKind || null });
-  log(`project turnover branch: ${name} -> ${branch || "(none)"} [${kind}] (by ${by})`);
+  store.patchProject(name, { turnoverBranch: branch, turnoverBranches: branches, turnoverPolicy: chosenPolicy, baseRefKind: entry.baseRefKind || null });
+  log(`project turnover: ${name} -> ${branches.length ? branches.map((b) => b.branch).join(", ") : "(none)"} [${chosenPolicy}] (by ${by})`);
   const note = kind === LOCAL_TURNOVER_KIND
     ? `${name}: ${BASE_REF_KIND_LABELS[LOCAL_TURNOVER_KIND]}`
-    : branch
-      ? `${name}: turnover branch ${branch}`
-      : `${name}: no turnover branch`;
-  return { ok: true, project: name, turnoverBranch: branch, baseRefKind: kind, note };
+    : branches.length === 0
+      ? `${name}: no turnover branch`
+      : branches.length === 1
+        ? `${name}: turnover branch ${branch}`
+        : `${name}: ${branches.length} turnover branches (${branches.map((b) => b.branch).join(", ")})`;
+  return { ok: true, project: name, turnoverBranch: branch, turnoverBranches: branches, turnoverPolicy: chosenPolicy, baseRefKind: kind, note };
 }
 
 // "Always allow" in the permission box is the same fact as the two controls saying allow-all for the project that
@@ -2004,6 +2046,35 @@ const remoteWrites = new RemoteWrites({
   // A grant reaches the guard's own files too, so a tree the reader allowed does not have to reach the panel to
   // find that out — and a tree started to land keeps its permission across a panel restart.
   onGrant: () => void refreshGuards(),
+  // THE PERMISSION HISTORY, written from the one place that knows an ask, its answer and its expiry. The header's
+  // Permissions button counts what this store holds, so a card this box parked - a push from a research or
+  // implementation tree, a new turnover branch, a merge, an initiative move - is a permission the reader can find
+  // afterwards instead of a box that vanished when it was answered.
+  onRecord: ({ type, request, choice = "", by = "", why = "" } = {}) => {
+    if (!request?.id) return;
+    if (type === "ask") {
+      permissionsHistory.ask({
+        requestId: request.id,
+        command: request.command,
+        choices: request.allowed,
+        timeoutSeconds: request.timeoutSeconds,
+        deadline: request.deadline,
+        receivedAt: request.at,
+        surface: "permission card",
+        project: request.project,
+        tree: request.worktree ? String(request.worktree).replace(/\\/g, "/").split("/").pop() : "",
+        treePath: request.worktree,
+        agent: request.title || "the panel",
+        description: request.description,
+      });
+      return;
+    }
+    if (type === "answered") {
+      permissionsHistory.answered(request.id, { choice, by: by || "reader", via: "permission card" });
+      return;
+    }
+    if (type === "expired") permissionsHistory.expired(request.id, { why });
+  },
 });
 
 // The proof an AUTO-ALLOWED write really went through: the branch is on the remote. `git ls-remote` is asked a few
@@ -2285,6 +2356,10 @@ const PREFIX_MOUNTS = [
       // The second feed: a run's own approval is not on the transport's queue, and the popup's pending list and the
       // button's count must carry both (lib/run-permissions.js).
       runApprovals: () => runApprovals.live(),
+      // The third: a card the panel's own permission box parked (a push from a local-only tree, a new turnover
+      // branch, a merge, an initiative move). It was never on the CLI transport's queue either, so the popup and the
+      // button missed it (lib/remote-writes.js `list`).
+      cardApprovals: () => remoteWrites.list(),
       permissions: permissionsHistory,
       describe: approvalWhere,
       nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null,
@@ -2379,7 +2454,7 @@ const PREFIX_MOUNTS = [
   },
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.
-  { prefix: TURNOVER_PATH, handles: createProjectTurnoverRoutes({ getConfig: () => config, registry, setProjectTurnover, sendJson, readBody, authorised }) },
+  { prefix: TURNOVER_PATH, handles: createProjectTurnoverRoutes({ getConfig: () => config, registry, setProjectTurnover, sendJson, readBody, authorised, remoteWrites, log }) },
   // The collision prefix (routes/collisions.js): every pair the panel knows about with its evidence, the reader's
   // "bring this to me", and the ruling that both assistants are told about. The book, the sweep and the queue write
   // are this file's, so the handler is resolved per request (see `collisionsHandle` above).
@@ -6043,17 +6118,17 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 409, { error: `refused: ${project.path} is the project's own checkout, not a worktree — start that work from the New-agent card` });
       }
       if (!row.branch) return sendJson(res, 409, { error: `refused: ${row.path} is on a detached HEAD, so there is no branch to cut from` });
-      // THE KIND, decided before anything is cut. The dialog offers exactly two, and a body may carry the reader's
-      // answer to the clarify card; otherwise the parent's own name decides. NEITHER applies -> the card goes back and
-      // NOTHING is cut: a tree filed under a guessed kind is a push decision nobody made.
-      const stated = kindFromAnswer(body.kind);
-      const plan = stated
-        ? { cut: true, kind: stated, localOnly: stated === "research", why: `the reader chose ${stated}` }
-        : planCut({ project: project.name, parent: row.branch, mainBranch: project.mainBranch || null });
-      if (!plan.cut) {
-        log(`child: ${row.branch} names neither kind - asking the reader, and cutting nothing (${project.name})`);
-        return sendJson(res, 409, { error: plan.why, cut: false, clarify: plan.clarify, parent: row.branch, path: row.path });
-      }
+      // THE KIND is decided before anything is cut, and it never blocks the cut: a stated kind wins, a turnover-shaped
+      // parent is a turnover child, and otherwise the brief (the name the reader typed, else the parent) decides
+      // research or implementation (lib/branch-kind.js `planCut`). Nothing is cut under a guessed kind that the reader
+      // can point at later: the answer says which rule chose it.
+      const plan = planCut({
+        project: project.name,
+        parent: row.branch,
+        mainBranch: project.mainBranch || null,
+        kind: kindFromAnswer(body.kind),
+        brief: String(body.name || body.brief || row.branch || ""),
+      });
       const out = await cutChildWorktree({
         repoDir: project.path,
         parentBranch: row.branch,
@@ -6467,6 +6542,26 @@ const server = createServer(async (req, res) => {
         return sendJson(res, status, runAnswer);
       }
       const r = approvals.answer(body.id, body.choice, body.by || "ui");
+      // A CARD THE PANEL PARKED ITSELF comes last: the permission box on the board and the popup's row are the same
+      // question, so a press in the popup reaches the same `remoteWrites.answer` the box uses - and its resume (a new
+      // turnover branch, a merge, an initiative move) runs exactly as it would have from the box. `null` here means
+      // the id is none of the three feeds.
+      if (!r?.ok && remoteWrites.status(body.id).status === "pending") {
+        const resume = remoteWrites.takeResume(body.id);
+        const out = remoteWrites.answer(body.id, body.choice, { by: body.by || "reader" });
+        if (!out.ok) return sendJson(res, 409, out);
+        let resumed = null;
+        if (resume && out.choice !== "deny") {
+          try {
+            resumed = await resume();
+            log(`remote-write ${body.id}: the granted change was resumed from the permission history`);
+          } catch (e) {
+            resumed = { error: String((e && e.message) || e) };
+            log(`remote-write ${body.id}: resuming the granted change failed - ${resumed.error}`);
+          }
+        }
+        return sendJson(res, 200, { ...out, resumed, state: remoteWrites.state() });
+      }
       // A PERSON'S PRESS, written down: the store records the choice that was accepted, who sent it and when, from the
       // same call that closed the request. A refused answer records nothing - no decision was made, and the history
       // must not grow one.
@@ -6584,14 +6679,14 @@ const server = createServer(async (req, res) => {
       const branch = String(url.searchParams.get("branch") || "").trim();
       const isNew = url.searchParams.get("new") === "1" || url.searchParams.get("new") === "true";
       const answer = resolvePushPermissions(project || {}, config);
-      // THE TREE'S OWN KIND, when the path names a tree the panel cut: a record that says local only refuses the
-      // push whatever the four controls say, and the reason names the tree and the kind (lib/push-permissions.js
-      // `treeKindRefusal`). A tree with no record is decided by the controls exactly as before.
+      // THE TREE'S OWN KIND, when the path names a tree the panel cut: a record that says local only parks the push
+      // on the permission card, and the reason names the tree and the kind (lib/push-permissions.js `treeKindAsk`).
+      // A tree with no record is decided by the controls exactly as before.
       const kindRec = asked ? jobs.treeKindFor({ tree: asked, branch }) : null;
       const kindArgs = { tree: asked || null, kind: kindRec?.kind || null, lifted: kindRec?.lifted === true };
       const settled = branch
         ? pushPermissionFor(answer, { branch, isNew, ...kindArgs })
-        : { permission: pushModeFor(answer, kindArgs), reason: treeKindRefusal(kindArgs) || "" };
+        : { permission: pushModeFor(answer, kindArgs), reason: treeKindAsk(kindArgs) || "" };
       const answered = settled.permission;
       const remote = String(project?.remote || "");
       const where = project?.name ? `${project.name}${asked ? ` (${cleanPath(asked)})` : ""}` : asked ? cleanPath(asked) : "";
@@ -6612,7 +6707,7 @@ const server = createServer(async (req, res) => {
         // What the assistant may DO, not only what the settings say: allow = go ahead, ask = clarify first,
         // refuse = do not push at all and do not offer the box.
         permission: answered,
-        // The tree's kind, when a cut recorded one, and the refusal's own sentence: "refused" alone sends a reader
+        // The tree's kind, when a cut recorded one, and the sentence behind the answer: "refused" alone sends a reader
         // hunting a setting that is not the cause.
         kind: kindRec?.kind || null,
         kindLifted: kindRec?.lifted === true,
@@ -6622,11 +6717,11 @@ const server = createServer(async (req, res) => {
         say:
           answered === "refuse"
             ? settled.reason
-              ? `${settled.reason}. Nothing may be pushed from that tree until the reader lifts it.`
+              ? `${settled.reason}. Nothing may be pushed there, and no permission box is offered.`
               : `A push from ${where || "that checkout"} is refused outright by its push control (never) - nothing may be pushed there, and no permission box is offered.`
             : answered === "allow"
               ? `A push from ${where || "that checkout"} to ${remote || "its remote"} goes through without a question${branch ? ` for ${branch}` : ""}. It is a permission, not an instruction — push only when the work is meant to land.`
-              : `A push from ${where || "that checkout"} parks on the reader's permission box. Ask the reader with a clarify, or report the branch instead.`,
+              : `A push from ${where || "that checkout"} parks on the reader's permission box, one grant for one push. Ask the reader with a clarify, or report the branch instead.`,
       });
     }
 
@@ -6674,12 +6769,13 @@ const server = createServer(async (req, res) => {
       const pushed = listed.length
         ? listed
         : [{ branch: String(body.branch || ""), isNew: body.isNew === true }];
-      // The tree's own kind decides FIRST: a recorded local-only tree is refused without a box, and the refusal is
-      // the sentence that names the tree and the kind (lib/push-permissions.js `treeKindRefusal`).
+      // The tree's own kind decides FIRST, and it ASKS: a recorded local-only tree is parked on the permission card,
+      // and the sentence names the tree and the kind (lib/push-permissions.js `treeKindAsk`). `never` still refuses
+      // without a box, which is why the mode is computed before the decision.
       const kindRec = jobs.treeKindFor({ tree: worktree, branch: String(body.branch || "") });
       const kindArgs = { tree: worktree, kind: kindRec?.kind || null, lifted: kindRec?.lifted === true };
       const mode = strictestPermission(pushed.map((b) => permissionForPush(push, { ...b, ...kindArgs })));
-      const decision = remoteWrites.decision(worktree, policy, { pushMode: mode, kindRefusal: treeKindRefusal(kindArgs) });
+      const decision = remoteWrites.decision(worktree, policy, { pushMode: mode, kindAsk: treeKindAsk(kindArgs) });
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was given for.
         if (decision.consume) remoteWrites.spend(worktree);
@@ -6713,7 +6809,7 @@ const server = createServer(async (req, res) => {
         refs: String(body.refs || ""),
         title: `${path.basename(worktree || "") || worktree} wants to push`,
         command: `git push ${remote || "<remote>"} ${branch || "<branch>"}   — from ${cleanPath(worktree)}${body.remoteUrl ? ` (${String(body.remoteUrl).slice(0, 120)})` : ""}`,
-        description: "a worker is trying to put a branch on the remote, and this project's push control says to ask. Nothing is pushed until you answer, and Deny leaves the remote untouched.",
+        description: `${decision.why ? `${decision.why}. ` : ""}a worker is trying to put a branch on the remote. Nothing is pushed until you answer, one grant covers one push from this tree, and Deny leaves the remote untouched.`,
       });
       return sendJson(res, 200, {
         allowed: false,

@@ -249,9 +249,12 @@ test("a SPAWN FROM main records main as the cut parent and still says push and o
   assert.doesNotMatch(brief, /turnover branch is `feature\/roll-up`/, "a named parent is not overridden by the project's turnover branch");
 
   // The case ae6888ca built is untouched: a plain SPAWN on that project cuts from the turnover branch and rolls up.
-  const plain = await p.assistant.startSpawn({ target: "demo", project: "demo", prompt: "the ordinary cut on this project" }, { source: "assistant" });
+  const plain = await p.assistant.startSpawn({ target: "demo", project: "demo", prompt: "the ordinary fix on this project" }, { source: "assistant" });
   assert.equal(p.recordOf(plain).parent, "feature/roll-up", "a plain cut still follows the project's turnover branch");
-  assert.match(p.gw.posts.at(-1)?.input || "", /this project's turnover branch/);
+  // The brief names code, so the tree is an implementation tree, and it lands where it was cut from: its own paragraph
+  // names the turnover branch as the destination instead of the parent's old "push and open a pull request".
+  assert.match(p.gw.posts.at(-1)?.input || "", /cut from `feature\/roll-up` - a turnover branch/);
+  assert.match(p.gw.posts.at(-1)?.input || "", /merge it into `feature\/roll-up` LOCALLY/);
 });
 
 // ---- 5: a ref that names nothing ----------------------------------------------------------------------------------

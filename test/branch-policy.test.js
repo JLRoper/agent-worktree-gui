@@ -42,6 +42,8 @@ const git = (dir, args) => {
 const commit = (dir, message = "work") =>
   git(dir, ["commit", "-q", "--allow-empty", "-m", message]);
 
+const TURNOVER_BRANCH = "20261121_1200_ROPER-186_demo";
+
 // A repo with one commit on `branch`, ready to be cut from. `-b <branch>` is what makes the parent interesting: the
 // panel branches from whatever this checkout has checked out, and the whole point is that it is not always main.
 function makeRepo(branch = "main") {
@@ -174,7 +176,7 @@ test("a worker's run body names the parent its tree was really cut from", async 
   // 1. A turnover branch: the tree is cut FROM it, so the worker is told to merge back into it locally and not push.
   const turnover = makeRepo("main");
   repos.push(turnover);
-  git(turnover, ["checkout", "-q", "-b", "feature/turnover"]);
+  git(turnover, ["checkout", "-q", "-b", TURNOVER_BRANCH]);
   const dirA = mkdtempSync(path.join(tmpdir(), "wtgui-policy-jobs-"));
   dirs.push(dirA);
   const jobsA = makeJobs(dirA, stub.url);
@@ -183,8 +185,8 @@ test("a worker's run body names the parent its tree was really cut from", async 
   const jobA = await jobsA.create({ prompt: "probe the turnover branch", cwd: turnover, existing: false, project: "Menu" });
   const bodyA = stub.last();
   assert.equal(jobA.status !== "failed", true, `the run was accepted: ${jobA.error || ""}`);
-  assert.match(bodyA, /cut from `feature\/turnover`/, `the body names the real parent, not main:\n${bodyA}`);
-  assert.match(bodyA, /merging `[^`]+` into `feature\/turnover` LOCALLY and do not push/, "the body says to merge into the parent locally");
+  assert.match(bodyA, new RegExp(`cut from \`${TURNOVER_BRANCH}\``), `the body names the real parent, not main:\n${bodyA}`);
+  assert.match(bodyA, new RegExp(`merging \`[^\`]+\` into \`${TURNOVER_BRANCH}\` LOCALLY and do not push`), "the body says to merge into the parent locally");
   assert.doesNotMatch(bodyA, /cut from `main`/, "the parent is read, never assumed to be main");
   assert.doesNotMatch(bodyA, /open a pull request/, "a tree cut from a turnover branch is not told to open a PR");
 
@@ -194,18 +196,21 @@ test("a worker's run body names the parent its tree was really cut from", async 
   const jobsA2 = makeJobs(dirA, stub.url);
   t.after(() => jobsA2.dispose());
   await jobsA2.create({ prompt: "follow-up in the same tree", cwd: treeA, existing: true, project: "Menu" });
-  assert.match(stub.last(), /cut from `feature\/turnover`/, `a second run in the tree reads the recorded parent:\n${stub.last()}`);
+  assert.match(stub.last(), new RegExp(`cut from \`${TURNOVER_BRANCH}\``), `a second run in the tree reads the recorded parent:\n${stub.last()}`);
 
-  // 2. Cut from main: the opposite instruction — do not merge into it, push the branch and open a PR.
+  // 2. Cut from main with a code brief: an implementation tree. It merges into main LOCALLY only on the reader's
+  // explicit grant, and it is never told to push or open a PR.
   git(turnover, ["checkout", "-q", "main"]);
   const jobsB = makeJobs(dirA, stub.url);
   t.after(() => jobsB.dispose());
-  await jobsB.create({ prompt: "land a change", cwd: turnover, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github" });
+  await jobsB.create({ prompt: "fix the landing guard", cwd: turnover, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github" });
   const bodyB = stub.last();
   assert.match(bodyB, /cut from `main`/, `a tree cut from main names main as its parent:\n${bodyB}`);
-  assert.match(bodyB, /do not merge into it/, "it is told not to merge into the landing branch");
-  assert.match(bodyB, /push it and open a pull request/, "it is told to push and open a PR");
-  assert.doesNotMatch(bodyB, /merge `[^`]+` into `main` LOCALLY/, "never the turnover-branch instruction for a landing parent");
+  assert.match(bodyB, /This is an implementation tree/, "the brief's code words make it implementation");
+  assert.match(bodyB, /Merge it into `main` LOCALLY only if the reader grants that explicitly/, "main is written only on a grant");
+  assert.match(bodyB, /do not merge into it on your own, and do not push/, "the worker does not push or merge on its own");
+  assert.doesNotMatch(bodyB, /push it and open a pull request/, "an implementation tree never opens a PR");
+  assert.doesNotMatch(bodyB, /gh pr create/, "and is not handed the PR command");
 
   // 3. A tree nobody can name (cut by hand, no record, no upstream) gets the blanket rule and NO invented parent.
   const handTree = path.join(turnover, ".worktrees", "by-hand");
@@ -254,8 +259,8 @@ test("a project's turnover branch is the parent of a tree cut on a master checko
   assert.notEqual(job.status, "failed", `the run was accepted: ${job.error || ""}`);
   const body = stub.last();
   assert.match(body, /cut from `dmr-7-turnover`/, `the turnover branch is the parent:\n${body}`);
-  assert.match(body, /this project's turnover branch \(local only\)/, "the paragraph names the case it is in");
-  assert.match(body, /merging `[^`]+` into `dmr-7-turnover` LOCALLY and do not push/, "the worker rolls up locally");
+  assert.match(body, /This is an implementation tree/, "a code brief makes it implementation, even cut from the turnover branch");
+  assert.match(body, /merge it into `dmr-7-turnover` LOCALLY/, "the worker rolls up locally, into the branch it was cut from");
   assert.doesNotMatch(body, /push it and open a pull request|gh pr create/, "and is never told to open one");
   assert.doesNotMatch(body, /cut from `master`/, "the checkout's own branch is not the parent");
   // The cut really started at the turnover tip, and the reader's checkout did not move.
@@ -346,6 +351,73 @@ test("a stage whose artifact is not a pull request is local-only: commit and rep
   assert.match(line, /^LANDING: /);
   assert.match(line, /local-only/);
   assert.doesNotMatch(line, /\{\{|\$/, "no placeholders in a sentence a worker has to obey");
+});
+
+// THE PARAGRAPH PER KIND. Research releases the work and merges into nothing; implementation lands LOCALLY, into the
+// turnover branch it was cut from or the project's own, else into main only on the reader's grant. A turnover child
+// keeps the paragraph it always had, and a stage's local-only artifact still wins over every kind.
+test("the landing paragraph per kind: research releases, implementation rolls up locally", () => {
+  const research = branchLandingLine({ kind: "research", parent: "main", branch: "wtgui/research-a1b2c3", policy: "allow", remote: "origin", mainBranch: "main" });
+  assert.match(research, /This is a research tree/);
+  assert.match(research, /commit on `wtgui\/research-a1b2c3` and report the commit/);
+  assert.match(research, /Do not merge it into any branch, do not push it and do not open a pull request/);
+  assert.match(research, /copied out and released/);
+  assert.doesNotMatch(research, /merge it into `main`|gh pr create|git push -u/, "a research tree is never told to land");
+
+  const implFromTurnover = branchLandingLine({
+    kind: "implementation",
+    parent: TURNOVER_BRANCH,
+    turnoverBranch: TURNOVER_BRANCH,
+    branch: "wtgui/fix-a1b2c3",
+    policy: "allow",
+  });
+  assert.match(implFromTurnover, /This is an implementation tree/);
+  assert.match(implFromTurnover, new RegExp(`merge it into \\\`${TURNOVER_BRANCH}\\\` LOCALLY`));
+  assert.match(implFromTurnover, /A push from this tree is not part of this landing: it parks on the reader's permission card, one grant covers one push from this tree/);
+  assert.doesNotMatch(implFromTurnover, /push it and open a pull request|gh pr create/);
+
+  // Parent is not a turnover branch, but the project has one: the work rolls into THAT branch, never into the parent.
+  const implConfigured = branchLandingLine({
+    kind: "implementation",
+    parent: "feature/some-old-branch",
+    turnoverBranch: "feature/turnover",
+    branch: "wtgui/fix-a1b2c3",
+    policy: "allow",
+  });
+  assert.match(implConfigured, /This project's turnover branch is `feature\/turnover`/);
+  assert.match(implConfigured, /merge it into `feature\/turnover` LOCALLY - do not merge into `feature\/some-old-branch`/);
+  assert.doesNotMatch(implConfigured, /push it and open a pull request/);
+
+  // No turnover branch at all: main, and only on the reader's explicit grant.
+  const implMain = branchLandingLine({ kind: "implementation", parent: "main", branch: "wtgui/fix-a1b2c3", policy: "allow", mainBranch: "main" });
+  assert.match(implMain, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
+  assert.match(implMain, /do not merge into it on your own, and do not push/);
+  assert.doesNotMatch(implMain, /push it and open a pull request|gh pr create/);
+  // A project that refuses every push says so, and the kind NEVER tells a worker a push would be allowed without a card:
+  // the recorded kind outranks the project's controls, so `allow` still parks and `deny` still refuses.
+  const implDeny = branchLandingLine({ kind: "implementation", parent: "main", branch: "wtgui/fix-a1b2c3", policy: "deny" });
+  assert.match(implDeny, /refuses a push outright \(deny\)/);
+  assert.doesNotMatch(implDeny, /parks on the reader's permission card/);
+  assert.doesNotMatch(implMain, /Remote writes are allowed for this project/, "an allow policy never reads as a push grant to a local-only kind");
+
+  // A turnover child keeps today's paragraph.
+  const turnoverChild = branchLandingLine({ kind: "turnover", parent: "feature/turnover", turnoverBranch: "feature/turnover", branch: "wtgui/child-a1b2c3", policy: "allow" });
+  assert.match(turnoverChild, /this project's turnover branch/);
+  assert.match(turnoverChild, /merging `[^`]+` into `feature\/turnover` LOCALLY and do not push/);
+
+  // A stage whose artifact is not a pull request wins over the kind: it has nothing to land.
+  const stage = branchLandingLine({ kind: "implementation", localOnly: true, branch: "wtgui/stage-a1b2c3" });
+  assert.match(stage, /This stage's artifact is not a pull request/);
+  assert.doesNotMatch(stage, /implementation tree/);
+
+  // A LIFTED tree is not given its kind's "do not push" paragraph: the reader already said it may land on the remote,
+  // so the parent's own case stands (with the policy tail to make it truthful).
+  for (const kind of ["research", "implementation"]) {
+    const lifted = branchLandingLine({ kind, lifted: true, parent: "main", branch: "wtgui/lifted-a1b2c3", policy: "allow", remote: "origin" });
+    assert.match(lifted, /cut from `main` - a landing branch/, `${kind} lifted reads as the parent's case`);
+    assert.match(lifted, /Remote writes are allowed for this project/);
+    assert.doesNotMatch(lifted, new RegExp(`This is a ${kind} tree`), "a lifted tree is not told to stay local");
+  }
 });
 
 test("the panel's own assistant is handed no landing paragraph at all", async (t) => {

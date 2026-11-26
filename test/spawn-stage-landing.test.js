@@ -154,7 +154,7 @@ test("a document stage is started local-only: commit and report, no push and no 
   assert.doesNotMatch(body, /cut from `main`/, "the parent's case is not rendered at all");
 });
 
-test("a pr stage keeps its push and PR, and an ordinary worker is untouched", async (t) => {
+test("a pr stage keeps its push and PR, and an ordinary worker is briefed by its tree's kind", async (t) => {
   const p = await panel(t);
   const tree = await p.cutTree("cut the landing tree");
   const critique = p.stageOf("critique");
@@ -170,11 +170,14 @@ test("a pr stage keeps its push and PR, and an ordinary worker is untouched", as
   assert.match(prBody, /gh pr create --fill/);
   assert.doesNotMatch(prBody, /is not a pull request/, "and never the local-only stage paragraph");
 
-  // An ordinary worker — no stage, no flag — is the same parent's paragraph every worker had before this change.
-  const other = await p.cutTree("cut an ordinary tree");
-  await p.assistant.startSpawn({ target: other.path, existing: true, project: p.project.name, prompt: "fix the failing test", branch: other.branch }, { source: "assistant" });
+  // An ordinary worker - no stage, no flag - is briefed by the KIND its tree was cut with. The cut's own brief names
+  // code, so the tree is an implementation tree: its paragraph is the local landing, never the PR one.
+  const other = await p.cutTree("cut an ordinary tree to fix the failing test");
+  await p.assistant.startSpawn({ target: other.path, existing: true, project: p.project.name, prompt: "keep going", branch: other.branch }, { source: "assistant" });
   const plain = p.gw.last();
-  assert.match(plain, /cut from `main`/, `an ordinary worker is unchanged:\n${plain}`);
-  assert.match(plain, /push it and open a pull request/);
+  assert.match(plain, /This is an implementation tree/, `an ordinary worker is briefed by its kind:\n${plain}`);
+  assert.match(plain, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
+  assert.match(plain, /do not push/);
+  assert.doesNotMatch(plain, /gh pr create|push it and open a pull request/);
   assert.doesNotMatch(plain, /is not a pull request/);
 });

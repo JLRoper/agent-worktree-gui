@@ -2,7 +2,7 @@
 // stays local only until a person lifts it.
 //
 // The mechanism is the one a person's lift already uses (`POST /api/worktree/kind-lift`): the branch-kind record reads
-// `kind: "research"` with `lifted: true`, and lib/push-permissions.js `treeKindRefusal` then answers null, so the push
+// `kind: "research"` with `lifted: true`, and lib/push-permissions.js `treeKindAsk` then answers null, so the push
 // meets the ordinary controls instead of the research refusal. What is new here is WHEN it is written - at the cut,
 // for a SPAWN line that named a task id - and WHY it is written: `preLiftedBy: "row <id>"` names the row, so a later
 // reader can tell a panel pre-lift from a person's lift (which writes no preLiftedBy).

@@ -313,11 +313,19 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
     assert.equal(missing.status, 404);
 
     // WHAT THE CHIP COUNTS: the project record on `/api/state` carries the list, which is what the page draws from
-    // without a second call. A save has to reach it before the next discovery pass, or the chip lies until then.
+    // without a second call. A save has to reach it before the next discovery pass, or the chip lies until then. The
+    // read itself is the poll's cached copy (3s floor), so this waits for the refresh a reader's next poll would get
+    // rather than reading the copy built before the save.
     await postRules("alpha", ["one", "two", "three"]);
-    const state = await (await fetch(`${panel.base}/api/state`)).json();
-    const record = (state.projects || []).find((p) => p.name === "alpha");
-    assert.deepEqual(record.rules, ["one", "two", "three"]);
+    let state = null;
+    let record = null;
+    for (let i = 0; i < 50; i += 1) {
+      state = await (await fetch(`${panel.base}/api/state`)).json();
+      record = (state.projects || []).find((p) => p.name === "alpha") || null;
+      if (record && JSON.stringify(record.rules) === JSON.stringify(["one", "two", "three"])) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    assert.deepEqual(record.rules, ["one", "two", "three"], `the snapshot carries it: ${JSON.stringify(record && record.rules)}`);
     assert.deepEqual((state.projects || []).find((p) => p.name === "beta").rules, ["seed rule for beta"]);
     // ...and the route agrees with the snapshot, which is the pair of answers the chip and the bar are drawn from.
     assert.deepEqual((await get("?project=alpha")).json.rules, ["one", "two", "three"]);

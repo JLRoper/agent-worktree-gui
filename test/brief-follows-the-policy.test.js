@@ -3,12 +3,16 @@
 // What this pins, each one a way a tree in a project that ALLOWS pushes was once briefed as local-only:
 //
 //   1. the blanket paragraph follows the policy in force: `allow` is not "local-only … a push will park and then fail";
-//   2. a tree cut from main is told, on its FIRST turn, to push and open a pull request — with the parent book wired in
-//      the way server.js wires it (`jobs.parents = new ParentBook(…)`). A Jobs built without one hid the fault: the
-//      parent book's record is an OBJECT, and handing it over as the parent printed "cut from `[object Object]`";
+//   2. a tree cut from main with a brief that names CODE is an IMPLEMENTATION tree (lib/branch-kind.js `planCut`): it is
+//      told to merge locally into main only on the reader's grant and never to push - on its FIRST turn, with the
+//      parent book wired in the way server.js wires it (`jobs.parents = new ParentBook(…)`). A Jobs built without one
+//      hid the fault: the parent book's record is an OBJECT, and handing it over as the parent printed "cut from
+//      `[object Object]`";
 //   3. the same tree is told the same thing on a LATER turn, after the panel has renamed its branch (lib/tree-names.js
-//      changes the slug and keeps the six-hex tag) — the parent is recorded under the tag, not under the old name;
-//   4. a reply reaches the worker with its project's policy and remote, through the real /api/agents/reply route.
+//      changes the slug and keeps the six-hex tag) - the parent and the kind are recorded under the tag, not under the
+//      old name;
+//   4. a reply reaches the worker with its tree's kind and its project's own landing rules, through the real
+//      /api/agents/reply route - which is how the route proves it resolved the tree's project.
 //
 // The run body is read off a stub Runs API that records what was actually POSTed: "what the worker reads" is the claim.
 import assert from "node:assert/strict";
@@ -171,7 +175,7 @@ test.after(() => {
   if (sharedRepo) sweep(sharedRepo);
 });
 
-test("a tree cut from main is told to push for a pull request, on its first turn and after its branch is renamed", async (t) => {
+test("a tree cut from main with a code brief is an implementation tree: it merges locally and never pushes, on its first turn and after its branch is renamed", async (t) => {
   const stub = await stubGateway();
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-jobs-"));
   const repo = sharedRepo;
@@ -189,11 +193,15 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   assert.notEqual(first.status, "failed", `the run was accepted: ${first.error || ""}`);
   const body1 = stub.last();
   assert.doesNotMatch(body1, /\[object Object\]/, `the parent is a name, never a stringified record:\n${body1}`);
-  assert.match(body1, /cut from `main` - a landing branch, so do not merge into it/);
-  assert.match(body1, /`git push -u origin HEAD` then `gh pr create --fill`/, "the push is spelled out with the project's own remote");
-  assert.match(body1, /Remote writes are allowed for this project, so a push is not asked about/, "and it quotes the guard truthfully");
+  // THE KIND, from the brief: "land a change" names code, so this cut is an implementation tree. It lands by merging
+  // into main LOCALLY, only on the reader's grant, and it never pushes or opens a pull request of its own.
+  assert.match(body1, /cut from `main`/);
+  assert.match(body1, /This is an implementation tree/);
+  assert.match(body1, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
+  assert.match(body1, /do not merge into it on your own, and do not push/);
+  assert.match(body1, /A push from this tree is not part of this landing: it parks on the reader's permission card/);
+  assert.doesNotMatch(body1, /`git push -u origin HEAD`|gh pr create/, "an implementation tree is never told to open a pull request");
   assert.match(body1, /the question is one complete sentence naming the report and the decision wanted/, "the clarify card's wording rule rides the brief");
-  assert.doesNotMatch(body1, /LOCAL-ONLY|LOCALLY and do not push/, "nothing in the brief says this tree cannot push");
 
   // ---- the panel renames the branch (the slug changes, the six-hex tag stays) ----------------------------------
   const tree = first.worktreePath;
@@ -207,10 +215,10 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   await jobsB.create({ prompt: "Keep going", cwd: tree, reply: true, ownerPath: tree, project: "fixture", branchPolicy: "allow", remote: "origin" });
   const body2 = stub.last();
   assert.doesNotMatch(body2, /\[object Object\]/);
-  assert.match(body2, /cut from `main` - a landing branch/, `a renamed tree still reads where it was cut from:\n${body2}`);
-  assert.match(body2, /push it and open a pull request/);
-  assert.match(body2, /Remote writes are allowed for this project/);
-  assert.doesNotMatch(body2, /LOCAL-ONLY|will park and then fail/, "the reply is not told the blanket local-only rule");
+  assert.match(body2, /cut from `main`/, `a renamed tree still reads where it was cut from:\n${body2}`);
+  assert.match(body2, /This is an implementation tree/, "and the KIND it was cut with, read back off its record");
+  assert.match(body2, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
+  assert.doesNotMatch(body2, /will park and then fail/, "the reply is not told the blanket local-only rule");
 
   // ---- a tree whose branch merely LOOKS like another is not the recorded tree --------------------------------
   // The same directory switched to a branch with no tag in its name is a different piece of work: the record is not
@@ -375,16 +383,26 @@ test("a tree nobody can name still follows its project's policy", async (t) => {
   assert.match(stub.last(), /LOCAL-ONLY/, "with no policy named, the default rule stands");
 });
 
-test("the reply route briefs a worker with the policy and remote of its tree's project", async (t) => {
+test("the reply route briefs a worker with its tree's kind and its project's own landing rules", async (t) => {
   const stub = await stubGateway();
   const repo = sharedRepo;
+  // The project's OWN rules, and a brief that names no code (so the cut is a research tree): the reply must carry both
+  // the kind's paragraph and these rules, which is what proves the route resolved the tree's project rather than
+  // falling back to the panel's defaults.
   const panel = await startPanel({
     config: {
       apiServer: { url: stub.url, key: "sandbox-key" },
-      // The GLOBAL says local-only; only the project's own override allows. A reply that fell back to the global would
-      // brief this worker as local-only, which is the whole fault.
       remoteBranchPolicy: "local-only",
-      projects: [{ name: "fixture", path: repo, remote: "origin", mainBranch: "main", remoteBranchPolicy: "allow" }],
+      projects: [
+        {
+          name: "fixture",
+          path: repo,
+          remote: "origin",
+          mainBranch: "main",
+          remoteBranchPolicy: "allow",
+          landingRules: "A research tree writes its answer to docs/reports/ and is released; nothing is merged and nothing is pushed.",
+        },
+      ],
     },
   });
   t.after(async () => {
@@ -398,7 +416,9 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   const body1 = String(stub.submitted[0]?.input || "");
   assert.deepEqual(stub.submitted[0]?.model_options, { reasoning: { enabled: true, effort: "medium" } }, "the chosen reasoning level reaches the gateway, not just the card");
   assert.equal(job.reasoningEffort, "medium", "the setting is returned on the actual job");
-  assert.match(body1, /cut from `main` - a landing branch/, `the first turn is told to land by pull request:\n${body1}`);
+  assert.match(body1, /This is a research tree/, `the first turn is told the kind its brief names:\n${body1}`);
+  assert.match(body1, /LANDING RULES FOR fixture:/, "and the project's own rules, resolved from the tree's project");
+  assert.match(body1, /writes its answer to docs\/reports\//);
   assert.doesNotMatch(body1, /\[object Object\]/);
 
   // Wait for the first turn to settle, then rename its branch the way the panel does after a first turn.
@@ -425,8 +445,7 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   assert.ok(body2.includes("use absolute paths"), "the reply still re-anchors its tools");
   assert.ok(replied.json.job.lines.some((line) => line.kind === "init" && line.text.includes(`continuing session ${job.thread} · turn 2`)));
   assert.ok(!replied.json.job.lines.some((line) => /asked to work in|⇢ workspace /.test(line.text)), "no repeated setup note on the route's returned card");
-  assert.match(body2, /cut from `main` - a landing branch/, `the reply is briefed like the first turn:\n${body2}`);
-  assert.match(body2, /`git push -u origin HEAD`/, "with the project's own remote, not a placeholder");
-  assert.match(body2, /Remote writes are allowed for this project, so a push is not asked about/, "and the project's policy, not the global one");
-  assert.doesNotMatch(body2, /LOCAL-ONLY|will park and then fail/, "the continuation is not told the tree is local-only");
+  assert.match(body2, /This is a research tree/, `the reply is briefed like the first turn:\n${body2}`);
+  assert.match(body2, /LANDING RULES FOR fixture:/, "and its project's own rules, resolved again on the reply");
+  assert.doesNotMatch(body2, /will park and then fail/, "the continuation is not told the blanket local-only rule");
 });
