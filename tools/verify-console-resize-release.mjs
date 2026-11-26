@@ -1,43 +1,52 @@
 #!/usr/bin/env node
-// MEASURE: the console corner's RELEASE BOUNCE - how many pixels the box gives back between the last pointermove of a
-// drag and the first frame after the pointer comes up, on a synthetic console, at three page zooms.
+// GATE: the console corner's RELEASE CONTRACT - the height a drag draws is the height the release keeps, so the
+// corner never jumps when the pointer comes up.
 //
-//   node tools/measure-console-resize-release.mjs
-//   node tools/measure-console-resize-release.mjs --viewport 1400x900
-//   node tools/measure-console-resize-release.mjs --json <path>
-//   node tools/measure-console-resize-release.mjs --headed
-//   node tools/measure-console-resize-release.mjs --keep
+//   node tools/verify-console-resize-release.mjs
+//   node tools/verify-console-resize-release.mjs --viewport 1400x900
+//   node tools/verify-console-resize-release.mjs --json <path>
+//   node tools/verify-console-resize-release.mjs --headed
+//   node tools/verify-console-resize-release.mjs --keep
 //
-// IT ASSERTS NOTHING, AND THAT IS THE POINT. This is a measurement, not a gate: it prints numbers and exits 0 whether
-// or not the release bounces. A green run says the tool measured - NOT that the defect is absent - so it may land
-// while the defect exists. The gesture's own gate is tools/verify-console-corner-drag.mjs, and this tool exists so
-// that the number that gate reads as a failure is also on the record as a number.
-//
-// WHAT IT MEASURES. The corner gesture follows the pointer for the whole drag (public/app.js's pointermove ->
-// outGripStep -> setOutHeight) and applies its clamps ONCE, on release (endOutGrip): the height the drag reached is
-// held to the sheet's floor and to the ROOM the box has under its top edge in the viewport,
+// WHAT IT GUARDS, AND WHY IT IS A GATE. The corner gesture follows the pointer for the whole drag (public/app.js's
+// pointermove -> outGripStep -> setOutHeight) and holds the box to a band (outGripLimit) whose top is the ROOM the box
+// has under its top edge in the viewport,
 //
 //   room = max(sheet cap, round(innerHeight - top - OUT_GRIP_ROOM))
 //
-// in layout px, with OUT_GRIP_ROOM 8. A drag whose last move asks for MORE than that room is therefore a box that
-// shrinks back at the release, and the corner the hand is on jumps up by exactly the overshoot. Four numbers are
-// printed per case, all in LAYOUT px - the unit `--out-h`, the sheet's min/max-height and the room are written in; a
-// rect and a pointer are VISUAL, and are divided by the page zoom before they are reported:
+// in layout px, with OUT_GRIP_ROOM 8. THE DEFECT THIS WAS BUILT FROM, measured on 1.180.1: the move ran free and the
+// release applied that room, so a downward drag that carried the corner past it drew a height the pointerup took back
+// - 892px drawn, 772px kept, 120px of bounce, at page zoom 100, 90 AND 110. The fix is that the move stops the box on
+// the room while the pointer keeps going (the way a window resize stops at the screen edge) and the release's clamp
+// then returns the height already on the box. This gate is the measurement turned into a verdict: for EVERY accepted
+// drag the release+1 height minus the last-move height must be 0.
 //
-//   dragged     the hand's travel in the box's own unit: the last-move height minus the height the press froze
+// WHAT IT ASSERTS, per case:
+//
+//   delta 0        release+1 height minus the last-move height, within 0.5px. This is the bounce.
+//   top unchanged  the release moves neither edge of the box, within 0.5px (a corner that jumps shows up in either).
+//   the shape      follow: the box drew what the hand asked, and the grip's bottom is on the pointer at the last move.
+//                  limit:  the hand asked for at least 20px MORE than the room, the pointer passed the viewport's
+//                          bottom edge, and the box stopped ON the room - a case that failed to carry the corner past
+//                          the limit would otherwise read as a clean zero.
+//                  hold:   a press that never moved changed nothing while the hand was down.
+//   the store      state.outHeights and `--out-h` both hold the height the box draws after the release.
+//
+// Four numbers are printed per case, all in LAYOUT px - the unit `--out-h`, the sheet's min/max-height and the room are
+// written in; a rect and a pointer are VISUAL, and are divided by the page zoom before they are reported:
+//
+//   asked       the hand's own request at the last move, before the band was applied (the page's outGripDrag.want)
 //   last-move   the box's height after the FINAL pointermove
 //   release+1   the box's height one animation frame after pointerup
-//   delta       release+1 minus last-move. Negative is the box giving pixels back; `revert` prints the same fact
-//               with the sign a reader means (positive = the corner jumped UP by that many px at the release)
+//   delta       release+1 minus last-move. A non-zero delta is the corner jumping at the release.
 //
-// plus the room and the overshoot (last-move minus room) the case was built to produce, so a case that failed to carry
-// the corner past the room says so instead of reading as a clean zero.
-//
-// THE CASES. inside-room: a drag well inside the room, expected delta 0. past-room-120: the last move asks for the room
-// plus 120 px, so the corner is carried past it - the reader's bounce, expected to reproduce as a revert. The same
-// past-room drag at page zoom 90 and at 110. press-only: a press that never moves. upward: a shrink. The zoom is the
-// page's own (Settings > Display, `applyZoom` in public/settings.js), a layout scale on documentElement, so a pointer
-// length and a CSS length stop being the same number away from 100.
+// THE CASES. inside-room: a drag well inside the room. past-room-120: the last move asks for the room plus 120px, so
+// the corner is carried past it - the reader's bounce, and now the box must stop on the room. The same past-room drag
+// at page zoom 90 and 110. past-then-back: past the room, then back up 60px inside it, so the corner must return to
+// the hand rather than staying at the limit (the limit is applied from the pointer's own position, not accumulated).
+// The same return at 90%. press-only: a press that never moves. upward: a shrink. The zoom is the page's own
+// (Settings > Display, `applyZoom` in public/settings.js), a layout scale on documentElement, so a pointer length and a
+// CSS length stop being the same number away from 100 - and the bounce was identical at all three zooms.
 //
 // WHY A SYNTHETIC CONSOLE. The bounce is a property of the gesture and the box's geometry, not of the transcript, so
 // the console is BUILT into the real page - the real sheet, the real delegated pointerdown, the real release - rather
@@ -46,14 +55,15 @@
 // writer (setOutHeight). The pointer is real CDP input, the same trusted press and moves a reader makes, including
 // moves BELOW the viewport's bottom edge (a hand that travels past the screen is how the room is overrun on a page
 // whose zoom lets it be). What this shape therefore does NOT cover is a console inside a scrollport whose top edge a
-// pin or a rebuild moves mid-drag: that is tools/verify-console-corner-drag.mjs's matrix.
+// pin or a rebuild moves mid-drag: that is tools/verify-console-corner-drag.mjs's matrix, which reads the same
+// unclamped request (`dragWant`) to tell a box held on the limit from a corner the gesture lost.
 //
 // The panel is a throwaway one (tools/panel-testkit.mjs: spare port, own PANEL_CONFIG / HERMES_HOME / stores,
 // assistant off, fetch off), so no board, no gateway key and no reader's tab are involved.
 //
-// EXIT CODE: 0 when every case was measured (the numbers are not a verdict), 1 when a case could not be measured (a
-// press that missed the grip, a console that did not draw, a release whose frame read never landed), 2 when the panel
-// or the browser half did not run.
+// EXIT CODE: 0 when every case passed, 1 when a case failed or could not be measured (a press that missed the grip, a
+// console that did not draw, a release whose frame read never landed), 2 when the panel or the browser half did not
+// run.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadPlaywright, notRun } from "./browser.mjs";
@@ -85,8 +95,9 @@ const BOX_W = 640;
 const START_H = 200; // the press height: under the sheet's 230 px cap, so the cap is read for real
 const INSIDE_PX = 150; // how far inside the room the inside-room drag stops
 const PAST_PX = 120; // how far past the room the past-room drag's last move asks for
+const BACK_PX = 60; // how far back inside the room the return drag comes
 const UP_PX = 80; // how far the upward drag shrinks the box
-const STEPS = 5; // pointer moves per drag
+const STEPS = 5; // pointer moves per leg
 const STEP_MS = 45;
 const HOLD_MS = 350; // the press-only case's hold, so it is a press and not a click
 const GRIP_INSET_PX = 3; // a hand lands a few px inside the 18 px band
@@ -94,14 +105,26 @@ const ROOM_PX = 8; // OUT_GRIP_ROOM, public/app.js
 const SETTLE_MS = 400; // after a zoom change and a rebuild
 const FRAME_WAIT_MS = 3000;
 
-// The shape each case drives. `drag` is what the pointer does; `zoom` is the page's own zoom in percent.
+// The tolerances. `delta` is the defect: the release writes a rounded pixel height, so anything above half a pixel is
+// a real move and a bounce is tens of pixels. `follow` is the same 2px the repo's corner gates use.
+const RELEASE_TOLERANCE_PX = 0.5;
+const STORE_TOLERANCE_PX = 0.5;
+const FOLLOW_TOLERANCE_PX = 2;
+const LIMIT_TOLERANCE_PX = 1;
+const LIMIT_MARGIN_PX = 20; // how far past the room a "limit" case must ask, so a short drag cannot pass vacuously
+const WANT_TOLERANCE_PX = 1.5; // the page's own record of the hand's request against the height the case planned
+
+// The shape each case drives. `drag` is what the pointer does; `zoom` is the page's own zoom in percent; `expect` is
+// the promise the verdict holds the case to.
 const CASES = [
-  { id: "inside-room", zoom: 100, drag: "inside", note: "a drag well inside the room under the corner" },
-  { id: "past-room-120", zoom: 100, drag: "past", note: "the corner carried past the room by about 120 px" },
-  { id: "past-room-120@90", zoom: 90, drag: "past", note: "the same drag on a page at 90%" },
-  { id: "past-room-120@110", zoom: 110, drag: "past", note: "the same drag on a page at 110%" },
-  { id: "press-only", zoom: 100, drag: "none", note: "a press that never moves" },
-  { id: "upward", zoom: 100, drag: "up", note: "a drag upward, a shrink" },
+  { id: "inside-room", zoom: 100, drag: "inside", expect: "follow", note: "a drag well inside the room under the corner" },
+  { id: "past-room-120", zoom: 100, drag: "past", expect: "limit", note: "the corner carried past the room by about 120 px" },
+  { id: "past-room-120@90", zoom: 90, drag: "past", expect: "limit", note: "the same drag on a page at 90%" },
+  { id: "past-room-120@110", zoom: 110, drag: "past", expect: "limit", note: "the same drag on a page at 110%" },
+  { id: "past-then-back", zoom: 100, drag: "back", expect: "follow", note: "past the room, then back 60 px inside it: the corner must return to the hand" },
+  { id: "past-then-back@90", zoom: 90, drag: "back", expect: "follow", note: "the same return on a page at 90%" },
+  { id: "press-only", zoom: 100, drag: "none", expect: "hold", note: "a press that never moves" },
+  { id: "upward", zoom: 100, drag: "up", expect: "follow", note: "a drag upward, a shrink" },
 ];
 
 // ---- the page half ------------------------------------------------------------------------------------------------
@@ -151,7 +174,11 @@ const PAGE_HELPERS = (cfg) => {
       room,
       cap: Number.isFinite(cap) ? cap : null,
       held: typeof outDragging === "function" ? outDragging(o) : null,
-      inJobBody: Boolean(o.closest(".job-body")),
+      moved: typeof outGripDrag !== "undefined" && outGripDrag ? Boolean(outGripDrag.moved) : null,
+      // The hand's own request, before the gesture's band was applied (public/app.js outGripDrag.want). The difference
+      // between this and the height on the box is the clamp doing its job, not the drag failing.
+      want: typeof outGripDrag !== "undefined" && outGripDrag && outGripDrag.want != null ? +Number(outGripDrag.want).toFixed(2) : null,
+      held_room: typeof outGripDrag !== "undefined" && outGripDrag && Number.isFinite(Number(outGripDrag.room)) ? +Number(outGripDrag.room).toFixed(2) : null,
       content: +((o.scrollHeight || 0) / z).toFixed(2),
       stored: (() => {
         try {
@@ -257,7 +284,7 @@ const PAGE_HELPERS = (cfg) => {
         (e) => {
           window.__RR.lastY = +e.clientY.toFixed(1);
           window.__RR.ys.push(window.__RR.lastY);
-          if (window.__RR.ys.length > 40) window.__RR.ys.shift();
+          if (window.__RR.ys.length > 60) window.__RR.ys.shift();
         },
         true,
       );
@@ -268,6 +295,16 @@ const PAGE_HELPERS = (cfg) => {
   };
   return true;
 };
+
+// The heights (layout px) the hand asks for, in order. Empty is the press-only case; two entries are a drag with a
+// direction change. The past-room legs ask for more than the room on purpose.
+function targetsFor(spec, press) {
+  if (spec.drag === "inside") return [press.h + INSIDE_PX];
+  if (spec.drag === "past") return [press.room + PAST_PX];
+  if (spec.drag === "back") return [press.room + PAST_PX, press.room - BACK_PX];
+  if (spec.drag === "up") return [press.h - UP_PX];
+  return [];
+}
 
 // One case: fresh console, zoom, press, motion, release, the four numbers.
 async function runCase(page, spec) {
@@ -291,27 +328,31 @@ async function runCase(page, spec) {
     return { spec, at, before, prePress, press, hit, measured: false, why: `the press did not engage the corner gesture (the point is ${hit.at})` };
   }
 
-  // Where the last move must land. The gesture's own arithmetic, read back from the page: the height a pointer y asks
-  // for is `y / zoom + grab - top`, so the y that asks for `want` is `(want + top - grab) * zoom`. `grab` is the layout
-  // px of the grip the hand landed inside, which the press froze.
+  // `grab` is the layout px of the grip the hand landed inside, which the press froze. A height `want` is asked for by
+  // the pointer at `(want + top - grab) * z` (visual px) - the gesture's own arithmetic, read back from the page.
   const grab = +(press.top + press.h - at.y / press.z).toFixed(3);
-  const want = spec.drag === "past" ? +(press.room + PAST_PX).toFixed(2) : spec.drag === "up" ? +(press.h - UP_PX).toFixed(2) : +(press.h + INSIDE_PX).toFixed(2);
-  const endY = spec.drag === "none" ? at.y : +((want + press.top - grab) * press.z).toFixed(1);
-
+  const targets = targetsFor(spec, press);
   const steps = [];
-  if (spec.drag !== "none") {
-    for (let i = 1; i <= STEPS; i += 1) {
-      const y = at.y + ((endY - at.y) * i) / STEPS;
-      await page.mouse.move(at.x, y);
-      await page.waitForTimeout(STEP_MS);
-      const r = await page.evaluate(() => window.__RR_API.read());
-      if (r) steps.push({ pointerY: +y.toFixed(1), h: r.h, top: r.top, varPx: r.varPx });
+  let lastY = at.y;
+  let fromH = press.h;
+  if (targets.length) {
+    for (const want of targets) {
+      for (let i = 1; i <= STEPS; i += 1) {
+        const h = fromH + ((want - fromH) * i) / STEPS;
+        lastY = +((h + press.top - grab) * press.z).toFixed(1);
+        await page.mouse.move(at.x, lastY);
+        await page.waitForTimeout(STEP_MS);
+        const r = await page.evaluate(() => window.__RR_API.read());
+        if (r) steps.push({ pointerY: lastY, h: r.h, top: r.top, want: r.want, varPx: r.varPx });
+      }
+      fromH = want;
     }
     await page.waitForTimeout(60);
   } else {
     await page.waitForTimeout(HOLD_MS);
   }
   const last = await page.evaluate(() => window.__RR_API.read());
+  const finalTarget = targets.length ? targets[targets.length - 1] : null;
 
   // The release. The frame read is the number this tool is about; the same-task read is kept as context.
   await page.mouse.up();
@@ -320,6 +361,31 @@ async function runCase(page, spec) {
   await page.waitForTimeout(120);
   const after = await page.evaluate(() => window.__RR_API.read());
   const measured = probe.frameH != null;
+  // The corner at the last move, in layout px: the grip's own bottom edge against (pointer + the pixels of the grip the
+  // hand landed inside). Both sides are visual numbers divided by the press's scale.
+  const cornerPx = last ? +(last.gripBottom / last.z - (lastY / last.z + grab)).toFixed(2) : null;
+  const numbers = measured
+    ? {
+        id: spec.id,
+        zoom: spec.zoom,
+        expect: spec.expect,
+        pressPx: press.h,
+        askedPx: last && last.want != null ? last.want : null,
+        lastMovePx: last.h,
+        releasePx: probe.frameH,
+        releaseSyncPx: probe.syncH,
+        deltaPx: +(probe.frameH - last.h).toFixed(2),
+        roomPx: last.room,
+        wantPx: finalTarget,
+        shortfallPx: finalTarget == null ? null : +(last.h - finalTarget).toFixed(2),
+        cornerPx,
+        topMovedPx: last && probe.frameTop != null ? +(probe.frameTop - last.top).toFixed(2) : null,
+        pointerBelowViewportPx: +(lastY - press.innerH).toFixed(1),
+        afterVarPx: after ? after.varPx : null,
+        storedPx: after ? after.stored : null,
+        steps: steps.length,
+      }
+    : null;
   return {
     spec,
     measured,
@@ -329,52 +395,86 @@ async function runCase(page, spec) {
     before,
     prePress,
     press,
-    want,
-    endY,
+    targets,
+    endY: lastY,
     steps,
     last,
     probe,
     after,
-    numbers: measured
-      ? {
-          id: spec.id,
-          zoom: spec.zoom,
-          draggedPx: +(last.h - press.h).toFixed(2),
-          lastMovePx: last.h,
-          releasePx: probe.frameH,
-          releaseSyncPx: probe.syncH,
-          deltaPx: +(probe.frameH - last.h).toFixed(2),
-          revertPx: +(last.h - probe.frameH).toFixed(2),
-          pressPx: press.h,
-          roomPx: last.room,
-          overshootPx: +(last.h - last.room).toFixed(2),
-          shortfallPx: +(last.h - want).toFixed(2),
-          pointerTravelPx: +(endY - at.y).toFixed(1),
-          pointerBelowViewportPx: +(endY - press.innerH).toFixed(1),
-          pointerDelivered: probe.ys.length ? probe.ys[probe.ys.length - 1] : null,
-          afterVarPx: after ? after.varPx : null,
-          storedPx: after ? after.stored : null,
-          steps: steps.length,
-        }
-      : null,
+    numbers,
   };
+}
+
+// What a case promises. `delta` and the top edge are the release contract; the rest keeps the case honest, so a drag
+// that never reached the limit - or a box that was never free to follow - cannot read as a pass.
+function verdictOf(run) {
+  const { spec } = run;
+  const fails = [];
+  const n = run.numbers;
+  if (!run.measured || !n) return { fail: [`not measured: ${run.why}`], numbers: n };
+  // The hand's request: the page's own record when the build has one (`outGripDrag.want`, added with the limit), and the
+  // height this case moved the pointer to otherwise. A build without the record must still fail on the delta, not on a
+  // field it never had.
+  const asked = n.askedPx == null ? n.wantPx : n.askedPx;
+  if (!(Math.abs(n.deltaPx) <= RELEASE_TOLERANCE_PX)) {
+    fails.push(`the release moved the box ${n.deltaPx}px (last move ${n.lastMovePx}px -> ${n.releasePx}px): the corner jumps on pointerup`);
+  }
+  if (n.topMovedPx == null || Math.abs(n.topMovedPx) > RELEASE_TOLERANCE_PX) {
+    fails.push(`the release moved the box's top edge ${n.topMovedPx}px`);
+  }
+  if (spec.expect === "hold") {
+    if (Math.abs(n.lastMovePx - n.pressPx) > RELEASE_TOLERANCE_PX) {
+      fails.push(`a press that moved nothing changed the box ${+(n.lastMovePx - n.pressPx).toFixed(2)}px while the hand was down`);
+    }
+  } else if (spec.expect === "limit") {
+    if (asked == null || asked < n.roomPx + LIMIT_MARGIN_PX) {
+      fails.push(`the case did not carry the hand past the room: it asked ${asked}px against a ${n.roomPx}px room`);
+    }
+    if (Math.abs(n.lastMovePx - n.roomPx) > LIMIT_TOLERANCE_PX) {
+      fails.push(`the box drew ${n.lastMovePx}px where the room is ${n.roomPx}px: the move did not stop on the limit`);
+    }
+    if (!(n.pointerBelowViewportPx > 0)) {
+      fails.push(`the pointer never passed the viewport's bottom edge (${n.pointerBelowViewportPx}px): the drag did not overrun the room`);
+    }
+  } else {
+    if (n.shortfallPx == null || Math.abs(n.shortfallPx) > FOLLOW_TOLERANCE_PX) {
+      fails.push(`the box drew ${n.lastMovePx}px against the hand's ${n.wantPx}px: it did not follow inside the room`);
+    }
+    if (n.cornerPx == null || Math.abs(n.cornerPx) > FOLLOW_TOLERANCE_PX) {
+      fails.push(`the corner stood ${n.cornerPx}px from the hand at the last move`);
+    }
+  }
+  if (spec.drag !== "none") {
+    if (n.askedPx != null && Math.abs(n.askedPx - n.wantPx) > WANT_TOLERANCE_PX) {
+      fails.push(`the page recorded the hand asking for ${n.askedPx}px where the case moved the pointer to ${n.wantPx}px`);
+    }
+    if (n.storedPx == null) fails.push("nothing was stored for the height the drag reached");
+    else if (Math.abs(n.storedPx - n.releasePx) > STORE_TOLERANCE_PX) {
+      fails.push(`stored ${n.storedPx}px against the ${n.releasePx}px the box draws`);
+    }
+    if (n.afterVarPx == null) fails.push("--out-h was left unset after the drag");
+    else if (Math.abs(n.afterVarPx - n.releasePx) > STORE_TOLERANCE_PX) {
+      fails.push(`--out-h ${n.afterVarPx}px against the ${n.releasePx}px the box draws`);
+    }
+  }
+  return { fail: fails, numbers: n };
 }
 
 const pad = (s, n) => String(s).padEnd(n);
 const rpad = (s, n) => String(s).padStart(n);
 const signed = (n) => (n == null || !Number.isFinite(Number(n)) ? "?" : `${Number(n) > 0 ? "+" : ""}${Number(n).toFixed(0)}`);
-const COLUMNS = `case               zoom dragged  last-move  release+1  delta  revert   room  overshoot`;
-const rowOf = (n) =>
-  `${pad(n.id, 18)}${rpad(`${n.zoom}%`, 5)}${rpad(n.draggedPx.toFixed(0), 9)}${rpad(n.lastMovePx.toFixed(0), 11)}${rpad(n.releasePx.toFixed(0), 11)}${rpad(signed(n.deltaPx), 7)}${rpad(signed(n.revertPx), 8)}${rpad(n.roomPx.toFixed(0), 7)}${rpad(signed(n.overshootPx), 11)}`;
+const COLUMNS = `case                 zoom  asked  last-move  release+1  delta   room  shape   verdict`;
+const rowOf = (n, ok) =>
+  `${pad(n.id, 20)}${rpad(`${n.zoom}%`, 5)}${rpad(n.askedPx == null ? "-" : n.askedPx.toFixed(0), 7)}${rpad(n.lastMovePx.toFixed(0), 11)}${rpad(n.releasePx.toFixed(0), 11)}${rpad(signed(n.deltaPx), 7)}${rpad(n.roomPx.toFixed(0), 7)}  ${pad(n.expect, 8)}${ok ? "PASS" : "FAIL"}`;
 
 async function main() {
   const pw = loadPlaywright();
-  if (!pw) return notRun("the console release bounce measurement", "no Playwright install (set PANEL_PLAYWRIGHT_ROOT)");
+  if (!pw) return notRun("the console release contract", "no Playwright install (set PANEL_PLAYWRIGHT_ROOT)");
 
   const panel = await startPanel({ config: { assistant: { enabled: false }, fetchSeconds: -1 } });
   const rows = [];
-  const ledger = { measuredAt: new Date().toISOString(), viewport: { width: WIDTH, height: HEIGHT }, panel: panel.base, version: "", cases: [], pageErrors: [], consoleErrors: [] };
-  let measuredCount = 0;
+  const results = [];
+  const ledger = { checkedAt: new Date().toISOString(), viewport: { width: WIDTH, height: HEIGHT }, panel: panel.base, version: "", cases: [], pageErrors: [], consoleErrors: [] };
   let browser = null;
   try {
     browser = await pw.chromium.launch({ headless: !HEADED });
@@ -400,8 +500,8 @@ async function main() {
       await page.evaluate(() => window.__RR_API.install());
       ledger.version = await page.evaluate(() => window.__RR_API.version());
 
-      console.log(`\nMEASURE console release bounce - panel ${panel.base} v${ledger.version || "?"}, ${WIDTH}x${HEIGHT}, headless Chromium`);
-      console.log("A MEASUREMENT, NOT A GATE: nothing below is an assertion, and a green run does not mean the bounce is gone.\n");
+      console.log(`\nVERIFY console release contract - panel ${panel.base} v${ledger.version || "?"}, ${WIDTH}x${HEIGHT}, headless Chromium`);
+      console.log("The release must keep the height the drag draws: delta 0 for every accepted drag, at every zoom.\n");
       console.log(COLUMNS);
 
       for (const spec of CASES) {
@@ -409,24 +509,18 @@ async function main() {
         try {
           run = await runCase(page, spec);
         } catch (err) {
-          run = { spec, measured: false, why: String((err && err.message) || err).slice(0, 240) };
+          run = { spec, measured: false, why: String((err && err.message) || err).slice(0, 240), numbers: null };
         }
-        ledger.cases.push(run);
-        if (run.measured) {
-          measuredCount += 1;
-          const n = run.numbers;
-          rows.push(n);
-          console.log(rowOf(n));
-          if (spec.drag !== "none" && (Math.abs(n.shortfallPx) > 2 || n.pointerBelowViewportPx > 0)) {
-            console.log(
-              `  pointer ${n.pointerTravelPx}px of travel, ended ${n.pointerBelowViewportPx > 0 ? `${n.pointerBelowViewportPx}px BELOW the viewport bottom` : "inside the viewport"};` +
-                ` last move asked ${run.want}px and drew ${n.lastMovePx.toFixed(0)}px${Math.abs(n.shortfallPx) > 2 ? ` (${n.shortfallPx.toFixed(0)}px short of the planned height)` : ""};` +
-                ` --out-h ${n.afterVarPx == null ? "unset" : `${n.afterVarPx}px`} after the release; stored ${n.storedPx == null ? "unset" : `${n.storedPx}px`}`,
-            );
-          }
+        const verdict = verdictOf(run);
+        ledger.cases.push({ ...run, verdict: verdict.fail });
+        if (run.numbers) {
+          rows.push(run.numbers);
+          console.log(rowOf(run.numbers, verdict.fail.length === 0));
+          for (const f of verdict.fail) console.log(`  ${spec.id}: ${f}`);
         } else {
-          console.log(`${pad(spec.id, 18)}${rpad(`${spec.zoom}%`, 5)}   NOT MEASURED - ${run.why}`);
+          console.log(`${pad(spec.id, 20)}${rpad(`${spec.zoom}%`, 5)}   NOT MEASURED - ${run.why}`);
         }
+        results.push({ id: spec.id, ok: verdict.fail.length === 0, fail: verdict.fail });
         await page.waitForTimeout(150);
       }
     } finally {
@@ -438,38 +532,32 @@ async function main() {
     else console.log(`\nkept: ${panel.dir}`);
   }
 
-  console.log("\nAll columns are LAYOUT px. dragged = last-move height minus the height the press froze; last-move = the");
-  console.log("box's height after the final pointermove; release+1 = one animation frame after pointerup; delta =");
-  console.log("release+1 minus last-move; revert = last-move minus release+1 (positive = the corner jumped up at the");
-  console.log("release); overshoot = last-move minus the room the release clamps to.");
+  console.log("\nAll columns are LAYOUT px. asked = the hand's request at the last move, before the band; last-move = the");
+  console.log("box's height after the final pointermove; release+1 = one animation frame after pointerup; delta = release+1");
+  console.log("minus last-move (0 is the contract); room = max(sheet cap, viewport under the frozen top - 8).");
 
-  const reverts = rows.filter((n) => Math.abs(n.revertPx) >= 1);
-  const unchanged = rows.filter((n) => Math.abs(n.revertPx) < 1);
-  if (rows.length) {
-    console.log(`\nRELEASE BOUNCE, BY CASE`);
-    for (const n of rows) {
-      console.log(
-        `  ${pad(n.id, 18)}${rpad(`${n.zoom}%`, 5)}  ${rpad(n.lastMovePx.toFixed(0), 5)}px -> ${rpad(n.releasePx.toFixed(0), 5)}px  ${
-          Math.abs(n.revertPx) >= 1 ? `the release gave back ${Math.abs(n.revertPx).toFixed(0)}px (the corner jumps up on pointerup)` : "no revert"
-        }`,
-      );
-    }
+  for (const n of rows) {
     console.log(
-      `\nMEASURED ${measuredCount}/${CASES.length} cases. Release revert in ${reverts.length}: ${reverts.map((n) => `${n.id} ${Math.abs(n.revertPx).toFixed(0)}px`).join(", ") || "none"}.` +
-        ` No revert in ${unchanged.length}: ${unchanged.map((n) => n.id).join(", ") || "none"}.`,
+      `  ${pad(n.id, 20)}${rpad(`${n.zoom}%`, 5)}  ${rpad(n.lastMovePx.toFixed(0), 5)}px -> ${rpad(n.releasePx.toFixed(0), 5)}px  ${
+        Math.abs(n.deltaPx) <= RELEASE_TOLERANCE_PX ? "no revert (delta 0)" : `the release gave back ${Math.abs(n.deltaPx).toFixed(0)}px`
+      }`,
     );
-    console.log("No assertion was made. This run is a measurement, not a pass.");
-  } else {
-    console.log("\nMEASURED 0 cases: nothing was measured, so nothing is claimed.");
   }
   if (ledger.pageErrors.length) console.log(`PAGEERRORS ${ledger.pageErrors.length}: ${ledger.pageErrors.slice(0, 3).join(" | ")}`);
 
+  const failures = results.filter((r) => !r.ok);
+  const measuredCount = rows.length;
   if (JSON_OUT) {
     mkdirSync(path.dirname(path.resolve(JSON_OUT)), { recursive: true });
     writeFileSync(path.resolve(JSON_OUT), JSON.stringify(ledger, null, 1), "utf8");
     console.log(`ledger: ${path.resolve(JSON_OUT)}`);
   }
-  process.exit(measuredCount === CASES.length ? 0 : measuredCount > 0 ? 1 : 2);
+  console.log(
+    failures.length
+      ? `\nRESULT: FAIL ${failures.length}/${CASES.length} cases: ${failures.map((f) => f.id).join(", ")}`
+      : `\nRESULT: PASS ${measuredCount}/${CASES.length} cases, delta 0 at every zoom, press-only and upward unchanged`,
+  );
+  process.exit(failures.length ? 1 : measuredCount === CASES.length ? 0 : 1);
 }
 
 main().catch((e) => {
