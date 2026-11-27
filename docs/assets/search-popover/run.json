@@ -1,5 +1,5 @@
 {
- "base": "http://127.0.0.1:54983",
+ "base": "http://127.0.0.1:59876",
  "filter": "saffron",
  "seeded": {
   "assistantTurns": 12,
@@ -2417,12 +2417,12 @@
   }
  ],
  "screenshots": [
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\01-assistant-anchored-1760x1000.png",
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\02-assistant-dragged-1760x1000.png",
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\03-assistant-resized-1760x1000.png",
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\04-assistant-reopened-1760x1000.png",
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\05-hot-anchored-1760x1000.png",
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\06-hot-resized-1760x1000.png",
-  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\07-hot-reopened-1760x1000.png"
+  "docs/assets/search-popover/01-assistant-anchored-1760x1000.png",
+  "docs/assets/search-popover/02-assistant-dragged-1760x1000.png",
+  "docs/assets/search-popover/03-assistant-resized-1760x1000.png",
+  "docs/assets/search-popover/04-assistant-reopened-1760x1000.png",
+  "docs/assets/search-popover/05-hot-anchored-1760x1000.png",
+  "docs/assets/search-popover/06-hot-resized-1760x1000.png",
+  "docs/assets/search-popover/07-hot-reopened-1760x1000.png"
  ]
 }

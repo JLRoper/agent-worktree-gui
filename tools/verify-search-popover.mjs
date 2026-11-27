@@ -192,10 +192,13 @@ const v = createVerifier();
 const errors = [];
 const record = { base: panel.base, filter: FILTER, seeded: { assistantTurns: ASSISTANT_TURNS, workerTurns: WORKER_TURNS }, viewport: null, steps: [], screenshots: [] };
 const near = (a, b, tol = 1.5) => Math.abs(Number(a) - Number(b)) <= tol;
+// The record's paths are RELATIVE to the repo: a drive-letter path is true on one machine only, and the
+// absolute-paths gate refuses a new one in a tracked file. The console prints the path the reader can click.
+const relPath = (p) => path.relative(ROOT, p).split(path.sep).join("/");
 const shot = async (page, name) => {
   const p = path.join(outDir, `${name}.png`);
   await page.screenshot({ path: p });
-  record.screenshots.push(p);
+  record.screenshots.push(relPath(p));
   console.log(`screenshot: ${p}`);
   return p;
 };
