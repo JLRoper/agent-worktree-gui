@@ -3759,9 +3759,16 @@ function cardBodyFollowing(body) {
 
 // The one place a card body's pin is decided from its own scroll. Measured on the event, like a console's, and the
 // panel's own writes are excluded by the caller (`setScroll` records where it put the box).
-function noteCardBodyScroll(body) {
+//
+// `tailPx` is the band the caller will accept as "on the foot". The reader's own scroll uses the sheet's 8 px
+// (CARD_TAIL_PX); a corner gesture's release passes 0, because the distance it is recording is the drag's own doing:
+// a drag that grew the console past the transcript's slack leaves the body N px off its foot, and the 8 px band read
+// that as "still following" and let the next pin/rebuild scroll the box to its foot - 8 px of corner lost after the
+// hand let go, measured at 820x1080 from a 140px start (tools/verify-console-corner-drag.mjs, interrupt-repaint).
+// Following still resumes on the reader's own scroll, which is noted with the band.
+function noteCardBodyScroll(body, tailPx = CARD_TAIL_PX) {
   if (!body) return;
-  body._atBottom = body.scrollHeight - body.scrollTop - body.clientHeight <= CARD_TAIL_PX;
+  body._atBottom = body.scrollHeight - body.scrollTop - body.clientHeight <= tailPx;
 }
 
 // Is a live corner gesture holding a console inside this transcript? A gesture moves the console's BOTTOM edge from

@@ -7070,6 +7070,18 @@ body.pipew-open { overflow: hidden; }
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box > .job-out[style*="--out-h"] {
   flex: 0 0 auto;
 }
+/* AND THE BOX THE GRIP IS DRAWN IN FOLLOWS IT. `.out-box` carries the grip at `bottom: 0 right: 0`, so a wrapper that
+   keeps taking the pane's slack while the console inside it is 140px draws the handle under the console's own bottom
+   edge, in blank room: the reader presses a corner the console does not have, and a drag then grows the console inside
+   that blank while the handle stands still. Measured on the live pane from a 140px start: a 285.41px wrapper around a
+   140px console at 1600 (a 28.61px wrapper slack at 820), the grip 145.41px / 28.61px below the console's own bottom
+   edge, 60px of pointer travel drawing 60px of height with the grip's bottom edge on the same pixel for all 30 steps
+   (tools/verify-console-corner-drag.mjs reads the pair as `corner gap`). The room belongs to the turn once the
+   console's height is somebody's answer, exactly as the rule above says; the wrapper is then the console's own box and
+   the grip is on its corner, so the drag's growth moves the corner the hand is on. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box:has(> .job-out[style*="--out-h"]) {
+  flex: 0 0 auto;
+}
 .as-subpane[data-subpane="chat"] > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,

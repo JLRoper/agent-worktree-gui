@@ -1157,7 +1157,13 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   }));
   const prevBody = el.querySelector(".job-body");
   const bodyTop = prevBody ? prevBody.scrollTop : 0;
-  const bodyAtBottom = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 32 : true;
+  // The body's own record wins over the band when it says NOT following. A corner gesture's release records this
+  // transcript off its foot even when the gap is under a line (app.js endOutGrip -> noteCardBodyScroll(body, 0)), and
+  // a rebuild that measured only the DOM read that gap as "on the foot", scrolled it away, and took the corner with
+  // it: 8 px after the hand let go, measured at 820x1080 from a 140px start. An unrecorded body is measured as before.
+  const bodyAtBottom = prevBody
+    ? prevBody._atBottom !== false && prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 32
+    : true;
   const pageY = window.scrollY;
   const typing = captureTyping(el);
   // A rebuild replaces the card node, which drops any selection standing in its readout; record it and put it back.
@@ -1198,8 +1204,9 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
     // arriving line carry the body down, and a fresh node would otherwise say "following" for a reader parked up
     // the transcript, who would be dragged to the bottom by the next streamed line. Read back off the box the panel
     // just placed rather than copied from the old node's measurement: a body that shrank under the reader ends up on
-    // its foot, and that is following.
-    noteCardBodyScroll(body);
+    // its foot, and that is following. The band is 0 - the panel's own placement is either the foot or it is not, and
+    // an 8 px band let the settle pass scroll away the last few px a corner drag had just won.
+    noteCardBodyScroll(body, 0);
   }
   settleScrolls(fresh);
   reaimHotHit();

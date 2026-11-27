@@ -159,10 +159,32 @@
     return state.assistantView;
   }
 
+  // THE FLOAT'S HEAD, OWED TO A RELEASE. While a console's corner gesture is live, nothing above that console is drawn
+  // (a chip appearing in the title row, a new tab, a renamed session all move the pane below and take the frozen corner
+  // with it). The paint is recorded here and drawn once at the release, from public/app.js endOutGrip's deferred flush.
+  // One stable function, so the gesture's flush list holds one entry however many times the head was asked to paint.
+  let headPaintOwed = false;
+  function flushHeadPaint() {
+    if (!headPaintOwed) return;
+    headPaintOwed = false;
+    renderAssistant();
+  }
+  function deferHeadPaint() {
+    headPaintOwed = true;
+    globalThis.outGripDefer?.(flushHeadPaint);
+  }
+
   // The buttons and the panes a session needs, created once and then left alone: the button at the head of the row
   // (before the lists, so the sessions always read first) and the pane at the head of the body. This is the whole of
   // "a second assistant shows up in the top tab row" — the records are the source and nothing here knows a number.
   function syncSessionTabs() {
+    // A TAB CAN GROW THE ROW ABOVE THE CONSOLE (a new session's button, a renamed label that wraps) and the pane below
+    // moves with it, taking the corner a console drag froze. The same deferral the card's own paints use: nothing above
+    // the console is drawn until the release (see deferHeadPaint).
+    if (globalThis.outGripLive?.()) {
+      deferHeadPaint();
+      return;
+    }
     const row = as$("as-tabs");
     const body = document.querySelector("#assistant .as-body");
     for (const rec of sessionRecords()) {
@@ -2141,6 +2163,16 @@
   }
 
   function renderAssistant() {
+    // THE FLOAT'S HEAD IS A ROW ABOVE THE CONSOLE. A state poll that lands under the hand can add a status chip
+    // ("sentry stale") or a tab, the head's chip strip wraps, and the whole pane - the console's top edge and the corner
+    // the hand is on - moves down by the line. Measured on the live pane: 24.29px of bar over a 140px console at
+    // 1600x1080, the corner 24.3px off the pointer for every step after the poll (tools/verify-console-corner-drag.mjs,
+    // interrupt-poll). The card's own paints already wait for the release; this is the rest of the head. The release
+    // draws it once, through deferHeadPaint.
+    if (globalThis.outGripLive?.()) {
+      deferHeadPaint();
+      return;
+    }
     const a = state.assistant;
     // Which frame the PANE is drawn in is the panel's setting, and this is the one painter every path already calls:
     // a save, a settings event from another tab and the first snapshot all land here, so it re-frames without a
@@ -2368,9 +2400,12 @@
       if (body) {
         // The same two records `pinChatToBottom` keeps, written the other way round: where the panel put the box, and
         // that this body is NOT following. Without the second, a fresh node answers "following" and the next streamed
-        // line drags a reader who is reading the middle of the transcript back down to the foot.
+        // line drags a reader who is reading the middle of the transcript back down to the foot. The band is 0: the
+        // panel placed the box at an offset the pin branch above already decided is not the foot (a reader on the foot
+        // took that branch), and a corner gesture's release is recorded the same way (public/app.js endOutGrip). The
+        // 8 px band would mark a drag's own last few px as following, and the settle pass would scroll them away.
         setScroll(body, prevTop);
-        noteCardBodyScroll(body);
+        noteCardBodyScroll(body, 0);
       }
     }
     // The panel is fixed, so a rebuild can never move the page — but a focus() inside it can, and this keeps

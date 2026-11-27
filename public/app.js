@@ -10776,11 +10776,15 @@ function outGripLive() {
 
 // A repaint path that found the gesture in its way says so here, and the release draws it once, after the height the
 // reader chose has been recorded - so the flush cannot re-clamp what they set. A caller with its own paint to run (the
-// assistant's chat card, which is not the board's renderAll) hands that paint over as `flush`.
+// assistant's chat card, which is not the board's renderAll) hands that paint over as `flush`; every distinct paint is
+// kept, because more than one path can be waiting (a poll's head and a card rebuild), and running only the last one
+// would leave the others owed.
 function outGripDefer(flush) {
   if (!outGripDrag) return;
   outGripDrag.deferred = true;
-  if (typeof flush === "function") outGripDrag.flush = flush;
+  if (typeof flush !== "function") return;
+  const list = outGripDrag.flushes || (outGripDrag.flushes = []);
+  if (!list.includes(flush)) list.push(flush);
 }
 
 // The grip's own press. Delegated from the document because the console node is replaced by ordinary repaints, and a
@@ -11007,13 +11011,16 @@ function endOutGrip(e) {
       // on the pixel it started from - measured, 60px down and the grip 60px below the corner it was dragged to, and
       // 120px of an up-drag undone in one write. What the panel records is the truth: this transcript is that far from
       // its foot now, so it stops following until the reader is back on it (following resumes on the reader's own
-      // scroll, public/board/console.js noteCardBodyScroll).
-      if (d.body) noteCardBodyScroll(d.body);
+      // scroll, public/board/console.js noteCardBodyScroll). The band is 0 here, not the sheet's 8 px: the gap this
+      // release records is the drag's own, and reading it as "still following" let the release's own repaint scroll the
+      // transcript the last few px to its foot and take the corner with it.
+      if (d.body) noteCardBodyScroll(d.body, 0);
     }
   }
   // Whatever a repaint path wanted to draw while the pointer was down is drawn now, once.
   if (d.deferred) {
-    if (typeof d.flush === "function") d.flush();
+    const flushes = d.flushes || [];
+    if (flushes.length) for (const f of flushes) f();
     else renderAll();
   }
 }
