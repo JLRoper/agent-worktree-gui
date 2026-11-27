@@ -4,16 +4,46 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.181.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.182.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-768 releases from v0.1.0 (2026-10-20) to v1.181.2 (2026-11-26), 2723 commits between the tags. Every release is anchored by an
+770 releases from v0.1.0 (2026-10-20) to v1.182.0 (2026-11-27), 2730 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.182.0 — 2026-11-27 · 2 commits
+
+[`d9040f0`](https://github.com/JLRoper/agent-worktree-gui/commit/d9040f06d9dfb5dadbfa1e2a117ef3e70a60cec2) · [compare v1.181.3...v1.182.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.181.3...v1.182.0)
+
+### Added
+
+- feat(perf): the client perf recorder loads only for a tab that asks with ?perf=1 ([`bf55838`](https://github.com/JLRoper/agent-worktree-gui/commit/bf55838e4aff89d7db6698fc757bf29641118712))
+
+### Other
+
+- chore: 1.182.0 - the version this landing carries ([`d9040f0`](https://github.com/JLRoper/agent-worktree-gui/commit/d9040f06d9dfb5dadbfa1e2a117ef3e70a60cec2))
+
+## v1.181.3 — 2026-11-27 · 5 commits
+
+[`2d45b54`](https://github.com/JLRoper/agent-worktree-gui/commit/2d45b5409e2c3fb5bd16536d78e3fb59a65fdf33) · [compare v1.181.2...v1.181.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.181.2...v1.181.3)
+
+### Fixed
+
+- fix(restart): a bounce takes the port at once, and a RESTART line waits for nothing ([`c016df0`](https://github.com/JLRoper/agent-worktree-gui/commit/c016df081550070a5d0d22bdf0eb0cc5b1418e67))
+
+### Docs & tests
+
+- docs(report): the full suite's answer on the corner's second defect ([`7598033`](https://github.com/JLRoper/agent-worktree-gui/commit/7598033e73c6349183d72015acf6490561ddd5f0))
+- docs: render the changelog - 768 releases ([`7ee08e4`](https://github.com/JLRoper/agent-worktree-gui/commit/7ee08e4343f5d8d57f66469e2ce0241246ccb843))
+- test(verify): the restart-line gate bounces the build it says it bounces ([`c78e961`](https://github.com/JLRoper/agent-worktree-gui/commit/c78e96192565f1a7f75a86eb6fa86b288e75bda9))
+
+### Other
+
+- chore: 1.181.3 - the version this landing carries ([`2d45b54`](https://github.com/JLRoper/agent-worktree-gui/commit/2d45b5409e2c3fb5bd16536d78e3fb59a65fdf33))
 
 ## v1.181.2 — 2026-11-26 · 4 commits
 
