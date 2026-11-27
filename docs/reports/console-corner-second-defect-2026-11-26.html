@@ -238,6 +238,16 @@ limit.
   <tr><td class="n">node --test test/console-grip.test.js</td><td class="ok">19 pass, 0 fail (the source tests rewritten to the one-band rule and the 0px tail band)</td></tr>
   <tr><td class="n">console-height-store, console-tail-pin, console-output-box, agent-card-scroll-pin, assistant-float-header, assistant-search-scroll</td><td class="ok">83 pass, 0 fail</td></tr>
 </table>
+<p><code>npm test</code>, once, on the final tree: <strong>3,877 passing and 23 failing</strong>, then cancelled at 19.7
+minutes because <code>test/worktree-assistant.test.js</code> stopped returning after its own three failures - the same
+stall the previous landing's report hit. None of the 23 is a page file this branch changes: they are the panel's own
+paths and config keys (<code>paths</code>, <code>paths-http</code>, <code>scan-roots</code>), the harness declarations,
+the initiative tier store and its routes, the wave, rebase, reconcile, refresh-row and project-open routes, the junctioned
+checkout's remove, the jobs store's reasoning level, and three owner/label routes in
+<code>worktree-assistant.test.js</code> that answer <code>assistant-1</code> where the test expects
+<code>assistant-2</code>. The two tests in that set that read <code>public/app.js</code> slice <code>rootOf()</code> and
+the worktree row template, not the gesture; the queue-reattach failure is <code>state.jobs</code> missing from
+<code>/api/state</code>, a server answer this branch does not write.</p>
 
 <h2>8. The residual, plainly</h2>
 <p>One row in 48 does not end with the corner on the hand: <code>interrupt-poll@1600/140</code>, final 24.3px, tagged
