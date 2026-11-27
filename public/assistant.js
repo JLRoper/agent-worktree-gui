@@ -2971,7 +2971,17 @@
   // every paint already carries.
   function padFor(id) {
     if (id === FIRST_ASSISTANT)
-      return { assistantId: id, notes: state.assistant?.notes || "", file: false, path: "", exists: true, cap: Number(state.assistant?.notesCap) || 0, error: null };
+      return {
+        assistantId: id,
+        notes: state.assistant?.notes || "",
+        file: false,
+        path: "",
+        exists: true,
+        cap: Number(state.assistant?.notesCap) || 0,
+        noteCap: Number(state.assistant?.noteCap) || 0,
+        lines: Array.isArray(state.assistant?.noteLines) ? state.assistant.noteLines : [],
+        error: null,
+      };
     const hit = padNotes.get(id);
     if (hit) {
       loadPadNotes(id); // a stale hit re-reads behind this paint
@@ -3005,6 +3015,23 @@
     const padCap = Number(pad?.cap) || 0;
     const padLen = String(pad?.notes || "").length;
     const padOver = padCap > 0 && padLen > padCap;
+    // Every note line, with its OWN length: the total above says how full the pad is, and this says which line is
+    // taking the room and whether it was clipped to the per-note cap. The server computes `lines` (lib/assistant/
+    // notes-file.js `noteLines`), so the page cannot disagree with the cap that clipped them.
+    const noteCap = Number(pad?.noteCap) || 0;
+    const noteRows = Array.isArray(pad?.lines) ? pad.lines : [];
+    const noteList = noteRows.length
+      ? `<div class="as-hint">Each note, with its own length:</div>${noteRows
+          .map((l) => {
+            const text = String(l.text || "");
+            const shown = text.length > 96 ? `${text.slice(0, 96)}…` : text;
+            const chars = Number(l.chars) || 0;
+            const cap = Number(l.cap) || noteCap;
+            const bad = l.clipped ? " is-bad" : "";
+            return `<div class="as-line" data-as-notelen="${chars}" data-as-notecap="${cap}"><span class="as-hint${bad}" title="${esc(text)}">${esc(shown)}</span><span class="as-hint${bad}" title="This note's characters${l.clipped ? " (clipped to the per-note cap)" : ""}">${chars}/${cap}</span></div>`;
+          })
+          .join("")}`
+      : "";
     const notesGroup = pad
       ? `<div class="as-group">
         <h4>Notes — read on every turn</h4>
@@ -3015,6 +3042,7 @@
           <span class="as-err" id="${padId("as-pad-err", who)}">${esc(pad.error || "")}</span>
           <span class="as-hint">${pad.file ? "kept in this assistant's own notes.md" : "kept on the server in assistant.json"}</span>
         </div>
+        ${noteList}
       </div>`
       : `<div class="as-group">
         <h4>Notes — read on every turn</h4>
