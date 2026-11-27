@@ -1,4 +1,4 @@
-# Landing: the search popover opens under its box, and the reader can move it (1.186.0)
+# Landing: the search popover opens under its box, and the reader can move it (1.188.1)
 
 The reader's report: the transcript search popover opens at the pane's left edge, roughly 700px away from the search
 box, and it should be moveable and resizable with a reset on reopen. The code agreed with the report: the shared
