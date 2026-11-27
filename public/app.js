@@ -194,6 +194,7 @@ window.WMApp.scaffold = {
   RULES_FALLBACK_CAPS, rulesCaps, rulesFor, rulesBarOpen, rulesChipSig, rulesChipHtml, refreshRulesChip,
   TURNOVER_FALLBACK_MAX, turnoverMaxChars, turnoverFor, turnoverBarOpen, turnoverChipSig, turnoverChipHtml,
   refreshTurnoverChip, turnoverLine, turnoverBarHtml, toggleTurnoverBar, closeTurnoverBar, saveProjectTurnover,
+  turnoverKinds, turnoverKindLabel, turnoverKindShort, turnoverKindSentence, turnoverPolicySentence,
   turnoverPolicies, turnoverPolicyFor, turnoverPolicyLabel, turnoverPolicyLine, saveProjectTurnoverPolicy,
   boardOf, boardBarOpen, boardChipSig, boardChipHtml, refreshBoardChip, boardLine, boardBarHtml,
   toggleBoardBar, closeBoardBar,
@@ -332,7 +333,8 @@ const state = {
   // project's open bar kinds in the order they were opened (rendered newest first); `rulesBar` is the rules bar's own
   // edit state, and `ruleCaps` the two limits `/api/project-rules` answered with (null until the first read).
   // `turnoverBar` is the same editor state for the turnover branch, `turnoverCaps` its one cap, and
-  // `turnoverPolicies` / `turnoverPolicyLabels` the policy select's ids and words (both null until the first read).
+  // `turnoverPolicies` / `turnoverPolicyLabels` the policy select's ids and words (both null until the first read),
+  // with `turnoverKinds` / `turnoverKindLabels` the kind select's ids and the words lib/base-ref-kind.js gives them.
   bars: new Map(),
   rulesBar: null,
   ruleCaps: null,
@@ -340,6 +342,8 @@ const state = {
   turnoverCaps: null,
   turnoverPolicies: null,
   turnoverPolicyLabels: null,
+  turnoverKinds: null,
+  turnoverKindLabels: null,
   spawn: {},
   paused: false,
   es: null,

@@ -30,10 +30,28 @@
 //      route answers 200 with the same list - the `value === undefined` half of setProjectTurnover, proved end to end
 //   7. the two states of the chip row are photographed: policy before the change (free) and after it (one per
 //      feature), plus the refusal, at 1440x900
-//   8. no page errors
+//   8. THE KIND'S SENTENCE: each of the four states (turnover, checkout with a named branch, local-turnover, plain
+//      checkout) draws its own wording from the read's kindLabels, and the named branch is stated as the winner over
+//      the checkout - each one photographed
+//   9. no page errors
 //
-// The panel under test is a SECOND instance on a free port (tools/panel-testkit.mjs `freePort`): three throwaway
-// git repositories, each named in config.json with its own turnoverBranches and turnoverPolicy.
+// WHAT ELSE THIS GATE NOW PROVES: THE KIND'S SENTENCE
+// The chip row's helper used to say "A tree cut for this project starts from this branch" whenever the field held a
+// name, whatever KIND the project's record stored. That is a falsehood on a row that stores `checkout`: a cut starts
+// at the named branch only because lib/jobs.js prefers a named branch over the checkout, and a branch that has landed
+// keeps winning. The bar now draws its sentence FROM the stored baseRefKind, with the words routes/project-turnover.js
+// answers in `kindLabels` (imported from lib/base-ref-kind.js), and states plainly when a named branch wins:
+//
+//   checkout        a cut starts at the checkout's own branch, and the named branch is where its work rolls up into
+//   turnover        a cut starts from the named turnover branch
+//   local-turnover  a cut starts from the local turnover branch the panel finds, and asks when none exists
+//   checkout+named  the named branch WINS, even when the checkout stands on main and after the branch has landed
+//
+// Each of the four states is photographed, and the policy's own one-line effect (the read's `policyLabels`) is read
+// off the bar under its select. A fake read with different kind words proves the sentence is built from the READ.
+//
+// The panel under test is a SECOND instance on a free port (tools/panel-testkit.mjs `freePort`): four throwaway
+// git repositories, each named in config.json with its own turnoverBranches, turnoverPolicy and baseRefKind.
 import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -65,12 +83,12 @@ if (!pw) {
   process.exit(2);
 }
 
-// ---- the sandbox: three projects, one per policy, each with a branch list ---------------------------------------
+// ---- the sandbox: four projects, one per policy and one per kind state, each with a branch list -----------------
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-turnover-policy-"));
 const repos = path.join(dir, "repos");
 mkdirSync(repos, { recursive: true });
 const paths = {};
-for (const name of ["alpha", "beta", "gamma"]) {
+for (const name of ["alpha", "beta", "gamma", "delta"]) {
   const repo = path.join(repos, name);
   mkdirSync(repo, { recursive: true });
   git(repo, ["init", "-q", "-b", "main"]);
@@ -83,10 +101,18 @@ for (const name of ["alpha", "beta", "gamma"]) {
 const ALPHA_BRANCHES = [{ branch: "20261120_0900_TASK-11_alpha-rollup", key: "task 11" }];
 const BETA_BRANCHES = ["feature/beta-rollup"];
 const GAMMA_BRANCHES = [];
+const DELTA_BRANCHES = [];
+// ONE PROJECT PER STATE the sentence must tell the truth about:
+//   alpha  kind turnover        the named branch IS the cut
+//   beta   kind checkout + named branch - the defect's own row: the kind says the checkout, lib/jobs.js says the
+//          named branch, and the sentence must say the branch wins (and keeps winning after it lands)
+//   gamma  kind local-turnover  a found branch, with the ask when none qualifies
+//   delta  kind checkout, no branch - the checkout really is the answer
 const PROJECTS = [
-  { name: "alpha", path: paths.alpha, mainBranch: "main", turnoverBranches: ALPHA_BRANCHES, turnoverPolicy: "free" },
-  { name: "beta", path: paths.beta, mainBranch: "main", turnoverBranches: BETA_BRANCHES, turnoverPolicy: "ask" },
-  { name: "gamma", path: paths.gamma, mainBranch: "main", turnoverBranches: GAMMA_BRANCHES, turnoverPolicy: "one-per-feature" },
+  { name: "alpha", path: paths.alpha, mainBranch: "main", turnoverBranches: ALPHA_BRANCHES, turnoverPolicy: "free", baseRefKind: "turnover" },
+  { name: "beta", path: paths.beta, mainBranch: "main", turnoverBranches: BETA_BRANCHES, turnoverPolicy: "ask", baseRefKind: "checkout" },
+  { name: "gamma", path: paths.gamma, mainBranch: "main", turnoverBranches: GAMMA_BRANCHES, turnoverPolicy: "one-per-feature", baseRefKind: "local-turnover" },
+  { name: "delta", path: paths.delta, mainBranch: "main", turnoverBranches: DELTA_BRANCHES, turnoverPolicy: "free", baseRefKind: "checkout" },
 ];
 
 const shotsDir = process.env.PANEL_SHOTS_DIR ? path.resolve(process.cwd(), process.env.PANEL_SHOTS_DIR) : path.join(dir, "shots");
@@ -136,17 +162,36 @@ try {
       const scanned =
         byName.alpha?.turnoverBranch === ALPHA_BRANCHES[0].branch &&
         byName.beta?.turnoverBranch === BETA_BRANCHES[0] &&
-        Array.isArray(byName.gamma?.turnoverBranches);
-      return scanned && ["alpha", "beta", "gamma"].every((n) => byName[n] && byName[n].turnoverPolicy) ? byName : false;
+        Array.isArray(byName.gamma?.turnoverBranches) &&
+        Array.isArray(byName.delta?.turnoverBranches);
+      const kinds = ["alpha", "beta", "gamma", "delta"].every(
+        (n) => byName[n] && byName[n].baseRefKind === PROJECTS.find((p) => p.name === n).baseRefKind,
+      );
+      return scanned && kinds && ["alpha", "beta", "gamma", "delta"].every((n) => byName[n] && byName[n].turnoverPolicy) ? byName : false;
     },
-    { timeoutMs: 60_000, what: "the three projects on the board, scanned and carrying their turnoverPolicy" },
+    { timeoutMs: 60_000, what: "the four projects on the board, scanned and carrying their turnoverPolicy and kind" },
   );
   ok("the board carries the three projects with their policy on the project record", Boolean(ready));
   check("the record's policy is the file's: free, ask, one per feature", [ready.alpha.turnoverPolicy, ready.beta.turnoverPolicy, ready.gamma.turnoverPolicy], ["free", "ask", "one-per-feature"]);
+  // THE RECORD'S KIND is what the sentence must be drawn from, and each project's is the one its config row stores.
+  check(
+    "the record's kind is the file's: turnover, checkout, local turnover, checkout",
+    [ready.alpha.baseRefKind, ready.beta.baseRefKind, ready.gamma.baseRefKind, ready.delta.baseRefKind],
+    ["turnover", "checkout", "local-turnover", "checkout"],
+  );
   const real = await getJson("/api/project-turnover?project=alpha");
   check("GET /api/project-turnover answers the three policies and their words", [real.body.policies, Object.keys(real.body.policyLabels)], [["free", "ask", "one-per-feature"], ["free", "ask", "one-per-feature"]]);
   const LABELS = real.body.policyLabels;
   note(`policyLabels: ${JSON.stringify(LABELS)}`);
+  // The KIND's words come from lib/base-ref-kind.js through the route; the gate asserts them here and the bar's
+  // sentence is then checked against THESE strings, so a page with its own drifting copy cannot pass.
+  const KIND_WORDS = {
+    checkout: "the checkout's own branch",
+    turnover: "the named turnover branch",
+    "local-turnover": "local turnover branch - ask if none exist",
+  };
+  check("GET /api/project-turnover answers the three kinds with lib/base-ref-kind.js's labels", [real.body.kinds, real.body.kindLabels], [["checkout", "turnover", "local-turnover"], KIND_WORDS]);
+  const KIND_OF = { alpha: "turnover", beta: "checkout", gamma: "local-turnover", delta: "checkout" };
 
   browser = await pw.chromium.launch({ headless: true }).catch(async (err) => {
     if (!/Executable doesn't exist|headless[_-]shell/i.test(String((err && err.message) || err))) throw err;
@@ -166,9 +211,9 @@ try {
     }
   });
   await page.goto(base, { waitUntil: "domcontentloaded" });
-  const boardUp = await waitFor(async () => (await page.locator("section.project[data-project]").count()) >= 3, { timeoutMs: 60_000, what: "three project sections on the board" });
-  ok("the page draws the three project sections", boardUp);
-  for (const name of ["alpha", "beta", "gamma"]) {
+  const boardUp = await waitFor(async () => (await page.locator("section.project[data-project]").count()) >= 4, { timeoutMs: 60_000, what: "four project sections on the board" });
+  ok("the page draws the four project sections", boardUp);
+  for (const name of ["alpha", "beta", "gamma", "delta"]) {
     const sec = page.locator(`section.project[data-project="${name}"]`);
     const cls = (await sec.getAttribute("class")) || "";
     if (cls.includes("collapsed")) await sec.locator(".project-head[data-toggle-project]").first().click();
@@ -190,21 +235,32 @@ try {
     page.evaluate((n) => {
       const bar = document.querySelector(`[data-turnover-bar="${n}"]`);
       const sel = bar?.querySelector("[data-turnover-policy]");
+      const kindSel = bar?.querySelector("[data-turnover-kind]");
       const status = bar?.querySelector("[data-turnover-status]");
+      const text = (el) => (el?.textContent || "").replace(/\s+/g, " ").trim();
       return {
         present: Boolean(bar),
         select: Boolean(sel),
         values: sel ? [...sel.options].map((o) => o.value) : [],
-        texts: sel ? [...sel.options].map((o) => o.textContent.replace(/\s+/g, " ").trim()) : [],
+        texts: sel ? [...sel.options].map((o) => text(o)) : [],
         titles: sel ? [...sel.options].map((o) => o.title) : [],
         value: sel?.value || "",
         label: (sel?.closest("label")?.firstChild?.textContent || "").replace(/\s+/g, " ").trim(),
         aria: sel?.getAttribute("aria-label") || "",
         title: sel?.getAttribute("title") || "",
         disabled: Boolean(sel?.disabled),
-        status: (status?.textContent || "").replace(/\s+/g, " ").trim(),
+        status: text(status),
         statusError: Boolean(status?.classList.contains("clone-err")),
         branch: bar?.querySelector("[data-turnover-input]")?.value ?? null,
+        // The KIND's select, the two sentences under the controls, and the chip's tooltip: the whole claim about where
+        // a cut starts is read from these, not from the page's source.
+        kind: kindSel?.value || "",
+        kindTexts: kindSel ? [...kindSel.options].map((o) => text(o)) : [],
+        kindTitle: kindSel?.getAttribute("title") || "",
+        kindAria: kindSel?.getAttribute("aria-label") || "",
+        kindLine: text(bar?.querySelector("[data-turnover-kind-line]")),
+        policyLine: text(bar?.querySelector("[data-turnover-policy-line]")),
+        chipTitle: document.querySelector(`button[data-turnover-chip="${n}"]`)?.title || "",
       };
     }, name);
   const waitForLabels = (name, wantFirst) =>
@@ -216,9 +272,9 @@ try {
       { timeoutMs: 20_000, what: `the policy select for ${name} to draw the read's labels` },
     );
 
-  // ---- 1. THE READ: three projects, three values, the read's own labels --------------------------------------
+  // ---- 1. THE READ: four projects, three values, the read's own labels ----------------------------------------
   const readStates = {};
-  for (const [name, policy, branch] of [["alpha", "free", ALPHA_BRANCHES[0].branch], ["beta", "ask", BETA_BRANCHES[0]], ["gamma", "one-per-feature", ""]]) {
+  for (const [name, policy, branch] of [["alpha", "free", ALPHA_BRANCHES[0].branch], ["beta", "ask", BETA_BRANCHES[0]], ["gamma", "one-per-feature", ""], ["delta", "free", ""]]) {
     await openBar(name);
     const st = await waitForLabels(name, LABELS.free);
     readStates[name] = st;
@@ -229,8 +285,13 @@ try {
     check(`${name}'s select has the project's own policy selected`, st?.value, policy);
     ok(`${name}'s select has an accessible name naming the project`, String(st?.aria || "").includes(name), st?.aria);
     check(`${name}'s bar draws its branch field beside the policy`, st?.branch, branch);
+    // The one line under the policy select, drawn from the read's own `policyLabels` and not from a copy in the page.
+    check(`${name}'s bar states its policy's effect in one line, from the read's label`, st?.policyLine, `policy: ${LABELS[policy]}`);
+    // The kind's select is the record's kind, with the route's labels (lib/base-ref-kind.js).
+    check(`${name}'s kind select has the project's own kind selected`, st?.kind, KIND_OF[name]);
+    check(`${name}'s kind options carry the read's kindLabels verbatim`, st?.kindTexts, [KIND_WORDS.checkout, KIND_WORDS.turnover, KIND_WORDS["local-turnover"]]);
   }
-  ok("the three bars show three different policies, each from its own project record", new Set(Object.values(readStates).map((s) => s.value)).size === 3);
+  ok("the four bars show three different policies, each from its own project record", new Set(Object.values(readStates).map((s) => s.value)).size === 3);
   // The before picture: the chip row with the select on the project's current policy, branch and kind beside it.
   const shot = async (name, file) => {
     // The chip row and the open bar are two boxes; the union is the picture. The head is scrolled to the top first,
@@ -264,6 +325,52 @@ try {
     note(`shot ${target}`);
     return target;
   };
+  // ---- 1b. THE SENTENCE IS DRAWN FROM THE STORED KIND, ONE WORDING PER KIND -----------------------------------
+  // Four states, four sentences read off the bars and asserted VERBATIM. The words inside them come from the route
+  // (lib/base-ref-kind.js), so a page that spelled its own labels would fail where it matters most.
+  const kindStates = {};
+  for (const name of ["alpha", "beta", "gamma", "delta"]) kindStates[name] = await barState(name);
+  const EXPECTED = {
+    // turnover: the named branch IS the cut.
+    alpha: `kind ${KIND_WORDS.turnover}: a cut starts from the named turnover branch ${ALPHA_BRANCHES[0].branch}, and its worker merges back into it locally (no push, no pull request). A named branch wins over the checkout even when the checkout stands on main, and a branch that has landed keeps winning for as long as it exists.`,
+    // checkout + a named branch: the defect's own row. The sentence must not let the kind claim the cut.
+    beta: `kind ${KIND_WORDS.checkout}: a cut starts at the checkout's own branch, and ${BETA_BRANCHES[0]} is where its work rolls up into. A named branch wins: lib/jobs.js cuts from ${BETA_BRANCHES[0]} even when the checkout stands on main, so the kind's checkout is not in force, and a branch that has landed keeps winning for as long as it exists.`,
+    gamma: `kind ${KIND_WORDS["local-turnover"]}: a cut starts from the local turnover branch the panel finds (a pushed, unmerged branch named YYYYMMDD_HHMM_<KEY>_<slug>), and it asks when none exists instead of cutting from main.`,
+    delta: `kind ${KIND_WORDS.checkout}: a cut starts at the checkout's own branch, and no branch is named for its work to roll up into.`,
+  };
+  for (const name of ["alpha", "beta", "gamma", "delta"]) {
+    check(`${name}'s helper sentence is the one wording for kind ${KIND_OF[name]}`, kindStates[name].kindLine, EXPECTED[name]);
+    check(`${name}'s chip states the SAME sentence as its bar`, kindStates[name].chipTitle, `${EXPECTED[name]} Click to change the kind, the branch or the policy.`);
+  }
+  // The defect itself: beta's record says checkout while lib/jobs.js cuts from its named branch. The old hint's
+  // unconditional "starts from this branch" must be gone from every state, and beta's row must say which one wins.
+  ok(
+    "no bar claims a cut 'starts from this branch' as an unconditional fact",
+    !Object.values(kindStates).some((s) => /starts from this branch/i.test(s.kindLine)),
+  );
+  ok(
+    "beta's row says the named branch wins, names the checkout kind as not in force, and says a landed branch keeps winning",
+    /A named branch wins: lib\/jobs\.js cuts from feature\/beta-rollup even when the checkout stands on main/.test(kindStates.beta.kindLine) &&
+      /so the kind's checkout is not in force/.test(kindStates.beta.kindLine) &&
+      /a branch that has landed keeps winning for as long as it exists/.test(kindStates.beta.kindLine),
+    kindStates.beta.kindLine,
+  );
+  ok(
+    "the four rows carry four different wordings, one per kind state",
+    new Set(Object.values(kindStates).map((s) => s.kindLine)).size === 4,
+  );
+  // The pictures: one per kind state, each the chip row and the whole bar including both sentences.
+  const kindShots = {};
+  for (const [name, file] of [
+    ["alpha", "turnover-kind-turnover.png"],
+    ["beta", "turnover-kind-named-branch-wins.png"],
+    ["gamma", "turnover-kind-local-turnover.png"],
+    ["delta", "turnover-kind-checkout.png"],
+  ]) {
+    kindShots[name] = await shot(name, file);
+    ok(`the ${KIND_OF[name]} kind row was photographed beside its chip`, Boolean(kindShots[name]), kindShots[name] || "no clip");
+  }
+
   const beforeShot = await shot("alpha", "turnover-policy-before.png");
   ok("the chip row was photographed with the policy select on its current value", Boolean(beforeShot), beforeShot || "no clip");
 
@@ -296,6 +403,7 @@ try {
   check("the route answered the policy-only body with 200", answers.map((a) => a.status), [200]);
   ok("the select redraws on the answered policy", afterChange?.value === "one-per-feature", afterChange?.value);
   ok("the bar's line names the policy it now holds", /one per feature - ask, and refuse a second branch/.test(afterChange?.status || ""), afterChange?.status);
+  check("...and the line under the policy select states one per feature, from the route's own label", afterChange?.policyLine, `policy: ${LABELS["one-per-feature"]}`);
   check("the branch field still shows the project's branch", afterChange?.branch, ALPHA_BRANCHES[0].branch);
   const afterShot = await shot("alpha", "turnover-policy-after.png");
   ok("the chip row was photographed after the change", Boolean(afterShot), afterShot || "no clip");
@@ -312,6 +420,9 @@ try {
   // A fake read answers different words and a different selected value. A page that hardcoded its labels would draw
   // "free - add a turnover branch without asking" here; a page that draws the read's answer cannot.
   const FAKE_LABELS = { free: "FREE from the read", ask: "ASK from the read", "one-per-feature": "ONE PER FEATURE from the read" };
+  // The KIND's words get the same treatment: a page that built its sentence from a copy in the page would still read
+  // "the checkout's own branch" here, whatever this fake answered.
+  const FAKE_KIND = { checkout: "CHECKOUT from the read", turnover: "TURNOVER from the read", "local-turnover": "LOCAL TURNOVER from the read" };
   const fakeReadHandler = async (route) => {
     if (route.request().method() !== "GET") return route.continue();
     await route.fulfill({
@@ -320,7 +431,7 @@ try {
       body: JSON.stringify({
         maxChars: 120,
         kinds: ["checkout", "turnover", "local-turnover"],
-        kindLabels: {},
+        kindLabels: FAKE_KIND,
         policies: ["free", "ask", "one-per-feature"],
         policyLabels: FAKE_LABELS,
         defaultPolicy: "ask",
@@ -328,7 +439,7 @@ try {
         turnoverBranch: BETA_BRANCHES[0],
         turnoverBranches: BETA_BRANCHES.map((branch) => ({ branch, key: null })),
         turnoverPolicy: "one-per-feature",
-        baseRefKind: "turnover",
+        baseRefKind: "checkout",
       }),
     });
   };
@@ -338,11 +449,19 @@ try {
   const fakeRead = await waitForLabels("beta", FAKE_LABELS.free);
   check("the select draws the labels the READ answered, not a copy in the page", fakeRead?.texts, [FAKE_LABELS.free, FAKE_LABELS.ask, FAKE_LABELS["one-per-feature"]]);
   check("...and selects the value the READ answered", fakeRead?.value, "one-per-feature");
+  check("the KIND select draws the words the READ answered, not a copy in the page", fakeRead?.kindTexts, [FAKE_KIND.checkout, FAKE_KIND.turnover, FAKE_KIND["local-turnover"]]);
+  ok(
+    "...and the helper sentence is built from those words, from the READ's kind",
+    String(fakeRead?.kindLine || "").startsWith(`kind ${FAKE_KIND.checkout}:`),
+    fakeRead?.kindLine,
+  );
   await page.unroute(TURNOVER_ROUTE, fakeReadHandler);
   await closeBar("beta");
   await openBar("beta");
   const realAgain = await waitForLabels("beta", LABELS.free);
   check("with the fake gone, beta's bar reads its real policy again", realAgain?.value, "ask");
+  check("...its kind select reads lib/base-ref-kind.js's labels again", realAgain?.kindTexts, [KIND_WORDS.checkout, KIND_WORDS.turnover, KIND_WORDS["local-turnover"]]);
+  check("...and its sentence is the stored kind's again", realAgain?.kindLine, EXPECTED.beta);
 
   // ---- 4. THE REDRAW IS FROM THE ANSWER, NOT FROM THE PICK ---------------------------------------------------
   // The reader picks free; the route answers ask. The bar must read ask - the answer is what the file now holds.
