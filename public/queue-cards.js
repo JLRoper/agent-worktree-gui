@@ -771,8 +771,14 @@ window.WMApp.queueCards = function queueCards(deps) {
           : t.state === "queued" && t.reason
             ? `<div class="as-task-note" title="${esc(t.reason)}">${esc(t.reason)}</div>`
             : "";
+    // THE AGENT ROWS ARE ONE BLOCK ON THE FACTS LINE, not flex siblings on it. `div.as-task-facts` is a wrapping
+    // flex row with an 8 px column gap, so two agents joined straight into it laid out SIDE BY SIDE and that gap
+    // read as the separator between two agents (the reader photographed exactly that on a card carrying an EXITED
+    // thread and a RUNNING one). One child block, a column, gives every agent its own line. No indent of its own:
+    // the facts line carries the 18 px, and `.as-task-agents`' 19 px belongs to the Initiatives pane, which is why
+    // that container is not the one reused here.
     const agents = list.length
-      ? list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")
+      ? `<div class="as-task-agent-stack">${list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")}</div>`
       : `<div class="as-task-agent is-none" title="nothing has run this task yet — Start marks it running, and the thread it is handed becomes its first agent row">
             <span class="as-agent-mark is-queued" aria-hidden="true">○</span>
             <span class="as-task-agent-label">no agent yet</span>
@@ -810,13 +816,18 @@ window.WMApp.queueCards = function queueCards(deps) {
     const more = fold.length
       ? `<details class="as-task-more"><summary title="the tree, the files, the attempts and the detail — folded so the row reads as one line">${t.worktree || (Array.isArray(t.files) && t.files.length) ? "tree · files" : "more"}${Number(t.attempts) > 0 ? " · attempts" : ""}${t.detail ? " · detail" : ""}</summary><div class="as-task-more-body">${fold.join(`<span class="as-task-sep">·</span>`)}</div></details>`
       : "";
+    // THE PIPELINE IS A FACT ABOUT THE TASK, not about an agent: it is assigned to the row, and every agent the row
+    // cuts runs under it. It gets a line of its own under the facts block, so an agent's line stays about that agent
+    // and a task whose pipeline reads "assistant decides" cannot look like something the agent beside it chose.
+    const pipelineRow = `<div class="as-task-pipeline-row"><span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>`;
     // Somebody else filed this row (null for the ordinary case), drawn on its own small line below.
     const filedBy = queueFiledBy(t, id);
     return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(state)}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
         <div class="as-task-main">
           <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
             ${headHtml(`${queueLaneChip(t)}${queueHoldBadge(t, byId)}${queueQuestionChip(t, alerts)}`)}
-            <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}<span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>
+            <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}</div>
+            ${pipelineRow}
             ${filedBy ? `<div class="as-task-filed" title="who filed this row: the by the write carried, which is not its owner">filed by ${esc(filedBy)}</div>` : ""}
             ${note}
             ${queueReattachNoteHtml(id, t.id)}
