@@ -1,5 +1,7 @@
 // tools/verify-legend.mjs - the worktree chart's legend as a disclosure, proved in a real browser.
 //
+// HARNESS: LIVE GATE            tracks main: `npm run verify:legend`
+//
 //   node tools/verify-legend.mjs
 //   PANEL_SHOTS_DIR=docs/assets/legend-disclosure node tools/verify-legend.mjs
 //
