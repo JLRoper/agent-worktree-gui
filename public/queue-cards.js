@@ -453,7 +453,25 @@ window.WMApp.queueCards = function queueCards(deps) {
   // failed attempt and its live retry), and the id is the only thing on the card that says which record the row's
   // verdict was read from. A row with no run id says so — `guessing` — instead of letting a thread match pass for
   // evidence.
-  function queueAgentHtml(id, t, thread, jobs) {
+  // WHERE THIS AGENT'S WORK IS. The task's `worktree` is one path that moves with the newest link, so on its own it
+  // cannot say where an earlier agent ran. `where` is this thread's own recorded tree (lib/assistant/queue.js
+  // `threadTrees`), read back through the board row: the project it belongs to and how that tree LANDS - the verdict
+  // for every kind (a research or implementation tree lands by merging locally, a turnover tree also carries a PR).
+  // Absent when the queue never wrote a tree for this thread, and then the line draws nothing extra: an absence is not
+  // the task's own project.
+  function queueAgentWhere(where) {
+    if (!where) return "";
+    const parts = [];
+    if (where.project) parts.push(`project ${where.project}`);
+    if (where.verdict) parts.push(String(where.verdict));
+    if (where.pr?.number) parts.push(`PR #${where.pr.number} ${String(where.pr.state || "").toLowerCase()}`.trim());
+    if (!parts.length) return "";
+    const text = parts.join(" · ");
+    const title = `the tree this agent ran in${where.kindLabel ? ` (${where.kindLabel})` : ""}${where.path ? `: ${where.path}` : ""}. ${where.verdict ? `It lands as ${where.verdict}.` : "Its landing was not read."}${where.pr?.number ? ` Pull request #${where.pr.number} is ${String(where.pr.state || "in an unknown state").toLowerCase()}.` : ""}`;
+    return `<span class="as-task-agent-where" title="${esc(title)}">${esc(text)}</span>`;
+  }
+
+  function queueAgentHtml(id, t, thread, jobs, where = null) {
     const threads = Array.isArray(t?.threads) && t.threads.length ? t.threads.filter(Boolean) : t?.thread ? [t.thread] : [];
     const current = threads.length ? threads[threads.length - 1] : "";
     const onCurrent = thread === current;
@@ -503,6 +521,7 @@ window.WMApp.queueCards = function queueCards(deps) {
             <code class="as-task-agent-thread">${esc(thread)}</code>
             ${runChip}
             ${named ? `<span class="as-task-agent-label">${esc(label)}</span>` : ""}
+            ${queueAgentWhere(where)}
             ${pill}
           </div>`;
   }
@@ -771,8 +790,21 @@ window.WMApp.queueCards = function queueCards(deps) {
           : t.state === "queued" && t.reason
             ? `<div class="as-task-note" title="${esc(t.reason)}">${esc(t.reason)}</div>`
             : "";
+    // THE AGENT ROWS ARE ONE BLOCK ON THE FACTS LINE, not flex siblings on it. `div.as-task-facts` is a wrapping
+    // flex row with an 8 px column gap, so two agents joined straight into it laid out SIDE BY SIDE and that gap
+    // read as the separator between two agents (the reader photographed exactly that on a card carrying an EXITED
+    // thread and a RUNNING one). One child block, a column, gives every agent its own line. No indent of its own:
+    // the facts line carries the 18 px, and `.as-task-agents`' 19 px belongs to the Initiatives pane, which is why
+    // that container is not the one reused here.
+    // WHOSE PROJECT, WHOSE LANDING. Each agent line carries the project and the landed verdict of the tree THAT
+    // thread ran in (`agentRows`, decorated server-side from `threadTrees`). When at least one line has that, the
+    // task-level meta line steps aside: it names the tree the row points at NOW, and printing it under lines that
+    // already say where each agent worked would be the same fact a second time. With no per-agent record - every queue
+    // file written before `threadTrees` existed - the meta line draws exactly as before, so nothing is lost.
+    const agentRows = Array.isArray(t.agentRows) ? t.agentRows : [];
+    const anyWhere = agentRows.some((r) => r && (r.project || r.verdict));
     const agents = list.length
-      ? list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")
+      ? `<div class="as-task-agent-stack">${list.map((th, i) => queueAgentHtml(id, t, th, jobs, agentRows[i] || null)).join("")}</div>`
       : `<div class="as-task-agent is-none" title="nothing has run this task yet — Start marks it running, and the thread it is handed becomes its first agent row">
             <span class="as-agent-mark is-queued" aria-hidden="true">○</span>
             <span class="as-task-agent-label">no agent yet</span>
@@ -810,13 +842,18 @@ window.WMApp.queueCards = function queueCards(deps) {
     const more = fold.length
       ? `<details class="as-task-more"><summary title="the tree, the files, the attempts and the detail — folded so the row reads as one line">${t.worktree || (Array.isArray(t.files) && t.files.length) ? "tree · files" : "more"}${Number(t.attempts) > 0 ? " · attempts" : ""}${t.detail ? " · detail" : ""}</summary><div class="as-task-more-body">${fold.join(`<span class="as-task-sep">·</span>`)}</div></details>`
       : "";
+    // THE PIPELINE IS A FACT ABOUT THE TASK, not about an agent: it is assigned to the row, and every agent the row
+    // cuts runs under it. It gets a line of its own under the facts block, so an agent's line stays about that agent
+    // and a task whose pipeline reads "assistant decides" cannot look like something the agent beside it chose.
+    const pipelineRow = `<div class="as-task-pipeline-row"><span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>`;
     // Somebody else filed this row (null for the ordinary case), drawn on its own small line below.
     const filedBy = queueFiledBy(t, id);
     return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(state)}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
         <div class="as-task-main">
           <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
             ${headHtml(`${queueLaneChip(t)}${queueHoldBadge(t, byId)}${queueQuestionChip(t, alerts)}`)}
-            <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}<span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>
+            <div class="as-task-facts">${agents}${meta.length && !anyWhere ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}</div>
+            ${pipelineRow}
             ${filedBy ? `<div class="as-task-filed" title="who filed this row: the by the write carried, which is not its owner">filed by ${esc(filedBy)}</div>` : ""}
             ${note}
             ${queueReattachNoteHtml(id, t.id)}

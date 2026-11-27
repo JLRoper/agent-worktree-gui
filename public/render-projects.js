@@ -370,6 +370,121 @@ ${projects.map((p) => projectSection(p.name)).join("\n")}
   </section>`;
 }
 
+// ---- the legend: one line at rest, the words behind a popover -----------------------------------
+// The legend used to be ONE dense paragraph under every chart - the five liveness chips, the age number and its
+// ring, the kind column's three letters and the fold, all at once, ~700 characters the reader asked to put away.
+// It is a DISCLOSURE now. Collapsed, the strip carries every SYMBOL with its short word - the chips already read
+// hermes, claude, board, port and files, the kind marks keep T, R and I, and the parent's chevron keeps "fold" -
+// plus one control whose visible label says what it is. Expanded, the popover carries the same words as SHORT
+// LINES under three headings, so nothing the block taught is lost; it is only deferred until asked for.
+//
+// The strip is a real one-line box: `flex-wrap: nowrap` in the sheet, and the keys clip rather than wrap, so the
+// control stays beside them at the live width instead of dropping to a second row. The popover is absolute, so
+// opening it never reflows the chart, and it hangs under the strip - the bottom edge of the card - so it cannot
+// cover a tree row; .legend is its containing block.
+//
+// Keyboard is the button's own: Enter and Space fire its click, so both open (and close) it. Escape closes it and
+// leaves focus on the button, where `:focus-visible` draws the ring; a press anywhere outside closes it. The open
+// name lives in `legendOpenFor` rather than only in the DOM, so a board repaint (which rebuilds this section's
+// markup from `legendHtml`) redraws an open popover open instead of closing it under the reader.
+function legendId(name) {
+  // Injective, so two project names that sanitise alike cannot share one popover's id: every character outside
+  // [A-Za-z0-9_-] becomes its code point in hex, fenced by underscores.
+  return `legend-pop-${String(name || "project").replace(/[^A-Za-z0-9_-]/g, (ch) => `_${ch.codePointAt(0).toString(16)}_`)}`;
+}
+
+let legendOpenFor = null;
+
+function legendHtml(name) {
+  const id = legendId(name);
+  const open = legendOpenFor === name;
+  return `<div class="legend" data-legend="${esc(name)}">
+      <div class="legend-line">
+        <span class="age-slot" data-age-slot="${esc(name)}"></span>
+        <span class="legend-keys">
+          <span class="sig sig-hermes">⧉ hermes</span>
+          <span class="sig sig-claude">⧉ claude</span>
+          <span class="sig sig-board">● board</span>
+          <span class="sig sig-port">:port</span>
+          <span class="sig sig-files">✎ files</span>
+          <span class="kind-mark kind-turnover" role="img" aria-label="turnover tree">T</span>
+          <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span>
+          <span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span>
+          <span class="legend-fold"><span class="legend-fold-glyph" aria-hidden="true">▾</span> fold</span>
+        </span>
+        <button type="button" class="legend-toggle" data-legend-toggle="${esc(name)}" aria-expanded="${open ? "true" : "false"}" aria-controls="${esc(id)}"><span class="legend-q" aria-hidden="true">?</span> what these mean</button>
+      </div>
+      <div class="legend-pop" id="${esc(id)}" data-legend-pop="${esc(name)}" role="group" aria-label="what the chart's marks mean"${open ? "" : " hidden"}>
+        <div class="legend-group">
+          <h4>liveness evidence</h4>
+          <p><span class="sig sig-hermes">⧉ hermes</span> session active</p>
+          <p><span class="sig sig-claude">⧉ claude</span> Claude Code session active</p>
+          <p><span class="sig sig-board">● board</span> live board PID</p>
+          <p><span class="sig sig-port">:port</span> dev server listening</p>
+          <p><span class="sig sig-files">✎ files</span> edited recently</p>
+          <p class="legend-note">a row is live only if one of these fired</p>
+          <p class="legend-note">the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</p>
+        </div>
+        <div class="legend-group">
+          <h4>the kind column</h4>
+          <p><span class="kind-mark kind-turnover" role="img" aria-label="turnover tree">T</span> turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally)</p>
+          <p><span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R to lift it)</p>
+          <p><span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick)</p>
+        </div>
+        <div class="legend-group">
+          <h4>folding</h4>
+          <p>a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight</p>
+          <p>a fold only hides, every chip and open panel stays as it was</p>
+        </div>
+      </div>
+    </div>`;
+}
+
+function legendControl(name) {
+  return [...document.querySelectorAll("[data-legend-toggle]")].find((b) => b.dataset.legendToggle === name) || null;
+}
+
+function closeLegends() {
+  legendOpenFor = null;
+  for (const pop of document.querySelectorAll("[data-legend-pop]")) {
+    if (pop.hidden) continue;
+    pop.hidden = true;
+    legendControl(pop.dataset.legendPop)?.setAttribute("aria-expanded", "false");
+  }
+}
+
+function toggleLegend(name) {
+  const btn = legendControl(name);
+  const pop = btn ? document.getElementById(btn.getAttribute("aria-controls") || "") : null;
+  if (!btn || !pop || pop.dataset.legendPop !== name) return;
+  const opening = pop.hidden;
+  closeLegends();
+  if (!opening) return;
+  pop.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  legendOpenFor = name;
+}
+
+// The two delegated presses this disclosure needs, and nothing more. A press on the control toggles; any press
+// outside the popover (and off the control) closes it; Escape closes it and puts focus back on the control that
+// opened it, which is where the ring stays visible.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest?.("[data-legend-toggle]");
+  if (btn) {
+    toggleLegend(btn.dataset.legendToggle);
+    return;
+  }
+  if (legendOpenFor && !e.target.closest?.("[data-legend-pop]")) closeLegends();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !legendOpenFor) return;
+  const btn = legendControl(legendOpenFor);
+  closeLegends();
+  btn?.focus();
+});
+// ---- end the legend -----------------------------------------------------------------------------
+
 function projectSection(name) {
   const p = state.projects.get(name) || { name };
   // Focus mode force-expands a project that holds a live row (public/app.js projectDrawsOpen), so the class, the
@@ -410,7 +525,7 @@ function projectSection(name) {
     <div class="wt-scroll">
       <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently - a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · the kind column: <span class="kind-mark kind-turnover" role="img" aria-label="turnover tree">T</span> turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally), <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R to lift it), <span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick) · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight - a fold only hides, every chip and open panel stays as it was</div>
+    ${legendHtml(name)}
   </section>`;
 }
 

@@ -33,8 +33,9 @@
 //                        the chip beside the host chip, the grey strip's STACK of bars, and the editor in the rules
 //                        bar that adds, edits, reorders and deletes a project's one-line rules
 //   the turnover         turnoverChipHtml, refreshTurnoverChip, turnoverFor, turnoverBarHtml, toggleTurnoverBar,
-//                        closeTurnoverBar and saveProjectTurnover: the head line's fourth chip, and the one field that
-//                        names the branch a tree cut for this project starts from and rolls back into
+//                        closeTurnoverBar, saveProjectTurnover and saveProjectTurnoverPolicy: the head line's fourth
+//                        chip, and the bar that names the branch a tree cut for this project starts from and rolls
+//                        back into, beside the kind it is read from and the policy that decides a new one is added
 //   the row's detail     gitSubHtml (one folded file strip), DESC_SENTENCE_BREAK and descLines (the description as
 //                        bullets), refreshClock (the refresh journal's wall clock) and detailHtml, the whole
 //                        tr.detail block: merge state, description, TODO, liveness, the agent slots and the idle
@@ -616,6 +617,35 @@ function turnoverKindShort(name) {
   return turnoverFor(name) || "none";
 }
 
+// The project's TURNOVER POLICY, the third control of the bar: free adds a new turnover branch at once, ask waits
+// for the reader's answer, and one per feature does the same AND refuses a second branch for a task or initiative key
+// that already has one (lib/project-turnover.js `planTurnoverSave`). The snapshot carries the normalised value on the
+// project record (lib/projects.js reads it through `turnoverPolicyOf`, so an absent key reads `ask`), and the WORDS
+// come from the read's own `policyLabels` - never a second copy of them here, because the writer and the page would
+// then be able to disagree about what a policy means. Before a bar has opened there is no read yet, so the ids stand
+// in as their own labels for the one paint between the open and its answer; the answer repaints with the real words.
+const TURNOVER_POLICIES_FALLBACK = ["free", "ask", "one-per-feature"];
+const TURNOVER_POLICY_FALLBACK = "ask";
+
+function turnoverPolicies() {
+  const list = Array.isArray(state.turnoverPolicies) ? state.turnoverPolicies.filter(Boolean) : [];
+  return list.length ? list : TURNOVER_POLICIES_FALLBACK;
+}
+
+function turnoverPolicyFor(name) {
+  const value = String(state.projects.get(name)?.turnoverPolicy || "").trim().toLowerCase();
+  return turnoverPolicies().includes(value) ? value : TURNOVER_POLICY_FALLBACK;
+}
+
+function turnoverPolicyLabel(id) {
+  return String(state.turnoverPolicyLabels?.[id] || id || "");
+}
+
+// What the bar's line says after a policy save: the label the read gave the id the ANSWER named.
+function turnoverPolicyLine(name) {
+  return `${name}: turnover policy ${turnoverPolicyLabel(turnoverPolicyFor(name))}`;
+}
+
 function turnoverBarOpen(name) {
   return barsOf(name).includes("turnover");
 }
@@ -661,11 +691,16 @@ function turnoverBarHtml(name) {
   const kinds = TURNOVER_KINDS.map(
     (k) => `<option value="${esc(k)}"${kind === k ? " selected" : ""}>${esc(TURNOVER_KIND_LABELS[k])}</option>`,
   ).join("");
+  const policy = turnoverPolicyFor(name);
+  const policies = turnoverPolicies().map(
+    (id) => `<option value="${esc(id)}"${policy === id ? " selected" : ""} title="${esc(turnoverPolicyLabel(id))}">${esc(turnoverPolicyLabel(id))}</option>`,
+  ).join("");
   const local = kind === "local-turnover";
   return `<div class="host-form turnover-form" data-turnover-bar="${esc(name)}">
       <span class="mono host-line${bar?.error ? " clone-err" : ""}" data-turnover-status>${esc(bar?.line || turnoverLine(name))}</span>
       <span class="turnover-body">
         <label class="turnover-kind" title="where a tree cut for this project starts: the checkout's own branch, the branch named here, or a local turnover branch the panel finds">kind <select class="turnover-select" data-turnover-kind="${esc(name)}" aria-label="the base-ref kind for ${esc(name)}"${busy}>${kinds}</select></label>
+        <label class="turnover-policy" title="what adding a turnover branch to this project does: free adds it at once, ask waits for your answer, one per feature also refuses a second branch for a task or initiative key that already has one - a change saves at once">policy <select class="turnover-select" data-turnover-policy="${esc(name)}" aria-label="the turnover policy for ${esc(name)}" title="${esc(turnoverPolicyLabel(policy))}"${busy}>${policies}</select></label>
         <input class="mono turnover-input" type="text" maxlength="${turnoverMaxChars()}" data-turnover-input="${esc(name)}" value="${esc(branch)}" placeholder="a branch name, e.g. feature/turnover"${busy}${local ? " disabled" : ""} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" aria-label="the turnover branch for ${esc(name)}">
         <button type="button" data-turnover-save="${esc(name)}" title="store this kind and branch on the project's config.json row; an empty field clears the branch"${busy}>save</button>
         <button type="button" data-turnover-close="${esc(name)}" title="close the turnover bar">close</button>
@@ -698,9 +733,14 @@ async function toggleTurnoverBar(name) {
     }
     // The cap travels with the read, so the field's `maxlength` and the writer's refusal are one number.
     if (Number.isFinite(Number(out.maxChars))) state.turnoverCaps = { maxChars: Number(out.maxChars) };
+    // The policy's ids and words travel with the same read: the select draws ITS list, not a copy of it, so a policy
+    // the server stops offering disappears from the page the next time a bar opens.
+    if (Array.isArray(out.policies) && out.policies.length) state.turnoverPolicies = out.policies.map(String);
+    if (out.policyLabels && typeof out.policyLabels === "object") state.turnoverPolicyLabels = { ...out.policyLabels };
     const p = state.projects.get(name);
     if (p) p.turnoverBranch = String(out.turnoverBranch || "");
     if (p && out.baseRefKind) p.baseRefKind = String(out.baseRefKind);
+    if (p && out.turnoverPolicy) p.turnoverPolicy = String(out.turnoverPolicy);
     state.turnoverBar = { project: name, line: turnoverLine(name), busy: false, error: false };
     repaintBar(name, "turnover");
     refreshTurnoverChip(name);
@@ -756,6 +796,52 @@ async function saveProjectTurnover(name) {
   } catch (e) {
     if (state.turnoverBar?.project !== name) return false;
     state.turnoverBar = { ...state.turnoverBar, busy: false, error: true, line: `could not save the turnover branch: ${e.message}` };
+    repaintBar(name, "turnover");
+    return false;
+  }
+}
+
+// ONE policy save, on the select's CHANGE: no save button, because a policy is one word with nothing to type and the
+// reader has already chosen it. The body is the policy ALONE - `{ project, turnoverPolicy }` - which is what
+// routes/project-turnover.js accepts as a save of its own (`entries` stays undefined, and `setProjectTurnover` leaves
+// the branch list exactly as it stands). Sending `turnoverBranches` unchanged beside it would be a second copy of the
+// list to validate, and a list save is the path that parks a permission card under `ask`; a policy is not a branch
+// creation, so it must not be able to become one.
+//
+// The bar redraws from the ANSWER: the writer decides what was stored (it lowercases, and it answers `ask` for the
+// default), and drawing the select's own typed value instead would show a policy the file does not hold. A refusal
+// puts the route's sentence on the bar's line VERBATIM - a swallowed failure is a control that looks like it worked.
+async function saveProjectTurnoverPolicy(name, value) {
+  const bar = state.turnoverBar?.project === name ? state.turnoverBar : { project: name };
+  state.turnoverBar = { ...bar, busy: true, error: false, line: "saving the turnover policy..." };
+  repaintBar(name, "turnover");
+  try {
+    const res = await apiFetch(
+      "/api/project-turnover",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, turnoverPolicy: String(value ?? "") }) },
+      { timeoutMs: 20000 },
+    );
+    const out = await res.json().catch(() => ({}));
+    if (state.turnoverBar?.project !== name) return false;
+    if (!res.ok) {
+      state.turnoverBar = { ...state.turnoverBar, busy: false, error: true, line: out.error || `could not save the turnover policy (HTTP ${res.status})` };
+      repaintBar(name, "turnover");
+      return false;
+    }
+    const p = state.projects.get(name);
+    const answered = String(out.turnoverPolicy || "").trim().toLowerCase();
+    if (p && answered) p.turnoverPolicy = answered;
+    // The answer's branch list is the project's branch list: a policy save leaves it alone, and drawing the answer's
+    // copy proves the page reads what the file holds rather than assuming nothing moved.
+    if (p && out.turnoverBranch !== undefined) p.turnoverBranch = String(out.turnoverBranch || "");
+    if (p && Array.isArray(out.turnoverBranches)) p.turnoverBranches = out.turnoverBranches;
+    state.turnoverBar = { project: name, busy: false, error: false, line: turnoverPolicyLine(name) };
+    repaintBar(name, "turnover");
+    refreshTurnoverChip(name);
+    return true;
+  } catch (e) {
+    if (state.turnoverBar?.project !== name) return false;
+    state.turnoverBar = { ...state.turnoverBar, busy: false, error: true, line: `could not save the turnover policy: ${e.message}` };
     repaintBar(name, "turnover");
     return false;
   }

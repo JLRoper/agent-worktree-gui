@@ -3989,9 +3989,13 @@ button.btn-turnover:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 
 .turnover-form .turnover-body { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .turnover-form .turnover-input { flex: 1 1 auto; min-width: 160px; max-width: 420px; }
 /* The kind: three words, and the third one is why this field exists - a branch the panel has to find, so the name
-   field beside it is disabled until the reader picks one of the two named kinds again. */
-.turnover-form .turnover-kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+   field beside it is disabled until the reader picks one of the two named kinds again. The policy: the same shape, and
+   its words are the read's own labels ("free - add a turnover branch without asking"), so it is given room for the
+   longest of the three. */
+.turnover-form .turnover-kind,
+.turnover-form .turnover-policy { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .turnover-form .turnover-select { max-width: 260px; }
+.turnover-form .turnover-policy .turnover-select { max-width: 480px; }
 .turnover-form .turnover-hint { white-space: normal; }
 
 /* ---- the board chip, and the claims it opens in the same grey strip ------------------------------------------- */
@@ -5817,6 +5821,134 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 #as-initiatives .init-card.is-titlecard:hover .init-chips .init-meta,
 #as-initiatives .init-card.is-titlecard:hover .init-chips .chip + .chip::before { color: var(--tab-ink-2); }
 
+/* ---- THE BOARD'S TAGS: a chip that is a WORD, not a COUNT ------------------------------------------
+   A tag is a word about the work; the chips beside it count its scale. They share one row, so they must be told
+   apart at a glance: the count is a borderless sentence in muted ink, and the tag is a small PLATE with a 4px radius,
+   a coloured spine on its left edge and the ident in the mono face. Not `.chip`'s 999px capsule and not its palette -
+   the palette here is the registry's own ten names (lib/initiative-tags.js TAG_PALETTE), each one a dark-theme pair
+   that clears 4.5:1 on --tab-surface. */
+#as-initiatives .init-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0 0 0 var(--tab-s1);
+  padding: 0 6px;
+  border: 1px solid var(--tag-line, var(--tab-line));
+  border-left: 2px solid var(--tag-ink, var(--tab-ink-3));
+  border-radius: 4px;
+  background: var(--tag-bg, transparent);
+  color: var(--tag-ink, var(--tab-ink-2));
+  font-family: var(--tab-font-mono);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+#as-initiatives .init-chips > .init-tag:first-of-type { margin-left: var(--tab-s2); }
+#as-initiatives button.init-tag { cursor: pointer; font: 600 var(--tab-fs-chip)/1.7 var(--tab-font-mono); }
+#as-initiatives button.init-tag:hover { filter: brightness(1.25); }
+#as-initiatives button.init-tag:active { transform: translateY(1px); }
+#as-initiatives button.init-tag.is-off { opacity: 0.45; filter: saturate(0.5); }
+#as-initiatives button.init-tag.is-off:hover { opacity: 0.8; }
+#as-initiatives .init-tag-more {
+  margin: 0 0 0 var(--tab-s1);
+  padding: 0 6px;
+  border: 1px dashed var(--tab-line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tab-ink-2);
+  font: 600 var(--tab-fs-chip)/1.7 var(--tab-font-mono);
+  cursor: pointer;
+}
+#as-initiatives .init-tag-more:hover { color: var(--tab-ink); border-color: var(--tag-line, var(--tab-line-strong)); filter: brightness(1.2); }
+/* The rest of a card's tags, under its facts row and never ON it: a 100% basis wraps the group to its own line. */
+#as-initiatives .init-tags-rest {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s1) 0;
+  margin-top: var(--tab-s1);
+  padding-top: var(--tab-s1);
+  border-top: 1px dashed var(--tab-line);
+}
+#as-initiatives .init-tags-rest .init-tag:first-child { margin-left: 0; }
+
+/* THE TEN NAMES. One block per colour, and nothing else in the panel repaints when one changes. */
+#as-initiatives .init-tag-slate { --tag-ink: #aeb8c6; --tag-line: rgba(174, 184, 198, 0.34); --tag-bg: rgba(174, 184, 198, 0.08); }
+#as-initiatives .init-tag-red { --tag-ink: #ff9c94; --tag-line: rgba(255, 156, 148, 0.38); --tag-bg: rgba(229, 83, 75, 0.12); }
+#as-initiatives .init-tag-amber { --tag-ink: #f0c674; --tag-line: rgba(240, 198, 116, 0.38); --tag-bg: rgba(210, 153, 34, 0.12); }
+#as-initiatives .init-tag-olive { --tag-ink: #cbd47c; --tag-line: rgba(203, 212, 124, 0.36); --tag-bg: rgba(160, 175, 70, 0.12); }
+#as-initiatives .init-tag-green { --tag-ink: #7ee787; --tag-line: rgba(126, 231, 135, 0.36); --tag-bg: rgba(46, 160, 67, 0.14); }
+#as-initiatives .init-tag-teal { --tag-ink: #6fd7c4; --tag-line: rgba(111, 215, 196, 0.36); --tag-bg: rgba(40, 150, 140, 0.14); }
+#as-initiatives .init-tag-sky { --tag-ink: #7fd3f7; --tag-line: rgba(127, 211, 247, 0.36); --tag-bg: rgba(56, 139, 253, 0.12); }
+#as-initiatives .init-tag-blue { --tag-ink: #9ecbff; --tag-line: rgba(158, 203, 255, 0.38); --tag-bg: rgba(56, 139, 253, 0.14); }
+#as-initiatives .init-tag-violet { --tag-ink: #c8a6ff; --tag-line: rgba(200, 166, 255, 0.38); --tag-bg: rgba(163, 113, 247, 0.16); }
+#as-initiatives .init-tag-pink { --tag-ink: #f2a0c8; --tag-line: rgba(242, 160, 200, 0.38); --tag-bg: rgba(219, 97, 162, 0.14); }
+
+/* ---- THE TAG FILTER ROW: one row at the top of the pane, composed with the view switch ------------- */
+#as-initiatives .init-tagbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s2) 0;
+  border-top: 1px solid var(--tab-line);
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tagbar-label {
+  flex: 0 0 auto;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+#as-initiatives .init-tagtoggles { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tab-s1); flex: 1 1 auto; min-width: 0; }
+#as-initiatives .init-tagtoggles .init-tag { margin-left: 0; }
+#as-initiatives .init-tagmode .init-tagmode-btn { min-height: 22px; padding: 0 var(--tab-s2); font-size: var(--tab-fs-chip); }
+#as-initiatives .init-tag-clear, #as-initiatives .init-tag-manage { flex: 0 0 auto; }
+#as-initiatives .init-tagbar-bad { color: var(--tab-bad); }
+
+/* ---- THE REGISTRY EDITOR: one row per tag, then the create form ------------------------------------ */
+#as-initiatives .init-tagmgr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s3);
+  padding: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-tagmgr-hint { margin: 0; }
+#as-initiatives .init-tagmgr-list { display: flex; flex-direction: column; gap: 0; }
+#as-initiatives .init-tagrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tab-s2);
+  padding: var(--tab-s2) 0;
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tagrow:last-child { border-bottom: 0; }
+#as-initiatives .init-tagrow > .init-tag { margin-left: 0; }
+#as-initiatives .init-tagname { color: var(--tab-ink); font: 600 var(--tab-fs-body)/1.4 var(--tab-font-ui); }
+#as-initiatives .init-tagdesc { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .init-tagrow-acts { display: inline-flex; gap: var(--tab-s1); margin-left: auto; }
+#as-initiatives .init-tagrow .init-tagform { flex: 1 1 100%; margin: var(--tab-s1) 0 0; }
+#as-initiatives .init-tagask { flex: 1 1 100%; margin: 0; }
+#as-initiatives .init-tag-force { margin-left: var(--tab-s2); }
+#as-initiatives .init-tagpick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1); }
+#as-initiatives .init-tagpick .init-tag { margin-left: 0; }
+#as-initiatives .init-tagpick-empty { margin: 0 0 var(--tab-s1); }
+
 /* SECTION HEADS: sentence case, one weight, a hairline that carries the eye to the count. */
 #as-initiatives .init-sechead {
   display: flex;
@@ -6876,14 +7008,38 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 .as-qpane .as-task-question { cursor: pointer; color: #ffd7a8; background: #2a2014; border-color: #4a3a1f; }
 .as-qpane .as-task-question:hover { color: #ffe9c9; border-color: #6a5228; }
 .as-qpane .as-task-facts { display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; margin: 1px 0 0 18px; min-width: 0; }
+/* THE AGENT ROWS ARE A BLOCK, not flex siblings on the facts line. As direct children of `.as-task-facts` two agents
+   laid out side by side and the 8 px column gap between them read as the separator between two agents, which is
+   what a reader photographed on a card carrying an EXITED thread and a RUNNING one. As one column child they stack:
+   full width each, a 2 px gap, and the meta line (project, PR) keeps its own inline row after them.
+   NO HORIZONTAL INDENT of its own: the facts line already carries the 18 px, and `.as-task-agents`' 19 px belongs
+   to the Initiatives pane's listing, so that container is deliberately not reused here.
+   A card with ONE agent takes the same column and measures exactly as it did - one line, its natural width, the meta
+   beside it - because a single row has nothing to stack with; from two rows up the block takes the whole line and
+   the column is what the reader sees. */
+.as-qpane .as-task-agent-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0; }
+.as-qpane .as-task-agent-stack:has(> .as-task-agent + .as-task-agent) { flex: 1 0 100%; }
+/* The row is full width, so the pill's own `margin-left: auto` (which right-aligns it in the Initiatives pane's
+   column) would park an EXITED chip at the far edge of a 1100 px card, hundreds of pixels from the thread it
+   describes. Inside this block it stays beside its thread and its run id: the row is a line, not a two-column table. */
+.as-qpane .as-task-agent-stack .as-task-agent .pill { margin-left: 0; }
 .as-qpane .as-task-agents { display: flex; flex-direction: row; flex-wrap: wrap; gap: 2px 6px; margin: 0; min-width: 0; }
 .as-qpane .as-task-agent { gap: 4px; padding: 0 3px 0 2px; }
 .as-qpane .as-task-agent .as-task-agent-thread { max-width: 210px; font-size: 10px; }
 .as-qpane .as-task-agent .as-task-agent-label { font-size: 10px; }
+/* WHERE THIS AGENT'S WORK IS, and how that tree lands: the project, the landed verdict, and a PR when the tree is a
+   turnover branch. It rides the agent's own line because one task can be carried by agents in different trees and
+   projects, and the task's own `worktree` only ever names the newest one. Dimmer than the thread and it shrinks
+   first, so a narrow card keeps the agent's name and loses the tail of this sentence. */
+.as-qpane .as-task-agent .as-task-agent-where { flex: 0 1 auto; min-width: 0; font-size: 9.5px; color: var(--dimmer); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .as-qpane .as-task-agent .pill { font-size: 9px; line-height: 1.5; padding: 0 5px; }
 .as-qpane .pill.pill-running { color: #7ee787; background: var(--green-bg); border-color: #1f4a2a; }
 .as-qpane .as-task-meta { margin: 0; gap: 0 8px; font-size: 10px; color: var(--dim); }
 .as-qpane .as-task-pipeline { margin: 0; display: inline-flex; align-items: center; gap: 4px; }
+/* THE PIPELINE'S OWN LINE. A pipeline is assigned to the whole task and every agent the row cuts runs under it, so
+   the chip is not a fact about the agent beside it: on its own row the agents' lines stay about the agents, and
+   "assistant decides" cannot read as something an agent chose. Same 18 px indent as the facts block it sits under. */
+.as-qpane .as-task-pipeline-row { display: flex; align-items: center; gap: 4px; margin: 1px 0 0 18px; min-width: 0; }
 .as-qpane .as-task-pipeline .as-qflow { margin-left: 0; padding: 0 5px; font-size: 9px; line-height: 1.6; border-radius: 999px; }
 .as-qpane .as-task-pipe { font-size: 9px; line-height: 1.6; padding: 0 6px; }
 .as-qpane .as-task-note { margin: 1px 0 0 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -7568,3 +7724,157 @@ body.pipeline-modal-open { overflow: hidden; }
 }
 .cut-dialog .cut-actions .cut-go { border-color: var(--blue); color: var(--blue); }
 .cut-dialog .cut-actions button:disabled { opacity: 0.55; cursor: default; }
+
+/* ---- the chart legend: one line at rest, the words behind a popover --------------------------------
+   Every chart used to carry one 700-character paragraph under it: the five liveness chips, the meaning of the
+   age number and its ring, the kind column's three letters and the fold, all at once. The reader called it too
+   busy to display as a block, so it is a DISCLOSURE now. The strip keeps every symbol and its short word - the
+   chips spell hermes, claude, board, port and files, the kind marks keep T, R and I, and the parent's chevron
+   keeps "fold" - and one control whose visible label says what it is. The words are unchanged; they live in the
+   popover as short lines under three headings, so nothing is lost, only deferred.
+
+   The popover is absolutely positioned, so opening it never reflows the chart, and it hangs BELOW the strip -
+   which is the bottom edge of the card - so it cannot cover a tree row; .legend is its containing block. The
+   strip is nowrap and its keys clip rather than wrap, so the control stays on the one line at the live width
+   instead of dropping to a second row, which is the busy block this replaced. `.legend` keeps its padding and
+   its colour in public/chart.css; only what the disclosure adds lives here, so a rebase meets one block. */
+.legend { position: relative; }
+.legend-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  white-space: nowrap;
+}
+.legend-keys {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.legend .legend-line .sig { flex: 0 0 auto; margin-top: 0; }
+.legend .legend-line .age-slot { flex: 0 0 auto; }
+.legend .legend-line .kind-mark { flex: 0 0 auto; vertical-align: 0; }
+.legend-fold { flex: 0 0 auto; margin-left: 2px; color: var(--dim); font: 10.5px var(--mono); }
+.legend-fold-glyph { margin-right: 1px; color: var(--dimmer); }
+.legend-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px;
+  border: 1px solid #333b47;
+  border-radius: 9px;
+  background: #20242c;
+  color: var(--dim);
+  font: 10.5px/1.7 var(--mono);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.legend-toggle:hover { color: var(--text); border-color: #4a5568; background: #262b34; }
+.legend-toggle:focus-visible { outline: 2px solid #7fb2e8; outline-offset: 1px; }
+.legend-toggle[aria-expanded="true"] { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+.legend-q {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 9.5px;
+  line-height: 1;
+  opacity: .85;
+}
+.legend-pop {
+  position: absolute;
+  left: 14px;
+  top: calc(100% - 4px);
+  z-index: 60;
+  width: min(860px, calc(100% - 28px));
+  max-height: 62vh;
+  overflow: auto;
+  padding: 10px 12px 11px;
+  border: 1px solid #2c3542;
+  border-radius: 8px;
+  background: #151a21;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: left;
+}
+.legend-pop[hidden] { display: none; }
+.legend-pop .legend-group + .legend-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #232b36;
+}
+.legend-pop h4 {
+  margin: 0 0 3px;
+  color: var(--dimmer);
+  font: 600 10px/1.5 var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.legend-pop p { margin: 0 0 2px; }
+.legend .legend-pop .sig { margin: 0 4px 0 0; vertical-align: 0; }
+.legend .legend-pop .kind-mark { margin: 0 4px 0 0; vertical-align: 0; }
+.legend-pop .legend-note { color: var(--dimmer); }
+
+/* THE SEARCH POPOVER'S OWN CHROME: a drag strip with a close x across its top, and a resize grip in its bottom-right
+   corner. Both header searches mount the one popover (public/core/search-popover.js), so the controls are drawn once
+   in that module and skinned here; the rules are scoped to the two popover containers so nothing else on the page
+   inherits them. The strip is sticky because `.as-search-pop` is its own scroller: the handle and the x have to stay
+   reachable when the reader walks the list past the fold. The grip is a bottom-right triangle, 14x14, clipped so its
+   hit box is the corner and not the whole row under it. */
+.as-search-pop > .as-search-drag,
+.ha-search-pop > .as-search-drag {
+  position: sticky; top: 0; z-index: 2; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  height: 14px; margin: -2px 0 2px; border-radius: 4px;
+  background: #121821; color: var(--dimmer);
+  cursor: move; touch-action: none; user-select: none;
+}
+.as-search-pop > .as-search-drag::before,
+.ha-search-pop > .as-search-drag::before {
+  content: ""; width: 28px; height: 3px; border-radius: 2px; background: #33404f;
+}
+.as-search-pop > .as-search-drag:hover::before,
+.ha-search-pop > .as-search-drag:hover::before { background: #4f6480; }
+.as-search-pop > .as-search-drag > .as-search-x,
+.ha-search-pop > .as-search-drag > .as-search-x {
+  position: absolute; right: 0; top: -2px; width: 16px; height: 16px; padding: 0;
+  border: 0; border-radius: 3px; background: none;
+  color: var(--dimmer); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer;
+}
+.as-search-pop > .as-search-drag > .as-search-x:hover,
+.ha-search-pop > .as-search-drag > .as-search-x:hover { color: var(--text); background: #1d2734; }
+.as-search-pop > .as-search-grip,
+.ha-search-pop > .as-search-grip {
+  position: sticky; bottom: 0; z-index: 2; flex: 0 0 auto; align-self: flex-end;
+  width: 16px; height: 16px; margin: 0 -3px -3px auto;
+  cursor: nwse-resize; touch-action: none;
+  /* The whole 16x16 box is the hit target; the VISUAL is the bottom-right triangle drawn by ::after. A clip-path on
+     the grip itself would clip the hit test too, and a press at its centre would land on the row underneath. */
+  background: none;
+}
+.as-search-pop > .as-search-grip::after,
+.ha-search-pop > .as-search-grip::after {
+  content: ""; position: absolute; inset: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background-image: repeating-linear-gradient(135deg, #3a4758 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop > .as-search-grip:hover::after,
+.ha-search-pop > .as-search-grip:hover::after {
+  background-image: repeating-linear-gradient(135deg, #6b819f 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop.is-moving, .ha-search-pop.is-moving { cursor: move; }
+.as-search-pop.is-resizing, .ha-search-pop.is-resizing { cursor: nwse-resize; }
+/* The drag strip is the popover's first child, so the item header under it is the first ITEM even though it is no
+   longer `:first-child`; the rule that removes its top border has to be repeated for this neighbour. */
+.as-search-pop > .as-search-drag + .as-search-item { margin-top: 0; padding-top: 3px; border-top: 0; }

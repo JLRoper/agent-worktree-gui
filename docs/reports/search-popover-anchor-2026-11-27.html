@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The search popover opens under its box</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 150px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; white-space:pre-wrap; overflow-wrap:anywhere; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.num, th.num { white-space:nowrap; text-align:right; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul, ol { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  figure { margin:14px 0; }
+  figure img { max-width:100%; border:1px solid var(--line); border-radius:6px; }
+  figcaption { font-size:12.5px; color:var(--dim); margin-top:4px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The search popover opens under its box</h1>
+<p class="sub">agent-worktree-gui, 2026-11-27. Both header searches used to align their results popover to the RIGHT edge of a control that is wider than the box, so a popover wider than the box grew LEFTWARDS: 140px left of the turn search's input and 296px left of the Hot Agent opener. It now opens at the box's own left edge, and the reader can move it, resize it and close it; every close forgets the reader's rectangle.</p>
+
+<dl class="facts">
+  <dt>branch</dt><dd><code>wtgui/transcript-search-the-results-popover-d1ab23</code>, cut from <code>20261127_1422_TASK-371_build-the-initiative-tag</code></dd>
+  <dt>base measured</dt><dd><code>609dfff7</code> (the turnover tip this tree was cut from) vs this tree's working copy</dd>
+  <dt>version</dt><dd>1.188.1 (above the turnover branch's 1.188.0, which moved after this tree was cut)</dd>
+  <dt>viewport</dt><dd>1760 x 1000, deviceScaleFactor 1, headless Chromium</dd>
+  <dt>the gate</dt><dd><code>node tools/verify-search-popover.mjs</code> - 52 checks, 52 passed, 7 screenshots, <code>docs/assets/search-popover/run.json</code></dd>
+  <dt>the files</dt><dd><code>public/core/search-popover.js</code> (the rule, the chrome, the drag/resize/reset), <code>public/assistant.js:708</code> and <code>:1392</code> (the two anchors), <code>public/style.css:7715</code> (the chrome's scoped section), <code>test/search-popover.test.js</code></dd>
+</dl>
+
+<h2>The defect, as the code stated it</h2>
+<p>The shared module's own header said the popover aligned with "the whole <code>.as-search</code> span, not the input", and the arithmetic aligned RIGHT edges (<code>search-popover.js</code> before this cut, <code>placeGeometry</code>: <code>right = min(viewport - pad, box.right)</code>, <code>left = right - width</code>). The assistant's <code>.as-search</code> span is 138.5px wide while its input is 55.6px, and the Hot Agent opener is a 34px button, so a 250px or 330px popover always grew to the left of the box it belonged to.</p>
+<p>Measured on the base export with <code>getBoundingClientRect</code>, same probe, same seeded store, both bars:</p>
+<table>
+  <thead><tr><th>bar</th><th>the box</th><th class="num">box left</th><th class="num">popover left before</th><th class="num">off the box before</th><th class="num">popover left after</th><th class="num">off the box after</th></tr></thead>
+  <tbody>
+    <tr><td>turn search (<code>#as-search-q</code>)</td><td>the input itself, 55.6 x 20</td><td class="num">1503.5</td><td class="num">1363.5</td><td class="num no">140.0 left</td><td class="num">1503.5</td><td class="num ok">0.0</td></tr>
+    <tr><td>Hot Agent (<code>#ha-search-open</code>)</td><td>the opener button, 34 x 28</td><td class="num">1035.2</td><td class="num">739.2</td><td class="num no">296.0 left</td><td class="num">1035.2</td><td class="num ok">0.0</td></tr>
+  </tbody>
+</table>
+<p>The assistant popover also ended at the <code>.as-search</code> span's right edge (1642.1), which is 111.4px left of where the input ends: with the input at the far right of a wide bar, the list sits at the pane's left half and the box is nowhere near it. On the Hot Agent bar the same rule put the popover 296px left of a button the reader had just pressed.</p>
+
+<h2>The rule now</h2>
+<p><code>public/core/search-popover.js:88</code> (<code>placeGeometry</code>) takes the box's own rectangle and answers:</p>
+<ul>
+  <li><code>left = clamp(box.left, pad, viewport - pad - squeeze)</code> - the popover's LEFT edge opens at the box's left edge, so it can never start left of the box while the window can still hold its narrowest placement.</li>
+  <li><code>width = min(want, room)</code>, with <code>want = clamp(boxWidth + 140, 250, 380)</code> and <code>room</code> the space to the window's right edge - a tight window SQUEEZES the list (down to 160px) rather than sliding it back under the pane. The assistant's bar leaves 248.5px when its count is showing, and the measured width is 248.5px at the input's own left edge.</li>
+  <li><code>top = round(box.bottom + 6)</code>, clamped so the popover's minimum height fits - the top edge is the measured 121px against the input's bottom 114.7px (6.3px).</li>
+  <li><code>maxHeight = max(120, min(42% of the window, room below))</code>, unchanged.</li>
+</ul>
+<p><code>public/assistant.js:708</code> passes <code>anchor: input</code> for the turn search. The Hot Agent bar at <code>:1392</code> passes its opener button, because its input lives INSIDE the popover: the rule places the popover's left edge at the button's left edge and its top 6px under the button's bottom, and the popover's own head box lands 6px inside that span.</p>
+
+<h2>Moved, resized, reset</h2>
+<p>The popover now carries its own chrome, drawn once by the module (<code>ensureChrome</code>, <code>search-popover.js:184</code>) and skinned in one scoped section of <code>public/style.css:7715</code>:</p>
+<ul>
+  <li>A 14px drag strip across the top (<code>[data-search-drag]</code>) with the close x at its right. The strip is <code>position: sticky</code> because the turn-search popover is its own scroller: both controls stay reachable when the walk scrolls the list past the fold.</li>
+  <li>A 16x16 hit box in the bottom-right corner (<code>[data-search-grip]</code>), drawn as a triangle by <code>::after</code> so the whole box is the drag target rather than only the visible corner.</li>
+  <li>A drag writes <code>{left, top, width, height}</code> (<code>dragGeometry</code>, <code>:114</code>); a grip drag keeps the top-left and grows the rectangle, with 250 x 120 as its floor and the window as its ceiling (<code>applyMoved</code>, <code>:227</code>). A move keeps the list's natural height under its cap; a resize sets an explicit height.</li>
+  <li><code>hide()</code> (<code>:340</code>) and <code>resetPlacement()</code> (<code>:326</code>) forget the rectangle and the size, so a reopen draws the anchored default. The turn search's scope chip calls <code>resetPlacement()</code> (<code>public/assistant.js:1337</code>) so a new scope is drawn at the default even though the list stays open.</li>
+  <li>The x calls the bar's own close (<code>onClose</code>): <code>escapeSearch</code> for the turn search (clear the filter, caret back in the box), <code>hotEscape</code> for the Hot Agent bar (clear, focus back on the opener).</li>
+  <li>The strip's mousedown is preventative and its listener is on the document's mouse-move/up, so the caret stays in the box: every gate check of the arrow walk runs after a drag and reads <code>document.activeElement</code> as the search input.</li>
+</ul>
+
+<h2>The gate</h2>
+<p><code>node tools/verify-search-popover.mjs</code>, 1760 x 1000, a synthesized store (12 assistant turns, 24 worker turns) on a free port:</p>
+<pre>52/52 checks passed  (7 screenshots in docs/assets/search-popover)</pre>
+<p>The checks that state this cut's claims, with the gate's own numbers:</p>
+<table>
+  <thead><tr><th>claim</th><th>measured</th></tr></thead>
+  <tbody>
+    <tr><td>the popover's top edge sits at the input's bottom edge</td><td>122 vs 115.7 + 6</td></tr>
+    <tr><td>the popover's left edge is the INPUT's own left edge</td><td>1497.6 vs 1497.6 (this gate's store and bar state; 1503.5 in the symmetric before/after probe above)</td></tr>
+    <tr><td>it is not drawn at the pane's left edge</td><td>217.6px inside the pane's left edge</td></tr>
+    <tr><td>a drag moves it by the pointer's travel</td><td>moved -120, 80</td></tr>
+    <tr><td>a new answer keeps the moved rectangle</td><td>same left/top after a second query</td></tr>
+    <tr><td>a grip drag resizes it</td><td>330x480 from 250x420 (+80, +60)</td></tr>
+    <tr><td>a grip drag past the floor stops at the minimum</td><td>250x120</td></tr>
+    <tr><td>an arrow press still steps while moved / in the floored list</td><td>2 of 10, 2 of 10; the stepped row inside the band</td></tr>
+    <tr><td>Escape, the x and an outside press each close it, and a reopen is the anchored default</td><td>1497.6 / 122 / 250 / 420 on every reopen</td></tr>
+    <tr><td>a scope change resets the rectangle while the list stays open</td><td>1427.6 / 162 / 300 / 460 -&gt; 1497.6 / 122 / 250 / 420</td></tr>
+    <tr><td>the Hot Agent popover's left edge is the opener's own</td><td>1035.2 vs 1035.2 (was 739.2, 296px left)</td></tr>
+    <tr><td>its head box lands just inside the opener's span</td><td>6px in</td></tr>
+    <tr><td>six presses on the moved and resized Hot Agent list</td><td>7 of 20, the row inside the band, scrollTop 76</td></tr>
+    <tr><td>its Escape / x / outside reopen</td><td>1035.2 / 82 / 330 / 420 on every reopen</td></tr>
+  </tbody>
+</table>
+
+<h3>Screenshots</h3>
+<figure><img src="../assets/search-popover/01-assistant-anchored-1760x1000.png" alt="the turn search anchored under its input"><figcaption>01 - the turn search's popover at the input's left edge, its drag strip and x at the top.</figcaption></figure>
+<figure><img src="../assets/search-popover/02-assistant-dragged-1760x1000.png" alt="the popover after a drag"><figcaption>02 - dragged by (-120, 80); the count, the walk and the caret are unchanged.</figcaption></figure>
+<figure><img src="../assets/search-popover/03-assistant-resized-1760x1000.png" alt="the popover after a resize"><figcaption>03 - resized by the bottom-right grip, walked to a later row.</figcaption></figure>
+<figure><img src="../assets/search-popover/04-assistant-reopened-1760x1000.png" alt="the popover reopened at the anchored default"><figcaption>04 - a reopen after Escape: the anchored default again.</figcaption></figure>
+<figure><img src="../assets/search-popover/05-hot-anchored-1760x1000.png" alt="the Hot Agent popover under its opener"><figcaption>05 - the Hot Agent popover under the opener button, not 296px to its left.</figcaption></figure>
+<figure><img src="../assets/search-popover/06-hot-resized-1760x1000.png" alt="the Hot Agent popover moved and resized"><figcaption>06 - the Hot Agent list moved and shortened, the walk on row 7 of 20.</figcaption></figure>
+<figure><img src="../assets/search-popover/07-hot-reopened-1760x1000.png" alt="the Hot Agent popover reopened at the anchored default"><figcaption>07 - the Hot Agent reopen after an outside press: the anchored default again.</figcaption></figure>
+
+<h2>What was not touched, and what was already red</h2>
+<p>The chrome's rules are one new section at the END of <code>public/style.css</code> (<code>:7715</code>), every selector scoped under <code>.as-search-pop</code> or <code>.ha-search-pop</code>: the reader allowed the overlap with the live <code>#373</code> work on that file, and this section does not edit any existing rule. The keyboard's mapping, the count's DOM, the scroller follow and the mousedown dismissal are the same code paths as before; only where the element sits and how it is moved changed.</p>
+<p>The full suite ran once, in two halves: 459 files, 4017 tests, 3985 passed, 28 failed (the second half was stopped at its last file, <code>worktree-assistant.test.js</code>, which hangs the runner on this host). One red was this cut's own - <code>test/reports-are-tracked.test.js</code> found this report page on disk and not in the index; it is force-added now and re-runs 4 of 4 green. The other 27 are the tree's own: re-run by file on the cut base export (<code>609dfff7</code>), the same failures come back - <code>assistant-queue-reattach</code>, <code>gateway-permissions</code>, <code>harness</code> (the <code>verify-queue-agents</code> wiring that arrives with <code>3bd8a0c6</code>), <code>initiative-tier-route</code> (3), <code>junctioned-node-modules</code>, <code>paths</code>, <code>project-open-route</code>, <code>reasoning-runs</code>, <code>rebase-route</code>, <code>refresh-row-route</code>, <code>scan-roots</code>, <code>scan-upstream</code>, <code>tree-cache</code>, <code>waves-route</code> (3), and <code>worktree-assistant</code> (3, then the same hang). The <code>absolute-paths</code> pair that fails in the base export is an artifact of that export not being a git checkout; in this tree <code>npm run absolute-paths</code> reads clean, 2420 tracked files and none new. The search's own 132 tests are 131 of 132, the one red being the pre-existing harness wiring.</p>
+
+<h2>Evidence index</h2>
+<ul>
+  <li><code>tools/verify-search-popover.mjs</code> - the gate; <code>--out</code>, <code>--keep</code>.</li>
+  <li><code>docs/assets/search-popover/run.json</code> - every rectangle the gate measured, step by step.</li>
+  <li><code>docs/assets/search-popover/*.png</code> - the seven screenshots above.</li>
+  <li><code>docs/landing-search-popover-anchor-1.188.1-2026-11-27.md</code> - the landing record and the gate's output.</li>
+</ul>
+</main>
+</body>
+</html>

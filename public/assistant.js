@@ -702,14 +702,18 @@
       input,
       pop,
       count: as$("as-search-n"),
-      // The whole `.as-search` span, not the input: the popover aligns with the control the reader sees, which is
-      // what this bar has always used.
-      anchor: as$("as-search"),
+      // The INPUT's own rect, not the whole `.as-search` span: the span also holds the count and the scope chip, so
+      // anchoring to it put a 250px popover's left edge 140px left of a 55px box (and, on a wide bar, at the pane's
+      // own edge). The module opens the popover at this box's left edge and grows it rightwards from there.
+      anchor: input,
       readout: searchReadout,
       current: () => searchHitAt,
       onStep: stepSearch,
       onOpen: openCurrentSearchHit,
       onEscape: escapeSearch,
+      // The popover's own x: the same close Escape performs, because a reader pressing a close control means the
+      // search, not the box's text.
+      onClose: escapeSearch,
       onDismiss: dismissSearch,
       onType: () => armSearch(),
       onPick: (at) => revealSearchHit(at),
@@ -884,10 +888,10 @@
     }
   }
 
-  // Under the box, right edges aligned and never off the screen: the rail hugs the window's right edge and the
-  // popover is wider than the box, so it grows leftwards. The arithmetic is public/core/search-popover.js's
-  // `placeGeometry`, one pure function both header searches use; this keeps the old read of the two nodes for a page
-  // that did not load the module.
+  // Under the box, the box's own left edge first and never off the screen: the popover is wider than the box, so it
+  // grows RIGHTWARDS from that edge; the width narrows rather than sliding the list back under the pane. The
+  // arithmetic is public/core/search-popover.js's `placeGeometry`, one pure function both header searches use; this
+  // keeps the old read of the two nodes for a page that did not load the module.
   function placeSearchPop() {
     const bar = searchBar();
     if (bar) return bar.place();
@@ -1328,6 +1332,9 @@
       if (String(input.value || "").trim()) {
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = null;
+        // A new SCOPE is a new question, so it is drawn at the anchored default even when the reader had moved the
+        // list somewhere convenient for the old one.
+        searchBar()?.resetPlacement();
         runSearch();
       }
     });
@@ -1379,12 +1386,16 @@
       // The popover has a permanent head (the box) and a footer, so the LIST is the scroller the walk follows.
       scroller: as$("ha-search-list"),
       count: as$("ha-search-n"),
+      // The opener BUTTON is the box this bar's popover hangs under: its input lives INSIDE the popover's head, so
+      // the head is what has to land under the control the reader pressed. The popover opens at the button's left
+      // edge and grows rightwards from there - it used to align right edges and grow leftwards, 296px off the button.
       anchor: as$("ha-search-open"),
       readout: hotReadout,
       current: () => hotAt,
       onStep: hotStep,
       onOpen: hotEnter,
       onEscape: hotEscape,
+      onClose: hotEscape,
       onDismiss: hotDismiss,
       onType: () => hotArm(),
       onPick: (at) => openHotAt(at),
@@ -2971,7 +2982,17 @@
   // every paint already carries.
   function padFor(id) {
     if (id === FIRST_ASSISTANT)
-      return { assistantId: id, notes: state.assistant?.notes || "", file: false, path: "", exists: true, cap: Number(state.assistant?.notesCap) || 0, error: null };
+      return {
+        assistantId: id,
+        notes: state.assistant?.notes || "",
+        file: false,
+        path: "",
+        exists: true,
+        cap: Number(state.assistant?.notesCap) || 0,
+        noteCap: Number(state.assistant?.noteCap) || 0,
+        lines: Array.isArray(state.assistant?.noteLines) ? state.assistant.noteLines : [],
+        error: null,
+      };
     const hit = padNotes.get(id);
     if (hit) {
       loadPadNotes(id); // a stale hit re-reads behind this paint
@@ -3005,6 +3026,29 @@
     const padCap = Number(pad?.cap) || 0;
     const padLen = String(pad?.notes || "").length;
     const padOver = padCap > 0 && padLen > padCap;
+    // Every note line, with its OWN length: the total above says how full the pad is, and this says which line is
+    // taking the room and whether it was clipped to the per-note cap. The server computes `lines` (lib/assistant/
+    // notes-file.js `noteLines`), so the page cannot disagree with the cap that clipped them.
+    const noteCap = Number(pad?.noteCap) || 0;
+    const noteRows = Array.isArray(pad?.lines) ? pad.lines : [];
+    // A cut line names the journal entry that holds its full text (`[cut - full note j42]`). One hint under the
+    // list says how to read that entry back; it is drawn only when at least one line carries a locator.
+    const noteReadHint = noteRows.some((l) => l.locator)
+      ? `<div class="as-hint">A cut note names its journal entry; the full text is in GET /api/state (journal[].id).</div>`
+      : "";
+    const noteList = noteRows.length
+      ? `<div class="as-hint">Each note, with its own length:</div>${noteRows
+          .map((l) => {
+            const text = String(l.text || "");
+            const shown = text.length > 96 ? `${text.slice(0, 96)}…` : text;
+            const chars = Number(l.chars) || 0;
+            const cap = Number(l.cap) || noteCap;
+            const bad = l.clipped ? " is-bad" : "";
+            const where = l.locator ? ` · ${l.locator}` : "";
+            return `<div class="as-line" data-as-notelen="${chars}" data-as-notecap="${cap}" data-as-notelocator="${esc(l.locator || "")}"><span class="as-hint${bad}" title="${esc(text)}">${esc(shown)}</span><span class="as-hint${bad}" title="This note's characters${l.clipped ? " (clipped to the per-note cap)" : ""}">${chars}/${cap}${esc(where)}</span></div>`;
+          })
+          .join("")}${noteReadHint}`
+      : "";
     const notesGroup = pad
       ? `<div class="as-group">
         <h4>Notes — read on every turn</h4>
@@ -3015,6 +3059,7 @@
           <span class="as-err" id="${padId("as-pad-err", who)}">${esc(pad.error || "")}</span>
           <span class="as-hint">${pad.file ? "kept in this assistant's own notes.md" : "kept on the server in assistant.json"}</span>
         </div>
+        ${noteList}
       </div>`
       : `<div class="as-group">
         <h4>Notes — read on every turn</h4>
@@ -3039,7 +3084,7 @@
         <h4>Journal</h4>
         <div class="as-journal">${
           (a.journal || [])
-            .map((j) => `<div><span class="t">${esc(new Date(j.at).toLocaleTimeString())}</span> <span class="k">${esc(j.kind)}</span> ${esc(j.text)}</div>`)
+            .map((j) => `<div><span class="t">${esc(new Date(j.at).toLocaleTimeString())}</span> <span class="k">${esc(j.kind)}${j.id ? ` ${esc(j.id)}` : ""}</span> ${esc(j.text)}</div>`)
             .join("") || `<div class="as-help">quiet</div>`
         }</div>
       </div>`;
@@ -3661,6 +3706,41 @@
   // THE ARCHIVED VIEW'S SEARCH WORDS. One string over titles AND descriptions; the filter itself is
   // initArchivedMatches, and the box is drawn only in the archived view.
   let initSearch = "";
+  // ---- the tag filter (the row at the top of the pane) ------------------------------------------------------------
+  // EVERY TAG IS PRESSED AT DEFAULT, which is exactly why the default is NOT a Set holding every id: `null` means
+  // "all of them", so a tag created a minute later is pressed too without anyone adding it. A Set holds the reader's
+  // own selection once they have pressed something, and an empty Set (every tag unpressed) is NO FILTER rather than
+  // an empty board - see wtInitiativeFold.tagFilterMatch.
+  // THE STATE IS SAVED TWICE, like the float's own view: the URL query (`initTags=…&initTagMode=all`) so a reload and
+  // a pasted link land on the same filtered board, and localStorage so the filter survives a navigation that dropped
+  // the query. The URL wins when it carries `initTags`; otherwise the stored record is read. Nothing is written to the
+  // URL until the reader presses something - a boot that rewrote their address bar would be the pane editing the page.
+  const INIT_TAG_FILTER_KEY = "wm.initiativeTagFilter";
+  const INIT_TAG_START = (() => {
+    const fromUrl = wtInitiativeFold.tagFilterFromUrl(location.search);
+    if (fromUrl) return { tags: new Set(fromUrl.tags), mode: fromUrl.mode };
+    try {
+      const raw = JSON.parse(localStorage.getItem(INIT_TAG_FILTER_KEY) || "null");
+      if (raw && raw.all === true) return { tags: null, mode: raw.mode === "all" ? "all" : "any" };
+      if (raw && Array.isArray(raw.tags)) return { tags: new Set(raw.tags.map(String)), mode: raw.mode === "all" ? "all" : "any" };
+    } catch {
+      /* a browser with storage off still filters; it just forgets */
+    }
+    return { tags: null, mode: "any" };
+  })();
+  let initTagSel = INIT_TAG_START.tags; // null = every tag pressed
+  let initTagMode = INIT_TAG_START.mode; // "any" | "all"
+  // The +N chip's open state, one entry per initiative: the rest of that card's tags are listed under its facts row
+  // only while the reader has asked for them, and the book survives every repaint for the reason the other folds do.
+  const initTagsMore = new Set();
+  // The registry editor: whether it is unfolded, the one rename draft that is open (tag id -> fields), the create
+  // form's draft, and the sentence the last write answered (per tag, `new` for the form). Drafts live here rather
+  // than in the DOM because a snapshot repaints the pane under the caret.
+  let initTagMgrOpen = false;
+  let initTagDraft = { ident: "", name: "", description: "", color: "" };
+  const initTagEdit = new Map();
+  const initTagStatus = new Map();
+  const initTagBusy = new Set(); // tag ids with a write in flight, so a double press is one write
   // The markup the pane is showing. It is the whole of what this renderer draws, so a pass that produces the same
   // string has nothing to write: the DOM on screen is already that markup, and rewriting it would only cost the
   // reader their scroll anchor, their selection and the task-fold nodes the pass reconciles (public/assistant.js,
@@ -4452,6 +4532,8 @@
           <input type="text" id="as-init-edit-title-${esc(init.id)}" data-init-field="editTitle" maxlength="${Number(initDoc?.caps?.title) || 120}" spellcheck="false" value="${esc(initDraft.editTitle)}">
           <label class="as-role-caption" for="as-init-edit-desc-${esc(init.id)}">description</label>
           <textarea class="as-note-box" id="as-init-edit-desc-${esc(init.id)}" data-init-field="editDesc" rows="3" spellcheck="false" placeholder="what this piece of work is, in a line or two">${esc(initDraft.editDesc)}</textarea>
+          <label class="as-role-caption">tags</label>
+          ${initTagPickerHtml()}
           <div class="as-actions">
             <button type="button" class="primary" data-init-save="${esc(init.id)}"${blocked ? " disabled" : ""}>Save words</button>
             <button type="button" data-init-cancel="edit">Cancel</button>
@@ -4512,6 +4594,7 @@
         <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} behind this piece of work">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
         ${statusHtml}
+        ${initTagChipsHtml(init, open)}
         ${init.updatedAt ? `<span class="as-hint init-meta">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
         ${open ? `<button type="button" class="init-mini init-edit" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
         ${open ? `<button type="button" class="init-mini init-archive" data-init-archive="${esc(init.id)}"${blocked ? " disabled" : ""} title="put this initiative away - refused while a wave or a task under it is still open, and nothing is detached, lost or renumbered when it goes">Archive</button>` : ""}
@@ -4600,6 +4683,7 @@
       <div class="init-chips">
         <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} still behind this piece of work">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} still attached - archiving detaches nothing, and Restore returns you to them">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
+        ${initTagChipsHtml(init, true)}
         <button type="button" class="init-mini init-restore" data-init-restore="${esc(init.id)}"${blocked ? " disabled" : ""} title="put this initiative back in the active list at the place it was archived from - its worktrees, its waves and its task links are exactly as they were">Restore</button>
       </div>
       ${initNoteFor(init.id)}
@@ -4614,6 +4698,351 @@
     if (!words.length) return true;
     const hay = `${String(init?.title || "")}\n${String(init?.description || "")}`.toLowerCase();
     return words.every((word) => hay.includes(word));
+  }
+
+  // ---- the board's tags: the chips a card draws, the filter row and the registry editor ---------------------------
+  // THE REGISTRY RIDES THE PANE'S ONE READ (GET /api/initiatives -> `tags`), so nothing here fetches it separately: a
+  // tag write answers the registry alone (routes/initiatives.js), which is enough to repaint every chip because a card
+  // stores ids. The words, the colour and the caps are read from `initDoc.tags` every time, never copied into a card.
+  const initTagRegistry = () => (Array.isArray(initDoc?.tags?.tags) ? initDoc.tags.tags : []);
+  const initTagCaps = () => (initDoc?.tags?.caps && typeof initDoc.tags.caps === "object" ? initDoc.tags.caps : {});
+  const initTagPalette = () => (Array.isArray(initDoc?.tags?.palette) ? initDoc.tags.palette : []);
+  const initTagById = (id) => initTagRegistry().find((t) => t.id === String(id || "")) || null;
+  const initTagName = (tag) => String(tag?.name || tag?.ident || "");
+
+  // SAVED TWICE, on a press only. localStorage is the durable half; the query is the shareable half and is edited in
+  // place with replaceState (never pushState: every toggle would fill the back button, and the pane is one page).
+  function initTagFilterSave() {
+    try {
+      localStorage.setItem(
+        INIT_TAG_FILTER_KEY,
+        JSON.stringify(initTagSel === null ? { all: true, mode: initTagMode } : { all: false, mode: initTagMode, tags: [...initTagSel] }),
+      );
+    } catch {
+      /* a browser with storage off still filters; it just forgets */
+    }
+    try {
+      const q = wtInitiativeFold.tagFilterQuery({ tags: initTagSel === null ? null : [...initTagSel], mode: initTagMode });
+      const params = new URLSearchParams(location.search);
+      params.delete("initTags");
+      params.delete("initTagMode");
+      for (const [k, v] of new URLSearchParams(q)) params.set(k, v);
+      const search = params.toString();
+      history.replaceState(history.state, "", `${location.pathname}${search ? `?${search}` : ""}${location.hash || ""}`);
+    } catch {
+      /* a browser that refuses history still filters; the reload falls back to localStorage */
+    }
+  }
+
+  // THE TAGS A CARD CARRIES, resolved in the REGISTRY's order so two cards list their chips the same way. An id the
+  // registry does not hold draws nothing: a store hand-edited past its registry is read forgivingly, not painted as a
+  // chip with no word on it.
+  function initTagsFor(init) {
+    const ids = Array.isArray(init?.tagIds) ? init.tagIds : [];
+    if (!ids.length) return [];
+    const byId = new Map(initTagRegistry().map((t) => [t.id, t]));
+    return ids.map((id) => byId.get(id)).filter(Boolean);
+  }
+
+  // WHAT THE FILTER HAS PRESSED, as ids. `null` is every tag pressed - and a stale id (a tag deleted in another tab,
+  // or a URL from before the registry changed) is DROPPED here rather than narrowing the list to nothing.
+  function initTagSelected() {
+    const all = initTagRegistry().map((t) => t.id);
+    if (initTagSel === null) return all;
+    return all.filter((id) => initTagSel.has(id));
+  }
+
+  // IS THE FILTER NARROWING ANYTHING? Two states narrow and nothing else does:
+  //   * `all` mode with any tag pressed - a card must carry EVERY one of them, so even "all pressed" is a real
+  //     question (and with a single tag in the registry, "all" still means "carry that tag", untagged cards out);
+  //   * `any` mode with some tags unpressed.
+  // The rest state - every tag pressed, matching any - is NO filter: it is the default the row opens on, and the board
+  // it draws is the whole board, untagged cards included. Clear's enabled state reads this same answer, so the button
+  // and the filter cannot disagree about whether anything is being narrowed.
+  function initTagFilterActive() {
+    const all = initTagRegistry();
+    const sel = initTagSelected();
+    if (!sel.length) return false;
+    if (initTagMode === "all") return true;
+    return sel.length !== all.length;
+  }
+
+  // WHAT THE FILTER IS SHOWING, in the reader's words, for the empty state and the "showing N of M" line: the idents
+  // they pressed and the mode between them, never a count of ids.
+  function initTagSelectionLabel() {
+    const sel = initTagSelected().map((id) => initTagById(id)?.ident || id);
+    if (!sel.length) return "no tag";
+    const list = sel.length <= 4 ? sel.join(", ") : `${sel.slice(0, 4).join(", ")} and ${sel.length - 4} more`;
+    return `${initTagMode === "all" ? "all of" : "any of"} ${list}`;
+  }
+
+  function initTagToggle(id) {
+    const all = initTagRegistry().map((t) => t.id);
+    const cur = initTagSel === null ? new Set(all) : new Set(all.filter((x) => initTagSel.has(x)));
+    if (cur.has(id)) cur.delete(id);
+    else cur.add(id);
+    initTagSel = cur;
+    initTagFilterSave();
+  }
+
+  // ONE WRITE, ONE ANSWER: the registry the route answers is adopted without re-reading the board, because nothing a
+  // tag write changes lives on a card - the cards hold ids, and the registry is what gives them their words.
+  async function initTagPost(method, body) {
+    const r = await apiFetch(
+      "/api/initiatives/tags",
+      { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+      { timeoutMs: 12000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(d.error || `HTTP ${r.status}`), { data: d, status: r.status });
+    return d;
+  }
+  function adoptInitTags(d) {
+    const reg = d && d.registry && typeof d.registry === "object" ? d.registry : d && Array.isArray(d.tags) ? d : null;
+    if (!reg || !initDoc) return;
+    initDoc = { ...initDoc, tags: { ...reg, at: reg.at || new Date().toISOString() } };
+    initReadAt = Date.now();
+    initErr = "";
+    initFailCount = 0;
+    initRetryAt = 0;
+    initRetryWaitMs = 0;
+    initCacheWrite(initDoc);
+  }
+  function setInitTagStatus(key, text, bad = false, extra = null) {
+    if (!text) {
+      initTagStatus.delete(key);
+      return;
+    }
+    initTagStatus.set(key, { text: String(text), bad, ...(extra || {}) });
+  }
+
+  async function initTagCreate() {
+    if (initTagBusy.has("new")) return;
+    initTagBusy.add("new");
+    try {
+      const d = await initTagPost("POST", {
+        ident: initTagDraft.ident,
+        name: initTagDraft.name,
+        description: initTagDraft.description,
+        color: initTagDraft.color || undefined,
+      });
+      adoptInitTags(d);
+      initTagDraft = { ident: "", name: "", description: "", color: "" };
+      setInitTagStatus("new", `added "${d.tag?.ident || ""}" (${String(d.tag?.name || "")}) - it is on the filter row now, pressed like every other tag`, false);
+    } catch (err) {
+      setInitTagStatus("new", String((err && err.message) || err), true);
+    } finally {
+      initTagBusy.delete("new");
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  async function initTagRenameSave(id) {
+    const draft = initTagEdit.get(id);
+    if (!draft || initTagBusy.has(id)) return;
+    initTagBusy.add(id);
+    try {
+      const d = await initTagPost("PATCH", { id, ident: draft.ident, name: draft.name, description: draft.description, color: draft.color });
+      adoptInitTags(d);
+      initTagEdit.delete(id);
+      setInitTagStatus(id, d.changed === false ? "nothing changed - the tag already reads that way" : `renamed - every card and every saved filter follows ("${String(d.tag?.ident || "")}")`, false);
+    } catch (err) {
+      setInitTagStatus(id, String((err && err.message) || err), true);
+    } finally {
+      initTagBusy.delete(id);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  // DELETE ASKS THE SERVER FIRST, AND THE SERVER ASKS THE READER. A tag on live cards answers 409 with the count and
+  // the titles (lib/initiative-tags.js); that sentence is drawn on the row with a "Delete anyway (N)" control, and
+  // only that control sends `confirm`. A tag on nothing deletes on the first press.
+  async function initTagDelete(id, confirm = false) {
+    if (initTagBusy.has(id)) return;
+    initTagBusy.add(id);
+    try {
+      const d = await initTagPost("DELETE", { id, confirm: Boolean(confirm) });
+      adoptInitTags(d);
+      initTagEdit.delete(id);
+      initTagStatus.delete(id);
+      const n = Number(d.carried) || 0;
+      setInitTagStatus("new", `deleted "${String(d.deleted?.ident || "")}"${n ? ` - taken off ${n} initiative${n === 1 ? "" : "s"}` : " - no initiative carried it"}`, false);
+      if (initTagSel !== null && initTagSel.delete(id)) initTagFilterSave();
+    } catch (err) {
+      const data = (err && err.data) || {};
+      if (data.refused === "carried" && Number(data.carried)) {
+        setInitTagStatus(id, String((err && err.message) || err), true, { confirm: true, count: Number(data.carried) });
+      } else {
+        setInitTagStatus(id, String((err && err.message) || err), true);
+      }
+    } finally {
+      initTagBusy.delete(id);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  // A tag chip, and the row that holds the rest. `.init-tag` IS NOT `.chip`: a tag is a word about the work and a
+  // count is a fact about its scale, so the tag chip carries its own class, its registry colour and a tighter radius
+  // and reads as a different species beside "3 projects" - which is the whole point of putting them in one row.
+  function initTagChipHtml(tag, extra = "") {
+    const color = String(tag.color || "slate");
+    const desc = String(tag.description || "").trim();
+    const title = `${initTagName(tag)}${desc ? ` - ${desc}` : ""}${extra ? ` (${extra})` : ""}`;
+    return `<span class="init-tag init-tag-${esc(color)}" data-init-tag="${esc(tag.id)}" title="${esc(title)}">${esc(tag.ident)}</span>`;
+  }
+
+  // THE CARD'S TAGS, drawn AFTER the "#N waves" status chip. The first three, then one +N chip for the rest: on the
+  // expanded card the +N unfolds the rest into a second row under the facts, and on the folded title card the same
+  // press opens the card AND the rest - a +N on a title card that only set a flag nobody can see would read as broken.
+  function initTagChipsHtml(init, open) {
+    const tags = initTagsFor(init);
+    if (!tags.length) return "";
+    const id = String(init.id || "");
+    const win = wtInitiativeFold.tagChips(tags, wtInitiativeFold.TAG_CHIP_FIRST);
+    const moreOpen = initTagsMore.has(id) && Boolean(open);
+    const head = win.head.map((t) => initTagChipHtml(t)).join("");
+    const restTitle = win.rest.map((t) => initTagName(t)).join(", ");
+    const more = win.hidden
+      ? `<button type="button" class="init-tag-more" data-init-tags-more="${esc(id)}" aria-expanded="${moreOpen ? "true" : "false"}" title="${esc(
+          moreOpen
+            ? `fold the rest back into +${win.hidden}`
+            : `the other ${win.hidden} tag${win.hidden === 1 ? "" : "s"} - ${restTitle}${open ? "" : " (this also opens the card)"}`,
+        )}">+${win.hidden}</button>`
+      : "";
+    const rest = moreOpen
+      ? `<span class="init-tags-rest" data-init-tags-rest="${esc(id)}">${win.rest.map((t) => initTagChipHtml(t)).join("")}</span>`
+      : "";
+    return `${head}${more}${rest}`;
+  }
+
+  // THE TAG FILTER ROW (the pane's top): one toggle per registry tag, the any/all switch beside them, a visible Clear
+  // and the way into the registry editor. Every tag is pressed by default, so the row at rest says "all of them" and
+  // the board under it is the whole map. The row is drawn whether or not a tag exists - an empty board is where the
+  // reader learns the feature is there.
+  function initTagFilterRowHtml() {
+    if (!initDoc?.tags || typeof initDoc.tags !== "object") return "";
+    const tags = initTagRegistry();
+    const unreadable = initDoc.tags.readable === false;
+    const sel = new Set(initTagSelected());
+    const active = initTagFilterActive();
+    const toggles = tags
+      .map((t) => {
+        const on = sel.has(t.id);
+        const desc = String(t.description || "").trim();
+        return `<button type="button" class="init-tag init-tag-${esc(String(t.color || "slate"))}${on ? " is-on" : " is-off"}" data-init-tagtoggle="${esc(t.id)}" aria-pressed="${on ? "true" : "false"}" title="${esc(
+          `${on ? "showing" : "hiding"} the initiatives tagged ${initTagName(t)}${desc ? ` (${desc})` : ""} - every tag starts pressed`,
+        )}">${esc(t.ident)}</button>`;
+      })
+      .join("");
+    const modeHtml = `<span class="init-seg init-tagmode" role="group" aria-label="a card must carry any of the pressed tags, or all of them">
+        <button type="button" class="init-view init-tagmode-btn" data-init-tagmode="any" aria-pressed="${initTagMode === "any" ? "true" : "false"}" title="a card is shown when it carries ANY of the pressed tags">any</button>
+        <button type="button" class="init-view init-tagmode-btn" data-init-tagmode="all" aria-pressed="${initTagMode === "all" ? "true" : "false"}" title="a card is shown only when it carries EVERY pressed tag">all</button>
+      </span>`;
+    const storeline = unreadable
+      ? `<span class="as-hint init-tagbar-bad">the tag registry cannot be read: ${esc(initDoc.tags.error || "")} - filtering is off, and nothing about tags may be written</span>`
+      : tags.length
+        ? ""
+        : `<span class="as-hint">no tags yet - Manage tags adds the first one</span>`;
+    return `<div class="init-tagbar" data-init-tagbar>
+        <span class="init-tagbar-label" title="the board's tags - an initiative carries an id, so renaming a tag follows every card">Tags</span>
+        <div class="init-tagtoggles" role="group" aria-label="filter the initiatives by tag - every tag starts pressed; press one to narrow the list to the cards carrying it">
+          ${toggles}
+          ${storeline}
+        </div>
+        ${tags.length ? modeHtml : ""}
+        <button type="button" class="init-mini init-tag-clear" data-init-tagclear${active ? "" : " disabled"} title="${active ? "press every tag back on and match any of them - the filter row's default" : "every tag is already pressed and matching any - there is nothing to clear"}">Clear</button>
+        <button type="button" class="init-mini init-tag-manage" data-init-tagmgr aria-expanded="${initTagMgrOpen ? "true" : "false"}" title="create, rename and delete the board's tags - the reader's to change; an assistant may only apply an existing one">Manage tags</button>
+      </div>
+      ${initTagMgrOpen ? initTagManagerHtml() : ""}`;
+  }
+
+  // ONE FORM for the create row and the one open rename, so the caps, the palette and the sentence beside them cannot
+  // disagree between the two. `mode` is "new" or "rename"; `id` is the tag being renamed (or "new").
+  function initTagFormHtml(mode, id, draft) {
+    const caps = initTagCaps();
+    const palette = initTagPalette();
+    const key = mode === "new" ? "new" : String(id);
+    const identMin = Number(caps.identMin) || 2;
+    const identMax = Number(caps.identMax) || 6;
+    const nameMax = Number(caps.tagName) || 40;
+    const descMax = Number(caps.tagDescription) || 200;
+    const attr = (which) => `data-init-tagfield="${which}" data-init-tagform="${esc(key)}"`;
+    const colors = palette.length ? palette : [{ id: "slate", label: "slate" }];
+    const color = String(draft.color || colors[0].id);
+    return `<div class="init-form init-tagform" data-init-tagformbody="${esc(key)}">
+        <label class="as-role-caption" for="as-init-tag-ident-${esc(key)}">ident</label>
+        <input type="text" id="as-init-tag-ident-${esc(key)}" ${attr("ident")} maxlength="${identMax}" spellcheck="false" autocomplete="off" value="${esc(draft.ident || "")}" placeholder="${esc("SSO".slice(0, identMax))}">
+        <label class="as-role-caption" for="as-init-tag-name-${esc(key)}">name</label>
+        <input type="text" id="as-init-tag-name-${esc(key)}" ${attr("name")} maxlength="${nameMax}" spellcheck="false" autocomplete="off" value="${esc(draft.name || "")}" placeholder="single sign-on migration">
+        <label class="as-role-caption" for="as-init-tag-desc-${esc(key)}">description</label>
+        <input type="text" id="as-init-tag-desc-${esc(key)}" ${attr("description")} maxlength="${descMax}" spellcheck="false" autocomplete="off" value="${esc(draft.description || "")}" placeholder="what this tag means (optional)">
+        <label class="as-role-caption" for="as-init-tag-color-${esc(key)}">colour</label>
+        <select id="as-init-tag-color-${esc(key)}" ${attr("color")}>${colors
+          .map((c) => `<option value="${esc(c.id)}"${color === c.id ? " selected" : ""}>${esc(c.label)}</option>`)
+          .join("")}</select>
+        <div class="as-actions">
+          <button type="button" class="primary" data-init-tagsave="${esc(key)}" data-init-tagsavemode="${mode}"${initTagBusy.has(key) ? " disabled" : ""}>${mode === "new" ? "Add tag" : "Save tag"}</button>
+          ${mode === "rename" ? `<button type="button" data-init-tagcancel="${esc(key)}">Cancel</button>` : ""}
+          <span class="as-hint">${identMin}-${identMax} letters or digits, unique whatever the case; the name is at most ${nameMax} characters and the description ${descMax}</span>
+        </div>
+      </div>`;
+  }
+
+  // THE REGISTRY EDITOR: every tag with its chip, its full name and its description, one Rename (which unfolds the
+  // form above) and one Delete; then the create form. A refusal is drawn on the row it belongs to, and the confirmed
+  // delete's count is on its own control - the reader sees what the press costs before making it.
+  function initTagManagerHtml() {
+    const tags = initTagRegistry();
+    const rows = tags
+      .map((t) => {
+        const id = String(t.id);
+        const editing = initTagEdit.get(id);
+        const status = initTagStatus.get(id);
+        return `<div class="init-tagrow" data-init-tagrow="${esc(id)}">
+            ${initTagChipHtml(t)}
+            <span class="init-tagname">${esc(initTagName(t))}</span>
+            <span class="as-hint init-tagdesc">${esc(String(t.description || "").trim() || "no description")}</span>
+            ${
+              editing
+                ? initTagFormHtml("rename", id, editing)
+                : `<span class="init-tagrow-acts"><button type="button" class="init-mini" data-init-tagrename="${esc(id)}"${initTagBusy.has(id) ? " disabled" : ""}>Rename</button><button type="button" class="init-mini" data-init-tagdelete="${esc(id)}"${initTagBusy.has(id) ? " disabled" : ""}>Delete</button></span>`
+            }
+            ${
+              status
+                ? `<div class="as-ask init-tagask${status.bad ? " is-bad" : ""}" role="status">${esc(status.text)}${
+                    status.confirm
+                      ? ` <button type="button" class="init-mini init-tag-force" data-init-tagdeleteforce="${esc(id)}">Delete anyway (${Number(status.count) || 0})</button>`
+                      : ""
+                  }</div>`
+                : ""
+            }
+          </div>`;
+      })
+      .join("");
+    const formStatus = initTagStatus.get("new");
+    return `<div class="init-tagmgr" data-init-tagmgr-body>
+        <p class="as-hint init-tagmgr-hint">The board's tags. An initiative carries an id and never a word, so renaming a tag here follows every card and every saved filter in one write; deleting one is refused while a card carries it unless you confirm, and the confirm names the count. Assistants may apply an existing tag and may not create, rename or delete one.</p>
+        <div class="init-tagmgr-list">${rows || `<div class="as-hint init-tagmgr-none">no tag exists yet - the form below makes the first one</div>`}</div>
+        ${initTagFormHtml("new", "new", initTagDraft)}
+        ${formStatus ? `<div class="as-ask init-tagask${formStatus.bad ? " is-bad" : ""}" role="status">${esc(formStatus.text)}</div>` : ""}
+      </div>`;
+  }
+
+  // THE APPLY PICKER, inside the edit form: one button per registry tag, pressed or not, and the draft's Set is what
+  // Save sends as `tagIds`. A tag deleted in another tab between this form opening and the press is refused BY NAME by
+  // the update route, which is why nothing here filters the draft against a registry it read a moment ago.
+  function initTagPickerHtml() {
+    const tags = initTagRegistry();
+    if (!tags.length) {
+      return `<div class="as-hint init-tagpick-empty">no tags yet - Manage tags in the filter row adds the first one, and then it can be applied here</div>`;
+    }
+    const picked = initDraft.editTagIds instanceof Set ? initDraft.editTagIds : new Set();
+    return `<div class="init-tagpick" role="group" aria-label="the tags this initiative carries - a press applies or removes one, and Save writes them">${tags
+      .map((t) => {
+        const on = picked.has(t.id);
+        return `<button type="button" class="init-tag init-tag-${esc(String(t.color || "slate"))}${on ? " is-on" : " is-off"}" data-init-tagpick="${esc(t.id)}" aria-pressed="${on ? "true" : "false"}" title="${esc(`${on ? "remove" : "apply"} ${initTagName(t)}`)}">${esc(t.ident)}</button>`;
+      })
+      .join("")}</div>`;
   }
 
   function initTyping() {
@@ -4653,6 +5082,11 @@
     "data-init-up", "data-init-down", "data-init-archive", "data-init-restore", "data-init-filter", "data-init-search",
     "data-init-notesave", "data-init-noteeditsave", "data-init-noteedit", "data-init-notedel", "data-init-notecancel",
     "data-init-notes-fold",
+    // The tag row, the card's +N chip, the apply picker and the registry editor: a keyboard user pressing one of these
+    // keeps the ring when the four-second repaint rebuilds the pane, exactly as the folds above do.
+    "data-init-tagtoggle", "data-init-tagmode", "data-init-tagclear", "data-init-tagmgr", "data-init-tags-more",
+    "data-init-tagrename", "data-init-tagdelete", "data-init-tagdeleteforce", "data-init-tagsave", "data-init-tagcancel",
+    "data-init-tagpick", "data-init-tagfield",
   ];
   let initKeyboardModality = false;
   document.addEventListener("keydown", (e) => {
@@ -4809,7 +5243,18 @@
     // What the current view draws: the active cards, or the archived ones that match the search. The archived view
     // never touches the active list, and the active view never draws an archived card - the two are separate arrays on
     // the wire, so an archived initiative cannot leak into a count by being filtered late.
-    const archivedShown = archivedAll.filter((init) => initArchivedMatches(init, initSearch));
+    // THE TAG FILTER IS COMPOSED OVER BOTH, and it is the same selection and the same any/all mode in each: the active
+    // list is narrowed by tags, the archived list by its search box AND the tags, so the one row at the top always
+    // means one thing. A tag selection pressed to nothing is NO filter (public/core/initiative-fold.js), which is what
+    // keeps the last unpressed tag from blanking the pane.
+    // `tagFiltering` comes FIRST: the row at rest (every tag pressed, matching any) is the whole board, untagged cards
+    // included, and the filter function alone would read that state as "a card must carry at least one tag". The
+    // switch is the same one Clear's enabled state reads, so the two cannot disagree about what "filtered" means.
+    const tagSel = initTagSelected();
+    const tagFiltering = initTagFilterActive();
+    const tagMatch = (init) => !tagFiltering || wtInitiativeFold.tagFilterMatch(init.tagIds, tagSel, initTagMode);
+    const activeShown = list.filter(tagMatch);
+    const archivedShown = archivedAll.filter((init) => initArchivedMatches(init, initSearch) && tagMatch(init));
     const showingArchived = initView === "archived";
     const storeLine = unreadable
       ? `<div class="as-ask is-bad" role="alert"><b>The initiative store cannot be read, so nothing may be written.</b> ${esc(initDoc.error || "")} The file is left exactly as it is: fix or move it, then try again.</div>`
@@ -4835,6 +5280,16 @@
           <h5>No initiatives yet</h5>
           <p class="init-empty-copy">An initiative is a title, a description and the worktrees behind it. One may span several projects and several assistants, and a worktree with none is normal: nothing is enforced.</p>
           <div class="as-actions"><button type="button" class="primary" data-init-new="empty"${unreadable ? " disabled" : ""}>New initiative</button></div>
+        </div>`
+      : "";
+    // THE FILTER HID EVERYTHING, which is not the same fact as no initiatives at all: the cards exist, the row above
+    // is narrowing them out, and the one thing the reader needs is the way back. It names what is being shown ("any of
+    // SSO, DMR") rather than "no results", because the second reads as an empty board.
+    const emptyFiltered = !showingArchived && list.length && !activeShown.length
+      ? `<div class="as-empty init-empty" data-init-tagempty>
+          <h5>no active initiative carries ${esc(initTagSelectionLabel())}</h5>
+          <p class="init-empty-copy">${list.length} active initiative${list.length === 1 ? "" : "s"} exist and the tag filter is hiding ${list.length === 1 ? "it" : "them"} - press a tag back on, switch to any, or clear the filter.</p>
+          <div class="as-actions"><button type="button" data-init-tagclear>Clear the tag filter</button></div>
         </div>`
       : "";
     const tier = initDoc.tier && initDoc.tier.id ? initDoc.tier : { id: "all", label: "ask me for everything", hint: "every create, edit, attach and detach waits for your answer" };
@@ -4875,21 +5330,28 @@
           </div>
           ${showingArchived ? `<input type="search" class="init-search" data-init-search placeholder="search archived titles and descriptions" aria-label="search the archived initiatives - a word from a title or a description finds it" spellcheck="false" autocomplete="off" value="${esc(initSearch)}">` : ""}
         </div>
+        ${/* THE TAG FILTER ROW, at the top of the pane and above every card: one toggle per tag (all of them pressed at
+             rest), the any/all switch beside them, a visible Clear and the way into the registry editor. It sits UNDER
+             the Active/Archived switch and composes WITH it and with the archived search rather than replacing either:
+             one row, one meaning, whichever list is on screen. */ ""}
+        ${initTagFilterRowHtml()}
         <div class="init-meta">
           ${storeLine}
           <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative and wave changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
           ${initErr ? `<span class="as-hint init-read">read failed: ${esc(initErr)}${esc(initRetryReason())}</span>` : ""}
+          ${tagFiltering && !showingArchived && activeShown.length && activeShown.length !== list.length ? `<span class="as-hint init-tagcount" data-init-tagcount>showing ${activeShown.length} of ${list.length} active - the tag filter is ${esc(initTagSelectionLabel())}</span>` : ""}
         </div>
         ${newForm}
       </div>
       ${empty}
+      ${emptyFiltered}
       ${showingArchived
         ? archivedAll.length
           ? archivedShown.length
             ? archivedShown.map(initArchivedCardHtml).join("")
-            : `<div class="as-empty init-empty" data-init-noarch>nothing archived matches "${esc(initSearch)}" - the search reads titles and descriptions, so a word from either finds it</div>`
+            : `<div class="as-empty init-empty" data-init-noarch>nothing archived matches ${esc(initSearch ? `"${initSearch}"` : "")}${initSearch && tagFiltering ? " and " : ""}${tagFiltering ? esc(initTagSelectionLabel()) : ""} - the search reads titles and descriptions, and the tag filter is applied to this list too</div>`
           : `<div class="as-empty init-empty" data-init-noarch>nothing is archived yet - open an initiative and its card carries Archive. A wave or a task that is still open refuses the move; a clean one goes away with its trees, waves and task links untouched, and Restore brings it back to its place.</div>`
-        : list.map((init, at) => initCardHtml(init, at, list.length)).join("")}`;
+        : activeShown.map((init, at) => initCardHtml(init, at, list.length)).join("")}`;
     // THE READER'S PLACE IS CARRIED ACROSS THE REPAINT, on the ROW they were looking at and not on the old
     // scrollTop. This pane is rebuilt from a poll, and a rebuild is not a no-op for the content above the reader: a
     // task row is filed or retires out of an open fold, a relative stamp crosses a minute and rewraps a line. A
@@ -5133,7 +5595,9 @@
       return;
     }
     try {
-      const d = await initPost("/api/initiatives/update", { id, title, description });
+      // `tagIds` rides the same write: the route validates every id against the registry and refuses an unknown one by
+      // name, which is the one way this form can fail on tags (a tag deleted in another tab since it was drawn).
+      const d = await initPost("/api/initiatives/update", { id, title, description, tagIds: [...(initDraft.editTagIds instanceof Set ? initDraft.editTagIds : [])] });
       adoptInitiatives(d);
       if (d.asked) {
         setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (edit "${title}")`, false, d.id);
@@ -5388,6 +5852,114 @@
         renderAssistantInitiatives(true);
         return;
       }
+      // THE TAG FILTER AND THE REGISTRY EDITOR, answered before the press rule for two reasons that are the arrows':
+      // the filter row sits OUTSIDE every card (so the rule would stop at "outside"), while the +N chip and the apply
+      // picker sit INSIDE one (so the rule would call them "self" and hand them to a list that knows none of them).
+      // Every one of these is a press on the pane, not a write: the writes live in initTagCreate/RenameSave/Delete.
+      const nearTag = (sel) => (e.target && e.target.closest ? e.target.closest(sel) : null);
+      const tagToggle = nearTag("[data-init-tagtoggle]");
+      if (tagToggle) {
+        e.preventDefault();
+        initTagToggle(String(tagToggle.dataset.initTagtoggle || ""));
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const tagModeBtn = nearTag("[data-init-tagmode]");
+      if (tagModeBtn) {
+        e.preventDefault();
+        initTagMode = String(tagModeBtn.dataset.initTagmode || "") === "all" ? "all" : "any";
+        initTagFilterSave();
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const tagClear = nearTag("[data-init-tagclear]");
+      if (tagClear) {
+        e.preventDefault();
+        // CLEAR IS THE DEFAULT, not an empty selection: every tag pressed, matching any of them. An empty selection
+        // would be the other way to show everything and it is the one a reader cannot tell apart from "nothing works".
+        initTagSel = null;
+        initTagMode = "any";
+        initTagFilterSave();
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const tagMgr = nearTag("[data-init-tagmgr]");
+      if (tagMgr) {
+        e.preventDefault();
+        initTagMgrOpen = !initTagMgrOpen;
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const tagMore = nearTag("[data-init-tags-more]");
+      if (tagMore) {
+        e.preventDefault();
+        const id = String(tagMore.dataset.initTagsMore || "");
+        if (initTagsMore.has(id)) {
+          initTagsMore.delete(id);
+        } else {
+          // The rest is listed under the facts row, which only an OPEN card draws: one press on a folded card opens it
+          // and the rest together, rather than setting a flag with nothing on screen to show for it.
+          initTagsMore.add(id);
+          initOpen.add(id);
+        }
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const tagRename = nearTag("[data-init-tagrename]");
+      if (tagRename) {
+        e.preventDefault();
+        const id = String(tagRename.dataset.initTagrename || "");
+        const tag = initTagById(id);
+        if (tag) initTagEdit.set(id, { ident: tag.ident, name: tag.name, description: tag.description || "", color: tag.color || "" });
+        renderAssistantInitiatives(true);
+        const box = as$(`as-init-tag-ident-${id}`);
+        if (box) {
+          box.focus({ preventScroll: true });
+          try {
+            box.setSelectionRange(box.value.length, box.value.length);
+          } catch {
+            /* a browser that refuses the range leaves the caret where it is */
+          }
+        }
+        return;
+      }
+      const tagDeleteForce = nearTag("[data-init-tagdeleteforce]");
+      if (tagDeleteForce) {
+        e.preventDefault();
+        void initTagDelete(String(tagDeleteForce.dataset.initTagdeleteforce || ""), true);
+        return;
+      }
+      const tagDelete = nearTag("[data-init-tagdelete]");
+      if (tagDelete) {
+        e.preventDefault();
+        void initTagDelete(String(tagDelete.dataset.initTagdelete || ""), false);
+        return;
+      }
+      const tagSaveBtn = nearTag("[data-init-tagsave]");
+      if (tagSaveBtn) {
+        e.preventDefault();
+        const key = String(tagSaveBtn.dataset.initTagsave || "");
+        if (String(tagSaveBtn.dataset.initTagsavemode || "") === "rename") void initTagRenameSave(key);
+        else void initTagCreate();
+        return;
+      }
+      const tagCancelBtn = nearTag("[data-init-tagcancel]");
+      if (tagCancelBtn) {
+        e.preventDefault();
+        initTagEdit.delete(String(tagCancelBtn.dataset.initTagcancel || ""));
+        renderAssistantInitiatives(true);
+        return;
+      }
+      const tagPick = nearTag("[data-init-tagpick]");
+      if (tagPick) {
+        e.preventDefault();
+        const id = String(tagPick.dataset.initTagpick || "");
+        if (!(initDraft.editTagIds instanceof Set)) initDraft.editTagIds = new Set();
+        if (initDraft.editTagIds.has(id)) initDraft.editTagIds.delete(id);
+        else initDraft.editTagIds.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
       const restoreBtn = e.target && e.target.closest ? e.target.closest("[data-init-restore]") : null;
       if (restoreBtn) {
         e.preventDefault();
@@ -5598,6 +6170,9 @@
         initAddId = "";
         initDraft.editTitle = init.title;
         initDraft.editDesc = init.description || "";
+        // The tags the card carries NOW, as the edit form's starting selection: Save writes this Set back, so an edit
+        // of the words never drops a tag by omission.
+        initDraft.editTagIds = new Set(Array.isArray(init.tagIds) ? init.tagIds : []);
         renderAssistantInitiatives(true);
         as$(`as-init-edit-title-${init.id}`)?.focus();
         return;
@@ -5675,6 +6250,24 @@
     // THE OPEN WAVE FORM'S DRAFT. Typing in it must survive the snapshot repaint, so the value goes into `waveForm`
     // and the repaint draws from there; nothing is sent until Create or Save. A checkbox answers through `change` on
     // some browsers and `input` on others, so both listeners write it and the write is idempotent.
+    // THE TAG FORM'S DRAFTS, for the reason every other draft is kept here: a snapshot repaints the form under the
+    // caret, and the words have to come back from this book. `key` is "new" for the create form and the tag id for the
+    // one open rename, and `which` is the field's own name - the ONE place both the input and the change listener
+    // write, so a blur that fires `change` after a `select` cannot put one field's value into another's slot.
+    const readTagField = (field) => {
+      if (!field) return false;
+      const key = String(field.closest("[data-init-tagformbody]")?.dataset.initTagformbody || "");
+      const which = String(field.dataset.initTagfield || "");
+      if (!key || !which) return false;
+      const value = String(field.value ?? "");
+      if (key === "new") {
+        initTagDraft = { ...initTagDraft, [which]: value };
+        return true;
+      }
+      if (!initTagEdit.has(key)) return false;
+      initTagEdit.set(key, { ...initTagEdit.get(key), [which]: value });
+      return true;
+    };
     const readWaveField = (field) => {
       if (!waveForm || !field) return false;
       const which = String(field.dataset.waveField || "");
@@ -5733,6 +6326,7 @@
         }
         return;
       }
+      if (readTagField(e.target.closest("[data-init-tagfield]"))) return;
       const field = e.target.closest("[data-init-field]");
       if (!field) return;
       const which = String(field.dataset.initField || "");
@@ -5740,6 +6334,10 @@
     });
     host.addEventListener("change", (e) => {
       if (readWaveField(e.target.closest("[data-wave-field]"))) return;
+      // The colour picker is a <select>: some browsers answer it through `change` and not `input`, and a text field
+      // answers `change` on its blur - so BOTH listeners go through the same reader, which writes the field's OWN name
+      // into the draft. Writing `color` from this branch regardless of the field is how a name once became a colour.
+      if (readTagField(e.target.closest("[data-init-tagfield]"))) return;
       const field = e.target.closest("[data-init-field]");
       if (field && field.dataset.initField === "addTree") initDraft.addTree = String(field.value ?? "");
     });

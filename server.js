@@ -115,6 +115,9 @@ import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js"
 // The initiatives: the big pieces of work, keyed by tree path in a side store beside the locks (lib/initiatives.js),
 // overlaid onto the board's rows on every read, and moved only through the permission box.
 import { Initiatives, normTreePath } from "./lib/initiatives.js";
+// The board's tag registry (lib/initiative-tags.js): the vocabulary an initiative's `tagIds` resolve against, in its own
+// state file beside initiatives.json so a rename of one chip never rewrites a card.
+import { InitiativeTags } from "./lib/initiative-tags.js";
 import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.js";
 // The waves of work: an ordered, gated group of tasks inside one initiative (lib/waves.js), in their own store
 // keyed by initiative id. This slice is a READ: the lane in the Initiatives tab, and one GET beside it.
@@ -133,6 +136,9 @@ import { countOperation, noteFact } from "./lib/read-profile.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
 import { baseRefKindLookup, baseRefKindOf, planTurnoverCut, projectTurnoverRow, turnoverBranchForKey, turnoverBranchFrom, turnoverBranchOf, turnoverBranchesOf, turnoverKeyFrom, turnoverLookup, turnoverPolicyOf, validateBaseRefKind, validateTurnoverBranch, validateTurnoverBranches, TURNOVER_POLICIES } from "./lib/project-turnover.js";
+// THE ASK AT THE CUT, END TO END: the one read of a permission record the queue's `permission` hold uses, and the
+// resume that cuts the feature's container and restarts the row when the reader allows it (lib/turnover-ask.js).
+import { allowTurnoverAsk, permissionStateOf } from "./lib/turnover-ask.js";
 import { BASE_REF_KIND_LABELS, LOCAL_TURNOVER_KIND } from "./lib/base-ref-kind.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-turnover.js";
 // The cleanup chip's one route (routes/project-cleanup.js): POST /api/projects/:id/cleanup, a dry run that returns
@@ -1421,10 +1427,15 @@ jobs.turnoverCutFor = (name, key = "", opts = {}) => {
   return planTurnoverCut({ project, key, name: opts.name || "", at: opts.at instanceof Date ? opts.at : new Date() });
 };
 // THE CARD a spawn's auto-cut parks on under `ask`/`one-per-feature`: the answer creates the feature's container, and
-// the next press reuses it for the implementation child. The resume runs the same container cut the direct path does
-// (`jobs.cutTurnoverTreeFor`), then joins the branch to the project's list.
-jobs.requestTurnoverBranch = ({ project, key = "", branch = "", policy = "" } = {}) => {
+// then RESUMES the same queue row as a fresh cut. `allowTurnoverAsk` owns that half (lib/turnover-ask.js): the container
+// is cut and joined to the project's list, the row is released from its park, and the ordinary spawner cuts the child
+// from the container and starts the worker. `prompt` and `row` are the cut's own - the row is what parks and the prompt
+// is what the restart is asked with - so the answered card rebuilds the same cut rather than a lookalike.
+// A DENY and an EXPIRY need nothing here: the record stops being pending, the row's `permission` hold reads false and
+// the queue settle returns it to `queued` with the record's reason (lib/assistant/queue.js).
+jobs.requestTurnoverBranch = ({ project, key = "", branch = "", policy = "", prompt = "", row = null, todos = [] } = {}) => {
   const found = (registry.projects || []).find((p) => p && p.name === project) || null;
+  const rowId = Number(row) > 0 ? Number(row) : null;
   return remoteWrites.request({
     kind: "turnover",
     worktree: String(found?.path || ""),
@@ -1433,14 +1444,23 @@ jobs.requestTurnoverBranch = ({ project, key = "", branch = "", policy = "" } = 
     title: `${project}: new turnover branch ${branch}`,
     command: `add the feature's turnover branch ${branch} to ${project}${key ? ` (key ${key})` : ""}`,
     description:
-      `this project's turnover policy is ${policy}, so a new turnover branch waits for you. Allow creates the feature container, so the implementation tree is cut from it; Deny cuts nothing and leaves the project as it is.`,
+      `this project's turnover policy is ${policy}, so a new turnover branch waits for you. Allow creates the feature container and cuts the implementation tree from it, starting the row the cut asked for; Deny cuts nothing and leaves the project as it is.`,
     allowed: ["once", "deny"],
     grants: false,
-    resume: async () => {
-      const made = await jobs.cutTurnoverTreeFor({ repoDir: found?.path, project, branch, base: String(found?.mainBranch || "main"), mainBranch: found?.mainBranch || null, key });
-      if (made.ok) await rememberTurnoverBranch(project, made.branch || branch, key);
-      return made;
-    },
+    resume: async () =>
+      allowTurnoverAsk({
+        assistant,
+        jobs,
+        repoDir: String(found?.path || ""),
+        project,
+        mainBranch: found?.mainBranch || null,
+        key,
+        branch,
+        rowId,
+        prompt,
+        todos: Array.isArray(todos) ? todos : [],
+        remember: (made, madeKey) => rememberTurnoverBranch(project, made, madeKey),
+      }),
   });
 };
 // The container is a ROW, not just a branch: the same adoption a spawn's own tree gets, so it draws (and its children
@@ -2175,7 +2195,10 @@ const locks = new Locks({ file: config.locksFile, log });
 // The big pieces of work (lib/initiatives.js): a title, a description, and which worktrees are behind each one. Like
 // the lock, this is the reader's map rather than anything git knows, so it lives in a side store under logs/ and is
 // overlaid onto the rows on every read - a scan that rebuilt a row cannot lose a membership it never owned.
-const initiatives = new Initiatives({ file: config.initiativesFile, log });
+// The registry is built first because the initiative store refuses an unknown tag id BY NAME: the door that stores a
+// card's `tagIds` is the one that checks them, so no route can bypass the check.
+const initiativeTags = new InitiativeTags({ file: config.initiativeTagsFile, log });
+const initiatives = new Initiatives({ file: config.initiativesFile, log, tags: initiativeTags });
 // The waves of work (lib/waves.js): a sibling store keyed by initiative id, so neither document rewrites the other.
 // It has no writer in this slice - the lane and GET /api/waves only read it - and it keeps the initiative store's
 // refuse-not-repair rule the day a write route arrives.
@@ -2204,6 +2227,11 @@ assistant = new Assistant({
   // `applyActions`). One store, the same object the initiatives tab writes, so a note logged by a turn and a note
   // typed by the reader are the same log.
   initiatives,
+  // WHAT A ROW PARKED ON A PERMISSION RECORD IS WAITING ON. A cut's turnover ask parks its queue row on the record id
+  // (lib/turnover-ask.js), and the queue's `permission` hold reads THIS answer: still pending holds the row, and a deny
+  // or an expiry releases it to `queued` with the reason. The mapping lives in the module, so the hold, the server and
+  // any test read the three record states the same way.
+  permissionStatus: (id) => permissionStateOf(remoteWrites.status(id)),
   // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
   // the controller and run only once the turn that asked for it has ended.
   onRestart: (spec) => restart.request(spec),
@@ -2443,6 +2471,10 @@ const PREFIX_MOUNTS = [
     prefix: INITIATIVES_PATH,
     handles: createInitiativesRoutes({
       initiatives,
+      // The board's tag registry: the read carries it (`tags`), and GET/POST/PATCH/DELETE /api/initiatives/tags answer
+      // from it. A delete is composed with the initiative store beside it (carriersOfTag -> dropTag -> the registry
+      // entry), which is why both stores are handed to the one module.
+      tags: initiativeTags,
       remoteWrites,
       getConfig: () => config,
       registry,
