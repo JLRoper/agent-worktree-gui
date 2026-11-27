@@ -702,14 +702,18 @@
       input,
       pop,
       count: as$("as-search-n"),
-      // The whole `.as-search` span, not the input: the popover aligns with the control the reader sees, which is
-      // what this bar has always used.
-      anchor: as$("as-search"),
+      // The INPUT's own rect, not the whole `.as-search` span: the span also holds the count and the scope chip, so
+      // anchoring to it put a 250px popover's left edge 140px left of a 55px box (and, on a wide bar, at the pane's
+      // own edge). The module opens the popover at this box's left edge and grows it rightwards from there.
+      anchor: input,
       readout: searchReadout,
       current: () => searchHitAt,
       onStep: stepSearch,
       onOpen: openCurrentSearchHit,
       onEscape: escapeSearch,
+      // The popover's own x: the same close Escape performs, because a reader pressing a close control means the
+      // search, not the box's text.
+      onClose: escapeSearch,
       onDismiss: dismissSearch,
       onType: () => armSearch(),
       onPick: (at) => revealSearchHit(at),
@@ -884,10 +888,10 @@
     }
   }
 
-  // Under the box, right edges aligned and never off the screen: the rail hugs the window's right edge and the
-  // popover is wider than the box, so it grows leftwards. The arithmetic is public/core/search-popover.js's
-  // `placeGeometry`, one pure function both header searches use; this keeps the old read of the two nodes for a page
-  // that did not load the module.
+  // Under the box, the box's own left edge first and never off the screen: the popover is wider than the box, so it
+  // grows RIGHTWARDS from that edge; the width narrows rather than sliding the list back under the pane. The
+  // arithmetic is public/core/search-popover.js's `placeGeometry`, one pure function both header searches use; this
+  // keeps the old read of the two nodes for a page that did not load the module.
   function placeSearchPop() {
     const bar = searchBar();
     if (bar) return bar.place();
@@ -1328,6 +1332,9 @@
       if (String(input.value || "").trim()) {
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = null;
+        // A new SCOPE is a new question, so it is drawn at the anchored default even when the reader had moved the
+        // list somewhere convenient for the old one.
+        searchBar()?.resetPlacement();
         runSearch();
       }
     });
@@ -1379,12 +1386,16 @@
       // The popover has a permanent head (the box) and a footer, so the LIST is the scroller the walk follows.
       scroller: as$("ha-search-list"),
       count: as$("ha-search-n"),
+      // The opener BUTTON is the box this bar's popover hangs under: its input lives INSIDE the popover's head, so
+      // the head is what has to land under the control the reader pressed. The popover opens at the button's left
+      // edge and grows rightwards from there - it used to align right edges and grow leftwards, 296px off the button.
       anchor: as$("ha-search-open"),
       readout: hotReadout,
       current: () => hotAt,
       onStep: hotStep,
       onOpen: hotEnter,
       onEscape: hotEscape,
+      onClose: hotEscape,
       onDismiss: hotDismiss,
       onType: () => hotArm(),
       onPick: (at) => openHotAt(at),

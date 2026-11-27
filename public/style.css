@@ -7711,3 +7711,56 @@ body.pipeline-modal-open { overflow: hidden; }
 }
 .cut-dialog .cut-actions .cut-go { border-color: var(--blue); color: var(--blue); }
 .cut-dialog .cut-actions button:disabled { opacity: 0.55; cursor: default; }
+
+/* THE SEARCH POPOVER'S OWN CHROME: a drag strip with a close x across its top, and a resize grip in its bottom-right
+   corner. Both header searches mount the one popover (public/core/search-popover.js), so the controls are drawn once
+   in that module and skinned here; the rules are scoped to the two popover containers so nothing else on the page
+   inherits them. The strip is sticky because `.as-search-pop` is its own scroller: the handle and the x have to stay
+   reachable when the reader walks the list past the fold. The grip is a bottom-right triangle, 14x14, clipped so its
+   hit box is the corner and not the whole row under it. */
+.as-search-pop > .as-search-drag,
+.ha-search-pop > .as-search-drag {
+  position: sticky; top: 0; z-index: 2; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  height: 14px; margin: -2px 0 2px; border-radius: 4px;
+  background: #121821; color: var(--dimmer);
+  cursor: move; touch-action: none; user-select: none;
+}
+.as-search-pop > .as-search-drag::before,
+.ha-search-pop > .as-search-drag::before {
+  content: ""; width: 28px; height: 3px; border-radius: 2px; background: #33404f;
+}
+.as-search-pop > .as-search-drag:hover::before,
+.ha-search-pop > .as-search-drag:hover::before { background: #4f6480; }
+.as-search-pop > .as-search-drag > .as-search-x,
+.ha-search-pop > .as-search-drag > .as-search-x {
+  position: absolute; right: 0; top: -2px; width: 16px; height: 16px; padding: 0;
+  border: 0; border-radius: 3px; background: none;
+  color: var(--dimmer); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer;
+}
+.as-search-pop > .as-search-drag > .as-search-x:hover,
+.ha-search-pop > .as-search-drag > .as-search-x:hover { color: var(--text); background: #1d2734; }
+.as-search-pop > .as-search-grip,
+.ha-search-pop > .as-search-grip {
+  position: sticky; bottom: 0; z-index: 2; flex: 0 0 auto; align-self: flex-end;
+  width: 16px; height: 16px; margin: 0 -3px -3px auto;
+  cursor: nwse-resize; touch-action: none;
+  /* The whole 16x16 box is the hit target; the VISUAL is the bottom-right triangle drawn by ::after. A clip-path on
+     the grip itself would clip the hit test too, and a press at its centre would land on the row underneath. */
+  background: none;
+}
+.as-search-pop > .as-search-grip::after,
+.ha-search-pop > .as-search-grip::after {
+  content: ""; position: absolute; inset: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background-image: repeating-linear-gradient(135deg, #3a4758 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop > .as-search-grip:hover::after,
+.ha-search-pop > .as-search-grip:hover::after {
+  background-image: repeating-linear-gradient(135deg, #6b819f 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop.is-moving, .ha-search-pop.is-moving { cursor: move; }
+.as-search-pop.is-resizing, .ha-search-pop.is-resizing { cursor: nwse-resize; }
+/* The drag strip is the popover's first child, so the item header under it is the first ITEM even though it is no
+   longer `:first-child`; the rule that removes its top border has to be repeated for this neighbour. */
+.as-search-pop > .as-search-drag + .as-search-item { margin-top: 0; padding-top: 3px; border-top: 0; }

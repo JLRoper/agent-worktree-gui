@@ -1,0 +1,2428 @@
+{
+ "base": "http://127.0.0.1:54983",
+ "filter": "saffron",
+ "seeded": {
+  "assistantTurns": 12,
+  "workerTurns": 24
+ },
+ "viewport": {
+  "width": 1760,
+  "height": 1000
+ },
+ "steps": [
+  {
+   "step": "assistant-anchored",
+   "measure": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "walk": {
+    "ass": {
+     "current": 1,
+     "total": 10,
+     "matched": 36,
+     "query": "saffron"
+    },
+    "hot": {
+     "current": 0,
+     "total": 0,
+     "matched": 0
+    },
+    "assBand": {
+     "visible": true,
+     "rowTop": 160.8,
+     "rowBottom": 210.5,
+     "bandTop": 122,
+     "bandBottom": 542
+    },
+    "hotBand": null,
+    "assScroll": 0,
+    "hotScroll": 0,
+    "strip": {
+     "top": 127,
+     "left": 1502.6,
+     "width": 240,
+     "height": 14
+    },
+    "hotStrip": false,
+    "x": true,
+    "grip": true,
+    "hotGrip": false
+   }
+  },
+  {
+   "step": "assistant-dragged",
+   "before": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "after": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1377.6,
+     "top": 202,
+     "right": 1627.6,
+     "bottom": 622,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1377.64px; top: 202px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "walk": {
+    "ass": {
+     "current": 2,
+     "total": 10,
+     "matched": 36,
+     "query": "saffron"
+    },
+    "hot": {
+     "current": 0,
+     "total": 0,
+     "matched": 0
+    },
+    "assBand": {
+     "visible": true,
+     "rowTop": 315.3,
+     "rowBottom": 365.1,
+     "bandTop": 202,
+     "bandBottom": 622
+    },
+    "hotBand": null,
+    "assScroll": 0,
+    "hotScroll": 0,
+    "strip": {
+     "top": 207,
+     "left": 1382.6,
+     "width": 240,
+     "height": 14
+    },
+    "hotStrip": false,
+    "x": true,
+    "grip": true,
+    "hotGrip": false
+   },
+   "afterAnswer": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1377.6,
+     "top": 202,
+     "right": 1627.6,
+     "bottom": 622,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1377.64px; top: 202px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "assistant-resized",
+   "before": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1377.6,
+     "top": 202,
+     "right": 1627.6,
+     "bottom": 622,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1377.64px; top: 202px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "after": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1377.6,
+     "top": 202,
+     "right": 1707.6,
+     "bottom": 682,
+     "width": 330,
+     "height": 480
+    },
+    "popHidden": false,
+    "popStyle": "width: 330px; left: 1377.64px; top: 202px; max-height: 480px; height: 480px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "floored": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1377.6,
+     "top": 202,
+     "right": 1627.6,
+     "bottom": 322,
+     "width": 250,
+     "height": 120
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1377.64px; top: 202px; max-height: 120px; height: 120px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "assistant-escape-reopen",
+   "afterEsc": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 370px; left: 1287.64px; top: 272px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "reopened": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "assistant-x-reopen",
+   "afterX": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 290px; left: 1407.64px; top: 182px; max-height: 460px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "reopened": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "assistant-outside-reopen",
+   "afterOutside": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1417.64px; top: 172px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "job-prompt",
+    "pageY": 0
+   },
+   "reopened": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "assistant-scope",
+   "before": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1427.6,
+     "top": 162,
+     "right": 1727.6,
+     "bottom": 622,
+     "width": 300,
+     "height": 460
+    },
+    "popHidden": false,
+    "popStyle": "width: 300px; left: 1427.64px; top: 162px; max-height: 460px; height: 460px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-q",
+    "pageY": 0
+   },
+   "after": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "as-search-scope",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "hot-anchored",
+   "measure": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 1035.2,
+     "top": 82,
+     "right": 1365.2,
+     "bottom": 502,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 1035.19px; top: 82px; max-height: 420px;",
+    "haInput": {
+     "left": 1041.2,
+     "top": 102,
+     "right": 1309.2,
+     "bottom": 124,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 1040.2,
+     "top": 128,
+     "right": 1360.2,
+     "bottom": 466.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   },
+   "walk": {
+    "ass": {
+     "current": 1,
+     "total": 10,
+     "matched": 12,
+     "query": "saffron"
+    },
+    "hot": {
+     "current": 1,
+     "total": 20,
+     "matched": 24
+    },
+    "assBand": {
+     "visible": true,
+     "rowTop": 160.8,
+     "rowBottom": 210.5,
+     "bandTop": 122,
+     "bandBottom": 542
+    },
+    "hotBand": {
+     "visible": true,
+     "rowTop": 128,
+     "rowBottom": 177.8,
+     "bandTop": 128,
+     "bandBottom": 466.6
+    },
+    "assScroll": 0,
+    "hotScroll": 0,
+    "strip": {
+     "top": 127,
+     "left": 1502.6,
+     "width": 240,
+     "height": 14
+    },
+    "hotStrip": true,
+    "x": true,
+    "grip": true,
+    "hotGrip": true
+   }
+  },
+  {
+   "step": "hot-dragged-resized",
+   "before": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1553.1,
+     "bottom": 115.7,
+     "width": 55.5,
+     "height": 20
+    },
+    "pop": {
+     "left": 1497.6,
+     "top": 122,
+     "right": 1747.6,
+     "bottom": 542,
+     "width": 250,
+     "height": 420
+    },
+    "popHidden": false,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 10,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 1035.2,
+     "top": 82,
+     "right": 1365.2,
+     "bottom": 502,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 1035.19px; top: 82px; max-height: 420px;",
+    "haInput": {
+     "left": 1041.2,
+     "top": 102,
+     "right": 1309.2,
+     "bottom": 124,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 1040.2,
+     "top": 128,
+     "right": 1360.2,
+     "bottom": 466.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   },
+   "dragged": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 875.2,
+     "top": 182,
+     "right": 1205.2,
+     "bottom": 602,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 875.188px; top: 182px; max-height: 420px;",
+    "haInput": {
+     "left": 881.2,
+     "top": 202,
+     "right": 1149.2,
+     "bottom": 224,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 880.2,
+     "top": 228,
+     "right": 1200.2,
+     "bottom": 566.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   },
+   "resized": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 875.2,
+     "top": 182,
+     "right": 1245.2,
+     "bottom": 542,
+     "width": 370,
+     "height": 360
+    },
+    "haHidden": false,
+    "haStyle": "width: 370px; left: 875.188px; top: 182px; max-height: 360px; height: 360px;",
+    "haInput": {
+     "left": 881.2,
+     "top": 202,
+     "right": 1189.2,
+     "bottom": 224,
+     "width": 308,
+     "height": 22
+    },
+    "haList": {
+     "left": 880.2,
+     "top": 228,
+     "right": 1240.2,
+     "bottom": 506.6,
+     "width": 360,
+     "height": 278.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   },
+   "walk": {
+    "ass": {
+     "current": 0,
+     "total": 0,
+     "matched": 0,
+     "query": ""
+    },
+    "hot": {
+     "current": 7,
+     "total": 20,
+     "matched": 24
+    },
+    "assBand": null,
+    "hotBand": {
+     "visible": true,
+     "rowTop": 456.7,
+     "rowBottom": 506.5,
+     "bandTop": 228,
+     "bandBottom": 506.6
+    },
+    "assScroll": 0,
+    "hotScroll": 76,
+    "strip": null,
+    "hotStrip": true,
+    "x": false,
+    "grip": false,
+    "hotGrip": true
+   }
+  },
+  {
+   "step": "hot-escape-reopen",
+   "afterEsc": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "width: 370px; left: 875.188px; top: 182px; max-height: 360px;",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "ha-search-open",
+    "pageY": 0
+   },
+   "reopened": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 1035.2,
+     "top": 82,
+     "right": 1365.2,
+     "bottom": 502,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 1035.19px; top: 82px; max-height: 420px;",
+    "haInput": {
+     "left": 1041.2,
+     "top": 102,
+     "right": 1309.2,
+     "bottom": 124,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 1040.2,
+     "top": 128,
+     "right": 1360.2,
+     "bottom": 466.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "hot-x-reopen",
+   "afterX": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "width: 330px; left: 915.188px; top: 162px; max-height: 420px;",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "ha-search-open",
+    "pageY": 0
+   },
+   "reopened": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 1035.2,
+     "top": 82,
+     "right": 1365.2,
+     "bottom": 502,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 1035.19px; top: 82px; max-height: 420px;",
+    "haInput": {
+     "left": 1041.2,
+     "top": 102,
+     "right": 1309.2,
+     "bottom": 124,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 1040.2,
+     "top": 128,
+     "right": 1360.2,
+     "bottom": 466.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   }
+  },
+  {
+   "step": "hot-outside-reopen",
+   "before": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 935.2,
+     "top": 152,
+     "right": 1265.2,
+     "bottom": 572,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 935.188px; top: 152px; max-height: 420px;",
+    "haInput": {
+     "left": 941.2,
+     "top": 172,
+     "right": 1209.2,
+     "bottom": 194,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 940.2,
+     "top": 198,
+     "right": 1260.2,
+     "bottom": 536.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   },
+   "after": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haHidden": true,
+    "haStyle": "width: 330px; left: 935.188px; top: 152px; max-height: 420px;",
+    "haInput": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haList": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "haRows": 0,
+    "active": "job-prompt",
+    "pageY": 0
+   },
+   "reopened": {
+    "viewport": {
+     "width": 1760,
+     "height": 1000
+    },
+    "pane": {
+     "left": 1280,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 1000,
+     "width": 480,
+     "height": 912.3
+    },
+    "bar": {
+     "left": 1281,
+     "top": 87.8,
+     "right": 1760,
+     "bottom": 124.7,
+     "width": 479,
+     "height": 36.9
+    },
+    "span": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1636,
+     "bottom": 115.7,
+     "width": 138.4,
+     "height": 20
+    },
+    "input": {
+     "left": 1497.6,
+     "top": 95.7,
+     "right": 1595.6,
+     "bottom": 115.7,
+     "width": 98,
+     "height": 20
+    },
+    "pop": {
+     "left": 0,
+     "top": 0,
+     "right": 0,
+     "bottom": 0,
+     "width": 0,
+     "height": 0
+    },
+    "popHidden": true,
+    "popStyle": "width: 250px; left: 1497.64px; top: 122px; max-height: 420px;",
+    "popCount": 0,
+    "hotOpen": {
+     "left": 1035.2,
+     "top": 48.3,
+     "right": 1069.2,
+     "bottom": 76.3,
+     "width": 34,
+     "height": 28
+    },
+    "haPop": {
+     "left": 1035.2,
+     "top": 82,
+     "right": 1365.2,
+     "bottom": 502,
+     "width": 330,
+     "height": 420
+    },
+    "haHidden": false,
+    "haStyle": "width: 330px; left: 1035.19px; top: 82px; max-height: 420px;",
+    "haInput": {
+     "left": 1041.2,
+     "top": 102,
+     "right": 1309.2,
+     "bottom": 124,
+     "width": 268,
+     "height": 22
+    },
+    "haList": {
+     "left": 1040.2,
+     "top": 128,
+     "right": 1360.2,
+     "bottom": 466.6,
+     "width": 320,
+     "height": 338.6
+    },
+    "haRows": 20,
+    "active": "ha-search-q",
+    "pageY": 0
+   }
+  }
+ ],
+ "screenshots": [
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\01-assistant-anchored-1760x1000.png",
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\02-assistant-dragged-1760x1000.png",
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\03-assistant-resized-1760x1000.png",
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\04-assistant-reopened-1760x1000.png",
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\05-hot-anchored-1760x1000.png",
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\06-hot-resized-1760x1000.png",
+  "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\transcript-search-the-results-popover-d1ab23\\docs\\assets\\search-popover\\07-hot-reopened-1760x1000.png"
+ ]
+}

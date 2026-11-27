@@ -130,6 +130,7 @@
     "verify:message-attachments": "node tools/verify-message-attachments.mjs",
     "verify:turn-pager": "node tools/verify-turn-pager.mjs",
     "verify:assistant-search": "node tools/verify-assistant-search.mjs",
+    "verify:search-popover": "node tools/verify-search-popover.mjs",
     "verify:assistant-search-keys": "node tools/verify-assistant-search-keys.mjs",
     "verify:assistant-search-order": "node tools/verify-assistant-search-order.mjs",
     "verify:assistant-search-scroll": "node tools/verify-assistant-search-scroll.mjs",

@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import "../public/core/search-popover.js";
 
-const { keyIntent, placeGeometry, mount, PLACE_DEFAULTS } = globalThis.wtSearchPopover;
+const { keyIntent, placeGeometry, dragGeometry, mount, PLACE_DEFAULTS } = globalThis.wtSearchPopover;
 
 // ---- one element, only what the module reads ------------------------------------------------
 function fakeEl(props = {}) {
@@ -28,6 +28,7 @@ function fakeEl(props = {}) {
     dataset: {},
     title: "",
     attributes: {},
+    children: [],
     listeners: new Map(),
     classList: {
       toggle(name, on) {
@@ -44,16 +45,39 @@ function fakeEl(props = {}) {
       if (!this.listeners.has(type)) this.listeners.set(type, []);
       this.listeners.get(type).push(fn);
     },
+    removeEventListener(type, fn) {
+      const list = this.listeners.get(type) || [];
+      const at = list.indexOf(fn);
+      if (at >= 0) list.splice(at, 1);
+    },
     setAttribute(name, value) {
       this.attributes[name] = String(value);
     },
     removeAttribute(name) {
       delete this.attributes[name];
     },
+    appendChild(child) {
+      this.children.push(child);
+      return child;
+    },
+    insertBefore(child) {
+      this.children.unshift(child);
+      return child;
+    },
+    querySelector: () => null,
     querySelectorAll: () => [],
     getBoundingClientRect: () => ({ left: 0, right: 0, bottom: 0, top: 0, width: 0, height: 0 }),
     ...props,
   };
+  // The chrome is built through the popover's own document, so a fake popover needs one that hands back fakes and
+  // can take the drag's own document-level listeners.
+  if (!el.ownerDocument) {
+    el.ownerDocument = {
+      createElement: () => fakeEl(),
+      addEventListener() {},
+      removeEventListener() {},
+    };
+  }
   return el;
 }
 
@@ -129,31 +153,69 @@ test("a stepping press is preventative, and Escape does not reach the panel", ()
 });
 
 // ---- the placement arithmetic ---------------------------------------------------------------
-test("the popover aligns its right edge with the box and grows leftwards", () => {
+test("the popover opens at the box's LEFT edge and grows rightwards", () => {
   const box = { left: 1200, right: 1420, bottom: 40 };
-  const g = placeGeometry({ box, viewportWidth: 1440, viewportHeight: 900 });
+  const g = placeGeometry({ box, viewportWidth: 1760, viewportHeight: 900 });
   assert.equal(g.width, 360, "the box's 220px plus 140, inside the 380 cap");
-  assert.equal(g.left, g.width === 360 ? 1420 - 360 : g.left);
+  assert.equal(g.left, 1200, "the left edge is the box's own left edge");
+  assert.equal(g.right, 1560, "it grows to the RIGHT, not left of the box");
   assert.equal(g.top, 46, "6px under the box");
   assert.equal(g.maxHeight, Math.max(120, Math.min(900 * 0.42, 900 - 46 - 12)));
 });
 
-test("the floor, the cap and the window's edges are respected", () => {
-  // A narrow box still gets the floor; a very wide one gets the cap.
-  assert.equal(placeGeometry({ box: { left: 10, right: 20, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 }).width, PLACE_DEFAULTS.minWidth);
-  assert.equal(placeGeometry({ box: { left: 900, right: 1420, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 }).width, PLACE_DEFAULTS.widthCap);
-  // A box hanging off the right edge clamps its right edge inside the window, and so does one off the left.
-  assert.equal(placeGeometry({ box: { left: 2000, right: 2100, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 }).right ?? placeGeometry({ box: { left: 2000, right: 2100, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 }).left + placeGeometry({ box: { left: 2000, right: 2100, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 }).width, 1432);
-  const left = placeGeometry({ box: { left: -300, right: -200, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 });
-  assert.equal(left.left, 8, "never off the left edge");
-  // A second bar may pass its own numbers, but the RULE is the same one.
-  const wide = placeGeometry({ box: { left: 1300, right: 1400, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900, options: { minWidth: 330, widthCap: 420 } });
-  assert.equal(wide.width, 330);
+test("a small box gets the floor and a box near the window's edge NARROWS instead of sliding left", () => {
+  // The assistant's box is ~55px: the 250px floor is what makes the popover wider than the box it hangs under.
+  const narrow = placeGeometry({ box: { left: 1497, right: 1553, bottom: 114 }, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(narrow.width, PLACE_DEFAULTS.minWidth);
+  assert.equal(narrow.left, 1497, "the left edge is the input's own left edge, not the pane's");
+  assert.ok(narrow.right <= 1760 - PLACE_DEFAULTS.pad, `right ${narrow.right} sits inside the window`);
+  // The count beside the box can shrink the room to ~197px: the placement squeezes to it rather than sliding left,
+  // which is what keeps the left edge under the box at the real bar's own layout.
+  const squeezed = placeGeometry({ box: { left: 1554.6, right: 1635.6, bottom: 76 }, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(squeezed.left, 1554.6, "the left edge is still the box's");
+  assert.equal(Math.round(squeezed.width * 10) / 10, 197.4, "and it is 197px wide, not 250px off the box's left");
+  // 30px from the right edge not even `squeeze` fits: the popover backs off the edge and keeps a readable width.
+  const tight = placeGeometry({ box: { left: 1700, right: 1730, bottom: 114 }, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(tight.left, 1760 - PLACE_DEFAULTS.pad - PLACE_DEFAULTS.squeeze, "the squeeze keeps the list readable");
+  assert.equal(tight.right, 1760 - PLACE_DEFAULTS.pad, "it runs to the window's own padding and stops");
+  // A very wide box gets the cap, and a box off the left edge is kept off the window's edge.
+  assert.equal(placeGeometry({ box: { left: 900, right: 1700, bottom: 10 }, viewportWidth: 1760, viewportHeight: 900 }).width, PLACE_DEFAULTS.widthCap);
+  assert.equal(placeGeometry({ box: { left: -300, right: -200, bottom: 10 }, viewportWidth: 1440, viewportHeight: 900 }).left, 8, "never off the left edge");
+  // A second bar may pass its own numbers, but the RULE is the same one: the Hot Agent opener is 34px wide.
+  const hot = placeGeometry({ box: { left: 1035, right: 1069, bottom: 75 }, viewportWidth: 1760, viewportHeight: 1000, options: { minWidth: 330, widthCap: 420 } });
+  assert.equal(hot.width, 330);
+  assert.equal(hot.left, 1035, "under the button, not 296px to its left");
 });
 
 test("a short window floors the height instead of collapsing the list", () => {
   const g = placeGeometry({ box: { left: 1200, right: 1420, bottom: 800 }, viewportWidth: 1440, viewportHeight: 820 });
   assert.equal(g.maxHeight, 120, "the floor wins over the room left below the box");
+});
+
+// ---- the drag and the grip -------------------------------------------------------------------
+test("a move follows the pointer's travel and stays inside the window", () => {
+  const start = { left: 100, top: 100, width: 250, height: 200 };
+  const moved = dragGeometry({ kind: "move", start, dx: 40, dy: 30, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.deepEqual({ left: moved.left, top: moved.top, width: moved.width, height: moved.height }, { left: 140, top: 130, width: 250, height: null });
+  const off = dragGeometry({ kind: "move", start, dx: 5000, dy: 5000, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(off.left, 1760 - PLACE_DEFAULTS.pad - 250, "the right edge stops at the window's padding");
+  assert.equal(off.top, 1000 - PLACE_DEFAULTS.pad - 200, "the bottom edge stops at the window's padding");
+  const back = dragGeometry({ kind: "move", start, dx: -5000, dy: -5000, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.deepEqual({ left: back.left, top: back.top }, { left: PLACE_DEFAULTS.pad, top: PLACE_DEFAULTS.pad }, "never off the top-left");
+});
+
+test("a grip drag resizes it, with a floor and the window as the ceiling", () => {
+  const start = { left: 100, top: 100, width: 250, height: 200 };
+  const bigger = dragGeometry({ kind: "resize", start, dx: 100, dy: 60, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(bigger.width, 350);
+  assert.equal(bigger.height, 260);
+  assert.equal(bigger.resized, true);
+  const tiny = dragGeometry({ kind: "resize", start, dx: -500, dy: -500, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(tiny.width, PLACE_DEFAULTS.minWidth, "the floor is a width the reader can still read");
+  assert.equal(tiny.height, PLACE_DEFAULTS.minHeight);
+  const huge = dragGeometry({ kind: "resize", start, dx: 9000, dy: 9000, viewportWidth: 1760, viewportHeight: 1000 });
+  assert.equal(huge.width, 1760 - PLACE_DEFAULTS.pad - 100);
+  assert.equal(huge.height, 1000 - PLACE_DEFAULTS.pad - 100);
 });
 
 // ---- the popover's life ---------------------------------------------------------------------
@@ -174,19 +236,95 @@ test("show writes the LIST, so a popover with a permanent head keeps its box", (
   });
 });
 
-test("show places the popover under its anchor and hides do not place", () => {
+test("show places the popover under its own box and hides do not place", () => {
+  withDom(
+    () => {
+      const input = fakeEl({ getBoundingClientRect: () => ({ left: 1200, right: 1255, bottom: 40 }) });
+      const anchor = fakeEl({ getBoundingClientRect: () => ({ left: 1100, right: 1130, bottom: 36 }) });
+      const pop = fakeEl({ hidden: true });
+      const bar = mount({ input, pop, anchor, readout: () => ({ text: "" }) });
+      const g = bar.place();
+      assert.equal(g, null, "a hidden popover is not placed");
+      bar.show("<i>x</i>");
+      assert.equal(pop.style.width, "250px", "the input is 55px wide: the floor applies");
+      assert.equal(pop.style.left, "1100px", "an explicit anchor wins: the popover opens at ITS left edge");
+      assert.equal(pop.style.top, "42px");
+      // No anchor means the INPUT itself, which is what the turn search passes: left edge at the box's left edge.
+      const own = fakeEl({ hidden: true });
+      const atInput = mount({ input, pop: own, readout: () => ({ text: "" }) });
+      atInput.show("<i>y</i>");
+      assert.equal(own.style.left, "1200px");
+    },
+    { viewport: { width: 1760, height: 1000 } },
+  );
+});
+
+test("hide clears a resized height and a reopen draws the anchored default again", () => {
+  withDom(
+    () => {
+      const input = fakeEl({ getBoundingClientRect: () => ({ left: 1200, right: 1255, bottom: 40 }) });
+      const pop = fakeEl({ hidden: true });
+      const bar = mount({ input, pop, readout: () => ({ text: "" }) });
+      bar.show("<i>x</i>");
+      assert.equal(pop.style.left, "1200px");
+      assert.equal(pop.style.top, "46px");
+      // What a grip drag leaves behind, and what a drag of the strip leaves behind.
+      pop.style.height = "300px";
+      pop.style.maxHeight = "300px";
+      pop.classList.add("is-moved");
+      bar.hide();
+      assert.equal(pop.hidden, true);
+      assert.equal(pop.style.height, "", "closing forgets the reader's size");
+      assert.equal(pop.classList.contains("is-moved"), false, "closing forgets the reader's rectangle");
+      bar.show("<i>y</i>");
+      assert.equal(pop.style.left, "1200px", "the reopen is the anchored default, not where it was left");
+      assert.equal(pop.style.top, "46px");
+      assert.equal(pop.style.width, "250px");
+      assert.equal(pop.style.height, "", "and it is its natural height again");
+    },
+    { viewport: { width: 1760, height: 1000 } },
+  );
+});
+
+test("the popover carries a drag strip with a close x, and a grip, and show re-adds them", () => {
   withDom(() => {
-    const input = fakeEl({ getBoundingClientRect: () => ({ left: 1200, right: 1420, bottom: 40 }) });
-    const anchor = fakeEl({ getBoundingClientRect: () => ({ left: 1100, right: 1130, bottom: 36 }) });
+    const input = fakeEl();
     const pop = fakeEl({ hidden: true });
-    const bar = mount({ input, pop, anchor, readout: () => ({ text: "" }) });
-    const g = bar.place();
-    assert.equal(g, null, "a hidden popover is not placed");
-    bar.show("<i>x</i>");
-    assert.equal(pop.style.width, "250px", "the anchor is 30px wide: the floor applies");
-    assert.equal(pop.style.left, `${1130 - 250}px`);
-    assert.equal(pop.style.top, "42px");
+    const closes = [];
+    const bar = mount({ input, pop, readout: () => ({ text: "" }), onClose: () => closes.push("close") });
+    bar.show("<b>rows</b>");
+    const classes = pop.children.map((child) => child.className);
+    assert.ok(classes.includes("as-search-drag"), `a drag strip is the first child: ${classes.join(", ")}`);
+    assert.ok(classes.includes("as-search-grip"), `a grip is the last child: ${classes.join(", ")}`);
+    const strip = pop.children.find((child) => child.className === "as-search-drag");
+    assert.equal(pop.children[0], strip, "the strip sits at the top");
+    const x = strip.children.find((child) => child.className === "as-search-x");
+    assert.ok(x, "the close x rides the strip");
+    for (const fn of x.listeners.get("click") || []) fn({ preventDefault() {} });
+    assert.deepEqual(closes, ["close"], "the x calls the bar's close");
+    // The strip's own mousedown is a drag, not a row press: it must not be preventative of nothing and must not throw.
+    for (const fn of strip.listeners.get("mousedown") || []) fn({ clientX: 0, clientY: 0, preventDefault() {}, stopPropagation() {} });
+    assert.equal(pop.classList.contains("is-moving"), true, "the strip starts a move");
   });
+});
+
+test("resetPlacement forgets the reader's rectangle while the list stays open", () => {
+  withDom(
+    () => {
+      const input = fakeEl({ getBoundingClientRect: () => ({ left: 1200, right: 1255, bottom: 40 }) });
+      const pop = fakeEl({ hidden: true });
+      const bar = mount({ input, pop, readout: () => ({ text: "" }) });
+      bar.show("<b>rows</b>");
+      pop.style.height = "260px";
+      pop.classList.add("is-resized");
+      const back = bar.resetPlacement();
+      assert.equal(pop.hidden, false, "a scope change leaves the list open");
+      assert.equal(pop.style.height, "", "but the size is the anchored default's");
+      assert.equal(pop.style.top, "46px");
+      assert.equal(back.left, 1200);
+    },
+    { viewport: { width: 1760, height: 1000 } },
+  );
 });
 
 test("the count's DOM is written from the readout, once", () => {
