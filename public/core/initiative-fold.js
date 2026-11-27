@@ -322,8 +322,95 @@
     };
   }
 
+  // ---- the board's tags: the chips a card draws, the filter, and its URL record ---------------------
+  // THE CHIP CAP IS THREE. An initiative may carry as many tags as it wants, but a card's facts row is a summary and
+  // a seventh chip would push the waves chip off a narrow rail: the card draws the FIRST THREE in the registry's order
+  // and one "+N" chip for the rest. Where the rest are listed is the expanded card's business (and the +N chip's own
+  // title), never the folded row's - the folded row is the whole card for a reader who has not pressed it.
+  const TAG_CHIP_FIRST = 3;
+
+  /**
+   * The tags one card draws: `{ head, rest, hidden, total }`.
+   *
+   * `head` is the first `limit` tags (three by default), `rest` what the +N chip stands for, `hidden` its number. A
+   * tag with no registry entry is dropped by the caller before this is asked - an id the registry cannot name draws
+   * nothing rather than a chip reading "[object Object]".
+   */
+  function tagChips(tags, limit = TAG_CHIP_FIRST) {
+    const list = Array.isArray(tags) ? tags.filter(Boolean) : [];
+    const n = Math.max(1, Math.floor(Number(limit)) || TAG_CHIP_FIRST);
+    return { head: list.slice(0, n), rest: list.slice(n), hidden: Math.max(0, list.length - n), total: list.length };
+  }
+
+  /**
+   * Does an initiative match the tag filter?
+   *
+   * `tagIds` is the card's own list (absent = none), `selected` the ids the filter row has pressed, and `mode` "any"
+   * (a card matching ONE selected tag) or "all" (a card matching EVERY one). NO SELECTED TAG IS NO FILTER, which is
+   * what makes the row's default - every tag pressed - show the whole board, and what stops a reader who unpressed the
+   * last tag from staring at an empty pane with no idea why. An UNTAGGED card is out under any non-empty selection:
+   * "show me the SSO work" must not include the work with no tags at all.
+   */
+  function tagFilterMatch(tagIds, selected, mode = "any") {
+    const have = Array.isArray(tagIds) ? tagIds.map((id) => String(id ?? "")).filter(Boolean) : [];
+    const want = Array.isArray(selected) ? selected.map((id) => String(id ?? "")).filter(Boolean) : [];
+    if (!want.length) return true;
+    if (!have.length) return false;
+    if (String(mode) === "all") return want.every((id) => have.includes(id));
+    return want.some((id) => have.includes(id));
+  }
+
+  /** "a,b , c" -> ["a","b","c"]: the spelling a URL query and a stored record both use, deduped in place. */
+  function tagFilterParse(value) {
+    const out = [];
+    const src = Array.isArray(value) ? value.join(",") : String(value == null ? "" : value);
+    for (const part of src.split(",")) {
+      const id = part.trim();
+      if (id && !out.includes(id)) out.push(id);
+    }
+    return out;
+  }
+
+  /**
+   * The URL half of the filter's saved state, as a query string WITHOUT the leading "?".
+   *
+   * `tags: null` is the default (every tag pressed) and writes NOTHING - a page with no tag filter keeps the plain
+   * URL it had. A list writes `initTags=…`, and "all" adds `initTagMode=all`; "any" is the default and is left out, so
+   * the shortest URL is the commonest state. `{ tags: [] }` is a filter with nothing pressed, which `tagFilterMatch`
+   * reads as no filter - it still writes nothing, because it IS nothing to persist.
+   */
+  function tagFilterQuery(state) {
+    const ids = state && state.tags !== null && state.tags !== undefined ? tagFilterParse(state.tags) : [];
+    const mode = String(state && state.mode) === "all" ? "all" : "any";
+    if (!ids.length) return "";
+    const params = [`initTags=${encodeURIComponent(ids.join(","))}`];
+    if (mode === "all") params.push("initTagMode=all");
+    return params.join("&");
+  }
+
+  /**
+   * The filter a URL carries, or `null` when it carries none.
+   *
+   * `null` and `{ tags: [] }` are different facts: no `initTags` parameter at all means the reader has never filtered
+   * (every tag pressed), while `initTags=` with nothing after it means they unpressed them all - which is a filter
+   * with nothing to match, and the pane draws it rather than pretending it did not happen. The caller falls back to
+   * localStorage only on `null`.
+   */
+  function tagFilterFromUrl(search) {
+    let q;
+    try {
+      q = new URLSearchParams(String(search == null ? "" : search).replace(/^\?/, ""));
+    } catch {
+      return null;
+    }
+    if (!q.has("initTags")) return null;
+    return { tags: tagFilterParse(q.get("initTags")), mode: q.get("initTagMode") === "all" ? "all" : "any" };
+  }
+
   root.wtInitiativeFold = {
     DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, TASK_STATE_INFO, TASK_CARD_BUCKET, TASK_CARD_FIRST, TASK_CARD_MORE,
+    TAG_CHIP_FIRST,
     press, cut, countChips, historyLine, taskChip, taskFoldKey, taskCardOrder, taskCardWindow, routeGlyph,
+    tagChips, tagFilterMatch, tagFilterParse, tagFilterQuery, tagFilterFromUrl,
   };
 })(globalThis);

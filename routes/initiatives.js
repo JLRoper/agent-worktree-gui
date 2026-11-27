@@ -26,6 +26,24 @@
 //                                      from the wave fold (archiveBlockers below), not from a second opinion.
 //   POST /api/initiatives/restore      { id, by? } - put it back at the position it was archived with
 //
+//   GET    /api/initiatives/tags       the board's tag registry (lib/initiative-tags.js): every tag with its id, ident,
+//                                      name, description, colour and createdAt, plus the palette and the caps. The tab
+//                                      reads the same document inside GET /api/initiatives (`tags`), so the pane needs no
+//                                      second request to draw its filter row; this route is for a caller that wants the
+//                                      vocabulary alone.
+//   POST   /api/initiatives/tags       { ident, name, description?, color? } - create one. 201 with the tag.
+//   PATCH  /api/initiatives/tags       { id, ident?, name?, description?, color? } - rename or recolour the ONE entry,
+//                                      which is what makes every card and every saved filter follow in one write.
+//   DELETE /api/initiatives/tags       { id, confirm? } - delete it. REFUSED (409) while any initiative carries it,
+//                                      with the COUNT and the titles in the sentence; `confirm: true` deletes it and
+//                                      takes the id off every initiative in one save (Initiatives.dropTag).
+//                                      THE THREE REGISTRY WRITES ARE THE READER'S ALONE. An assistant may apply an
+//                                      existing tag (initiative create/update `tagIds`) but may not mint, rename or delete
+//                                      one: a `by` that is not "reader" is a 403, because the board's vocabulary is the
+//                                      reader's to decide and a worker that could rename a tag could silently reorganise
+//                                      every filter the reader keeps. None of the three asks the permission tier - the
+//                                      tier governs the MAP (which trees belong to what), not the words on the cards.
+//
 // WHY THE TIER IS A SETTING AND NOT FOUR ROUTES. The reader's question is "how often do I want to be interrupted about
 // this map", and the answer is one of four levels (lib/initiative-permissions.js). The level decides ONLY whether the
 // panel parks the question: the card, its wording, its once/deny answer and the resume closure are the same at every
@@ -37,6 +55,9 @@
 // exists and cannot be read, and that check runs BEFORE a question is parked: a card whose answer could only fail is
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, NOTE_LABEL_MAX, NOTE_TEXT_MAX, NOTE_URL_MAX, NOTES_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
+// The board's tag registry: its store's view, the caps the tab prints and the id a card carries. The read joins the two
+// stores by id here (and only here), so a card never stores a word the registry could have renamed.
+import { TAG_DESCRIPTION_MAX, TAG_IDENT_MAX, TAG_IDENT_MIN, TAG_NAME_MAX, tagsView } from "../lib/initiative-tags.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
 import { WAVE_GATE_CHOICES, taskWithOwner, waveEvidenceNeeds, waveFileExistsPaths, waveIsOpen, waveLane, waveMemberOpen } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
@@ -52,6 +73,8 @@ import { profileReport, timeAsync, timeSync, withProfile } from "../lib/read-pro
 
 /** The one path this prefix answers, and the row the mount table in server.js matches on. */
 export const INITIATIVES_PATH = "/api/initiatives";
+/** The board's tag registry, under the same prefix: `/api/initiatives/tags` (GET/POST/PATCH/DELETE). */
+export const TAGS_PATH = `${INITIATIVES_PATH}/tags`;
 
 const nameOf = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").split("/").filter(Boolean).pop() || String(p || "");
 
@@ -106,13 +129,19 @@ function taskRowOf(task, nowMs, rowFor) {
  * The whole tab's document, built from the store plus the two things only the composition root knows: which project a
  * path belongs to, and what the board's row for it says. Pure enough to run over a fixture: every seam is a function.
  */
-export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null, evidenceFor = null, boardTasks = null, ownerLabel = null }) {
+export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null, evidenceFor = null, boardTasks = null, ownerLabel = null, tagStore = null }) {
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
   // The archived records, read once: the tab's Archived view and the counts. A store handed in by a fixture that
   // predates archive answers no list, and the view draws an empty one rather than failing.
   const archivedList = typeof initiatives.archivedList === "function" ? initiatives.archivedList() : [];
   const level = initiativeTierInfo(tier);
+  // THE BOARD'S TAGS, read once per answer. The registry is the one document every card's ids resolve against; the
+  // read hands it over whole (with its status, palette and caps) so the tab's filter row, its manager and its chips
+  // are all drawn from the same answer as the cards. `null` when no registry was handed in (a fixture older than
+  // tags), which the tab draws as no filter row rather than as "no tags".
+  const tagDoc = tagStore && typeof tagStore.statusOf === "function" ? tagsView(tagStore) : null;
+  const tagIdsOf = (init) => (Array.isArray(init.tagIds) ? init.tagIds.slice() : []);
   const board = timeSync("fold.queues", () =>
     assistants.map((rec) => {
       let view = null;
@@ -259,6 +288,9 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       // written is the one being looked for. A fixture that predates notes draws an empty log rather than failing.
       notes: typeof initiatives.notesFor === "function" ? initiatives.notesFor(init.id) : [],
       noteCount: typeof initiatives.notesFor === "function" ? initiatives.notesFor(init.id).length : 0,
+      // THE TAGS, AS IDS. The words are the registry's (`tags` below), never copied onto a card: a rename follows every
+      // card because every card holds an id, and a card can never claim a tag the registry does not have.
+      tagIds: tagIdsOf(init),
     };
   });
   // THE ARCHIVED LIST. Its own array, never mixed into `initiatives`: every count, chip, lane and drive in the panel
@@ -284,6 +316,9 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       // The put-away card draws no log - its notes are still on the record and Restore brings them back unchanged -
       // but the count is carried so the tab can say how much memory it is putting away.
       noteCount: typeof initiatives.notesFor === "function" ? initiatives.notesFor(init.id).length : 0,
+      // A put-away card keeps its tags: Restore brings back exactly the card that went away, chips and all, and the
+      // archived view's tag filter reads these ids.
+      tagIds: tagIdsOf(init),
     };
   });
   return {
@@ -301,7 +336,17 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       noteLabel: NOTE_LABEL_MAX,
       noteUrl: NOTE_URL_MAX,
       notes: NOTES_MAX,
+      // The tag registry's caps, for the same reason: the create form prints them beside its fields and the store
+      // refuses on them, so the two cannot disagree about what an ident or a name may be.
+      tagIdentMin: TAG_IDENT_MIN,
+      tagIdentMax: TAG_IDENT_MAX,
+      tagName: TAG_NAME_MAX,
+      tagDescription: TAG_DESCRIPTION_MAX,
     },
+    // THE BOARD'S TAG REGISTRY (lib/initiative-tags.js): every tag, its palette, its caps and whether the file can be
+    // read. Rides the read the tab already takes, so the filter row, the manager and every card are drawn from one
+    // answer. Null only for a fixture that handed in no registry.
+    tags: tagDoc,
     // The level in force, so the tab can say which one decides its questions and the settings select has one source.
     // `tiers` is the four labels, so a second surface cannot draw a different list.
     tier: { id: level.id, label: level.label, hint: level.hint },
@@ -377,6 +422,10 @@ export function archiveBlockers(init) {
 
 export function createInitiativesRoutes({
   initiatives,
+  // THE BOARD'S TAG REGISTRY (lib/initiative-tags.js). Optional for a fixture, required for the tag routes: without it
+  // GET/POST/PATCH/DELETE /api/initiatives/tags answer 503, and the read's `tags` is null. With it, the read hands the
+  // registry over whole and the three writes go through its store.
+  tags = null,
   remoteWrites,
   getConfig,
   registry,
@@ -487,6 +536,7 @@ export function createInitiativesRoutes({
         waves,
         templateExists,
         boardTasks: tasks,
+        tagStore: tags,
         evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
       }),
     );
@@ -573,6 +623,124 @@ export function createInitiativesRoutes({
     const config = getConfig() || {};
     const params = url?.searchParams || new URL(req.url || "/", "http://127.0.0.1").searchParams;
 
+    // ---- the board's tag registry (lib/initiative-tags.js) ---------------------------------------------------------
+    // ABOVE THE READ AND ITS METHOD GUARDS, because this is the one path on the prefix that answers GET, POST, PATCH
+    // and DELETE - a second method set than the rest of the prefix, and the reason the guard below says "GET on the
+    // bare path" rather than "GET anywhere".
+    //
+    // ONE DOCUMENT FOR BOTH STORES. The registry answers alone here (and inside GET /api/initiatives as `tags`), and
+    // the ids on an initiative resolve against it in the tab. That is what makes a rename follow every card and every
+    // saved filter in one write: nothing copied a tag's words onto a card in the first place.
+    //
+    // THE THREE WRITES ARE THE READER'S ALONE. `by` is the actor the page never sends (it means the reader) and an
+    // assistant always does; an assistant may APPLY an existing tag through the initiative routes, but the vocabulary
+    // itself is the reader's. 403 rather than a silent no-op, because a worker that thought it had named a tag should
+    // be told it did not.
+    if (route === TAGS_PATH) {
+      if (!tags || typeof tags.statusOf !== "function") {
+        sendJson(res, 503, { ok: false, error: "no tag registry is configured for this panel" });
+        return true;
+      }
+      if (req.method === "GET") {
+        sendJson(res, 200, { ok: true, ...tagsView(tags) });
+        return true;
+      }
+      if (req.method !== "POST" && req.method !== "PATCH" && req.method !== "DELETE") {
+        sendJson(res, 405, { error: `${req.method} is not allowed on ${route} - the registry answers GET, POST, PATCH and DELETE` });
+        return true;
+      }
+      if (!authorised(req, config.token)) {
+        sendJson(res, 403, { error: "bad or missing x-panel-token" });
+        return true;
+      }
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        sendJson(res, 400, { error: String((err && err.message) || err) });
+        return true;
+      }
+      const payload = body && typeof body === "object" ? body : {};
+      const by = actorOf(payload);
+      if (by !== "reader") {
+        sendJson(res, 403, {
+          ok: false,
+          error: `tags are the reader's to create, rename and delete - ${by} may only apply an existing tag to an initiative (tagIds on the create/update routes)`,
+        });
+        return true;
+      }
+      // An unreadable registry refuses every write with the store's own sentence, BEFORE anything is parked or written:
+      // the bytes stay where they are for the reader to fix.
+      const refusedTags = typeof tags.refuse === "function" ? tags.refuse() : null;
+      if (refusedTags) {
+        sendJson(res, 409, refusedTags);
+        return true;
+      }
+      // The registry rides the tab's cached read, so a write here must drop that document or the next GET answers the
+      // vocabulary from before the change.
+      dropView();
+
+      if (req.method === "POST") {
+        const out = tags.create({ ident: payload.ident, name: payload.name, description: payload.description, color: payload.color, by });
+        if (!out.ok) {
+          sendJson(res, 400, out);
+          return true;
+        }
+        log(`initiative-tags: created "${out.tag.ident}" (${out.tag.name}) as ${by}`);
+        sendJson(res, 201, { ok: true, asked: false, changed: true, tag: out.tag, registry: tagsView(tags) });
+        return true;
+      }
+      if (req.method === "PATCH") {
+        const id = String(payload.id || "").trim();
+        if (!id) {
+          sendJson(res, 400, { ok: false, error: "a rename needs the tag id" });
+          return true;
+        }
+        const out = tags.rename({ id, ident: payload.ident, name: payload.name, description: payload.description, color: payload.color, by });
+        if (!out.ok) {
+          sendJson(res, out.notFound ? 404 : 400, out);
+          return true;
+        }
+        if (out.changed !== false) log(`initiative-tags: renamed "${out.tag.ident}" (${id}) by ${by} - ${(out.fields || []).join(" and ")}`);
+        sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, tag: out.tag, fields: out.fields || [], registry: tagsView(tags) });
+        return true;
+      }
+
+      // DELETE. Refused while any initiative carries the tag unless the reader confirmed, and the refusal's sentence
+      // names the COUNT (lib/initiative-tags.js). A confirmed delete takes the id off every initiative FIRST, in one
+      // save, and only then drops the entry: if the second write failed, the tag would still exist and be unused, which
+      // a second press fixes - the other order would leave cards naming a tag the registry had already lost.
+      if (req.method !== "DELETE") {
+        sendJson(res, 405, { error: `${req.method} is not allowed on ${route} - the registry answers GET, POST, PATCH and DELETE` });
+        return true;
+      }
+      const id = String(payload.id || "").trim();
+      if (!id) {
+        sendJson(res, 400, { ok: false, error: "a delete needs the tag id" });
+        return true;
+      }
+      const confirm = payload.confirm === true || payload.confirm === "true" || payload.confirm === 1;
+      const carried = typeof initiatives.carriersOfTag === "function" ? initiatives.carriersOfTag(id) : [];
+      let removedFrom = 0;
+      if (carried.length && confirm) {
+        const dropped = initiatives.dropTag({ id, by });
+        if (!dropped.ok) {
+          sendJson(res, dropped.refused === "unreadable" ? 409 : 500, dropped);
+          return true;
+        }
+        removedFrom = Number(dropped.removed) || 0;
+      }
+      const out = tags.remove({ id, confirm, carried, by });
+      if (!out.ok) {
+        sendJson(res, out.notFound ? 404 : out.refused === "carried" || out.refused === "unreadable" ? 409 : 400, out);
+        return true;
+      }
+      if (removedFrom) onChange("tag deleted");
+      log(`initiative-tags: deleted "${out.deleted.ident}" (${id}) by ${by}${out.carried ? ` - taken off ${out.carried} initiative${out.carried === 1 ? "" : "s"}` : ""}`);
+      sendJson(res, 200, { ok: true, asked: false, changed: true, deleted: out.deleted, carried: Number(out.carried) || 0, removedFrom, registry: tagsView(tags) });
+      return true;
+    }
+
     // One read, at the bare path: the whole document the tab draws. Every other route on this prefix is a write.
     if (req.method === "GET") {
       if (route !== INITIATIVES_PATH) {
@@ -644,7 +812,7 @@ export function createInitiativesRoutes({
           allowed: ["once", "deny"],
           grants: false,
           resume: () => {
-            const out = initiatives.create({ title: payload.title, description: payload.description, by });
+            const out = initiatives.create({ title: payload.title, description: payload.description, tagIds: payload.tagIds, by });
             if (out.ok) onChange("created");
             return out;
           },
@@ -663,7 +831,7 @@ export function createInitiativesRoutes({
         });
         return true;
       }
-      const out = initiatives.create({ title: payload.title, description: payload.description, by });
+      const out = initiatives.create({ title: payload.title, description: payload.description, tagIds: payload.tagIds, by });
       if (!out.ok) {
         sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
         return true;
@@ -687,13 +855,13 @@ export function createInitiativesRoutes({
         sendJson(res, 404, { error: `no such initiative: ${id || "(none)"}` });
         return true;
       }
-      if (payload.title === undefined && payload.description === undefined) {
-        sendJson(res, 400, { ok: false, error: "nothing to change: send a title, a description, or both" });
+      if (payload.title === undefined && payload.description === undefined && payload.tagIds === undefined) {
+        sendJson(res, 400, { ok: false, error: "nothing to change: send a title, a description, a tag list, or several" });
         return true;
       }
       const by = actorOf(payload);
       if (initiativeAsks(tierOf(), "edit", { actor: by })) {
-        const bits = [payload.title !== undefined ? "the title" : "", payload.description !== undefined ? "the description" : ""].filter(Boolean);
+        const bits = [payload.title !== undefined ? "the title" : "", payload.description !== undefined ? "the description" : "", payload.tagIds !== undefined ? "the tags" : ""].filter(Boolean);
         const request = remoteWrites.request({
           kind: "initiative",
           worktree: "",
@@ -704,7 +872,7 @@ export function createInitiativesRoutes({
           allowed: ["once", "deny"],
           grants: false,
           resume: () => {
-            const out = initiatives.update({ id: existing.id, title: payload.title, description: payload.description, by });
+            const out = initiatives.update({ id: existing.id, title: payload.title, description: payload.description, tagIds: payload.tagIds, by });
             if (out.ok && out.changed !== false) onChange("edited");
             return out;
           },
@@ -723,7 +891,7 @@ export function createInitiativesRoutes({
         });
         return true;
       }
-      const out = initiatives.update({ id: existing.id, title: payload.title, description: payload.description, by });
+      const out = initiatives.update({ id: existing.id, title: payload.title, description: payload.description, tagIds: payload.tagIds, by });
       if (!out.ok) {
         sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
         return true;
