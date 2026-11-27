@@ -227,7 +227,7 @@ thread is the only place the in-flight context survives — a fresh tree re-deri
 ## 5. The hold field
 
 ```js
-hold: { kind: "thread" | "path" | "job", value: string, since: ISO-8601 string } | null
+hold: { kind: "thread" | "path" | "job" | "task" | "permission", value: string, since: ISO-8601 string } | null
 ```
 
 | kind | `value` | "still true" test | cost |
@@ -235,6 +235,8 @@ hold: { kind: "thread" | "path" | "job", value: string, since: ISO-8601 string }
 | `thread` | the thread name as the job store spells it (`wtgui-pick-up-the-turnover-branch-396ea9`) | a live run on that thread, matched by full name **or** by its six-hex tag (`lib/tree-names.js:35`) so a rename does not release it | 1 `isLive`, +1 pass over jobs if the name missed |
 | `path` | a tree directory, normalised (`C:/ProjectDevelopment/event-multi`) | `liveRunIn(jobs, value, {isLive})` returns null (`lib/refresh-row.js:134`) | 1 pass over jobs |
 | `job` | a job id (`df09538b`) | no live job with that id | 1 pass over jobs |
+| `task` | another row in the same queue (`#60` or `60`) | that row does not read `done` | 1 pass over the queue |
+| `permission` | one permission record id (`rw_mwzdc816_nywjo3`) | the record is pending; an answer, a deny or an expiry releases the row with the record's own reason (`lib/turnover-ask.js` `permissionStateOf`; the reader is injected by the server, and a caller with none reads `held: null`) | 1 map lookup |
 
 Rules for the field itself:
 
