@@ -189,6 +189,9 @@ function measureInPage() {
       return { ...rect(el), contentWidth, pillGap, pillText: pill ? pill.textContent.trim() : "" };
     };
     const meta = facts.querySelector(".as-task-meta");
+    // The pipeline chip: is it a block of its own, a SIBLING of the facts line, or still a child of it?
+    const pipeline = card.querySelector(".as-task-pipeline-row");
+    const pipelineInFacts = facts.querySelector(".as-task-pipeline");
     const when = facts.querySelector(".as-task-when");
     const parent = agents[0] ? agents[0].parentElement : null;
     const style = parent ? getComputedStyle(parent) : null;
@@ -197,6 +200,9 @@ function measureInPage() {
       facts: rect(facts),
       agents: agents.map(agentBox),
       meta: meta ? rect(meta) : null,
+      pipeline: pipeline ? { ...rect(pipeline), parentIsBody: pipeline.parentElement === card.querySelector(".as-task-body"), afterFacts: pipeline.previousElementSibling === facts, kids: [...pipeline.children].map((ch) => ({ cls: String(ch.className), h: ch.getBoundingClientRect().height, w: ch.getBoundingClientRect().width })) } : null,
+      pipelineInFacts: Boolean(pipelineInFacts),
+      pipelineText: pipeline ? pipeline.textContent.trim() : "",
       when: when ? rect(when) : null,
       metaText: meta ? meta.textContent.trim() : "",
       // The block the agents share: who it is, and the computed properties the ask names.
@@ -303,6 +309,21 @@ await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
       `contents ~${round(two.agents[0].contentWidth)} + ${round(two.agents[1].contentWidth)} px in a ${round(two.facts.width)} px line`,
     );
   }
+
+  // ---- the pipeline chip is a task-level row of its own ------------------------------------------------------
+  const pipelineChecks = (name, c) => {
+    check(Boolean(c.pipeline) && c.pipeline.parentIsBody === true && c.pipeline.afterFacts === true, `${name}: the pipeline chip is a row of its own, a sibling of the facts block`, JSON.stringify(c.pipeline));
+    check(c.pipelineInFacts === false, `${name}: the facts block no longer holds the pipeline chip`, `${c.pipelineInFacts}`);
+    check(
+      Boolean(c.pipeline) && Boolean(c.meta) && c.pipeline.top >= c.meta.bottom - 0.5,
+      `${name}: the pipeline row draws under the meta line`,
+      c.pipeline && c.meta ? `pipeline top ${round(c.pipeline.top)}, meta bottom ${round(c.meta.bottom)}` : "no pipeline or meta",
+    );
+  };
+  pipelineChecks("two threads", two);
+  pipelineChecks("three threads", three);
+  check(Boolean(one.pipeline) && one.pipeline.top >= one.facts.bottom - 0.5, "one thread: the pipeline row draws under the facts block", one.pipeline ? `pipeline top ${round(one.pipeline.top)}, facts bottom ${round(one.facts.bottom)}` : "no pipeline");
+  check(/assistant decides/.test(two.pipelineText || ""), "the pipeline row carries the task's own answer", JSON.stringify(two.pipelineText || ""));
 
   // ---- a third agent stacks too -----------------------------------------------------------------------------
   check(three.agents.length === 3, "three threads draw three agent rows", `${three.agents.length}`);

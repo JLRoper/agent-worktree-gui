@@ -7027,6 +7027,10 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 .as-qpane .pill.pill-running { color: #7ee787; background: var(--green-bg); border-color: #1f4a2a; }
 .as-qpane .as-task-meta { margin: 0; gap: 0 8px; font-size: 10px; color: var(--dim); }
 .as-qpane .as-task-pipeline { margin: 0; display: inline-flex; align-items: center; gap: 4px; }
+/* THE PIPELINE'S OWN LINE. A pipeline is assigned to the whole task and every agent the row cuts runs under it, so
+   the chip is not a fact about the agent beside it: on its own row the agents' lines stay about the agents, and
+   "assistant decides" cannot read as something an agent chose. Same 18 px indent as the facts block it sits under. */
+.as-qpane .as-task-pipeline-row { display: flex; align-items: center; gap: 4px; margin: 1px 0 0 18px; min-width: 0; }
 .as-qpane .as-task-pipeline .as-qflow { margin-left: 0; padding: 0 5px; font-size: 9px; line-height: 1.6; border-radius: 999px; }
 .as-qpane .as-task-pipe { font-size: 9px; line-height: 1.6; padding: 0 6px; }
 .as-qpane .as-task-note { margin: 1px 0 0 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
