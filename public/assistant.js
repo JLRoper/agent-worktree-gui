@@ -3020,6 +3020,11 @@
     // notes-file.js `noteLines`), so the page cannot disagree with the cap that clipped them.
     const noteCap = Number(pad?.noteCap) || 0;
     const noteRows = Array.isArray(pad?.lines) ? pad.lines : [];
+    // A cut line names the journal entry that holds its full text (`[cut - full note j42]`). One hint under the
+    // list says how to read that entry back; it is drawn only when at least one line carries a locator.
+    const noteReadHint = noteRows.some((l) => l.locator)
+      ? `<div class="as-hint">A cut note names its journal entry; the full text is in GET /api/state (journal[].id).</div>`
+      : "";
     const noteList = noteRows.length
       ? `<div class="as-hint">Each note, with its own length:</div>${noteRows
           .map((l) => {
@@ -3028,9 +3033,10 @@
             const chars = Number(l.chars) || 0;
             const cap = Number(l.cap) || noteCap;
             const bad = l.clipped ? " is-bad" : "";
-            return `<div class="as-line" data-as-notelen="${chars}" data-as-notecap="${cap}"><span class="as-hint${bad}" title="${esc(text)}">${esc(shown)}</span><span class="as-hint${bad}" title="This note's characters${l.clipped ? " (clipped to the per-note cap)" : ""}">${chars}/${cap}</span></div>`;
+            const where = l.locator ? ` · ${l.locator}` : "";
+            return `<div class="as-line" data-as-notelen="${chars}" data-as-notecap="${cap}" data-as-notelocator="${esc(l.locator || "")}"><span class="as-hint${bad}" title="${esc(text)}">${esc(shown)}</span><span class="as-hint${bad}" title="This note's characters${l.clipped ? " (clipped to the per-note cap)" : ""}">${chars}/${cap}${esc(where)}</span></div>`;
           })
-          .join("")}`
+          .join("")}${noteReadHint}`
       : "";
     const notesGroup = pad
       ? `<div class="as-group">
@@ -3067,7 +3073,7 @@
         <h4>Journal</h4>
         <div class="as-journal">${
           (a.journal || [])
-            .map((j) => `<div><span class="t">${esc(new Date(j.at).toLocaleTimeString())}</span> <span class="k">${esc(j.kind)}</span> ${esc(j.text)}</div>`)
+            .map((j) => `<div><span class="t">${esc(new Date(j.at).toLocaleTimeString())}</span> <span class="k">${esc(j.kind)}${j.id ? ` ${esc(j.id)}` : ""}</span> ${esc(j.text)}</div>`)
             .join("") || `<div class="as-help">quiet</div>`
         }</div>
       </div>`;

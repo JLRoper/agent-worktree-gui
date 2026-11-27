@@ -30,6 +30,7 @@ import {
   clipNoteLine,
   fitNotesText,
   noteLines,
+  noteLocatorOf,
   readNotesFile,
   writeNotesFile,
   NOTE_CLIP_MARK,
@@ -219,16 +220,20 @@ test("the NOTE action caps the pad line and journals the full text, on #1's pad 
   assert.equal(primary.length, 3, "#1's pad has three lines: none evicted");
   for (const line of primary) {
     assert.ok(line.length <= NOTE_LINE_CAP, `#1's line is ${line.length}, at or under ${NOTE_LINE_CAP}`);
-    assert.ok(line.endsWith(NOTE_CLIP_MARK), "with the marker");
+    assert.ok(noteLocatorOf(line), "with the journal entry's locator in the marker");
   }
+  const firstEntry = assistant.journal.find((j) => j.id === noteLocatorOf(primary[0]));
+  assert.equal(firstEntry?.text, notes[0], "the marker's id resolves to the note's full text");
 
   for (const note of notes) await assistant.applyActions(turnOf(two), parseActions(`NOTE: ${note}`));
   const theirs = readFileSync(notesFile(two), "utf8").split("\n");
   assert.equal(theirs.length, 3, "#2's own notes.md has three lines: none evicted");
   for (const line of theirs) {
     assert.ok(line.length <= NOTE_LINE_CAP, `#2's line is ${line.length}, at or under ${NOTE_LINE_CAP}`);
-    assert.ok(line.endsWith(NOTE_CLIP_MARK), "with the marker");
+    assert.ok(noteLocatorOf(line), "with the journal entry's locator in the marker");
   }
+  const thirdEntry = assistant.journal.find((j) => j.id === noteLocatorOf(theirs[2]));
+  assert.equal(thirdEntry?.text, notes[2], "and #2's marker resolves the same way");
 
   const journalled = assistant.journal.filter((j) => j.kind === "note").map((j) => j.text);
   assert.deepEqual(journalled, [...notes, ...notes], "the journal holds each full text, for both pads");
