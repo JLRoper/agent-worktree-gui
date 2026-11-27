@@ -116,6 +116,21 @@ test("the served shell carries the version on every bundle URL, and nowhere else
   assert.equal(rewriteShell(html, bundle.version, bundle.files), html, "rewriting an already rewritten shell changes nothing");
 });
 
+test("the perf recorder's tag is appended only when asked, as the first script and versioned", async (t) => {
+  const dir = await fixture(t);
+  await writeFile(path.join(dir, "perf-log.js"), "/* perf */\n");
+  const bundle = await readBundle(dir);
+  assert.ok(bundle.files["perf-log.js"], "the recorder is in the bundle although no index.html tag names it");
+
+  const plain = rewriteShell(bundle.html, bundle.version, bundle.files);
+  assert.ok(!plain.includes("perf-log.js"), "a normal shell never names the recorder - it is not even fetched");
+
+  const perf = rewriteShell(bundle.html, bundle.version, bundle.files, "1.76.25", { perf: true });
+  assert.ok(perf.includes(`<script src="/perf-log.js?v=${bundle.version}"></script>`), "the opt-in tag carries the version like every other bundle URL");
+  assert.ok(perf.indexOf("/perf-log.js") < perf.indexOf("/core/dom.js"), "it is the first script, so it wraps EventSource before any app script runs");
+  assert.equal(rewriteShell(perf, bundle.version, bundle.files, "1.76.25", { perf: true }), perf, "asking twice does not stack a second tag");
+});
+
 test("the shell also carries the release it was served as, and a second rewrite does not stack metas", async (t) => {
   const dir = await fixture(t);
   const bundle = await readBundle(dir);

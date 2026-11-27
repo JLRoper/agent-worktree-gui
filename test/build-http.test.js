@@ -69,6 +69,29 @@ test("the shell is served no-store with every asset URL versioned, and /api/buil
   assert.equal(index.headers.get("cache-control"), "no-store, must-revalidate", "the explicit shell URL is no-store too");
 });
 
+// The client-side perf recorder is opt-in: a tab asks with ?perf=1, so a normal load never even
+// fetches the file, and the one shell that does carry it carries a versioned URL like every other.
+test("the perf recorder is served only to a shell asked for with ?perf=1", async () => {
+  const panel = sharedPanel;
+
+  const plain = await (await fetch(`${panel.base}/`)).text();
+  assert.ok(!plain.includes("perf-log"), "a normal shell never names the recorder");
+
+  const asked = await fetch(`${panel.base}/?perf=1`);
+  assert.equal(asked.status, 200);
+  assert.equal(asked.headers.get("cache-control"), "no-store, must-revalidate", "the opt-in shell is still the un-cacheable shell");
+  const info = await (await fetch(`${panel.base}/api/build`)).json();
+  const html = await asked.text();
+  assert.ok(html.includes(`<script src="/perf-log.js?v=${info.version}"></script>`), "the opt-in tag is versioned like every other URL");
+  assert.ok(html.indexOf("/perf-log.js") < html.indexOf("/core/dom-format.js"), "and it comes first, before the app's own scripts");
+
+  const file = await fetch(`${panel.base}/perf-log.js`);
+  assert.equal(file.status, 200, "the recorder itself serves");
+  assert.equal(file.headers.get("cache-control"), "no-store", "an unversioned URL is never cached");
+  const stamped = await fetch(`${panel.base}/perf-log.js?v=${info.version}`);
+  assert.equal(stamped.headers.get("cache-control"), "public, max-age=31536000, immutable", "under the version it is cacheable like any asset");
+});
+
 test("an asset under the current version is cached hard; any other URL is no-store", async () => {
   const panel = sharedPanel;
   const info = await (await fetch(`${panel.base}/api/build`)).json();
