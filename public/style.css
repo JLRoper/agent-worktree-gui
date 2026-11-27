@@ -5817,6 +5817,134 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 #as-initiatives .init-card.is-titlecard:hover .init-chips .init-meta,
 #as-initiatives .init-card.is-titlecard:hover .init-chips .chip + .chip::before { color: var(--tab-ink-2); }
 
+/* ---- THE BOARD'S TAGS: a chip that is a WORD, not a COUNT ------------------------------------------
+   A tag is a word about the work; the chips beside it count its scale. They share one row, so they must be told
+   apart at a glance: the count is a borderless sentence in muted ink, and the tag is a small PLATE with a 4px radius,
+   a coloured spine on its left edge and the ident in the mono face. Not `.chip`'s 999px capsule and not its palette -
+   the palette here is the registry's own ten names (lib/initiative-tags.js TAG_PALETTE), each one a dark-theme pair
+   that clears 4.5:1 on --tab-surface. */
+#as-initiatives .init-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0 0 0 var(--tab-s1);
+  padding: 0 6px;
+  border: 1px solid var(--tag-line, var(--tab-line));
+  border-left: 2px solid var(--tag-ink, var(--tab-ink-3));
+  border-radius: 4px;
+  background: var(--tag-bg, transparent);
+  color: var(--tag-ink, var(--tab-ink-2));
+  font-family: var(--tab-font-mono);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+#as-initiatives .init-chips > .init-tag:first-of-type { margin-left: var(--tab-s2); }
+#as-initiatives button.init-tag { cursor: pointer; font: 600 var(--tab-fs-chip)/1.7 var(--tab-font-mono); }
+#as-initiatives button.init-tag:hover { filter: brightness(1.25); }
+#as-initiatives button.init-tag:active { transform: translateY(1px); }
+#as-initiatives button.init-tag.is-off { opacity: 0.45; filter: saturate(0.5); }
+#as-initiatives button.init-tag.is-off:hover { opacity: 0.8; }
+#as-initiatives .init-tag-more {
+  margin: 0 0 0 var(--tab-s1);
+  padding: 0 6px;
+  border: 1px dashed var(--tab-line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tab-ink-2);
+  font: 600 var(--tab-fs-chip)/1.7 var(--tab-font-mono);
+  cursor: pointer;
+}
+#as-initiatives .init-tag-more:hover { color: var(--tab-ink); border-color: var(--tag-line, var(--tab-line-strong)); filter: brightness(1.2); }
+/* The rest of a card's tags, under its facts row and never ON it: a 100% basis wraps the group to its own line. */
+#as-initiatives .init-tags-rest {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s1) 0;
+  margin-top: var(--tab-s1);
+  padding-top: var(--tab-s1);
+  border-top: 1px dashed var(--tab-line);
+}
+#as-initiatives .init-tags-rest .init-tag:first-child { margin-left: 0; }
+
+/* THE TEN NAMES. One block per colour, and nothing else in the panel repaints when one changes. */
+#as-initiatives .init-tag-slate { --tag-ink: #aeb8c6; --tag-line: rgba(174, 184, 198, 0.34); --tag-bg: rgba(174, 184, 198, 0.08); }
+#as-initiatives .init-tag-red { --tag-ink: #ff9c94; --tag-line: rgba(255, 156, 148, 0.38); --tag-bg: rgba(229, 83, 75, 0.12); }
+#as-initiatives .init-tag-amber { --tag-ink: #f0c674; --tag-line: rgba(240, 198, 116, 0.38); --tag-bg: rgba(210, 153, 34, 0.12); }
+#as-initiatives .init-tag-olive { --tag-ink: #cbd47c; --tag-line: rgba(203, 212, 124, 0.36); --tag-bg: rgba(160, 175, 70, 0.12); }
+#as-initiatives .init-tag-green { --tag-ink: #7ee787; --tag-line: rgba(126, 231, 135, 0.36); --tag-bg: rgba(46, 160, 67, 0.14); }
+#as-initiatives .init-tag-teal { --tag-ink: #6fd7c4; --tag-line: rgba(111, 215, 196, 0.36); --tag-bg: rgba(40, 150, 140, 0.14); }
+#as-initiatives .init-tag-sky { --tag-ink: #7fd3f7; --tag-line: rgba(127, 211, 247, 0.36); --tag-bg: rgba(56, 139, 253, 0.12); }
+#as-initiatives .init-tag-blue { --tag-ink: #9ecbff; --tag-line: rgba(158, 203, 255, 0.38); --tag-bg: rgba(56, 139, 253, 0.14); }
+#as-initiatives .init-tag-violet { --tag-ink: #c8a6ff; --tag-line: rgba(200, 166, 255, 0.38); --tag-bg: rgba(163, 113, 247, 0.16); }
+#as-initiatives .init-tag-pink { --tag-ink: #f2a0c8; --tag-line: rgba(242, 160, 200, 0.38); --tag-bg: rgba(219, 97, 162, 0.14); }
+
+/* ---- THE TAG FILTER ROW: one row at the top of the pane, composed with the view switch ------------- */
+#as-initiatives .init-tagbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s2) 0;
+  border-top: 1px solid var(--tab-line);
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tagbar-label {
+  flex: 0 0 auto;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+#as-initiatives .init-tagtoggles { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tab-s1); flex: 1 1 auto; min-width: 0; }
+#as-initiatives .init-tagtoggles .init-tag { margin-left: 0; }
+#as-initiatives .init-tagmode .init-tagmode-btn { min-height: 22px; padding: 0 var(--tab-s2); font-size: var(--tab-fs-chip); }
+#as-initiatives .init-tag-clear, #as-initiatives .init-tag-manage { flex: 0 0 auto; }
+#as-initiatives .init-tagbar-bad { color: var(--tab-bad); }
+
+/* ---- THE REGISTRY EDITOR: one row per tag, then the create form ------------------------------------ */
+#as-initiatives .init-tagmgr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s3);
+  padding: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-tagmgr-hint { margin: 0; }
+#as-initiatives .init-tagmgr-list { display: flex; flex-direction: column; gap: 0; }
+#as-initiatives .init-tagrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tab-s2);
+  padding: var(--tab-s2) 0;
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tagrow:last-child { border-bottom: 0; }
+#as-initiatives .init-tagrow > .init-tag { margin-left: 0; }
+#as-initiatives .init-tagname { color: var(--tab-ink); font: 600 var(--tab-fs-body)/1.4 var(--tab-font-ui); }
+#as-initiatives .init-tagdesc { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .init-tagrow-acts { display: inline-flex; gap: var(--tab-s1); margin-left: auto; }
+#as-initiatives .init-tagrow .init-tagform { flex: 1 1 100%; margin: var(--tab-s1) 0 0; }
+#as-initiatives .init-tagask { flex: 1 1 100%; margin: 0; }
+#as-initiatives .init-tag-force { margin-left: var(--tab-s2); }
+#as-initiatives .init-tagpick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1); }
+#as-initiatives .init-tagpick .init-tag { margin-left: 0; }
+#as-initiatives .init-tagpick-empty { margin: 0 0 var(--tab-s1); }
+
 /* SECTION HEADS: sentence case, one weight, a hairline that carries the eye to the count. */
 #as-initiatives .init-sechead {
   display: flex;

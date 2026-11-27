@@ -115,6 +115,9 @@ import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js"
 // The initiatives: the big pieces of work, keyed by tree path in a side store beside the locks (lib/initiatives.js),
 // overlaid onto the board's rows on every read, and moved only through the permission box.
 import { Initiatives, normTreePath } from "./lib/initiatives.js";
+// The board's tag registry (lib/initiative-tags.js): the vocabulary an initiative's `tagIds` resolve against, in its own
+// state file beside initiatives.json so a rename of one chip never rewrites a card.
+import { InitiativeTags } from "./lib/initiative-tags.js";
 import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.js";
 // The waves of work: an ordered, gated group of tasks inside one initiative (lib/waves.js), in their own store
 // keyed by initiative id. This slice is a READ: the lane in the Initiatives tab, and one GET beside it.
@@ -2175,7 +2178,10 @@ const locks = new Locks({ file: config.locksFile, log });
 // The big pieces of work (lib/initiatives.js): a title, a description, and which worktrees are behind each one. Like
 // the lock, this is the reader's map rather than anything git knows, so it lives in a side store under logs/ and is
 // overlaid onto the rows on every read - a scan that rebuilt a row cannot lose a membership it never owned.
-const initiatives = new Initiatives({ file: config.initiativesFile, log });
+// The registry is built first because the initiative store refuses an unknown tag id BY NAME: the door that stores a
+// card's `tagIds` is the one that checks them, so no route can bypass the check.
+const initiativeTags = new InitiativeTags({ file: config.initiativeTagsFile, log });
+const initiatives = new Initiatives({ file: config.initiativesFile, log, tags: initiativeTags });
 // The waves of work (lib/waves.js): a sibling store keyed by initiative id, so neither document rewrites the other.
 // It has no writer in this slice - the lane and GET /api/waves only read it - and it keeps the initiative store's
 // refuse-not-repair rule the day a write route arrives.
@@ -2443,6 +2449,10 @@ const PREFIX_MOUNTS = [
     prefix: INITIATIVES_PATH,
     handles: createInitiativesRoutes({
       initiatives,
+      // The board's tag registry: the read carries it (`tags`), and GET/POST/PATCH/DELETE /api/initiatives/tags answer
+      // from it. A delete is composed with the initiative store beside it (carriersOfTag -> dropTag -> the registry
+      // entry), which is why both stores are handed to the one module.
+      tags: initiativeTags,
       remoteWrites,
       getConfig: () => config,
       registry,
