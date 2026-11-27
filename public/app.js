@@ -194,6 +194,7 @@ window.WMApp.scaffold = {
   RULES_FALLBACK_CAPS, rulesCaps, rulesFor, rulesBarOpen, rulesChipSig, rulesChipHtml, refreshRulesChip,
   TURNOVER_FALLBACK_MAX, turnoverMaxChars, turnoverFor, turnoverBarOpen, turnoverChipSig, turnoverChipHtml,
   refreshTurnoverChip, turnoverLine, turnoverBarHtml, toggleTurnoverBar, closeTurnoverBar, saveProjectTurnover,
+  turnoverPolicies, turnoverPolicyFor, turnoverPolicyLabel, turnoverPolicyLine, saveProjectTurnoverPolicy,
   boardOf, boardBarOpen, boardChipSig, boardChipHtml, refreshBoardChip, boardLine, boardBarHtml,
   toggleBoardBar, closeBoardBar,
   cleanupOf, cleanupRuns, cleanupChipSig, cleanupChipHtml, refreshCleanupChip, refreshCleanupUi, cleanupBarHtml,
@@ -330,12 +331,15 @@ const state = {
   // The grey strip under a project's head is a STACK of bars now, and the host bar is one of them. `bars` holds each
   // project's open bar kinds in the order they were opened (rendered newest first); `rulesBar` is the rules bar's own
   // edit state, and `ruleCaps` the two limits `/api/project-rules` answered with (null until the first read).
-  // `turnoverBar` is the same editor state for the turnover branch, and `turnoverCaps` its one cap.
+  // `turnoverBar` is the same editor state for the turnover branch, `turnoverCaps` its one cap, and
+  // `turnoverPolicies` / `turnoverPolicyLabels` the policy select's ids and words (both null until the first read).
   bars: new Map(),
   rulesBar: null,
   ruleCaps: null,
   turnoverBar: null,
   turnoverCaps: null,
+  turnoverPolicies: null,
+  turnoverPolicyLabels: null,
   spawn: {},
   paused: false,
   es: null,
@@ -11253,6 +11257,16 @@ function codeBoxHit(e) {
   }
   return box.querySelector(":scope > .code-head[data-code-fold]");
 }
+
+// The turnover bar's POLICY select saves on its change, unlike the kind select beside it: a policy is one word the
+// reader has already chosen, so there is nothing for a save button to confirm. The value comes off the control that
+// changed (a repaint rebuilds the select, so a later lookup would read the wrong node); the bar then draws what the
+// route ANSWERED. The handler lives here, beside the chip's click, because the two are the one bar's whole input.
+document.addEventListener("change", (e) => {
+  const policy = e.target.closest && e.target.closest("[data-turnover-policy]");
+  if (!policy) return;
+  void saveProjectTurnoverPolicy(policy.dataset.turnoverPolicy, policy.value);
+});
 
 document.addEventListener("click", async (e) => {
   // A click is the reader taking over: stop chasing the box a spawn wanted focused. Clicking inside
