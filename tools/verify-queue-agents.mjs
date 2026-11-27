@@ -28,6 +28,10 @@
 //   three threads  the third stacks too: three left-equal boxes, three increasing tops, meta under the third.
 //   one thread     unchanged: one agent box, natural width (not stretched), on the facts block's own top, with
 //                  the meta text still sharing its line.
+//   pipeline       the chip is a block of its own under the facts line, a sibling of it, never inside it.
+//   provenance     each agent line carries the project and the landed verdict of the tree THAT thread ran in, read
+//                  back through the queue's own `threadTrees`/`decorateTasks` path; a thread with no recorded tree
+//                  draws nothing, and the task-level meta line steps aside when the agent lines carry it.
 //   compact card   the Initiatives pane's single-thread line is one line and has no wrapper of its own.
 //
 // The page is synthetic on purpose (no panel, no queue file, no port): the card markup comes from the shipped
@@ -38,7 +42,7 @@
 // a pass.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { loadPlaywright, notRun, withBrowser } from "./browser.mjs";
 import { sliceRegion } from "./panel-testkit.mjs";
 
@@ -103,6 +107,11 @@ const THREAD = (n) => `wtgui-queue-card-agent-${n}-7b3e42`;
 const TWO = [THREAD("one"), THREAD("two")];
 const THREE = [THREAD("one"), THREAD("two"), THREAD("three")];
 const ONE = [THREAD("one")];
+const PROV_A = THREAD("prov-a");
+const PROV_B = THREAD("prov-b");
+const PROV_NONE = THREAD("prov-none");
+const TREE_A = `${PROJECT}/.worktrees/queue-card-agents-371`;
+const TREE_B = `poc-guidelines/.worktrees/poc-guidelines-cut-4f11aa`;
 
 const task = (id, threads, extra = {}) => ({
   id,
@@ -114,28 +123,45 @@ const task = (id, threads, extra = {}) => ({
   worktree: `${PROJECT}/.worktrees/queue-card-agents-${id}`,
   files: ["public/queue-cards.js", "public/style.css"],
   attempts: 2,
-  row: { verdict: "NO COMMITS" },
   ...extra,
 });
+
+// The board rows the queue's read decorates against. The four plain cards each point at their own tree; the
+// provenance card's two recorded agents ran in DIFFERENT projects, which is the whole reason the fact belongs on the
+// agent's line rather than on the task's meta line. `prov-none` has no recorded tree, so its line must stay bare.
+const ROWS = [
+  ...[371, 372, 373, 374].map((id) => ({ path: `${PROJECT}/.worktrees/queue-card-agents-${id}`, project: PROJECT, verdict: "NO COMMITS" })),
+  { path: TREE_A, project: PROJECT, verdict: "UNMERGED (2 commits)", branchKind: "research", branchKindLabel: "research tree" },
+  { path: TREE_B, project: "poc-guidelines", verdict: "MERGED (3 commits)", pr: { number: 373, state: "OPEN" }, branchKind: "turnover", branchKindLabel: "turnover branch" },
+];
 
 const jobsFor = (threads, statuses) => new Map(threads.map((th, i) => [th, { status: statuses[i] || "running" }]));
 
 // Two threads is the photographed case: the first run failed (EXITED, with its re-attach press) and the second
-// is going (RUNNING). Three threads adds one more to prove the rule is a column and not a pair.
+// is going (RUNNING). Three threads adds one more to prove the rule is a column and not a pair. `provenance` is the
+// per-agent case: two recorded trees in two projects, and one thread nobody recorded a tree for.
 const FIXTURES = {
   two: { task: task(371, TWO), jobs: jobsFor(TWO, ["failed", "running"]) },
   three: { task: task(372, THREE), jobs: jobsFor(THREE, ["failed", "running", "done"]) },
   one: { task: task(373, ONE), jobs: jobsFor(ONE, ["running"]) },
   compact: { task: task(374, ONE), jobs: jobsFor(ONE, ["running"]) },
+  provenance: {
+    task: task(375, [PROV_A, PROV_B, PROV_NONE], {
+      project: PROJECT,
+      worktree: TREE_A,
+      threadTrees: { [PROV_A]: { path: TREE_A, project: PROJECT }, [PROV_B]: { path: TREE_B, project: "poc-guidelines" } },
+    }),
+    jobs: jobsFor([PROV_A, PROV_B, PROV_NONE], ["done", "running", "failed"]),
+  },
 };
 
 // ---- the page: the shipped stylesheets, the shipped markup, nothing else --------------------------------------
 // The order public/index.html loads them, because that order is the cascade the page really paints.
 const SHEETS = ["style.css", "chart.css", "core/pipeline-card.css", "core/task-card.css"];
 
-function pageHtml(renderer) {
+function pageHtml(renderer, decorated) {
   const css = SHEETS.map((rel) => readFileSync(path.join(ROOT, "public", rel), "utf8")).join("\n");
-  const card = (mode, own) => renderer.taskCardHtml(FIXTURES[mode].task, mode === "compact" ? "compact" : "full", {
+  const card = (mode) => renderer.taskCardHtml(decorated[mode], mode === "compact" ? "compact" : "full", {
     own: "assistant-1",
     jobs: FIXTURES[mode].jobs,
     byId: new Map(),
@@ -153,7 +179,7 @@ function pageHtml(renderer) {
   #inits { width: 760px; }
 </style></head>
 <body>
-  <div id="qpane" class="as-group as-qpane">${card("two")}${card("three")}${card("one")}</div>
+  <div id="qpane" class="as-group as-qpane">${card("two")}${card("three")}${card("one")}${card("provenance")}</div>
   <div id="qpane-narrow" class="as-group as-qpane">${card("two")}</div>
   <div id="as-initiatives"><div class="init-tasks" id="inits">${card("compact")}</div></div>
 </body></html>`;
@@ -186,7 +212,18 @@ function measureInPage() {
       const pillAt = pill ? kids.indexOf(pill) : -1;
       const prev = pillAt > 0 ? kids[pillAt - 1] : null;
       const pillGap = pill && prev ? pill.getBoundingClientRect().left - prev.getBoundingClientRect().right : null;
-      return { ...rect(el), contentWidth, pillGap, pillText: pill ? pill.textContent.trim() : "" };
+      // The per-agent provenance sentence, if this line carries one, and the band it draws in.
+      const whereEl = el.querySelector(".as-task-agent-where");
+      const whereRect = whereEl ? whereEl.getBoundingClientRect() : null;
+      return {
+        ...rect(el),
+        contentWidth,
+        pillGap,
+        pillText: pill ? pill.textContent.trim() : "",
+        where: whereEl ? whereEl.textContent.trim() : null,
+        whereTop: whereRect ? whereRect.top : null,
+        whereBottom: whereRect ? whereRect.bottom : null,
+      };
     };
     const meta = facts.querySelector(".as-task-meta");
     // The pipeline chip: is it a block of its own, a SIBLING of the facts line, or still a child of it?
@@ -225,6 +262,7 @@ function measureInPage() {
     two: read("#qpane", '[data-as-qrow="371"]'),
     three: read("#qpane", '[data-as-qrow="372"]'),
     one: read("#qpane", '[data-as-qrow="373"]'),
+    provenance: read("#qpane", '[data-as-qrow="375"]'),
     narrow: read("#qpane-narrow", '[data-as-qrow="371"]'),
     compact: read("#as-initiatives", '[data-as-qrow="374"]'),
   };
@@ -238,7 +276,17 @@ if (!playwright) {
 }
 
 const renderer = cardsFromSource();
-const html = pageHtml(renderer);
+// THE READ'S OWN DECORATION, not a hand-built `row`: the queue pane renders whatever `decorateTasks` attached to
+// the task (lib/assistant/queue.js), so the fixtures go through it too. `isLive` is true here because this gate is
+// about layout - a fixture that reads STALE would be making the liveness gate's claim, not this one.
+const { decorateTasks } = await import(pathToFileURL(path.join(ROOT, "lib", "assistant", "queue.js")).href);
+const normPath = (p) => String(p ?? "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+const rowsByPath = new Map(ROWS.map((r) => [normPath(r.path), r]));
+const rowFor = (t) => rowsByPath.get(normPath(t?.worktree)) || null;
+const decorated = Object.fromEntries(
+  Object.entries(FIXTURES).map(([mode, f]) => [mode, decorateTasks([f.task], { rowFor, isLive: () => true, jobs: null })[0]]),
+);
+const html = pageHtml(renderer, decorated);
 
 await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
   await page.setContent(html, { waitUntil: "load" });
@@ -325,6 +373,30 @@ await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
   check(Boolean(one.pipeline) && one.pipeline.top >= one.facts.bottom - 0.5, "one thread: the pipeline row draws under the facts block", one.pipeline ? `pipeline top ${round(one.pipeline.top)}, facts bottom ${round(one.facts.bottom)}` : "no pipeline");
   check(/assistant decides/.test(two.pipelineText || ""), "the pipeline row carries the task's own answer", JSON.stringify(two.pipelineText || ""));
 
+  // ---- whose project, whose landing: the per-agent line ------------------------------------------------------
+  const prov = measured.provenance;
+  check(prov.agents.length === 3, "the provenance card draws three agent rows", `${prov.agents.length}`);
+  if (prov.agents.length === 3) {
+    const [a, b, c] = prov.agents;
+    check(
+      /project agent-worktree-gui/.test(a.where || "") && /UNMERGED \(2 commits\)/.test(a.where || ""),
+      "the first agent's line names its own project and landing",
+      JSON.stringify(a.where),
+    );
+    check(
+      /project poc-guidelines/.test(b.where || "") && /MERGED \(3 commits\)/.test(b.where || "") && /PR #373 open/.test(b.where || ""),
+      "the second agent's line names ITS project, its landing and its PR",
+      JSON.stringify(b.where),
+    );
+    check(Boolean(a.where) && a.where !== b.where, "the two agent lines do not repeat one project");
+    check(c.where === null, "an agent whose tree was never recorded draws nothing extra", JSON.stringify(c.where));
+    check(prov.meta === null, "the task-level meta line steps aside when the agent lines carry it", prov.meta ? "meta still drawn" : "absent");
+    check(Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.left - c.left) <= 0.5, "the provenance lines share one left edge", `${round(a.left)} / ${round(b.left)} / ${round(c.left)}`);
+    check(b.top - a.top >= a.height - 0.5 && c.top - b.top >= b.height - 0.5, "and still stack one per line", `tops ${round(a.top)} / ${round(b.top)} / ${round(c.top)}`);
+    check(a.whereTop !== null && a.whereTop >= a.top - 0.5 && a.whereTop < a.bottom, "the sentence draws on the agent's own line", a.whereTop === null ? "no sentence" : `${round(a.whereTop)} in ${round(a.top)}-${round(a.bottom)}`);
+    check(Boolean(prov.pipeline) && prov.pipeline.top >= prov.facts.bottom - 0.5, "the pipeline row stays below the facts block", prov.pipeline ? `pipeline top ${round(prov.pipeline.top)}, facts bottom ${round(prov.facts.bottom)}` : "no pipeline");
+  }
+
   // ---- a third agent stacks too -----------------------------------------------------------------------------
   check(three.agents.length === 3, "three threads draw three agent rows", `${three.agents.length}`);
   if (three.agents.length === 3) {
@@ -386,6 +458,7 @@ await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
       ["two-agents", "#qpane .as-task:nth-child(1)"],
       ["three-agents", "#qpane .as-task:nth-child(2)"],
       ["one-agent", "#qpane .as-task:nth-child(3)"],
+      ["provenance", "#qpane .as-task:nth-child(4)"],
       ["compact", "#inits .as-task"],
     ]) {
       const el = await page.$(sel);

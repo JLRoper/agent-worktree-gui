@@ -7023,6 +7023,11 @@ tbody tr.row.flash-permissions { animation: flashrow-permissions var(--flash-row
 .as-qpane .as-task-agent { gap: 4px; padding: 0 3px 0 2px; }
 .as-qpane .as-task-agent .as-task-agent-thread { max-width: 210px; font-size: 10px; }
 .as-qpane .as-task-agent .as-task-agent-label { font-size: 10px; }
+/* WHERE THIS AGENT'S WORK IS, and how that tree lands: the project, the landed verdict, and a PR when the tree is a
+   turnover branch. It rides the agent's own line because one task can be carried by agents in different trees and
+   projects, and the task's own `worktree` only ever names the newest one. Dimmer than the thread and it shrinks
+   first, so a narrow card keeps the agent's name and loses the tail of this sentence. */
+.as-qpane .as-task-agent .as-task-agent-where { flex: 0 1 auto; min-width: 0; font-size: 9.5px; color: var(--dimmer); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .as-qpane .as-task-agent .pill { font-size: 9px; line-height: 1.5; padding: 0 5px; }
 .as-qpane .pill.pill-running { color: #7ee787; background: var(--green-bg); border-color: #1f4a2a; }
 .as-qpane .as-task-meta { margin: 0; gap: 0 8px; font-size: 10px; color: var(--dim); }
