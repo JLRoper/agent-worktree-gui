@@ -173,7 +173,10 @@ test("the sheet resolves the console's height from the variable, and the gesture
   // travel, and it is what undid every drag that ever worked.
   const release = grab(appSrc, "endOutGrip");
   assert.equal(/setScroll\(d\.body/.test(release), false, "the release writes no foot");
-  assert.ok(release.includes("noteCardBodyScroll(d.body)"), "it records where the drag left the transcript instead");
+  assert.ok(
+    release.includes("noteCardBodyScroll(d.body, 0)"),
+    "it records where the drag left the transcript, with no 8px tail band: the gap is the drag's own, and the band let the release's repaint scroll it away",
+  );
 });
 
 test("the chat pane's own pin and in-place paints defer to the gesture", () => {

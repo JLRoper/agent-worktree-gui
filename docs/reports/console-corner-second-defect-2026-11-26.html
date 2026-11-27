@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The console's corner, second defect: the handle was not on the console</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13px; }
+  th, td { text-align:left; padding:5px 7px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  .lead { border-left:3px solid var(--no); padding:2px 0 2px 12px; margin:12px 0; }
+  .good { border-left:3px solid var(--ok); padding:2px 0 2px 12px; margin:12px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  .small { font-size:11.5px; color:var(--dim); }
+  .scroll { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The console's corner, second defect: the handle was not on the console</h1>
+<p class="sub">agent-worktree-gui, branch <code>wtgui/continue-the-console-corner-s-second-7e5da4</code>, cut from
+<code>main</code> at <code>d84346c7</code> (1.181.0) and carrying 1.181.2. Every number below was read from the reader's
+LIVE panel at <code>http://127.0.0.1:7331</code> in the gate's own isolated browser context (its own localStorage, so the
+reader's stored heights were never touched), with this tree's page served over that panel's own data by
+<code>--serve</code>. No server was started, restarted or reconfigured. The pre-fix numbers come from the same gate
+served against a <code>git archive HEAD</code> export of <code>d84346c7</code> under
+<code>%TEMP%\wag\68b1f189\prefix</code> - one gate, one set of live data, two trees, and no worktree was created for the
+export. All line numbers are on this branch.</p>
+
+<dl class="facts">
+  <dt>the defect</dt><dd>12 of 16 drag cases at the 140px start failed in the non-scrolling slack turn</dd>
+  <dt>the cause</dt><dd>the grip is drawn at the bottom of the <code>.out-box</code> wrapper, and that wrapper keeps the pane's slack (<code>flex: 1 1 auto</code>) while the console inside it is <code>flex: 0 0 auto</code>: the handle stands in blank room below the console it resizes</dd>
+  <dt>the gap</dt><dd>145.41px at 1600 (a 285.41px wrapper around a 140px console), 28.61px at 820 (168.61px around 140px)</dd>
+  <dt>the top edge</dt><dd>stood still for all 30 steps at both widths; the failing number was the grip, not the top</dd>
+  <dt>the body's room</dt><dd>0px at the press (scrollHeight = clientHeight); its scroll writes during the drag were 0 to 0, no-ops</dd>
+  <dt>the fix</dt><dd>the wrapper becomes the console's own box when the console has an explicit height (public/style.css:7082), so the grip rides the console's corner</dd>
+  <dt>the gate</dt><dd>tools/verify-console-corner-drag.mjs, now reading the grip against the console's own bottom edge (<code>corner gap</code>) and the writes after the release</dd>
+  <dt>this tree</dt><dd class="ok">48 of 48 cases PASS</dd>
+  <dt>neighbours</dt><dd class="ok">verify-console-resize-release 8/8 PASS; verify-console-corner-tail PASS; 102 focused unit tests pass</dd>
+  <dt>the residual</dt><dd>one release in 48 lands 24.3px off the hand: a deferred head paint adds a chip row above the card. Read as a pane reflow, printed in the pass line, not hidden</dd>
+</dl>
+
+<h2>1. What the brief said, and what the panel showed</h2>
+<p>The brief named the start (140px), the shape (a non-scrolling slack turn) and a cause to prove: the drag freezes the
+top edge by writing the transcript's scroll offset, and a body with no scroll room cannot honour that write. The first
+half of that is exactly what the gesture does - it freezes the top edge at the press and writes the height from it
+(public/app.js:10821 reads the room once, public/app.js:10915 holds every move to it). The second half is real but not
+the writer of the failing numbers: the transcript at the 140px start really has no scroll room, and every scroll write the
+drag made was <code>scrollTop = 0</code> from <code>0</code> - and the top edge did not move for the whole drag.</p>
+<p>What moved was the handle. The grip is <code>bottom: 0; right: 0</code> inside <code>.out-box</code>, and in the slack
+turn that wrapper is <code>display: flex; flex-direction: column; flex: 1 1 auto</code> (public/style.css:7061), so it
+stretches to the pane's spare room while the console inside it, given an explicit height, is <code>flex: 0 0 auto</code>
+(public/style.css:7070). The grip therefore sits at the bottom of a box 145.41px taller than the console it belongs to.
+The hand presses that grip, the console grows, and the handle does not move: the console grows inside the wrapper's blank
+space until the blank is used up.</p>
+
+<h2>2. The geometry, step by step</h2>
+<p>Both traces are <code>slow</code>, 30 moves of 2px, from a 140px console, pre-fix tree, live panel, same gate.</p>
+<div class="scroll">
+<table>
+  <tr><th>at</th><th>console top</th><th>console height</th><th>grip bottom</th><th>wrapper height</th><th>corner gap</th><th>body scrollTop / room</th></tr>
+  <tr><td class="n">1600, press</td><td class="n">566.78</td><td class="n">140</td><td class="n">852.19</td><td class="n">285.41</td><td class="n no">145.41</td><td class="n">0 / 0</td></tr>
+  <tr><td class="n">1600, step 30 (+60)</td><td class="n">566.78</td><td class="n">200</td><td class="n">852.19</td><td class="n">285.41</td><td class="n no">85.41</td><td class="n">0 / 0</td></tr>
+  <tr><td class="n">1600, after release</td><td class="n">566.78</td><td class="n">200</td><td class="n">852.19</td><td class="n">285.41</td><td class="n no">85.41</td><td class="n">0 / 0</td></tr>
+  <tr><td class="n">820, press</td><td class="n">649.83</td><td class="n">140</td><td class="n">818.44</td><td class="n">168.61</td><td class="n no">28.61</td><td class="n">0 / 0</td></tr>
+  <tr><td class="n">820, step 15 (+30)</td><td class="n">649.83</td><td class="n">170</td><td class="n">818.83</td><td class="n">168.61</td><td class="n no">0.61</td><td class="n">0 / 1</td></tr>
+  <tr><td class="n">820, after release</td><td class="n">649.83</td><td class="n">200</td><td class="n">849.83</td><td class="n">200</td><td class="n ok">0</td><td class="n">0 / 32</td></tr>
+</table>
+</div>
+<p>At 1600 the wrapper never changes size: all 60px of growth happens under a stationary handle, and the gate reads the
+corner 60px from the pointer at the end (<code>final -60</code>). At 820 the wrapper's 28.61px of blank is consumed first
+and then the wrapper itself grows with the console, so the last 31.39px of travel do move the grip - which is why the
+failure there measures 28.61px rather than 60. The verdict named both: "the grip stood 145.41px below the console's own
+bottom edge (the wrapper the grip is drawn in is 285.41px for a 140px console, its flex 1 1 auto: the corner is not the
+console's corner, so the drag grows the console under the handle instead of moving it)".</p>
+<pre>pre-fix, node tools/verify-console-corner-drag.mjs --serve &lt;HEAD export&gt; --only slow --sizes 140 --widths 1600,820
+FAIL  slow@1600/140: ... corner worst 60px, final -60px, stored 200px, drawn 200px, corner gap 145.41px -- ...
+FAIL  slow@820/140:  ... corner worst 28.61px, final -28.61px, stored 200px, drawn 200px, corner gap 28.61px -- ...
+RESULT: FAIL 2/2 cases</pre>
+<p>The brief's count is the same defect at every drag case at that start: <code>slow</code>, <code>flick</code>,
+<code>past-max</code>, <code>crossing</code>, <code>interrupt-poll</code> and <code>interrupt-repaint</code> all press a
+handle that is not on the console. <code>no-move</code> presses and never drags, and <code>past-min</code> comes to rest
+on the sheet's 18px floor, so those four (two shapes at two widths) were the four passes: 12 of 16 fail, which is the
+brief's 12 of 48 across the whole matrix.</p>
+
+<h2>3. The scroll room, measured</h2>
+<p>The transcript at the 140px start is slack: its content is exactly the pane's height, so
+<code>scrollHeight - clientHeight</code> is 0 and a <code>scrollTop</code> write cannot move it. The gate instruments
+every write to the transcript's offset and the pre-fix trace shows what the gesture's own paths asked for during the drag:
+eight writes, every one of them <code>0 to 0</code>, from <code>setScroll</code> at public/board/console.js:3687 through
+public/app.js:10929. A body with no room cannot honour a write to a non-zero offset either, but it was never asked to:
+the frozen top edge was 566.78 at the press and 566.78 at every step.</p>
+<p>So the brief's mechanism is half of the story. The room matters at the release, not during the drag: once the wrapper
+is the console's own box the transcript gains room as the console grows (32px at 820 in the third row above), and a pin or
+a rebuild that lands at the release can spend that room by scrolling the transcript to its foot, taking the top edge - and
+the corner - with it. Two separate bands let it happen, and both are closed here:</p>
+<ul>
+  <li><code>noteCardBodyScroll(body)</code> used an 8px band to call a transcript "still following"
+      (public/board/console.js:3769). A drag's own last few px are inside that band, so the next pin scrolled them away.
+      The release now records the truth with <code>noteCardBodyScroll(d.body, 0)</code> (public/app.js:11017), and the
+      chat pane's own placement does the same (public/assistant.js:2408).</li>
+  <li><code>renderConversation</code> measured only the DOM, with a 32px band
+      (public/render-jobs.js:1165 before this change). A rebuild at the release read a drag's gap as "on the foot" and
+      scrolled it away. The body's own record now wins when it says not following, and the fresh node is noted with the
+      0 band (public/render-jobs.js:1209).</li>
+</ul>
+
+<h2>4. The fix: the handle moves with the console</h2>
+<p>One rule, at public/style.css:7082:</p>
+<pre>.as-subpane[data-subpane="chat"] &gt; .job &gt; .job-body &gt; .turn.is-slack &gt; .out-wrap &gt; .out-box:has(&gt; .job-out[style*="--out-h"]) {
+  flex: 0 0 auto;
+}</pre>
+<p>The rule above it already draws a console with an explicit height at that height (public/style.css:7070); this one
+does the same for the box the grip is drawn in, and only when the console inside it has a height. The wrapper is then the
+console's own box: <code>boxH === console height</code>, <code>corner gap 0</code>, and the drag's growth moves the grip
+the hand is on. A console nobody has resized keeps the flex and the pane's spare room still lands in it.</p>
+<p>The rest of the patch is the release side. The assistant's head is a row above the console (a status chip in the
+<code>as-bar</code> strip, a new session tab), so a paint that lands under the hand moves the frozen top edge: the head's
+paint is now deferred to the release (public/assistant.js:166 to 176, asked from
+<code>syncSessionTabs</code> at public/assistant.js:184 and <code>renderAssistant</code> at public/assistant.js:2172), and
+<code>outGripDefer</code> keeps every distinct deferred paint rather than only the last (public/app.js:11022).</p>
+
+<h2>5. The gate's new instruments</h2>
+<p>Three readings were added, each aimed at a number the old gate could not see:</p>
+<table>
+  <tr><th>the reading</th><th>what it answers</th><th>where</th></tr>
+  <tr>
+    <td><strong>corner gap</strong></td>
+    <td>the grip's bottom edge against the console's own bottom edge, at the press and at every step; above 2px is a
+        handle in blank space. This is the defect's own number, and it is invisible to every other reading because they
+        all come from the console's rect.</td>
+    <td class="n">tools/verify-console-corner-drag.mjs:227, :824</td>
+  </tr>
+  <tr>
+    <td><strong>the release's writes</strong></td>
+    <td>every write to the transcript's offset from the pointerup to the end of the settle, with its stack, plus the
+        scrolls the browser made itself. A corner that comes back off the hand after the release names its writer.</td>
+    <td class="n">tools/verify-console-corner-drag.mjs:356, :572, :601</td>
+  </tr>
+  <tr>
+    <td><strong>what sits above the box</strong></td>
+    <td>the card, its rows, and the assistant's head with their heights and tops, before the press and after the
+        release. A case whose corner moved can say which row grew instead of blaming the drag.</td>
+    <td class="n">tools/verify-console-corner-drag.mjs:608 (the <code>above()</code> helper)</td>
+  </tr>
+</table>
+<p>The hand's own request is also kept per move (<code>dragWant</code>, public/app.js:10917 and
+tools/verify-console-corner-drag.mjs:254), because a move held on the room's limit draws less than the hand asked for and
+judging the corner by the drawn height would read a deliberate stop as a lost corner. And the verdict now tells a pane
+reflow from a drag undone by evidence, not by the size of the number: the transcript's offset did not move between the
+last move and the release, and the card's top moved by the same amount as the console's top
+(tools/verify-console-corner-drag.mjs:885 to 915).</p>
+<p><code>--only &lt;substring&gt;</code> was added for the iteration between a defect and its fix
+(tools/verify-console-corner-drag.mjs:129); it skips the press-only matrix and never stands in for the full run.</p>
+
+<h2>6. The matrix, this tree, 48 of 48</h2>
+<p><code>node tools/verify-console-corner-drag.mjs --serve &lt;this tree&gt;</code>, both widths, both starts, the eight
+drag shapes and the press-only rows at zooms 100 and 90. Corner and final in px; "corner" is the worst gap between the
+grip and the pointer while the height was in range, "final" the same gap after the release.</p>
+<div class="scroll">
+<table>
+  <tr><th>case</th><th>pointer</th><th>size</th><th>corner worst</th><th>final</th><th>stored</th><th>corner gap</th><th>verdict</th></tr>
+<tr><td class="n">slow@1600/140</td><td class="n">60</td><td class="n">60</td><td class="n">0</td><td class="n">0</td><td class="n">200</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@1600/140</td><td class="n">120</td><td class="n">120</td><td class="n">0</td><td class="n">0</td><td class="n">260</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@1600/140</td><td class="n">-400</td><td class="n">-122</td><td class="n">0</td><td class="n">278</td><td class="n">18</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@1600/140</td><td class="n">900</td><td class="n">365</td><td class="n">0</td><td class="n">-535</td><td class="n">505</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@1600/140</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@1600/140</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">24.3</td><td class="n">176</td><td class="n">0</td><td class="ok">PASS, reflow 24.29px</td></tr>
+<tr><td class="n">interrupt-repaint@1600/140</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@1600/140</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@1600/460</td><td class="n">60</td><td class="n">60</td><td class="n">0</td><td class="n">0</td><td class="n">520</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@1600/460</td><td class="n">120</td><td class="n">120</td><td class="n">0</td><td class="n">0</td><td class="n">580</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@1600/460</td><td class="n">-400</td><td class="n">-400</td><td class="n">0</td><td class="n">199</td><td class="n">60</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@1600/460</td><td class="n">900</td><td class="n">220</td><td class="n">0</td><td class="n">-680</td><td class="n">680</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@1600/460</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@1600/460</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@1600/460</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@1600/460</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@820/140</td><td class="n">60</td><td class="n">60</td><td class="n">0</td><td class="n">0</td><td class="n">200</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@820/140</td><td class="n">120</td><td class="n">120</td><td class="n">0</td><td class="n">0</td><td class="n">260</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@820/140</td><td class="n">-400</td><td class="n">-122</td><td class="n">0</td><td class="n">278</td><td class="n">18</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@820/140</td><td class="n">900</td><td class="n">282</td><td class="n">0</td><td class="n">-618</td><td class="n">422</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@820/140</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@820/140</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@820/140</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">176</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@820/140</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">140</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">slow@820/460</td><td class="n">60</td><td class="n">60</td><td class="n">0</td><td class="n">0</td><td class="n">520</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">flick@820/460</td><td class="n">120</td><td class="n">120</td><td class="n">0</td><td class="n">0</td><td class="n">580</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-min@820/460</td><td class="n">-400</td><td class="n">-400</td><td class="n">0</td><td class="n">292</td><td class="n">60</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">past-max@820/460</td><td class="n">900</td><td class="n">254</td><td class="n">0</td><td class="n">-646</td><td class="n">714</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">crossing@820/460</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-poll@820/460</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">interrupt-repaint@820/460</td><td class="n">36</td><td class="n">36</td><td class="n">0</td><td class="n">0</td><td class="n">496</td><td class="n">0</td><td class="ok">PASS</td></tr>
+<tr><td class="n">no-move@820/460</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">460</td><td class="n">0</td><td class="ok">PASS</td></tr>
+</table>
+</div>
+<p class="small">"Final" is the corner's distance from the hand after the release; it is large where the drag reached a
+limit (past-min, past-max) because the box stopped where the limit is and the hand kept going, and that is the design.
+The press-only rows (16 of the 48, at 1600 and 820, 140/300/460/620px, zoom 100 and 90) all read delta 0 for the drawn
+height, the top edge and the corner, 0 scroll writes, corner gap 0, box flex <code>0 0 auto</code>.</p>
+
+<div class="good">
+<strong>Pre-fix: the four cases re-run at the 140 start fail on the gap.</strong> 145.41px at 1600, 28.61px at 820, and the
+brief's 12 of 48 (the 12 failures at the 140 start) follow from the same geometry.
+</div>
+<div class="good">
+<strong>This tree: 48 of 48 PASS, 0 FAIL.</strong> Corner gap 0 at the press and at every step of every case, the corner on
+the hand wherever the box was free to follow it, and the height the drag drew is the height the release keeps at every
+limit.
+</div>
+
+<h2>7. Neighbours</h2>
+<table>
+  <tr><th>what</th><th>result</th></tr>
+  <tr><td class="n">verify-console-resize-release.mjs</td><td class="ok">PASS 8/8 cases, delta 0 at every zoom, press-only and upward unchanged</td></tr>
+  <tr><td class="n">verify-console-corner-tail.mjs --root &lt;this tree&gt;</td><td class="ok">PASS, corner worst 0px of 8 steps, clamp called once, release clamp fires on the pointerup, 0/489 tail frames over 4px</td></tr>
+  <tr><td class="n">node --test test/console-grip.test.js</td><td class="ok">19 pass, 0 fail (the source tests rewritten to the one-band rule and the 0px tail band)</td></tr>
+  <tr><td class="n">console-height-store, console-tail-pin, console-output-box, agent-card-scroll-pin, assistant-float-header, assistant-search-scroll</td><td class="ok">83 pass, 0 fail</td></tr>
+</table>
+
+<h2>8. The residual, plainly</h2>
+<p>One row in 48 does not end with the corner on the hand: <code>interrupt-poll@1600/140</code>, final 24.3px, tagged
+<code>pane reflow 24.29px</code> in the pass line. The deferred head paint runs at the release, the status chip strip
+gains a row (<code>as-bar</code> 36.94px to 61.23px), the card and the console move down by the same 24.29px, and the
+grip goes with them. The transcript's own offset did not move - the body has no room, so no scroll could undo the drag -
+and the gate tells the two apart by that evidence and by the card's top moving with the box's (tools/verify-console-corner-drag.mjs:900
+to 915).</p>
+<p>That is a paint that has to happen, moved from under the hand to the release; it is not the drag's travel being given
+back. It is printed in the pass line rather than swallowed, and it is named here as a separate, smaller defect: a head
+that grows above the console when a chip arrives moves the corner by the row's height. Fixing it means reserving the chip
+row's height for the length of the gesture, which is a layout change to the float's head and not this row's brief.</p>
+
+<h2>9. Files</h2>
+<table>
+  <tr><th>file</th><th>what</th></tr>
+  <tr><td class="n">public/app.js</td><td>the deferred flush keeps every distinct paint (11022); the release records the transcript with no tail band (11017)</td></tr>
+  <tr><td class="n">public/assistant.js</td><td>the head's paint defers to the release (166 to 176, asked at 184 and 2172); the chat pane's placement notes the 0 band (2408)</td></tr>
+  <tr><td class="n">public/board/console.js</td><td><code>noteCardBodyScroll</code> takes the caller's band, defaulting to the reader's 8px (3769)</td></tr>
+  <tr><td class="n">public/render-jobs.js</td><td>a rebuild reads the body's own record before it pins, and notes the fresh node with the 0 band (1165, 1209)</td></tr>
+  <tr><td class="n">public/style.css</td><td>the wrapper the grip is drawn in becomes the console's own box when the console has a height (7082)</td></tr>
+  <tr><td class="n">test/console-grip.test.js</td><td>the one-band rule, the release's 0px tail band, the press's room, and the layout units</td></tr>
+  <tr><td class="n">tools/verify-console-corner-drag.mjs</td><td><code>--only</code>; the corner gap at the press and every step; the release's writes; what sits above the box; the hand's own request; the pane-reflow distinction</td></tr>
+  <tr><td class="n">package.json</td><td>1.181.2</td></tr>
+</table>
+
+<p class="small">One run of the gate is one dataset: the panel keeps streaming and polling while it runs, and a snapshot
+that lands mid-case can move a case by one. The numbers here are single whole runs, kept whole. The pre-fix export is
+<code>git archive HEAD</code> at <code>d84346c7</code> in <code>%TEMP%\wag\68b1f189\prefix</code>; traces are in the same
+folder (<code>prefix-slow-140.json</code>, <code>prefix-poll-140.json</code>). No worktree was created for the export.</p>
+
+</main>
+</body>
+</html>

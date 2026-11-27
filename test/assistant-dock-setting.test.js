@@ -222,7 +222,9 @@ test("the pane re-frames on load, on a save and on another tab's settings change
   assert.match(code, /el\.classList\.toggle\("is-floating", mode === "floating"\)/);
   // The paths that have to land here: the boot, an open, a resize, every render, and the settings event that carries
   // a pick made in another tab. The assistant's own tab no longer changes the frame.
-  assert.match(code, /function renderAssistant\(\) \{\n\s*const a = state\.assistant;\s*\n\s*applyFrame\(\);/,
+  // The corner gesture's deferral comes first: a paint under the hand is drawn at the release, and that paint runs
+  // this same function from the top. Everything after the guard still re-frames from the panel's key.
+  assert.match(code, /function renderAssistant\(\) \{\n\s*if \(globalThis\.outGripLive\?\.\(\)\) \{\n\s*deferHeadPaint\(\);\n\s*return;\n\s*\}\n\s*const a = state\.assistant;\n\s*applyFrame\(\);/,
     "every render re-frames from the panel's key — a save and the first snapshot both land here");
   assert.match(code, /el\.hidden = !state\.assistantOpen;\n\s*as\$\("btn-assistant"\)\?\.classList\.toggle\("is-on", state\.assistantOpen\);\n\s*applyFrame\(true\);/,
     "the boot applies the frame the panel's file asks for");

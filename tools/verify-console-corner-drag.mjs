@@ -10,6 +10,7 @@
 //   node tools/verify-console-corner-drag.mjs --trace <file>       # every step of every case as JSON
 //   node tools/verify-console-corner-drag.mjs --cause-check        # the slow drag with the browser's anchoring off
 //   node tools/verify-console-corner-drag.mjs --widths 1600,820 --sizes 140,460
+//   node tools/verify-console-corner-drag.mjs --only slow --sizes 140     # one case by name, no press-only matrix
 //   node tools/verify-console-corner-drag.mjs --press-sizes 140,300,460,620 --press-zooms 100,90
 //   node tools/verify-console-corner-drag.mjs --inner-height 1080
 //
@@ -30,6 +31,18 @@
 // and the scrollport's clamp takes the top edge down with it. That is a floor like the sheet's min-height: it is judged
 // by the size and store checks, not as a corner the gesture lost, and the floor is read where the press found it (how
 // far the transcript was from its foot).
+//
+// THE GRIP MUST BE THE CONSOLE'S CORNER. The grip is `bottom: 0` inside `.out-box`, so a wrapper stretched taller than
+// the console draws the handle under the console's own bottom edge, in blank room. The hand then presses a corner the
+// console does not have, and a drag grows the console inside that blank while the handle stands still: every number
+// read from the console's own rect is right, and the reader's corner does not move. The gap is read at the press and at
+// every step (`corner gap`) and fails above the corner tolerance, so a slack turn that stretches the grip's box cannot
+// pass this gate. Measured on the live pane's 140px start before the fix: 285.41px of wrapper around a 140px console at
+// 1600, the grip 145.41px below the console's bottom edge, 60px of travel and the grip on the same pixel for all 30
+// steps (28.61px at 820).
+//
+// ONE CASE BY NAME (`--only <substring>`) is the microscope while a defect is being worked: it runs the drag cases
+// whose name contains the string and skips the press-only matrix. It never stands in for the full run in a report.
 //
 // THE MATRIX. Two viewport widths (wide 1600, narrow 820 - the docked rail caps at half the window, so the console is
 // 463 px wide at one and 383 px at the other), and two starting sizes (small 140 px, large 460 px). At each: slow
@@ -110,6 +123,10 @@ const PRESS_TOLERANCE_PX = 1; // the brief's number: a press-only row fails abov
 // 1080 is the reader's screen and the shape tools/measure-console-press-only.mjs measures at; --inner-height keeps
 // 900 available for a reproduction, and a press that cannot reach the corner now says so instead of failing as a drag.
 const INNER_H = Number(opt("inner-height", 1080)) || 1080;
+// ONE CASE BY NAME, for the iteration between a defect and its fix: `--only interrupt-poll` runs the drag cases whose
+// name contains that string and skips the press-only matrix. The full run is the gate; this is the microscope, and it
+// never stands in for the full run in a report.
+const ONLY = opt("only", null);
 // A hand lands a few px inside an 18 px band; 3 px is inside it, and 2 px is the repo's corner tolerance.
 const GRIP_INSET_PX = 3;
 const CORNER_TOLERANCE_PX = 2;
@@ -150,7 +167,7 @@ const PAGE_HELPERS = (gripInset) => {
     try { ls = JSON.parse(localStorage.getItem("wm.outHeights") || "{}"); } catch { /* unreadable is empty */ }
     return { state: (typeof state !== "undefined" && state.outHeights) || {}, ls };
   };
-  const W = { writes: [], mutations: { child: 0, style: 0, other: 0 }, observer: null, node: null };
+  const W = { writes: [], mutations: { child: 0, style: 0, other: 0 }, observer: null, node: null, phase: "drag", after: [] };
 
   window.__CD = {
     pane, body, out, grip, openTurns,
@@ -188,6 +205,13 @@ const PAGE_HELPERS = (gripInset) => {
       const s = store();
       const id = o.dataset.out || "";
       const varRaw = o.style.getPropertyValue("--out-h") || "";
+      // THE GRIP'S OWN BOX (`.out-box`, the positioned wrapper the grip is `bottom: 0` in). It must be the console's
+      // box: a grip drawn at the corner of a wrapper TALLER than the console is a handle the hand can press where the
+      // console is not, and a drag that grows the console then travels inside that wrapper's blank instead of moving
+      // the console's corner. That gap is invisible to every number read from the console's own rect, so it is read
+      // here.
+      const ob = o.parentElement;
+      const obr = ob ? ob.getBoundingClientRect() : null;
       return {
         t: Math.round(performance.now()),
         id,
@@ -195,6 +219,12 @@ const PAGE_HELPERS = (gripInset) => {
         clientH: o.clientHeight,
         top: +r.top.toFixed(2),
         bottom: +r.bottom.toFixed(2),
+        boxBottom: obr ? +obr.bottom.toFixed(2) : null,
+        boxH: obr ? +obr.height.toFixed(2) : null,
+        boxFlex: ob ? getComputedStyle(ob).flex : "",
+        // The grip's bottom edge against the console's: 0 is the console's own corner, and a positive number is the
+        // blank a stretched wrapper leaves under it (the slack turn's free room - see public/style.css:7012).
+        gripGap: obr ? +(gr.bottom - r.bottom).toFixed(2) : null,
         varH: varRaw,
         varPx: varRaw ? parseFloat(varRaw) : null,
         stored: Number.isFinite(Number(s.state[id])) ? Number(s.state[id]) : null,
@@ -225,6 +255,7 @@ const PAGE_HELPERS = (gripInset) => {
         dragTop: typeof outGripDrag !== "undefined" && outGripDrag ? +Number(outGripDrag.top).toFixed(2) : null,
         moved: typeof outGripDrag !== "undefined" && outGripDrag ? Boolean(outGripDrag.moved) : null,
         same: o === W.node,
+        bodySame: b === W.bodyNode,
         sig: b.closest(".job")?.dataset.sig || "",
         artifacts: (typeof state !== "undefined" && state.jobs?.get(o.dataset.out)?.artifacts?.length) || 0,
         slack: Boolean(b.querySelector(":scope > .turn.is-slack")),
@@ -235,7 +266,7 @@ const PAGE_HELPERS = (gripInset) => {
         zoom: getComputedStyle(document.documentElement).zoom || "1",
       };
     },
-    mark: () => { W.node = out(); return true; },
+    mark: () => { W.node = out(); W.bodyNode = body(); return true; },
     // The transcript on its foot: the reader's state while a live turn is being read, and the state the legend
     // (public/style.css:1559) says the corner gesture stands the page's tail pin down for.
     foot: () => {
@@ -262,6 +293,8 @@ const PAGE_HELPERS = (gripInset) => {
     // between "a pin is back in the gesture" and "the anchor this design deliberately leaves on is the writer".
     instrument: () => {
       W.writes = [];
+      W.after = [];
+      W.phase = "drag";
       W.mutations = { child: 0, style: 0, other: 0 };
       if (!W.origScrollTop) {
         const desc = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
@@ -272,16 +305,35 @@ const PAGE_HELPERS = (gripInset) => {
           set(v) {
             try {
               const b = body();
-              if (b && this === b && W.writes.length < 8) {
-                W.writes.push({ to: Math.round(Number(v) || 0), from: desc.get.call(this), at: new Error().stack.split("\n").slice(2, 5).join(" <- ") });
+              if (b && this === b) {
+                if (W.phase === "release") {
+                  // THE WRITES AFTER THE HAND LET GO. The release is the other half of the gesture: a pin or a rebuild
+                  // that scrolls the transcript here moves the top edge the drag froze, and the corner comes back off
+                  // the hand. Kept with its stack so a failing case names the writer instead of "the drag was undone".
+                  if (W.after.length < 8) W.after.push({ to: Math.round(Number(v) || 0), from: desc.get.call(this), at: new Error().stack.split("\n").slice(2, 6).join(" <- ") });
+                } else if (W.writes.length < 8) {
+                  W.writes.push({ to: Math.round(Number(v) || 0), from: desc.get.call(this), at: new Error().stack.split("\n").slice(2, 5).join(" <- ") });
+                }
               }
             } catch { /* a page without the chat pane writes nothing to it */ }
-            return desc.set.call(this, v);
+            W.jsScroll = true;
+            try { return desc.set.call(this, v); } finally { W.jsScroll = false; }
           },
         });
       }
       const o = out();
       if (W.observer) W.observer.disconnect();
+      // A scroll the page's code did NOT write (W.jsScroll is false outside the setter) is the browser moving the
+      // transcript: scroll anchoring or a focus scroll. Recorded with the release-phase writes so a corner that came
+      // back after the hand let go has a name for its writer.
+      if (!W.scrollListener) {
+        W.scrollListener = (ev) => {
+          const b = body();
+          if (!b || ev.target !== b || W.phase !== "release" || W.jsScroll) return;
+          if (W.after.length < 8) W.after.push({ to: Math.round(b.scrollTop), from: null, browser: true, at: "a scroll event the page did not write" });
+        };
+        document.addEventListener("scroll", W.scrollListener, true);
+      }
       if (o) {
         W.observer = new MutationObserver((recs) => {
           for (const r of recs) {
@@ -298,6 +350,11 @@ const PAGE_HELPERS = (gripInset) => {
       if (W.observer) { W.observer.disconnect(); W.observer = null; }
       return { ...W.mutations, bodyWrites: W.writes.length, stacks: W.writes.slice(0, 4) };
     },
+    // The other half of the gesture: from here to the end of the settle, every write to the transcript's offset is
+    // kept with its stack. Nothing this records is a pass or a fail on its own; a case whose corner comes back off the
+    // hand after the release quotes it.
+    releaseMark: () => { W.phase = "release"; W.after = []; return true; },
+    releaseWrites: () => W.after.slice(0, 8),
     // A line from the stream, through the page's own append path: the live turn's ordinary growth.
     feed: (n) => {
       const o = out();
@@ -345,6 +402,54 @@ const PAGE_HELPERS = (gripInset) => {
       if (on) b.style.setProperty("overflow-anchor", "none", "important");
       else b.style.removeProperty("overflow-anchor");
       return getComputedStyle(b).overflowAnchor;
+    },
+    // WHAT IS ABOVE THE BOX WITHIN THE CARD, and how tall it is. A drag freezes the console's top edge, so the only
+    // writers that can move it are the rows drawn above it: the card's own head, the turn's rows before the box, and
+    // the chips beside it. Read at the press and after the release, so a case that lost its edge names the row that
+    // grew instead of blaming the pin. Every entry is a rect: the height is the number a repaint adds to the top.
+    above: () => {
+      const o = out();
+      const turn = o && o.closest ? o.closest(".turn") : null;
+      const wrap = o && o.closest ? o.closest(".out-wrap") : null;
+      const card = o && o.closest ? o.closest(".job") : null;
+      const rows = [];
+      const push = (name, el) => {
+        if (!el || el === o || !el.getBoundingClientRect) return;
+        const r = el.getBoundingClientRect();
+        rows.push({ name, h: +r.height.toFixed(2), top: +r.top.toFixed(2) });
+      };
+      // THE CARD ITSELF, so a verdict can tell the console moving with its pane from the transcript scrolling under
+      // it: the card's top moves with a row above it, and does not move for a scroll inside its body.
+      if (card) rows.push({ name: "card", h: +card.getBoundingClientRect().height.toFixed(2), top: +card.getBoundingClientRect().top.toFixed(2) });
+      if (card) for (const c of card.children) if (c !== turn) push(`card>${String(c.className || c.tagName).slice(0, 40)}`, c);
+      if (turn) for (const c of turn.children) if (c !== wrap) push(`turn>${String(c.className || c.tagName).slice(0, 40)}`, c);
+      if (wrap) for (const c of wrap.children) if (c !== (o.parentElement || null)) push(`wrap>${String(c.className || c.tagName).slice(0, 40)}`, c);
+      // AND THE ROWS ABOVE THE CARD ITSELF: the pane's head, the sub-tab strip, the float's own summary. A poll that
+      // rewrites one of those moves the whole card down, and the console's top edge with it - the drift the gesture
+      // cannot hold when the transcript has no scroll room. Walked up to #assistant, so the writer has a name.
+      let up = card;
+      let steps = 0;
+      while (up && up.parentElement && steps < 8) {
+        steps += 1;
+        const p = up.parentElement;
+        if (up !== card) push(`anc:${(up.id || String(up.className || up.tagName)).slice(0, 34)}`, up);
+        for (const c of p.children) {
+          if (c === up) continue;
+          push(`${(p.id || String(p.className || p.tagName)).slice(0, 22)}>${String(c.className || c.tagName).slice(0, 34)}`, c);
+          // The float's title row is the row a poll can make taller (its chip strip wraps). Its own children are read
+          // too, so a report names the chip that grew the row instead of "the bar".
+          if (c.classList && c.classList.contains("as-bar")) {
+            for (const k of c.children) {
+              push(`bar>${String(k.className || k.tagName).slice(0, 30)}`, k);
+              if (k.classList && k.classList.contains("chips")) {
+                rows[rows.length - 1].text = String(k.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120);
+              }
+            }
+          }
+        }
+        up = p;
+      }
+      return rows;
     },
     version: () => (typeof state !== "undefined" && state.settings ? state.settings.version : ""),
   };
@@ -464,6 +569,7 @@ async function move(page, x, y, wait = STEP_MS) {
 // release writes once.
 async function release(page) {
   const during = await page.evaluate(() => window.__CD.stopInstrument());
+  await page.evaluate(() => window.__CD.releaseMark());
   await page.mouse.up();
   const t0 = Date.now();
   let last = null;
@@ -492,7 +598,8 @@ async function release(page) {
   }
   const settleMs = Math.max(0, Math.round(lastChange));
   const after = await page.evaluate(() => window.__CD.read());
-  return { settleMs, after, writes: during, finalH };
+  const afterWrites = await page.evaluate(() => window.__CD.releaseWrites());
+  return { settleMs, after, writes: during, finalH, afterWrites };
 }
 
 // The starting size for a case, through the page's writer, verified against the rendered box. `z` is the page's own
@@ -593,6 +700,14 @@ const CASES = {
 
 const TRAVEL = { slow: 60, flick: 120, "past-min": -400, "past-max": 900, crossing: 0, "interrupt-poll": 36, "interrupt-repaint": 36, "no-move": 0 };
 
+// ONE CASE BY NAME, and a name that matches nothing is a refusal rather than a pass: a microscope run that measured no
+// case would print RESULT: PASS on an empty set, which is the one answer a gate must never give by accident.
+const DRAG_CASES = Object.keys(CASES).filter((n) => !ONLY || n.includes(ONLY));
+if (ONLY && !DRAG_CASES.length) {
+  console.error(`--only ${ONLY} matches none of: ${Object.keys(CASES).join(", ")}`);
+  process.exit(2);
+}
+
 // One case: fresh starting size, press, motion, release, settle, numbers.
 async function runCase(page, name, sizePx, innerHpx) {
   const start = await startSize(page, sizePx);
@@ -600,12 +715,15 @@ async function runCase(page, name, sizePx, innerHpx) {
   await page.evaluate(() => window.__CD.foot());
   await page.waitForTimeout(150);
   const before = await page.evaluate(() => window.__CD.read());
+  // What sits above the box in the card, so a case whose top edge moved can name the row that grew.
+  const aboveBefore = await page.evaluate(() => window.__CD.above());
   const { at, down } = await press(page);
   const out = await CASES[name](page, { press: at });
   const rows = Array.isArray(out) ? out : out.rows;
   const meta = Array.isArray(out) ? {} : out.meta || {};
-  const { settleMs, after, writes } = await release(page);
-  return { name, sizePx, at, before, down, rows: rows.filter(Boolean), meta, after, settleMs, writes, innerHpx };
+  const { settleMs, after, writes, afterWrites } = await release(page);
+  const aboveAfter = await page.evaluate(() => window.__CD.above());
+  return { name, sizePx, at, before, down, rows: rows.filter(Boolean), meta, after, settleMs, writes, afterWrites, innerHpx, above: { before: aboveBefore, after: aboveAfter } };
 }
 
 // What each case promises, in the three numbers the brief asks for: pointer delta against size delta, the corner
@@ -621,7 +739,7 @@ function missReason(down) {
 }
 
 function verdictOf(run) {
-  const { name, before, down, after, rows, writes, settleMs, innerHpx } = run;
+  const { name, before, down, after, rows, writes, settleMs, innerHpx, afterWrites } = run;
   const fails = [];
   const numbers = {};
   if (!before || !down || !after) return { fail: ["the case could not be read"], numbers };
@@ -658,6 +776,9 @@ function verdictOf(run) {
   numbers.styleWrites = writes.style;
   numbers.bodyWrites = writes.bodyWrites;
   numbers.bodyWriteStacks = writes.stacks || [];
+  // The writes to the transcript's offset from the release to the end of the settle, with their stacks. A corner that
+  // comes back off the hand after the release is one of these moving the top edge; the verdict names it.
+  numbers.releaseWrites = afterWrites || [];
   // Read DURING the drag, not after it: what the release then paints (a deferred rebuild that lands in the pointerup)
   // is the release's business, and the gate's question is whether the node under the hand survived the travel.
   numbers.nodeReplaced = rows.some((r) => r.same === false);
@@ -701,6 +822,26 @@ function verdictOf(run) {
   numbers.cornerAtReleasePx = +(after.gripBottom - (last.pointerY + grab)).toFixed(2);
   numbers.retrogradeSteps = retrograde;
   numbers.steps = rows.length;
+
+  // THE GRIP IS THE CONSOLE'S CORNER, OR IT IS A HANDLE IN BLANK SPACE. The grip is `bottom: 0` in `.out-box`, so a
+  // wrapper taller than the console draws the handle under the console's bottom edge: the hand presses where the
+  // console is not, and a drag that grows the console travels inside that blank without moving the console's corner at
+  // all. Every other number in this verdict is read from the console's own rect, so none of them can see it - the
+  // corner against the pointer reports it only as "the corner left the pointer by N", N being the blank. Read at the
+  // press and at every step.
+  let worstGap = Math.abs(Number(down.gripGap) || 0);
+  for (const r of rows) worstGap = Math.max(worstGap, Math.abs(Number(r.gripGap) || 0));
+  numbers.gripGapAtPressPx = down.gripGap == null ? null : +Number(down.gripGap).toFixed(2);
+  numbers.worstGripGapPx = +worstGap.toFixed(2);
+  numbers.upBoxPx = down.boxH == null ? null : +Number(down.boxH).toFixed(2);
+  numbers.upBoxFlex = down.boxFlex || "";
+  if (worstGap > CORNER_TOLERANCE_PX) {
+    fails.push(
+      `the grip stood ${numbers.worstGripGapPx}px below the console's own bottom edge (the wrapper the grip is drawn in ` +
+        `is ${numbers.upBoxPx}px for a ${down.h}px console, its flex ${numbers.upBoxFlex || "n/a"}: the corner is not the ` +
+        `console's corner, so the drag grows the console under the handle instead of moving it)`,
+    );
+  }
 
   // 1. THE HAND AND THE CORNER. While the requested height is inside [floor, room], the grip's bottom edge is on
   //    the pointer. This is the witness a stored-size check cannot see.
@@ -758,8 +899,32 @@ function verdictOf(run) {
     last.dragH >= followFloor - 0.5 &&
     (handAtEnd == null || handAtEnd <= room + CORNER_TOLERANCE_PX);
   numbers.cornerReleaseChecked = keptAsked;
-  if (keptAsked && Math.abs(numbers.cornerAtReleasePx) > CORNER_TOLERANCE_PX) {
-    fails.push(`the corner stood ${numbers.cornerAtReleasePx}px from the hand after the release (the drag's travel was undone)`);
+  // A PANE REFLOW IS NOT A DRAG UNDONE. The release can paint what the gesture deferred (a status chip in the float's
+  // title row, a card head's meta), and a row above the card growing moves the whole card - and the console's top edge
+  // with it. That is the pane reflowing after the hand let go, not a scroll write putting the transcript's foot back:
+  // the two are told apart by the evidence, not by the size of the number.
+  //   * the transcript's own offset did not move between the last move and the release (a foot write moves it), and
+  //   * the card's top moved by the same amount as the console's top (a scroll inside the body moves the console and
+  //     leaves the card where it is).
+  const cardTop = (side) => {
+    const r = (((run.above || {})[side]) || []).find((x) => x.name === "card");
+    return r ? r.top : null;
+  };
+  const cardShift = cardTop("after") != null && cardTop("before") != null ? +(cardTop("after") - cardTop("before")).toFixed(2) : null;
+  const boxShift = +(after.top - last.top).toFixed(2);
+  const offsetMoved = Math.abs(Number(after.bodyTop) - Number(last.bodyTop)) > 1;
+  const paneReflow =
+    keptAsked && !offsetMoved && cardShift != null && Math.abs(cardShift) > 1 && Math.abs(boxShift - cardShift) <= CORNER_TOLERANCE_PX;
+  numbers.cardShiftPx = cardShift;
+  numbers.boxShiftAtReleasePx = boxShift;
+  numbers.transcriptOffsetMoved = offsetMoved;
+  numbers.paneReflowPx = paneReflow ? cardShift : 0;
+  if (keptAsked && Math.abs(numbers.cornerAtReleasePx) > CORNER_TOLERANCE_PX && !paneReflow) {
+    const w = numbers.releaseWrites[0];
+    fails.push(
+      `the corner stood ${numbers.cornerAtReleasePx}px from the hand after the release (the drag's travel was undone)` +
+        (w ? `; the transcript's offset was written to ${w.to} from ${w.from} after the release (${String(w.at || "").slice(0, 180)})` : ""),
+    );
   }
   numbers.followFloorPx = followFloor;
   return { fail: fails, numbers };
@@ -817,6 +982,11 @@ function pressOnlyVerdict(run) {
   numbers.heldScrollWrites = run.writes.bodyWrites;
   numbers.settleMs = run.settleMs;
   numbers.nodeReplaced = Boolean(after.same === false);
+  // The witness, not a failure: where the grip stands against the console's own bottom edge. A press moves nothing
+  // even when the handle is drawn under the console (the slack turn's stretched wrapper), so this row's promise is
+  // about movement; the drag rows are where a floating handle costs the hand.
+  numbers.gripGapPx = before.gripGap == null ? null : round(before.gripGap);
+  numbers.boxFlex = before.boxFlex || "";
   if (Math.abs(numbers.deltaDrawn) > PRESS_TOLERANCE_PX) {
     fails.push(`the box changed height by ${numbers.deltaDrawn}px on the press, with the pointer still`);
   }
@@ -867,7 +1037,7 @@ async function main() {
           );
         }
         for (const size of SIZES) {
-          for (const name of Object.keys(CASES)) {
+          for (const name of DRAG_CASES) {
             const key = `${name}@${width}/${size}`;
             try {
               const run = await runCase(page, name, size, innerHpx);
@@ -880,12 +1050,18 @@ async function main() {
                 press: { at: run.at, down: run.down },
                 steps: run.rows.map((r) => ({
                   pointerY: r.pointerY, h: r.h, top: r.top, gripBottom: r.gripBottom, varH: r.varH, stored: r.stored,
-                  dragH: r.dragH, dragTop: r.dragTop, bodyTop: r.bodyTop, bodyMax: r.bodyMax, held: r.held, same: r.same,
+                  dragH: r.dragH, dragWant: r.dragWant, dragTop: r.dragTop, bodyTop: r.bodyTop, bodyMax: r.bodyMax, held: r.held, same: r.same,
+                  // The wrapper the grip is drawn in against the console's own bottom edge, and its flex: the pair
+                  // that names a grip floating in the slack turn's free room.
+                  boxBottom: r.boxBottom, boxH: r.boxH, boxFlex: r.boxFlex, gripGap: r.gripGap,
                 })),
                 after: run.after,
                 writes: run.writes,
                 settleMs: run.settleMs,
                 meta: run.meta,
+                above: run.above,
+                bodySame: run.after && run.after.bodySame,
+                releaseWrites: run.afterWrites,
               });
               const n = v.numbers;
               check(
@@ -896,7 +1072,8 @@ async function main() {
                   `stored ${n.storedAfter == null ? "unset" : `${n.storedAfter}px`}, drawn ${n.endPx}px, client ${n.clientAfter}px, ` +
                   `store delta ${n.renderVsStoredPx == null ? "n/a" : `${n.renderVsStoredPx}px`}, ` +
                   `snap ${n.releaseSnapPx}px, settle ${n.settleMs}ms, repaints ${n.repaints}, node ${n.nodeReplaced ? "replaced" : "same"}, ` +
-                  `body writes ${n.bodyWrites}` +
+                  `body writes ${n.bodyWrites}, corner gap ${n.worstGripGapPx}px` +
+                  (n.paneReflowPx ? `, pane reflow ${n.paneReflowPx}px` : "") +
                   (v.fail.length ? ` -- ${v.fail.join("; ")}` : ""),
               );
             } catch (err) {
@@ -909,7 +1086,7 @@ async function main() {
         // THE PRESS-ONLY ROWS: a press, half a second of stillness, a release, at the page's own zoom as well as at
         // 100. One row per width, height and zoom; each fails above 1px of movement in the box, its corner or its top
         // edge, and on any change the press leaves in `--out-h` or the store.
-        for (const zoomPct of PRESS_ZOOMS) {
+        for (const zoomPct of ONLY ? [] : PRESS_ZOOMS) {
           await applyZoom(page, zoomPct);
           const z = zoomPct / 100;
           for (const size of PRESS_SIZES) {
@@ -936,7 +1113,8 @@ async function main() {
                 `drawn ${n.drawnBefore}px -> ${n.drawnHeld}px (delta ${n.deltaDrawn}px), top ${n.topBefore}px -> ${n.topHeld}px ` +
                   `(delta ${n.deltaTop}px), corner delta ${n.cornerDelta}px, after ${n.drawnAfter}px/${n.topAfter}px, ` +
                   `stored ${n.storedBefore == null ? "unset" : `${n.storedBefore}px`} -> ${n.storedHeld == null ? "unset" : `${n.storedHeld}px`} during the hold -> ${n.storedAfter == null ? "unset" : `${n.storedAfter}px`}, ` +
-                  `--out-h "${n.varBefore}" -> "${n.varAfter}", zoom ${n.zoom}, scroll writes ${n.heldScrollWrites}` +
+                  `--out-h "${n.varBefore}" -> "${n.varAfter}", zoom ${n.zoom}, scroll writes ${n.heldScrollWrites}, ` +
+                  `corner gap ${n.gripGapPx}px (box flex ${n.boxFlex || "n/a"})` +
                   (v.fail.length ? ` -- ${v.fail.join("; ")}` : ""),
               );
             } catch (err) {
