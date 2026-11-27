@@ -32,10 +32,12 @@
 //                        toggleRulesBar, closeRulesBar, addRule, editRule, moveRule, deleteRule and saveProjectRules:
 //                        the chip beside the host chip, the grey strip's STACK of bars, and the editor in the rules
 //                        bar that adds, edits, reorders and deletes a project's one-line rules
-//   the turnover         turnoverChipHtml, refreshTurnoverChip, turnoverFor, turnoverBarHtml, toggleTurnoverBar,
-//                        closeTurnoverBar, saveProjectTurnover and saveProjectTurnoverPolicy: the head line's fourth
-//                        chip, and the bar that names the branch a tree cut for this project starts from and rolls
-//                        back into, beside the kind it is read from and the policy that decides a new one is added
+//   the turnover         turnoverChipHtml, refreshTurnoverChip, turnoverFor, turnoverKindSentence, turnoverBarHtml,
+//                        turnoverPolicySentence, toggleTurnoverBar, closeTurnoverBar, saveProjectTurnover and
+//                        saveProjectTurnoverPolicy: the head line's fourth chip, and the bar that names the branch a
+//                        tree cut for this project starts from and rolls back into, beside the kind it is read from
+//                        and the policy that decides a new one is added - each control's sentence is drawn from the
+//                        stored kind and from the route's own labels, never from whether the branch field is full
 //   the row's detail     gitSubHtml (one folded file strip), DESC_SENTENCE_BREAK and descLines (the description as
 //                        bullets), refreshClock (the refresh journal's wall clock) and detailHtml, the whole
 //                        tr.detail block: merge state, description, TODO, liveness, the agent slots and the idle
@@ -603,11 +605,24 @@ function turnoverKindFor(name) {
 }
 
 const TURNOVER_KINDS = ["checkout", "turnover", "local-turnover"];
+// The FALLBACK words, drawn only for the one paint between a bar opening and `/api/project-turnover` answering. The
+// read carries `kindLabels` from lib/base-ref-kind.js, and the bar draws THOSE once they arrive - the same rule the
+// policy select follows, so the page cannot hold a second copy of the reader's words that drifts from the route's.
 const TURNOVER_KIND_LABELS = {
   checkout: "the checkout's own branch",
   turnover: "the named turnover branch",
   "local-turnover": "local turnover branch - ask if none exist",
 };
+
+function turnoverKinds() {
+  const list = Array.isArray(state.turnoverKinds) ? state.turnoverKinds.filter(Boolean) : [];
+  return list.length ? list : TURNOVER_KINDS;
+}
+
+function turnoverKindLabel(kind) {
+  const read = state.turnoverKindLabels && typeof state.turnoverKindLabels === "object" ? state.turnoverKindLabels : null;
+  return String(read?.[kind] || TURNOVER_KIND_LABELS[kind] || kind || "");
+}
 
 // The chip's short answer for a kind: the third kind has no name to print, because it has no name yet - it is found
 // at the cut, and asking is what happens when nothing is found.
@@ -615,6 +630,42 @@ function turnoverKindShort(name) {
   const kind = turnoverKindFor(name);
   if (kind === "local-turnover") return "local turnover";
   return turnoverFor(name) || "none";
+}
+
+// WHAT A CUT FOR THIS PROJECT ACTUALLY STARTS FROM, said from the KIND the record stores (baseRefKind) rather than
+// from whether the branch field happens to hold a name. The bar's old hint asserted "a tree cut for this project
+// starts from this branch" whenever there was a name, which is a falsehood on a record that stores `checkout`: that
+// cut starts at the named branch only because lib/jobs.js prefers a named branch over the checkout, and the sentence
+// has to say which of the two is in force. One wording per kind, and the named branch is called out as the winner:
+//
+//   checkout        the checkout's own branch, with the named branch as the roll-up destination - and the named
+//                   branch WINS even when the checkout stands on main, and keeps winning after it lands
+//   turnover        the named branch IS the kind's answer, so the cut starts there
+//   local-turnover  the branch the panel FINDS at the cut, and the question when none qualifies
+function turnoverKindSentence(name) {
+  const kind = turnoverKindFor(name);
+  const branch = turnoverFor(name);
+  const label = turnoverKindLabel(kind);
+  if (kind === "local-turnover") {
+    return `kind ${label}: a cut starts from the local turnover branch the panel finds (a pushed, unmerged branch named YYYYMMDD_HHMM_<KEY>_<slug>), and it asks when none exists instead of cutting from main.`;
+  }
+  if (kind === "turnover" && branch) {
+    return `kind ${label}: a cut starts from the named turnover branch ${branch}, and its worker merges back into it locally (no push, no pull request). A named branch wins over the checkout even when the checkout stands on main, and a branch that has landed keeps winning for as long as it exists.`;
+  }
+  if (kind === "turnover") {
+    return `kind ${label}: no turnover branch is named, so a cut falls back to the checkout's own branch, and its worker pushes and opens a pull request.`;
+  }
+  if (branch) {
+    return `kind ${label}: a cut starts at the checkout's own branch, and ${branch} is where its work rolls up into. A named branch wins: lib/jobs.js cuts from ${branch} even when the checkout stands on main, so the kind's checkout is not in force, and a branch that has landed keeps winning for as long as it exists.`;
+  }
+  return `kind ${label}: a cut starts at the checkout's own branch, and no branch is named for its work to roll up into.`;
+}
+
+// What the chosen policy DOES, in the route's own words: the one line under the select. The read's `policyLabels` is
+// the only copy of these sentences (lib/project-turnover.js TURNOVER_POLICY_INFO), so the page and the writer cannot
+// describe the same policy differently.
+function turnoverPolicySentence(name) {
+  return `policy: ${turnoverPolicyLabel(turnoverPolicyFor(name))}`;
 }
 
 // The project's TURNOVER POLICY, the third control of the bar: free adds a new turnover branch at once, ask waits
@@ -651,18 +702,16 @@ function turnoverBarOpen(name) {
 }
 
 function turnoverChipSig(name) {
-  return `${turnoverFor(name)}|${turnoverKindFor(name)}|${turnoverBarOpen(name) ? "1" : "0"}`;
+  return `${turnoverFor(name)}|${turnoverKindFor(name)}|${turnoverKindLabel(turnoverKindFor(name))}|${turnoverBarOpen(name) ? "1" : "0"}`;
 }
 
 function turnoverChipHtml(name) {
   const branch = turnoverFor(name);
   const kind = turnoverKindFor(name);
   const open = turnoverBarOpen(name);
-  const title = kind === "local-turnover"
-    ? `${name} is cut on a local turnover branch: a pushed, unmerged branch named YYYYMMDD_HHMM_<KEY>_<slug>. If no branch qualifies the panel asks instead of cutting from main. Click to change.`
-    : branch
-      ? `${name}'s turnover branch is ${branch} - a tree cut for this project starts from it, and its worker merges back into it LOCALLY (no push, no pull request). Click to change or clear it.`
-      : `${name} has no turnover branch. A tree cut for it starts from whatever the checkout is standing on, so a checkout on main briefs its worker to push and open a pull request. Click to name the branch this project's work rolls up into.`;
+  // The chip's tooltip is the SAME kind-drawn sentence the bar prints, so the two surfaces cannot disagree about
+  // where a cut starts; it used to assert the branch was the start whenever one was named, whatever kind was stored.
+  const title = `${turnoverKindSentence(name)} Click to change the kind, the branch or the policy.`;
   return `<button type="button" class="btn-turnover${branch || kind === "local-turnover" ? " has-turnover" : ""}${open ? " is-open" : ""}" data-turnover-chip="${esc(name)}" data-turnover-project="${esc(name)}" data-turnover-sig="${esc(turnoverChipSig(name))}" aria-expanded="${open ? "true" : "false"}" title="${esc(title)}">turnover: ${esc(turnoverKindShort(name))}</button>`;
 }
 
@@ -678,7 +727,7 @@ function refreshTurnoverChip(name) {
 function turnoverLine(name) {
   const kind = turnoverKindFor(name);
   const branch = turnoverFor(name);
-  if (kind === "local-turnover") return `${name}: cut on ${TURNOVER_KIND_LABELS[kind]}`;
+  if (kind === "local-turnover") return `${name}: cut on ${turnoverKindLabel(kind)}`;
   return branch ? `${name}: work rolls up into ${branch}` : `${name}: no turnover branch - a cut starts where the checkout stands`;
 }
 
@@ -688,8 +737,8 @@ function turnoverBarHtml(name) {
   const branch = turnoverFor(name);
   const kind = turnoverKindFor(name);
   const busy = bar?.busy ? " disabled" : "";
-  const kinds = TURNOVER_KINDS.map(
-    (k) => `<option value="${esc(k)}"${kind === k ? " selected" : ""}>${esc(TURNOVER_KIND_LABELS[k])}</option>`,
+  const kinds = turnoverKinds().map(
+    (k) => `<option value="${esc(k)}"${kind === k ? " selected" : ""}>${esc(turnoverKindLabel(k))}</option>`,
   ).join("");
   const policy = turnoverPolicyFor(name);
   const policies = turnoverPolicies().map(
@@ -705,11 +754,8 @@ function turnoverBarHtml(name) {
         <button type="button" data-turnover-save="${esc(name)}" title="store this kind and branch on the project's config.json row; an empty field clears the branch"${busy}>save</button>
         <button type="button" data-turnover-close="${esc(name)}" title="close the turnover bar">close</button>
       </span>
-      <span class="mono dimmer turnover-hint">${esc(
-        local
-          ? "A tree cut for this project starts from the newest local branch that is named YYYYMMDD_HHMM_<KEY>_<slug>, pushed to a remote, and not an ancestor of main or master. When no branch qualifies the panel asks instead of cutting from main."
-          : "A tree cut for this project starts from this branch. Its worker merges back into it locally and does not push or open a pull request. Empty means no turnover branch: a cut starts where the checkout stands.",
-      )}</span>
+      <span class="mono dimmer turnover-hint" data-turnover-policy-line>${esc(turnoverPolicySentence(name))}</span>
+      <span class="mono dimmer turnover-hint turnover-kind-hint" data-turnover-kind-line>${esc(turnoverKindSentence(name))}</span>
     </div>`;
 }
 
@@ -734,9 +780,12 @@ async function toggleTurnoverBar(name) {
     // The cap travels with the read, so the field's `maxlength` and the writer's refusal are one number.
     if (Number.isFinite(Number(out.maxChars))) state.turnoverCaps = { maxChars: Number(out.maxChars) };
     // The policy's ids and words travel with the same read: the select draws ITS list, not a copy of it, so a policy
-    // the server stops offering disappears from the page the next time a bar opens.
+    // the server stops offering disappears from the page the next time a bar opens. The KIND's ids and words travel
+    // with it too (kindLabels comes from lib/base-ref-kind.js), and the sentence built from the kind draws THOSE.
     if (Array.isArray(out.policies) && out.policies.length) state.turnoverPolicies = out.policies.map(String);
     if (out.policyLabels && typeof out.policyLabels === "object") state.turnoverPolicyLabels = { ...out.policyLabels };
+    if (Array.isArray(out.kinds) && out.kinds.length) state.turnoverKinds = out.kinds.map(String);
+    if (out.kindLabels && typeof out.kindLabels === "object") state.turnoverKindLabels = { ...out.kindLabels };
     const p = state.projects.get(name);
     if (p) p.turnoverBranch = String(out.turnoverBranch || "");
     if (p && out.baseRefKind) p.baseRefKind = String(out.baseRefKind);
