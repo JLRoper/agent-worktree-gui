@@ -771,8 +771,14 @@ window.WMApp.queueCards = function queueCards(deps) {
           : t.state === "queued" && t.reason
             ? `<div class="as-task-note" title="${esc(t.reason)}">${esc(t.reason)}</div>`
             : "";
+    // THE AGENT ROWS ARE ONE BLOCK ON THE FACTS LINE, not flex siblings on it. `div.as-task-facts` is a wrapping
+    // flex row with an 8 px column gap, so two agents joined straight into it laid out SIDE BY SIDE and that gap
+    // read as the separator between two agents (the reader photographed exactly that on a card carrying an EXITED
+    // thread and a RUNNING one). One child block, a column, gives every agent its own line. No indent of its own:
+    // the facts line carries the 18 px, and `.as-task-agents`' 19 px belongs to the Initiatives pane, which is why
+    // that container is not the one reused here.
     const agents = list.length
-      ? list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")
+      ? `<div class="as-task-agent-stack">${list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")}</div>`
       : `<div class="as-task-agent is-none" title="nothing has run this task yet — Start marks it running, and the thread it is handed becomes its first agent row">
             <span class="as-agent-mark is-queued" aria-hidden="true">○</span>
             <span class="as-task-agent-label">no agent yet</span>
