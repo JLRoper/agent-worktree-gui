@@ -73,9 +73,24 @@ to row 7 of 20 and the scroller following. The seven screenshots and every measu
 `test/search-popover.test.js` is the module's unit file: 19 tests, all passing, including the new left-anchored
 arithmetic, the drag and grip arithmetic (floor and ceiling), the chrome's three controls, and `hide()` clearing a
 resized height before the reopen. The search's own suite - `assistant-search*`, `hot-agent-search`, `turn-search`,
-`absolute-paths` - is 132 tests, 131 passing. The one red is `test/harness.test.js` naming
+`absolute-paths` - is 132 tests, 131 passing; the one red is `test/harness.test.js` naming
 `tools/verify-queue-agents.mjs` (LIVE GATE with no package script), which arrives with `3bd8a0c6` on the turnover
 base and is not touched here.
+
+## The full suite, once, in two halves
+
+459 files, 4017 tests, 3985 passed, 28 failed (a run of 230 files and a run of 229; the second was stopped at its
+last file, `worktree-assistant.test.js`, which hangs the runner on this host). One of the 28 was this cut's own:
+`test/reports-are-tracked.test.js` found the local measurement report on disk and not in the index (the report page
+is force-added now, and the file re-runs 4 of 4 green). The other 27 are the tree's own reds: re-run by file on the
+cut base export (`609dfff7`), the same failures come back - `assistant-queue-reattach`, `gateway-permissions`,
+`harness`, `initiative-tier-route` (3), `junctioned-node-modules`, `paths`, `project-open-route`, `reasoning-runs`,
+`rebase-route`, `refresh-row-route`, `scan-roots`, `scan-upstream`, `tree-cache`, `waves-route` (3), and
+`worktree-assistant` (3, then the hang below). The `absolute-paths` pair that failed in the base export is an
+artifact of that export not being a git checkout; in this tree `npm run absolute-paths` reads clean.
+
+`worktree-assistant.test.js` hangs the runner - here and on the base export - after its three failures, so it is not
+this cut's to fix.
 
 ## The style.css overlap
 
