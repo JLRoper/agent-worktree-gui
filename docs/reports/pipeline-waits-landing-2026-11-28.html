@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 514 landing: the waits cut merged into the turnover, verified against its head</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .box { border:1px solid var(--line); border-radius:6px; padding:12px 16px; margin:16px 0; background:#fff; }
+  .cite { color:var(--dim); font-size:13px; }
+  .foot { margin-top:34px; color:var(--dim); font-size:13px; border-top:1px solid var(--line); padding-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 514 landing: the waits cut merged into the turnover, verified against its head</h1>
+  <p class="sub">The cut was already committed on <code>wtgui/row-514-is-the-second-cut-of-lib-2aca2b</code>; this page is
+    the landing of it and the re-measurement of its proof against the turnover head the branch now lands on.</p>
+
+  <div class="box">
+    <b>Landed.</b> <code>c274c85f</code> (the cut) and <code>d3fa24b9</code> (its page) are merged into
+    <code>wtgui/row-514-is-the-second-cut-of-lib-61ae03</code> as <b>4aff28ab</b>, a real merge with parents
+    <code>b4f88ad9</code> (this tree) and <code>d3fa24b9</code> (the cut's tip). Nothing was rebuilt: the two commits
+    were read, then merged. The version and the changelog are the turnover's, because the two sides never diverged on
+    them - <code>package.json</code> is <code>1.197.1</code> on both, and <code>git diff HEAD c274c85f</code> names
+    neither <code>package.json</code> nor a changelog, so there was no conflict to resolve and no bump was made.
+    Verified after the merge: the 54 export names unchanged, the moved block verbatim in
+    <code>lib/pipeline-waits.js</code> and gone from <code>lib/pipelines.js</code>, the five pipeline test files at
+    112 pass / 0 fail on both sides, <code>verify-pipeline-catalogue</code> at 38 passed / 0 failed, and one chain whose
+    last stage waits driven through the real <code>PUT</code> and <code>GET /api/pipelines</code>.
+  </div>
+
+  <h2>1. The two commits, as read before the merge</h2>
+  <table>
+    <tr><th>Commit</th><th>What it is</th><th>Files</th></tr>
+    <tr>
+      <td><code>c274c85f</code></td>
+      <td>The cut: the wait mechanic and the two host payloads move to <code>lib/pipeline-waits.js</code>, and
+        <code>lib/pipelines.js</code> re-exports the 24 names it lost.</td>
+      <td class="n">+424 / -405</td>
+    </tr>
+    <tr>
+      <td><code>d3fa24b9</code></td>
+      <td>The cut's own page, <code>docs/reports/pipeline-waits-cut-2026-11-28.html</code>, docs only.</td>
+      <td class="n">+263</td>
+    </tr>
+  </table>
+  <p class="cite">
+    Read rather than trusted: the cut's addition to <code>lib/pipelines.js</code> is a comment block plus one
+    <code>export { ... } from "./pipeline-waits.js"</code> at <code>lib/pipelines.js:376-401</code> - no stub body, no
+    second copy of a function. The new file's own header states the split and its import of <code>clean</code> and
+    <code>isObject</code> (<code>lib/pipeline-waits.js:1-19</code>).
+  </p>
+
+  <h2>2. The export surface, by name, against the turnover head</h2>
+  <p>
+    Both modules were imported and their keys compared, the base built from the turnover head
+    <code>4cbe6540</code> rather than from the cut's parent: the blob is the same either way
+    (<code>8df2500</code> for <code>lib/pipelines.js</code> at <code>4cbe6540</code>,
+    <code>c274c85f^</code> and <code>0ce44e77</code>), so the measurement is against the branch the work lands on.
+  </p>
+<pre>base count: 54          (lib/pipelines.js @ 4cbe6540)
+head count: 54          (lib/pipelines.js @ 4aff28ab)
+missing from head: (none)
+added to head: (none)
+identical by name: true</pre>
+  <p class="cite">
+    The 24 names the parent lost come back through the re-export at <code>lib/pipelines.js:376-401</code>, and
+    <code>lib/pipeline-waits.js</code> publishes exactly those 24 and no others (<code>grep '^export '</code> counts
+    24). No import site moved: <code>lib/jobs.js</code>, <code>lib/task-pipeline-drive.js</code>,
+    <code>lib/task-pipeline-document.js</code>, <code>routes/pipelines.js</code>, <code>server.js</code> and the five
+    test files still read <code>lib/pipelines.js</code>.
+  </p>
+
+  <h2>3. The moved block: present in the new file, absent from the old</h2>
+  <p>
+    The cut's own message names its ranges: base 371-695 and 727-803, 402 lines. Those ranges were taken out of the
+    parent's file and looked for as text.
+  </p>
+<pre>range1 lines: 325         range2 lines: 77         moved lines: 403 (402 + the joining blank)
+block in pipeline-waits.js:   True
+block in new pipelines.js:    False
+range1 alone in new pipelines.js: False
+range2 alone in new pipelines.js: False
+declarations of the 24 moved names left in lib/pipelines.js: 0
+lib/pipeline-waits.js lines: 424    lib/pipelines.js lines: 640 (was 1,012)</pre>
+  <p class="cite">
+    The two ranges are joined by the one blank line that stood where <code>renderPrompt</code> sat between them in the
+    parent, so the 403-line string is the moved text with nothing added but that blank. Nothing of the block remains in
+    <code>lib/pipelines.js</code>: no range survives alone, and no <code>const</code>, <code>function</code> or
+    <code>async function</code> declaring any of the 24 names is left there. The 58 moved lines that still appear
+    textually are the shared punctuation of any function (<code>}</code>, <code>return {</code>, <code>at,</code>).
+  </p>
+
+  <h2>4. The five pipeline test files, on both sides</h2>
+  <table>
+    <tr><th>File</th><th class="n">Turnover head 4cbe6540</th><th class="n">After the merge 4aff28ab</th></tr>
+    <tr><td><code>test/pipelines.test.js</code></td><td class="n">18 pass / 0 fail</td><td class="n">18 pass / 0 fail</td></tr>
+    <tr><td><code>test/pipeline-wait.test.js</code></td><td class="n">26 pass / 0 fail</td><td class="n">26 pass / 0 fail</td></tr>
+    <tr><td><code>test/pipeline-review-loop.test.js</code></td><td class="n">7 pass / 0 fail</td><td class="n">7 pass / 0 fail</td></tr>
+    <tr><td><code>test/pipeline-catalogue-route.test.js</code></td><td class="n">1 pass / 0 fail</td><td class="n">1 pass / 0 fail</td></tr>
+    <tr><td><code>test/task-pipeline-drive.test.js</code></td><td class="n">60 pass / 0 fail</td><td class="n">60 pass / 0 fail</td></tr>
+    <tr><td><b>Total</b></td><td class="n"><b>112 pass / 0 fail</b></td><td class="n"><b>112 pass / 0 fail</b></td></tr>
+  </table>
+  <p class="cite">
+    The base column is a <code>git archive</code> of <code>4cbe6540</code> unpacked into a scratch directory and run
+    there, not a checkout of this tree; the project has no dependencies (<code>package.json</code> declares an empty
+    <code>dependencies</code>), so the archive runs as it stands. Node v26.3.0, <code>node --test
+    --test-concurrency=2</code> per file. Nothing was red on either side, so there is no failure to compare against the
+    turnover head. The full suite was not run: the row's gate is this focused set.
+  </p>
+  <p>
+    <code>npm run verify:pipeline-catalogue</code>: <span class="ok">38 passed, 0 failed</span> - the bundle's several
+    pipelines proven end to end through the pipeline window, the picker and the Settings tab.
+  </p>
+
+  <h2>5. One chain whose last stage waits, through the real routes</h2>
+  <p>
+    A wait is what makes a chain hold, so a plain two-stage chain is not the check. Two definitions were written by the
+    ROUTE (<code>PUT /api/pipelines</code>, <code>routes/pipelines.js:81</code>) into a panel booted as the real
+    <code>server.js</code> against a throwaway config (<code>tools/panel-testkit.mjs</code>): <code>hold-local</code>
+    (kind <code>local</code>, one stage <code>work</code>, <code>next: "hold-review"</code>) and
+    <code>hold-review</code> (kind <code>investigation</code>, three stages: <code>draft</code> ends on
+    <code>branch-exists</code>, <code>answer</code> ends on <code>pr-comments</code>, <code>handoff</code> ends on
+    <code>clean</code>). They were read back through <code>GET /api/pipelines</code>
+    (<code>routes/pipelines.js:48</code>), and the wait was registered from the stage the ROUTE returned, not from the
+    literal in the script.
+  </p>
+<pre>PASS PUT  the two-definition chain is accepted  [status 200]
+PASS PUT  nothing was dropped: a review exit and a {{branch}} prompt are valid  [dropped []]
+PASS GET  the catalogue reads back  [status 200]
+PASS GET  both definitions are in the merged catalogue  [hold-local, hold-review]
+PASS GET  the chain link survived the save and the read  [hold-local.next = hold-review]
+PASS GET  the second definition carries its three stages  [draft -&gt; answer -&gt; handoff]
+PASS GET  the waiting stage kept its reviewer exit  [{"check":"pr-comments"}]
+PASS GET  the closed vocabularies still travel  [local,investigation,turnover]
+PASS DISK the live file holds the waiting stage and its exit  [{"check":"pr-comments"}]
+PASS WAIT reviewWaitFor registered a wait from the read-back stage  [answer / pr-comments]
+PASS WAIT the wait carries its document and its thread  [hold-review / thread-row-514]
+PASS WAIT its first interval is the one-hour floor  [3600000]
+PASS WAIT it reads as the reviewer's kind, not a run hold
+PASS WAIT not due at the cut, due one interval later
+PASS WAIT the first claim is granted
+PASS WAIT a comment newer than lastSeen matches the exit  [a comment arrived at 2026-11-28T12:01:00.000Z, after 2026-11-28T11:00:00.000Z]
+PASS WAIT the settle advances the stage and closes the wait  [answer -&gt; handoff]
+PASS WAIT the Bitbucket payload advances the same exit  [a comment arrived at 2026-11-28T12:02:00.000Z, after 2026-11-28T12:00:00.000Z]
+CHAIN-WAIT PASSED: the chain holds on a stage that waits</pre>
+  <p class="cite">
+    The wait steps are the moved code, at its new home: <code>reviewWaitFor</code>
+    (<code>lib/pipeline-waits.js:133</code>), <code>isRunWait</code> (<code>:67</code>), <code>waitDueAt</code>
+    (<code>:195</code>), <code>waitIsDue</code> (<code>:202</code>), <code>claimWait</code> (<code>:213</code>),
+    <code>readReviewExit</code> (<code>:230</code>), <code>settleWait</code> (<code>:323</code>),
+    <code>observePullRequest</code> (<code>:353</code>), <code>observeBitbucketPr</code> (<code>:397</code>) - every one
+    reached through the parent's re-export, so the script imports only <code>lib/pipelines.js</code>. The panel was
+    stopped in the same script; nothing it started survives the run.
+  </p>
+
+  <h2>6. What was not done</h2>
+  <p>
+    No version bump, no changelog edit, no push, no pull request, and no full suite. The merge into the turnover branch
+    is local. The tree was clean at the end of the run apart from this page and the merge.
+  </p>
+
+  <p class="foot">
+    Row 514, the second cut of <code>lib/pipelines.js</code>. Merge commit <code>4aff28ab</code>. Verified against the
+    turnover head <code>4cbe6540</code> on 2026-11-28.
+  </p>
+</main>
+</body>
+</html>
