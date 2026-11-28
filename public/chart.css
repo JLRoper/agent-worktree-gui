@@ -89,7 +89,8 @@ td.verdict .badge { display: inline-block; max-width: 100%; overflow: hidden; te
    and the badge's words (ON MAIN, MERGED) were the part that got clipped. The letter is a chip the size of the branch
    cell's `local` one, never a word: the name line's controls already compete for the row's width,
    and a sentence there is what the earlier landing exists to avoid. R and I are BUTTONS while the record is unlifted,
-   with the focus ring a real control needs; a lifted tree keeps its letter and gains a tick, in the allowed green. */
+   with the focus ring a real control needs; an upgraded tree reads T in the allowed green, because that is what it
+   behaves as - its tooltip is where the kind it was survives. */
 .kind-mark {
   display: inline-block;
   margin-right: 5px;
@@ -112,8 +113,9 @@ button.kind-mark.kind-research:focus-visible { outline: 2px solid #ffb454; outli
 .kind-mark.kind-implementation { color: #9fd0ff; border-color: #2a4664; background: #0f1a26; }
 button.kind-mark.kind-implementation:hover { color: #c8e6ff; border-color: #4a7aa8; background: #16273a; }
 button.kind-mark.kind-implementation:focus-visible { outline: 2px solid #6cb6ff; outline-offset: 1px; }
+/* An upgraded R or I draws T, not its old letter with a tick: the cell says what the tree behaves as, and the lifted
+   green is what still separates it from a turnover tree the cut itself recorded. */
 .kind-mark.is-lifted { color: #8fe3b0; border-color: #2b4a37; background: #14211a; }
-.kind-mark .kind-tick { margin-left: 1px; font-size: 9px; }
 /* In the legend the same letters are a decoder, not a cell's mark: they keep their ink and lose the cell's margins. */
 .legend .kind-mark { margin-right: 3px; margin-left: 3px; vertical-align: 0; }
 /* By CLASS, not by position: the chart draws between ten and twelve cells per row (the owner column comes and goes by

@@ -429,7 +429,8 @@ function legendHtml(name) {
           <h4>the kind column</h4>
           <p><span class="kind-mark kind-turnover" role="img" aria-label="turnover tree">T</span> turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally)</p>
           <p><span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press the R to lift it)</p>
-          <p><span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick)</p>
+          <p><span class="kind-mark kind-implementation" role="img" aria-label="implementation tree">I</span> implementation tree (local only - press the I to lift it)</p>
+          <p><span class="kind-mark kind-turnover is-lifted" role="img" aria-label="upgraded tree">T</span> an upgraded tree (was R or I - it behaves as a turnover tree, and its tooltip names the kind it was)</p>
         </div>
         <div class="legend-group">
           <h4>folding</h4>
@@ -1032,8 +1033,9 @@ function rowHtml(row, forceOwner = false) {
 // T is a STATEMENT: a turnover tree is the feature container - research and implementation trees are cut from it, and
 // an implementation tree's work merges back into it locally. R and I are BUTTONS while the record is unlifted:
 // pressing one opens the inline confirm (public/app.js `showKindConfirm`) that lifts the local-only kind through POST
-// /api/worktree/kind-lift. A lifted tree keeps its letter with a tick - the kind never changes, only the reader's
-// answer to it does. A tree with no record draws nothing at all, and the cell stays empty.
+// /api/worktree/kind-lift. The lift does NOT rewrite the record, but the cell names what the tree BEHAVES AS: an
+// upgraded R or I reads T, and its tooltip says the kind it was - "was an implementation tree, upgraded by the reader;
+// it behaves as a turnover tree". A tree with no record draws nothing at all, and the cell stays empty.
 const KIND_MARK = { turnover: "T", research: "R", implementation: "I" };
 
 function kindMarkHtml(row) {
@@ -1049,9 +1051,15 @@ function kindMarkHtml(row) {
   // BOTH LOCAL KINDS LIFT THE SAME WAY. The kind is what the cut recorded; the lift is the reader's per-tree grant
   // that makes a push meet the ordinary controls, and it is written on the same record. Research and implementation
   // differ in what they DO with the work (release it, or merge it locally), not in how the lift works.
+  //
+  // AND THE CELL NAMES WHAT AN UPGRADED TREE BEHAVES AS, which is a turnover tree: it reads T, never its old letter
+  // with a tick. The record still says research or implementation - the tooltip is where that survives, because the
+  // column answers the landing question the row is judged on, and T is the honest answer to it. The lifted green
+  // (chart.css `.kind-mark.is-lifted`) is what still separates an upgraded T from one the cut itself recorded.
   if (row.branchKindLifted === true) {
-    const says = `${label} - cut from ${parent}, lifted by the reader: its push meets the ordinary controls. The kind stays ${kind}.`;
-    return `<span class="kind-mark kind-${kind} is-lifted" role="img" aria-label="${esc(`${label}, lifted`)}" title="${esc(says)}">${mark}<span class="kind-tick" aria-hidden="true">\u2713</span></span>`;
+    const was = kind === "research" ? "a research tree" : "an implementation tree";
+    const says = `cut from ${parent}; was ${was}, upgraded by the reader; it behaves as a turnover tree, and its push meets the ordinary controls.`;
+    return `<span class="kind-mark kind-turnover is-lifted" role="img" aria-label="${esc(`${label}, upgraded by the reader - it behaves as a turnover tree`)}" title="${esc(says)}">T</span>`;
   }
   const says =
     kind === "research"

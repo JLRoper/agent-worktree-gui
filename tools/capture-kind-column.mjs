@@ -12,7 +12,8 @@
 //   research row      R, unlifted (a real button)
 //   turnover row      T, a statement
 //   MERGED row        a landed tree whose badge reads MERGED, and whose record is research - the pair that clipped
-//   lifted row        the research row after the reader's own Lift press, R with a tick
+//   lifted row        the research row after the reader's own Lift press, T in the lifted green, its tooltip naming
+//                     the research tree it was
 //
 // It also PRINTS the verdict cell's text and the kind cell's HTML at both widths, so the report can cite what the
 // picture shows instead of describing it. It asserts nothing: the gate is tools/verify-branch-kind.mjs.
@@ -169,7 +170,7 @@ try {
     await page.locator("[data-kind-lift-yes]").click();
     const lifted = await waitFor(
       async () => page.evaluate((sel) => Boolean(document.querySelector(`${sel} .kind-mark.is-lifted`)), `tr.row[data-key*="${fx.suffixes.research}"]`),
-      { timeoutMs: 20_000, what: "the row to draw R with a tick" },
+      { timeoutMs: 20_000, what: "the row to draw the upgraded T" },
     );
     console.log(`      the lift ${lifted ? "landed" : "did not land"} on this tree`);
     await shoot(page, "lifted-row", fx.suffixes.research);
