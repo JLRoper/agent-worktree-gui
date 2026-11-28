@@ -26,10 +26,12 @@ const { TAG_CHIP_FIRST, tagChips, tagFilterMatch, tagFilterParse, tagFilterQuery
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const style = readStyleSheets();
-// The prefix is answered by two files after row 515: routes/initiatives.js keeps the guard, the fold and the memo,
-// and routes/initiatives-write.js holds the tag registry and every write the assertions below read for.
+// The prefix is answered by three files after rows 515 and 516: routes/initiatives.js is the entry point, the fold and
+// the archive blockers are in routes/initiatives-read.js, and routes/initiatives-write.js holds the tag registry and
+// every write the assertions below read for.
 const route = [
   readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8"),
+  readFileSync(new URL("../routes/initiatives-read.js", import.meta.url), "utf8"),
   readFileSync(new URL("../routes/initiatives-write.js", import.meta.url), "utf8"),
 ].join("\n");
 

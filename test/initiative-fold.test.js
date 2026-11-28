@@ -28,7 +28,9 @@ const { DOTS, PREVIEW_LINES, press, cut, countChips } = fold;
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const style = readStyleSheets();
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const route = readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8");
+// The fold left routes/initiatives.js for routes/initiatives-read.js in row 516: the parent is the prefix's entry point
+// and re-exports it, so the assertions below about the fold's own loop read the file the loop lives in.
+const route = readFileSync(new URL("../routes/initiatives-read.js", import.meta.url), "utf8");
 
 // A node whose `closest` answers the selectors it is given: the press landed on an element, or inside one, that
 // matches those. That is the only thing the rule asks a node - which of the two card selectors answers first - so a
