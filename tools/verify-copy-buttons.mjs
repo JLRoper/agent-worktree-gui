@@ -24,7 +24,7 @@
 //              own textarea/execCommand fallback has to do the copy, and then BOTH are made to fail and the
 //              button must not claim success
 //   inspected  that the mechanism is one delegated handler and one attribute (read off public/app.js and
-//              public/style.css), not per-renderer markup, and that the copy writer it calls is still the
+//              public/console.css), not per-renderer markup, and that the copy writer it calls is still the
 //              panel's one (now public/dom.js)
 //
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN, counts a
@@ -763,7 +763,7 @@ try {
   console.log("accessibility tree over CDP, once hidden and once revealed; and the failure path by making the async");
   console.log("clipboard reject, then both writers fail.");
   console.log("WHAT WAS INSPECTED, NOT DRIVEN: that the mechanism is one delegated listener, one attribute and one CSS");
-  console.log("reveal read off public/app.js and public/style.css, and that the button is built in a single place —");
+  console.log("reveal read off public/app.js and public/console.css, and that the button is built in a single place —");
   console.log("which is what lets a block another worker adds opt in by carrying the attribute.");
   if (!failures) console.log("COPY-BUTTONS-OK");
 } catch (err) {

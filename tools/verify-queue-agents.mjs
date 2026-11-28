@@ -21,7 +21,7 @@
 //
 // WHAT IS MEASURED, off rendered boxes rather than off the source (the renderer is the page's own code, sliced
 // out of public/queue-cards.js exactly as test/assistant-queue-ui.test.js slices it, and the stylesheets are the
-// ones public/index.html links, read out of that file in its own order, because public/style.css is now the
+// ones public/index.html links, read out of that file in its own order, because that one file is now the
 // per-surface sheets the split landed):
 //
 //   two threads    the two .as-task-agent boxes share one left edge and one full width; their top offsets are
@@ -49,6 +49,7 @@ import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { loadPlaywright, notRun, withBrowser } from "./browser.mjs";
 import { sliceRegion } from "./panel-testkit.mjs";
+import { readStyleSheets, styleSheetFiles } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -130,7 +131,7 @@ const task = (id, threads, extra = {}) => ({
   threads,
   project: PROJECT,
   worktree: `${PROJECT}/.worktrees/queue-card-agents-${id}`,
-  files: ["public/queue-cards.js", "public/style.css"],
+  files: ["public/queue-cards.js", "public/queue.css"],
   attempts: 2,
   ...extra,
 });
@@ -178,17 +179,12 @@ const FIXTURES = {
 
 // ---- the page: the shipped stylesheets, the shipped markup, nothing else --------------------------------------
 // THE SHEETS THE PAGE LINKS, in the order public/index.html links them: a rule's cascade position is half of what
-// this gate measures, and public/style.css split into these per-surface sheets, so a hand-written list is a list
-// that goes stale. Reading it out of index.html is the same read test/style-sheets.js makes, and a sheet deleted
-// from the page fails here loudly instead of being measured with the previous file.
-function sheetsFromIndex() {
-  const html = readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
-  return [...html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"]+\.css)"/g)].map((m) => m[1]);
-}
-const SHEETS = sheetsFromIndex();
+// this gate measures, so the list is parsed from the page (tools/style-sheets.mjs), never written here. A sheet
+// deleted from the disk fails there loudly instead of being measured as the sheet before it.
+const SHEETS = styleSheetFiles({ root: ROOT });
 
 function pageHtml(renderer, decorated) {
-  const css = SHEETS.map((rel) => readFileSync(path.join(ROOT, "public", rel), "utf8")).join("\n");
+  const css = readStyleSheets({ root: ROOT });
   const card = (mode) => renderer.taskCardHtml(decorated[mode], mode === "compact" ? "compact" : "full", {
     own: "assistant-1",
     jobs: FIXTURES[mode].jobs,

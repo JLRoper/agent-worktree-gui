@@ -8,7 +8,7 @@
 //
 // THE DEFECT. With the assistant docked at the right, its chat sub-pane open and the transcript longer than the
 // scrollport, the newest turn's message ended up UNDER the reply composer: the composer is `position: sticky;
-// bottom: 0` (public/style.css, the chat block), and the newest turn — the one `public/assistant.js` marks
+// bottom: 0` (public/pipeline.css, the chat sub-pane's block), and the newest turn - the one `public/assistant.js` marks
 // `.is-slack` so that room the panel gains lands in its console — was `flex: 1 1 auto`. In an OVERFLOWING flex
 // column there is no room to gain, so the shrink factor spent the overflow on that one turn: it collapsed to a
 // zero-height box and its console (min-height 34px) painted OUTSIDE its own box, directly behind the sticky
