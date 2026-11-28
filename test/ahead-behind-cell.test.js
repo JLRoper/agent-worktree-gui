@@ -124,7 +124,10 @@ test("the column header explains the arrows, and the verdict carries the count a
   assert.match(chartColumns, /label: "Ahead \/ Behind"/);
   assert.match(chartColumns, /title:\s*\n?\s*"↑ commits this branch has that its own copy on the remote does not[^"]*"/);
   assert.match(chartColumns, /id: "ahead"/);
-  assert.match(projects, /ahead: `<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>`/);
+  // The ahead cell reads the section that owns it; a CONTAINER ROW (a turnover branch with no worktree) draws the
+  // chart's dash instead, because there is no copy on the remote to count against.
+  assert.match(projects, /ahead: `<td class="mono nowrap">\$\{container \?/);
+  assert.match(projects, /: aheadBehindCellHtml\(row\)\}<\/td>`/);
   // verdictHtml keeps the sentence inline so tools/verify-merge-chip.mjs can read its region on its own.
   assert.match(mergeControl, /function verdictHtml\(row\) \{/, "verdictHtml is not in the merge control section");
   assert.match(mergeControl, /Against \$\{row\.baseRef\}: \$\{Number\(row\.ahead\) \|\| 0\} ahead, \$\{Number\(row\.behind\) \|\| 0\} behind\./);

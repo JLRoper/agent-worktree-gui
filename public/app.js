@@ -7525,9 +7525,45 @@ function pendingScanConversations() {
 }
 // ---- end tree list row rule ---------------------------------------------
 
+// ---- starting a turnover container (the chart's container row) --------------------------------------------
+// A turnover branch is a CONTAINER: children are cut from it and their work rolls back into it. When no worktree
+// stands on it the chart draws the branch itself as a row (`public/render-projects.js`), and that row's one press is
+// this. The server's route runs `jobs.cutTurnoverTreeFor` - the same cut the panel's own auto-container uses - so it
+// REUSES a worktree that already holds the branch, puts one on a local branch that has none, and records it as the
+// container with the parent it was cut from. It writes no commit, starts no agent, pushes nothing, lands nothing and
+// opens no pull request; a refusal says which gate refused (a branch this project does not name, git's own error).
+async function startTurnoverContainer(button) {
+  const project = button?.dataset?.startProject || "";
+  const branch = button?.dataset?.startTurnover || "";
+  if (!project || !branch) return;
+  button.disabled = true;
+  try {
+    const res = await apiFetch("/api/worktree/turnover-start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, branch, key: button.dataset.startKey || "" }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.ok === false) {
+      showBanner(`${project}: start refused for ${branch} - ${body.error || `HTTP ${res.status}`}`);
+      return;
+    }
+    showBanner(
+      `${project}: started ${branch}` +
+        (body.path ? ` at ${body.path}` : "") +
+        (body.checkout ? " (the project's own checkout already stands on it, so it IS the container)" : "") +
+        " - its children roll into it, and the row is reconciled like any other worktree",
+    );
+  } catch (e) {
+    showBanner(`${project}: start failed for ${branch} - ${String((e && e.message) || e)}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 // The worktrees an agent can be attached to, grouped project-first for a readable picker.
 function worktreeOptionsHtml() {
-  const rows = [...state.rows.values()].sort(
+  const rows = [...state.rows.values()].filter((r) => !r.placeholder).sort(
     (a, b) => String(a.project).localeCompare(String(b.project)) || String(a.name).localeCompare(String(b.name)),
   );
   return rows
@@ -11407,6 +11443,15 @@ document.addEventListener("click", async (e) => {
     void probeWorktreeAgents(rowAgent.dataset.agentPath || "", rowAgent);
     return;
   }
+  // The container row's START press: put a worktree on a turnover branch that has none, so its children can be rolled
+  // into it and the row reconciled. Nothing is pushed, landed or opened as a PR; the route says which gate refused.
+  const startTurnover = e.target.closest(".btn-start-turnover");
+  if (startTurnover) {
+    e.stopPropagation();
+    e.preventDefault();
+    void startTurnoverContainer(startTurnover);
+    return;
+  }
   // The + bar under a row's agents: start a new agent in this worktree. This is what the ▶ used to do.
   // The green + bar: it becomes a text field in place. The field itself carries the same data attributes, so this
   // matches the button only - a click inside the input must not re-open it.
@@ -13204,6 +13249,12 @@ $("projects").addEventListener("click", (e) => {
   const key = tr.dataset.key;
   const row = state.rows.get(key);
   if (!row) return;
+  // A container row is a BRANCH, not a worktree: its detail would be a Merge state and an agents block for a directory
+  // that does not exist. Say what the row is for instead of opening an empty one.
+  if (row.placeholder) {
+    showBanner(`${row.branch} is a turnover branch with no worktree yet - press start to make the container tree; there is nothing to read until then`);
+    return;
+  }
   keepInPlace(
     () => document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`),
     () => {
