@@ -174,7 +174,8 @@ test("the expansion starts collapsed, and is remembered per row and per card", (
 });
 
 test("the row's strip draws the result chip and ONE collision diamond, and the detail draws neither card", () => {
-  const rowFile = read("public/render-projects.js");
+  // rowHtml and the name/extra cells moved to public/board/project-row.js in row 530's cut 2.
+  const rowFile = read("public/board/project-row.js");
   const scaffold = read("public/board-scaffold.js");
   // ONE CONTROL PER CELL. The collision diamond rides the name line, where the per-pair marks and the counts chip used
   // to sit; that is the strip that costs no height. The result chip is the chart's `reviewedExtra` column: a cell of

@@ -1591,6 +1591,11 @@
        and the project section. Loaded before render-projects.js and app.js, which call them by bare name;
        it declares only, so that order costs nothing and nothing here waits on boot. -->
   <script src="/board/project-order.js"></script>
+  <!-- Cut 2 of public/render-projects.js's three (row 530): every turnover branch a project names is a
+       row of its own, the children under their parent with the one fold that hides them, the row template,
+       its kind column and its reviewed chip. Loaded before render-projects.js and app.js, which call them
+       by bare name; it declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/project-row.js"></script>
   <!-- The board's projects, sections and rows, cut out of app.js (step 7 of the same order of work): a folder's
        card and its counts, the project section and its head, the worktree row and the age column under it, the
        children under their parent with the one fold that hides them, the ordering that puts a folder, a project

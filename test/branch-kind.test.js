@@ -334,10 +334,10 @@ test("7. the same push is allowed once the reader lifts it, and never still refu
 // behaves as - with the kind it was left in the tooltip. The page cannot be imported (it is a classic script), so the
 // region between KIND_MARK and the turnover mark is evaluated with the two helpers it calls.
 test("8. the Kind column names the container, the local kinds, and what an upgraded one behaves as", () => {
-  const src = readFileSync(path.resolve("public", "render-projects.js"), "utf8");
+  const src = readFileSync(path.resolve("public", "board", "project-row.js"), "utf8");
   const start = src.indexOf("const KIND_MARK =");
   const end = src.indexOf("// The row's turnover mark", start);
-  assert.ok(start > 0 && end > start, "the kind-mark region is in public/render-projects.js");
+  assert.ok(start > 0 && end > start, "the kind-mark region is in public/board/project-row.js");
   const esc = (s) =>
     String(s ?? "")
       .replace(/&/g, "&amp;")

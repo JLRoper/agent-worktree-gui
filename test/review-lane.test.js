@@ -2,7 +2,8 @@
 //
 // The lane has three surfaces and they must agree:
 //
-//   1. the amber ▣ on the row and the ✓ Reviewed beside it (public/render-projects.js `reviewRowMarkHtml`);
+//   1. the amber ▣ on the row and the ✓ Reviewed beside it (public/board/project-row.js `reviewRowMarkHtml`, cut 2
+//      of row 530);
 //   2. the result card under the row - summary, report anchor, next-step chips (public/board-scaffold.js);
 //   3. the header count that filters the table (public/app.js `paintReviewChip` / `tableHidesRow`).
 //
@@ -91,7 +92,9 @@ test("the marker's tooltip names the summary, the report and the step count", ()
 // ---- 2. the surfaces are wired --------------------------------------------------------------------------------
 
 const app = read("public/app.js");
-const rowsSrc = read("public/render-projects.js");
+// The row template is cut 2 of row 530 and the full rebuild is still in the parent, so both are read.
+const rowsSrc = `${read("public/board/project-row.js")}
+${read("public/render-projects.js")}`;
 const scaffold = read("public/board-scaffold.js");
 const html = read("public/index.html");
 const settings = read("public/settings.js");
@@ -133,7 +136,7 @@ test("the count filters the table, and the filter overrides the chart's hold and
 });
 
 test("the row carries an amber mark and a Reviewed press, distinct from the lock and the turnover mark", () => {
-  const mark = sliceBetween(rowsSrc, "function reviewRowMarkHtml(row)", "// ---- the age column");
+  const mark = sliceBetween(rowsSrc, "function reviewRowMarkHtml(row)", "// ---- end reviewed chip");
   assert.match(mark, /class="review-mark"/, "its own class, not the lock's and not the turnover's");
   assert.match(mark, /data-review-done=/, "the press lives on the row");
   assert.match(mark, /\\u25a3/, "an amber filled square - not the 🔒 and not the ⇄");
@@ -191,7 +194,7 @@ test("the result card is drawn by the panel from the stored delivery: anchor thr
   // and `rowChipInner` is the one place that says which card a chip stands for.
   const popup = sliceBetween(scaffold, "function rowChipInner(kind, row, key)", "// What the popup draws");
   assert.match(popup, /reviewBlockHtml\(row, key\)/);
-  // The chip itself rides the row's name line: public/render-projects.js is where that is asserted.
+  // The chip itself rides the row's name line: public/board/project-row.js is where that is asserted.
   assert.ok(!scaffold.includes("${reviewBlockHtml(row, key)}"), "the card no longer costs the row a paragraph");
 });
 
