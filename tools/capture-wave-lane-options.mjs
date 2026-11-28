@@ -3,7 +3,7 @@
 // photographed at the panel's real wave column and at the 900px panel, with the numbers the report is written from.
 //
 //   node tools/capture-wave-lane-options.mjs
-//   node tools/capture-wave-lane-options.mjs --home C:/Users/roper/AppData/Local/Temp/wag/689111db/fixture
+//   node tools/capture-wave-lane-options.mjs --home <a kept WAG_HOME, if you want this run's own>
 //
 // THE PANEL IS THE FIXTURE'S OWN. tools/initiatives-fixture.mjs builds three throwaway projects, four initiatives and
 // two assistants' queues, then boots server.js with WAG_HOME under scratch. This tool seeds ONE MORE project

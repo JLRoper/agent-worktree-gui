@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Three gates the sheet sweep left red, re-pinned to the card and the dialog they describe</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap: anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Three gates the sheet sweep left red, re-pinned to the card and the dialog they describe</h1>
+<p class="sub">agent-worktree-gui 1.196.1. Queue row #489, filed from row #438's completion. The 1.191.0 split of <code>public/style.css</code> was repaired by row #438, and its report named three gates it left red: two suites that pinned a card and a handler that had since changed, and the absolute-paths record, which refused four files other lanes had landed. This page re-pins the two, records or fixes the four, and quotes every run.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#489 (three follow-ups named in section 5 and section 7 of docs/reports/style-sheets-sweep-2026-11-28.html)</dd>
+  <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at 92e1c3a7; this tree cut from it and merged back locally, no branch pushed</dd>
+  <dt>version</dt><dd>1.196.1 unchanged: two gates and one record, no route, payload, layout or public/ change</dd>
+  <dt>files</dt><dd>tools/verify-queue-cards.mjs, tools/verify-child-button.mjs, tools/absolute-paths.allow, tools/capture-wave-lane-options.mjs</dd>
+  <dt>the three gates</dt><dd><span class="ok">47/47</span>, <span class="ok">25/25</span>, <span class="ok">clean</span> - every one exit 0, quoted in section 6</dd>
+  <dt>the re-pins bite</dt><dd>four plants, 6, 7 and 2 failing assertions and one over-count refusal, each named, files restored byte-identical</dd>
+</dl>
+
+<h2>1. What the three gates answered before this row</h2>
+<p>Measured in this tree at <code>92e1c3a7</code>, before any edit, with the three commands the row names:</p>
+<pre>$ node tools/verify-queue-cards.mjs
+FAIL  …a surface of its own, not the group's background - {"row":"rgb(29, 35, 43)","group":"rgb(24, 29, 38)"}
+FAIL  the actions row is the card's last child on every row
+FAIL  …and sits at the card's bottom edge - [103.5,52.9,69.8,55,37.8]
+FAIL  …below the head, not under it - [[356.3,340.3],[494.8,478.9],[582.7,566.7],[687.4,671.5],[777.4,761.5]]
+FAIL  one sub-row per agent, with its thread
+        got  [["agent-worktree-gui:seed-thread-before","agent-worktree-gui:seed-thread-live"], …]
+        want [["seed-thread-before","seed-thread-live"], …]
+FAIL  the meta line still names the tree and the files - project agent-worktree-gui
+FAIL  …and truncates a long file list rather than growing the card - project agent-worktree-gui
+47 checks, 7 failed
+RESULT: FAIL
+(exit code 1; screenshot lines elided)
+
+$ node tools/verify-child-button.mjs
+FAIL  it sends the project, the row's path and the name
+FAIL  cancel cuts nothing - a dismissed prompt must not reach the route
+25 checks, 2 failed.
+RESULT: 2 FAILED
+(exit code 1)
+
+$ node tools/absolute-paths.mjs
+absolute-paths: refused - 4 files naming a folder on this machine
+(exit code 1; the four files are tabled in section 4)</pre>
+<p>Row #438's report already proved the first seven are stale rather than broken: on its base, with the deleted-file read stubbed so the browser half could run at all, the same seven failed in the same words (docs/reports/style-sheets-sweep-2026-11-28.html, section 5). The measurements above agree with that reading to the digit - the card the seven describe is simply not the card the pane paints.</p>
+
+<h2>2. verify-queue-cards: the seven, re-pinned to the card the pane paints</h2>
+<p>Two landings changed the card, and neither updated this gate:</p>
+<ul>
+  <li><b><code>48f484e4</code></b> ("the queue row leads with what it is, its state and what it waits on") moved the presses out of the card's bottom edge into a right-hand column of <code>.as-task-main</code> (<code>public/queue.css:54</code>, <code>align-items: flex-start</code>), moved the tree, the files, the attempts and the detail behind the card's own <code>tree · files</code> disclosure (<code>public/queue-cards.js:864</code>), and gave <code>.as-task.is-done</code> the group's own fill (<code>public/queue.css:52</code>) so a finished row recedes into the group.</li>
+  <li><b><code>f926cf32</code></b> (queue row #410) put the project in front of every agent line and the run chip at its back (<code>public/queue-cards.js:507</code>), and left the task-level meta line naming the project and the PR, or stepping aside entirely when each agent line already says where it worked (<code>public/queue-cards.js:827</code>, <code>:877</code>).</li>
+</ul>
+<table>
+  <tr><th>the assertion, before</th><th>the assertion, now</th><th>what it reads, and why the old one could not</th></tr>
+  <tr>
+    <td class="tool">…a surface of its own, not the group's background</td>
+    <td class="tool">…a surface of its own, not the group's background</td>
+    <td>Same words, exact per-state fills: the four open cards must be <code>rgb(29, 35, 43)</code> and must differ from the group, and the done card must be the group's <code>rgb(24, 29, 38)</code>. None may be transparent. The old rule asked all five to differ from the group, which the done card cannot do by design.</td>
+  </tr>
+  <tr>
+    <td class="tool">the actions row is the card's last child on every row</td>
+    <td class="tool">the actions row is the main row's last child, never the card's, which ends with its fold</td>
+    <td>The presses are the last child of <code>.as-task-main</code>; the card's own last child is the <code>tree · files</code> disclosure when the row has one, and the main row when it has nothing to fold. <code>:437</code></td>
+  </tr>
+  <tr>
+    <td class="tool">…and sits at the card's bottom edge</td>
+    <td class="tool">…and sits in the card's top-right corner</td>
+    <td>Gap from the card's top edge 7 px and from its right edge 9 px, on every row - the card's own padding. The old bottom band (0 to 14 px from the bottom) measures 37.8 to 103.5 px now. <code>:442</code></td>
+  </tr>
+  <tr>
+    <td class="tool">…below the head, not under it</td>
+    <td class="tool">…right of the body and above the note, never under it</td>
+    <td>The presses sit strictly right of the body's right edge (body 1126, presses 1132), start above the head's bottom (340.3 against 356.3) and above every note. The old rule demanded the presses start BELOW the head, which is the bottom-edge card. <code>:447</code></td>
+  </tr>
+  <tr>
+    <td class="tool">one sub-row per agent, with its thread</td>
+    <td class="tool">one sub-row per agent, leading with project:branch</td>
+    <td>#1 is the only seeded row naming a worktree, so its two agent lines read <code>agent-worktree-gui:seed-thread-before</code> and <code>agent-worktree-gui:seed-thread-live</code>; #2 to #5 hold no tree and draw the bare thread, because a guessed project reads exactly like a fact. <code>:464</code></td>
+  </tr>
+  <tr>
+    <td class="tool">the meta line still names the tree and the files</td>
+    <td class="tool">the meta line names the project, and the tree and the files live in the fold</td>
+    <td>The meta line is exactly <code>project agent-worktree-gui</code>; the fold's summary is <code>tree · files · attempts · detail</code> and its body carries the tree path, the four file names, <code>2 attempts</code> and the task's detail. Nothing the old assertion proved is dropped - it is asserted one element lower. <code>:480</code></td>
+  </tr>
+  <tr>
+    <td class="tool">…and truncates a long file list rather than growing the card</td>
+    <td class="tool">…and truncates a long file list rather than growing the card</td>
+    <td>Same words, the fold's own rule: the files fragment stops after four names with an ellipsis (<code>package.json</code>, the fifth, is absent), and every fold starts closed. <code>:489</code></td>
+  </tr>
+</table>
+<p>Nothing was loosened to go green. Each of the four changed claims asserts a fact the current card draws, and the two that kept their words assert a <em>stronger</em> rule than before (exact per-state fills; the fifth file's absence plus the closed fold). The gate's header (lines 11 to 15) and a comment above the snapshot (lines 315 to 325) now record which landing moved what, so the next reader does not repair them back.</p>
+<pre>$ node tools/verify-queue-cards.mjs
+PASS  …a surface of its own, not the group's background: {"open":"rgb(29, 35, 43)","done":"rgb(24, 29, 38)","group":"rgb(24, 29, 38)"}
+PASS  the actions row is the main row's last child, never the card's, which ends with its fold: [[true,"more","tree · files · attempts · detail"],[true,"more","tree · files · attempts · detail"],[true,"more","tree · files"],[true,"as-task-main","no fold"],[true,"as-task-main","no fold"]]
+PASS  …and sits in the card's top-right corner: [[7,9],[7,9],[7,9],[7,9],[7,9]]
+PASS  …right of the body and above the note, never under it: [[1126,1132,340.3,356.3,430.9],[1126,1132,478.9,494.8,null],[1126,1132,566.7,582.7,623.6],[1126,1132,671.5,687.4,728.3],[1126,1132,761.5,777.4,null]]
+PASS  one sub-row per agent, leading with project:branch: [["agent-worktree-gui:seed-thread-before","agent-worktree-gui:seed-thread-live"],["seed-thread-holder"],["seed-thread-queued"],["seed-thread-parked"],["seed-thread-done"]]
+PASS  the meta line names the project, and the tree and the files live in the fold: {"meta":"project agent-worktree-gui","summary":"tree · files · attempts · detail","body":"tree <seed-worktree>·files public/assistant.js, public/queue.css, tools/verify-queue-cards.mjs, test/assistant-queue-ui.test.js…·2 a"}
+PASS  …and truncates a long file list rather than growing the card: {"files":"files public/assistant.js, public/queue.css, tools/verify-queue-cards.mjs, test/assistant-queue-ui.test.js…","closed":[false,false,false,"no fold","no fold"]}
+47 checks, 0 failed
+RESULT: PASS  QUEUE-CARDS-OK
+(exit code 0)</pre>
+<p class="small">The seed's worktree path is abbreviated here as <code>&lt;seed-worktree&gt;</code>; the gate reads it from the fixture it writes, and the driver's own log carries the full path.</p>
+
+<h2>3. verify-child-button: the press opens the dialog, it does not cut</h2>
+<p><code>cutChildTree</code> (<code>public/app.js:7943</code>) no longer posts. It reads the row's four attributes, asks <code>/api/branch-kinds</code> what the branch offers, and calls <code>openCutDialog({ project, path, parent, key, choices, parents })</code> (<code>public/app.js:7962</code>); the POST moved into <code>cutSubmit</code> (<code>public/app.js:7909</code>), behind the dialog's own Cut press, with Cancel wired to <code>closeCutDialog</code> (<code>public/app.js:7892</code>).</p>
+<table>
+  <tr><th>the assertion, before</th><th>the assertion, now</th><th>why</th></tr>
+  <tr>
+    <td class="tool">it sends the project, the row's path and the name</td>
+    <td class="tool">it sends the project, the row's path and the name</td>
+    <td>Same name, new subject: <code>cutChildTree</code> must read <code>data-child-project</code>, <code>-path</code>, <code>-branch</code> and <code>-tree</code> into four locals and hand all four to <code>openCutDialog</code>, and <code>cutSubmit</code>'s POST body must carry <code>project</code>, <code>path</code>, <code>name</code>, <code>kind</code> and <code>parent</code>. The old regex demanded a <code>JSON.stringify({ project, path, name: String(asked).trim() })</code> inside the handler and a <code>prompt()</code>'s <code>null</code> return, which describe a handler that no longer exists. <code>tools/verify-child-button.mjs:99</code></td>
+  </tr>
+  <tr>
+    <td class="tool">cancel cuts nothing - a dismissed prompt must not reach the route</td>
+    <td class="tool">cancel cuts nothing - a dismissed prompt must not reach the route</td>
+    <td>Now read from the dialog: Cancel's listener is <code>closeCutDialog</code>, only <code>.cut-go</code> reaches <code>cutSubmit</code>, <code>cutSubmit</code> refuses a null dialog, and <code>cutChildTree</code> carries no <code>JSON.stringify({ project</code> at all - so a press cannot cut before the reader answers. <code>tools/verify-child-button.mjs:109</code></td>
+  </tr>
+  <tr>
+    <td class="tool">the handler posts the cut route</td>
+    <td class="tool">the route is posted from the dialog's Cut press, not from the row</td>
+    <td>Not one of the two the row names, but the same staleness: the old check only asked whether the literal appeared ANYWHERE in app.js. It now requires it inside <code>cutSubmit</code> and absent from <code>cutChildTree</code>. <code>tools/verify-child-button.mjs:94</code></td>
+  </tr>
+</table>
+<pre>$ node tools/verify-child-button.mjs
+ok    the handler exists
+ok    the route is posted from the dialog's Cut press, not from the row - cutSubmit carries the route; cutChildTree does not
+ok    it sends the project, the row's path and the name - openCutDialog({ project, path, parent, key, choices, parents })
+ok    cancel cuts nothing - a dismissed prompt must not reach the route - Cancel closes the dialog; only Cut reaches /api/worktree/child, and a closed dialog submits nothing
+ok    the delegated listener answers the attribute
+ok    the listener calls the handler and stops the row from toggling
+ok    a double click is one tree, not two
+25 checks, 0 failed.
+RESULT: ALL PASS
+(exit code 0)</pre>
+
+<h2>4. absolute-paths: three records kept, one path fixed</h2>
+<p>The gate refuses a commit that names a folder on the machine that wrote it, and its allowlist is a record with a reason per file, not a widening of the rule. Four files were refused; each is decided below. None of the four is this row's file, and none of them is rewritten to satisfy the gate except the one whose absolute path was a usage sample rather than a measurement.</p>
+<table>
+  <tr><th>file</th><th>what the path is</th><th>decision</th><th>reason</th></tr>
+  <tr>
+    <td class="tool">docs/reports/queue-open-cards-2026-11-28.html:137</td>
+    <td>the row-443 report's "re-run it" block, naming the worktree its commands ran in</td>
+    <td><span class="warn">recorded</span></td>
+    <td>a landed report's own record of where it ran; this roll-up carries that page rather than rewriting it (<code>tools/absolute-paths.allow:272</code>)</td>
+  </tr>
+  <tr>
+    <td class="tool">docs/reports/row-404-version-tag-repair-2026-11-28.html:262</td>
+    <td>the row-404 report's foot, naming the worktree it measured in</td>
+    <td><span class="warn">recorded</span></td>
+    <td>the same: a measurement record, as it was (<code>tools/absolute-paths.allow:273</code>)</td>
+  </tr>
+  <tr>
+    <td class="tool">docs/reports/wave-lane-options/measurements.json:3,4,5</td>
+    <td>the five drawings' checkout, scratch WAG_HOME and report paths</td>
+    <td><span class="warn">recorded, count 3</span></td>
+    <td>the numbers in that page are only re-readable against the trees they were taken in; the count freezes the file at three, so a fourth path is still refused (<code>tools/absolute-paths.allow:274</code>)</td>
+  </tr>
+  <tr>
+    <td class="tool">tools/capture-wave-lane-options.mjs:6</td>
+    <td>a usage sample, <code>--home</code> pointed at one run's pruned scratch fixture</td>
+    <td><span class="ok">fixed</span></td>
+    <td>a sample a reader replaces, not a measurement: the line now reads <code>--home &lt;a kept WAG_HOME, if you want this run's own&gt;</code>, which is also true (the option has a default beside the checkout, <code>:37</code>)</td>
+  </tr>
+</table>
+<pre>$ node tools/absolute-paths.mjs
+absolute-paths: clean - 2545 tracked files, 1358 paths in 256 allowlisted files, none new
+(exit code 0)</pre>
+
+<h2>5. The proof that the re-pinned assertions still bite</h2>
+<p>A re-pin that only ever runs green is a rubric agreeing with itself, so each changed claim was made to fail by planting the defect it names in the tree, then the file was restored from a byte copy and compared. The plants were made in place and reverted with <code>cp</code> (never <code>git checkout</code>), and <code>cmp</code> reports the restored files identical to their backups; <code>git status --short</code> names only the four tooling files this row changes.</p>
+<table>
+  <tr><th>plant</th><th>what it changed</th><th>the run</th></tr>
+  <tr>
+    <td class="tool">A: queue card, four defects at once</td>
+    <td>the agent line drawn as the bare thread; the file list drawn in full; a tail element after the presses inside <code>.as-task-main</code>; the done card given the raised fill</td>
+    <td><span class="no">47 checks, 6 failed</span>: the surface, the presses' last-child place, the top-right corner, the project-led agent lines, the meta/fold pair and the truncation all red, each naming its measured value</td>
+  </tr>
+  <tr>
+    <td class="tool">B: queue card, the main row turned into a column</td>
+    <td><code>.as-task-main { flex-direction: column }</code> - the presses under the body, as the old card had them</td>
+    <td><span class="no">47 checks, 7 failed</span>, and the seventh is <code>…right of the body and above the note</code>: body right 1530 against presses left 829, presses top 451.1 against head bottom 356.3</td>
+  </tr>
+  <tr>
+    <td class="tool">C: the child-cut dialog</td>
+    <td><code>openCutDialog</code> called without <code>key</code>, and Cancel wired to <code>cutSubmit</code></td>
+    <td><span class="no">25 checks, 2 failed</span>: exactly "it sends the project, the row's path and the name" (naming the call it found) and "cancel cuts nothing - a dismissed prompt must not reach the route"</td>
+  </tr>
+  <tr>
+    <td class="tool">D: the allow record</td>
+    <td>a fourth drive-letter path added to measurements.json</td>
+    <td><span class="no">refused - 1 file over the count they recorded</span>, "(4 paths, 3 recorded in tools/absolute-paths.allow)", exit code 1</td>
+  </tr>
+</table>
+<p class="small">The plant-B numbers are the ones the run printed; they are larger than the real layout because a column main row stretches the body. That is the point of the measurement: the assertion reads the geometry, not a class name.</p>
+
+<h2>6. What ran, and what it answered</h2>
+<table>
+  <tr><th>command</th><th>answer</th><th>exit</th></tr>
+  <tr><td class="tool">node tools/verify-queue-cards.mjs</td><td><span class="ok">47 checks, 0 failed</span> - RESULT: PASS  QUEUE-CARDS-OK</td><td>0</td></tr>
+  <tr><td class="tool">node tools/verify-child-button.mjs</td><td><span class="ok">25 checks, 0 failed</span> - RESULT: ALL PASS</td><td>0</td></tr>
+  <tr><td class="tool">node tools/absolute-paths.mjs</td><td><span class="ok">clean - 2545 tracked files, 1358 paths in 256 allowlisted files, none new</span></td><td>0</td></tr>
+  <tr><td class="tool">node --test test/absolute-paths.test.js</td><td><span class="ok">17 tests, 17 pass, 0 fail, 0 skipped, 0 todo</span> - including "this repository's own tree passes" and both hook directions</td><td>0</td></tr>
+  <tr><td class="tool">node --test test/assistant-queue-ui.test.js</td><td><span class="ok">24 tests, 24 pass, 0 fail</span> - the card's DOM order, including "#410: the agent line leads with project:branch and the run chip trails the status chip"</td><td>0</td></tr>
+</table>
+<p>The full <code>npm test</code> was not run for this row, and that is a limit stated rather than a total claimed. Row #438 started it twice on this host and cancelled both (20 and 36 minutes, no summary); this row changes two static/browser gates and one record, names the tests that cover them, and runs those. The focused selector (<code>npm run test:changed</code>) is not used as the proof here either: it diffs against <code>origin/main</code>, and this tree's base is the turnover branch, 94 files ahead of main, so it selects 349 tests that have nothing to do with this change.</p>
+
+<h2>7. What is left, and what is red</h2>
+<p><b>Nothing this row touched is red.</b> All three gates the row names answer green on the tree that merges into <code>20261127_2134_TASK-405_row-405-is-the-complete</code>, and the four absolute-path refusals are closed: three recorded with their reason, one fixed at the line.</p>
+<ul>
+  <li><b>Not this row's gate, still red where it was:</b> <code>tools/verify-console-multi-block-line.mjs</code> needs job <code>6073fb2a</code>, which a sandbox does not hold; a substitute job passes its layout checks and fails three text checks. Row #438 named it and this row did not reopen it - it is a capture over a recorded run, not a card or a handler assertion.</li>
+  <li><b>Fixed elsewhere and carried here:</b> <code>tools/verify-css-split.mjs --stream</code> is green (0 lost, 0 edited, 15 borrowed from <code>chart.css</code>) on the multiset version the turnover branch already carried; this row did not change it.</li>
+  <li><b>The card itself was not touched.</b> The row's acceptance says no <code>public/</code> change, and the diff bears that out: under <code>tools/</code> the changes are the two gates, the allow record and one usage comment, and the rest of the diff is this page. The done card's group-coloured fill is the card's design, asserted as such rather than repaired.</li>
+</ul>
+<p class="small">Every number in this page was read from a run quoted in it, in this tree at <code>92e1c3a7</code> plus this row's edits, on 2026-11-28. The "before" block is the run made before the first edit; the "after" blocks are the last runs after the plants were restored. The gates print their assertion-to-value separator as a dash; it is shown here as a plain hyphen.</p>
+</main>
+</body>
+</html>
