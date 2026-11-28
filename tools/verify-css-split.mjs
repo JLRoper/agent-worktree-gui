@@ -3,25 +3,43 @@
 // (LEGACY_SHEET below names that file, once, because git is the only place it still exists).
 // THE PROOF FOR THE PER-SURFACE CUT, in two halves.
 //
-// HALF A - the rule stream. The one sheet was split into nineteen sheets by surface. The claim is that the
-// nineteen sheets IN THE ORDER public/index.html loads them still hold every rule the old file held, exactly once and
-// unedited, and that any rule they gained is one chart.css held beside that sheet at the split's commit - the
-// cross-sheet move. This half reads the pre-split file and that commit's chart.css out of git, parses both sides into
-// a normalized rule stream (comments dropped, whitespace collapsed, at-rule context kept) and compares them as a
-// multiset, so a move between sheets passes and a dropped, duplicated or edited rule fails with the rule named.
+// HALF A - the rule stream, as two claims.
+//
+//   THE PIN   the sheets public/index.html links today, parsed into a normalized rule stream (comments dropped,
+//             whitespace collapsed, at-rule context kept), equal as a multiset to tools/css-split-pin.txt: every
+//             sheet present in load order, every rule once, unedited. The pin is written from measurement
+//             (`--pin`) and never typed, so it is the tree's own multiset; a rule deleted, duplicated or edited, or
+//             a sheet renamed, added or dropped, fails and the rule is named. The pin replaced the deleted file as
+//             the base: pinning a file that no longer exists kept the gate red against every later landing - the
+//             pages hold 3,321 rules today against that file's 3,061 - so it could not say whether a row had
+//             changed a rule. See "THE PIN" below for the arithmetic that accounts for the difference.
+//
+//   THE ORIGIN every rule of the pre-split file is still on the page or in chart.css today, exactly once, and
+//             unedited but for the recorded edit; a rule the split borrowed from chart.css at that commit is the
+//             cross-sheet move and passes, and a rule a later row added is reported rather than refused. This half
+//             reads the pre-split file and that commit's chart.css out of git and compares them as a multiset, so a
+//             move between sheets passes and a dropped, duplicated or edited rule fails with the rule named.
 //
 // HALF B - the six panes. A stylesheet move is defined by what the browser computes, not by what the text says, so
-// this half boots the panel TWICE - once from a `git archive` export of the pre-split commit, once from this tree -
-// against two identical fixtures (fixed timestamps and fixed commit dates, so even the shas match), freezes the page
-// clock, and measures the same six panes on both: the board table, the console, the queue pane, the assistant float,
-// the initiatives tab and the settings drawer. For each pane it records every element's border box and every text
-// run's client rects, then compares. Zero differing boxes and zero differing text positions is the pass.
+// this half builds a before root from HEAD with the cut undone (the pre-split sheet restored, the split sheets
+// removed, the page's one link put back), boots that root twice and this tree once against one fixture (fixed
+// timestamps and fixed commit dates, so even the shas match), freezes the page clock, and measures the same six
+// panes on all three: the board table, the console, the queue pane, the assistant float, the initiatives tab and the
+// settings drawer. For each pane it records every element's border box and every text run's client rects, then
+// compares. Zero differing boxes and zero differing text positions is the pass.
+//
+// THAT COUNTERFACTUAL HAS EXPIRED, and the half is red for it. The before root restores a 3,061-rule file into a page
+// whose sheets hold 3,321, so the two pages cannot agree and have not since the sheets moved past the deleted file.
+// The multiset claim is HALF A's, and `--stream` is the run that decides whether a rule moved; this half is kept
+// because retiring it or rebuilding its before root is its own row.
 //
 // The BEFORE root is measured TWICE. A harness that cannot repeat itself makes a before/after match meaningless, so
 // the first pair of runs must agree before the cross-root comparison is allowed to claim anything.
 //
 //   node tools/verify-css-split.mjs                      # both halves, shots under docs/reports/css-split
 //   node tools/verify-css-split.mjs --stream             # half A only (no browser needed)
+//   node tools/verify-css-split.mjs --pin                # re-measure tools/css-split-pin.txt (with the row that
+//                                                        # changed a sheet) and print every sheet's count
 //   node tools/verify-css-split.mjs --old <rev> --keep   # another pre-split revision, keep the export
 //
 // Exit: 0 pass; 1 a check failed; 2 Playwright is not installed and the pixel half could not run.
@@ -40,6 +58,7 @@ const has = (name) => argv.includes(name);
 
 const REPORTS = path.resolve(opt("--out", path.join(ROOT, "docs", "reports", "css-split")));
 const STREAM_ONLY = has("--stream");
+const PIN_ONLY = has("--pin");
 const KEEP = has("--keep");
 
 const line = (s = "") => console.log(s);
@@ -54,12 +73,21 @@ let failures = 0;
 // HALF A: the normalized rule stream
 // ---------------------------------------------------------------------------------------------
 
-// The sheets the split added, in the order public/index.html loads them: every local sheet link except the ones that
+// The sheets the cut produced, in the order public/index.html loads them: every local sheet link except the ones that
 // were already separate (chart.css, whose own rules the stream check reads separately as the move's source) and the
 // shared card sheets under core/. The list itself is parsed from the page by tools/style-sheets.mjs, so a sheet added
 // there is measured without an edit here.
 const sheetsInLoadOrder = (root = ROOT) =>
   styleSheetFiles({ root }).filter((name) => name !== "chart.css" && !name.startsWith("core/"));
+
+// THE PIN's sheet set: every sheet the page links except the two core/ cards. chart.css belongs here even though the
+// cut did not produce it - the board-table cut moved the legend's rules into it, and a rule that lived in the one
+// sheet and lives there now has to be covered by the same multiset. The two core/ sheets are shared with the
+// standalone pipeline and task pages and were never part of the one sheet, so pinning them would widen this gate
+// into those pages' business.
+const pinnedSheetFiles = (root = ROOT) => styleSheetFiles({ root }).filter((name) => !name.startsWith("core/"));
+
+const PIN_FILE = path.join(ROOT, "tools", "css-split-pin.txt");
 
 // The one file the split removed, spelled as two segments so the sweep's proof (a grep for the old path under
 // tools/*.mjs answers nothing) can hold while the gate still names what it proves. Nothing reads it from disk -
@@ -120,7 +148,150 @@ export function parseRules(text) {
   return rules;
 }
 
-const ruleKey = (r) => `${r.ctx}|${r.sel}|${r.decls}`;
+export const ruleKey = (r) => `${r.ctx}|${r.sel}|${r.decls}`;
+
+// ---------------------------------------------------------------------------------------------
+// THE PIN: the measured multiset of the sheets that exist today
+// ---------------------------------------------------------------------------------------------
+//
+// The gate's first base was the deleted file itself: every rule of public/style.css at the commit before the split
+// had to appear on the page. That is a claim about 1.191.0, not about the tree a reader is looking at, and it went
+// stale by construction - today's sheets hold 3,321 rules against that file's 3,061 - so it could not say whether
+// THIS row changed a rule. The arithmetic that accounts for the difference, measured by this file's own parser:
+// 3,061 in the deleted file, minus 21 the board-table cut moved into chart.css, plus 225 the split borrowed from
+// chart.css, plus 56 later rows added = 3,321. The origin half below still proves that every one of those 3,061 is
+// still where it went; the pin is what proves nothing has moved since.
+//
+// The pin is a file, written from measurement and never typed: one line per rule, `ctx|selector|declarations`
+// exactly as parseRules normalizes it, grouped under a `## <sheet>` header in load order and sorted inside each
+// sheet. It is the multiset itself, not a digest, so a re-pin is a readable diff and a failure names the rule.
+//
+//   node tools/verify-css-split.mjs --pin    # re-measure it, in the row that changed a sheet
+//
+// A rule deleted, duplicated or edited; a sheet renamed, reordered, added or dropped: each reads as a failure that
+// names the sheet and the rule. The header states the counts and the parser refuses a file whose lines disagree, so
+// a truncated pin is refused rather than read as a shorter one.
+
+const PIN_META = /^#\s*sheets\s+(\d+),\s*rules\s+(\d+),\s*split sheets\s+(\d+),\s*split rules\s+(\d+)\s*$/;
+
+// `measure` is [{ sheet, keys, ... }] in load order. chart.css is the one sheet here the cut did not produce, so the
+// split subtotal counts it out.
+export function pinText(measure) {
+  const split = measure.filter((m) => m.sheet !== "chart.css");
+  const rules = measure.reduce((a, m) => a + m.keys.length, 0);
+  const splitRules = split.reduce((a, m) => a + m.keys.length, 0);
+  const out = [
+    "# tools/css-split-pin.txt - the rule multiset of the sheets public/index.html links today.",
+    "# Written by `node tools/verify-css-split.mjs --pin`; read by that gate's HALF A. Do not edit by hand:",
+    "# a rule line is `at-rule context|selector|declarations` exactly as the gate parses it, and this header is",
+    "# checked against the lines, so a truncated file is refused rather than read as a shorter pin.",
+    `# sheets ${measure.length}, rules ${rules}, split sheets ${split.length}, split rules ${splitRules}`,
+  ];
+  for (const m of measure) {
+    out.push(`## ${m.sheet}`);
+    for (const k of [...m.keys].sort()) out.push(k);
+  }
+  return `${out.join("\n")}\n`;
+}
+
+export function parsePin(text) {
+  const meta = { sheets: 0, rules: 0, splitSheets: 0, splitRules: 0 };
+  const bySheet = new Map();
+  let current = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    if (!raw) continue;
+    if (raw.startsWith("## ")) {
+      current = raw.slice(3).trim();
+      if (!current) throw new Error("css-split-pin.txt: a sheet header with no name");
+      if (bySheet.has(current)) throw new Error(`css-split-pin.txt: ${current} is pinned twice`);
+      bySheet.set(current, []);
+      continue;
+    }
+    if (raw.startsWith("# ")) {
+      const m = raw.match(PIN_META);
+      if (!m) continue;
+      meta.sheets = Number(m[1]);
+      meta.rules = Number(m[2]);
+      meta.splitSheets = Number(m[3]);
+      meta.splitRules = Number(m[4]);
+      continue;
+    }
+    if (!current) throw new Error(`css-split-pin.txt: a rule line before the first sheet header: ${raw.slice(0, 80)}`);
+    bySheet.get(current).push(raw);
+  }
+  const rules = [...bySheet.values()].reduce((a, keys) => a + keys.length, 0);
+  const split = [...bySheet.entries()].filter(([name]) => name !== "chart.css");
+  const splitRules = split.reduce((a, [, keys]) => a + keys.length, 0);
+  const disagree =
+    meta.sheets !== bySheet.size || meta.rules !== rules || meta.splitSheets !== split.length || meta.splitRules !== splitRules;
+  if (disagree) {
+    throw new Error(
+      `css-split-pin.txt: the header says ${meta.sheets} sheets / ${meta.rules} rules (${meta.splitRules} split), ` +
+        `the lines hold ${bySheet.size} / ${rules} (${splitRules}) - the file is truncated or hand-edited`,
+    );
+  }
+  return { meta, bySheet };
+}
+
+// Every sheet the page links, minus the two core/ cards, with its text, its rule keys and its bytes.
+export function measureSheetSet(root = ROOT) {
+  return pinnedSheetFiles(root).map((sheet) => {
+    const text = readFileSync(path.join(root, "public", sheet), "utf8");
+    const keys = parseRules(text).map(ruleKey);
+    return { sheet, text, keys, bytes: Buffer.byteLength(text) };
+  });
+}
+
+// The pin against the tree. A sheet in one and not the other is named before any rule is compared, because a
+// rename would otherwise read as one sheet lost and one gained.
+export function comparePin(pin, measured) {
+  const pinnedNames = [...pin.bySheet.keys()];
+  const nowNames = measured.map((m) => m.sheet);
+  const missing = pinnedNames.filter((n) => !nowNames.includes(n));
+  const extra = nowNames.filter((n) => !pin.bySheet.has(n));
+  const common = pinnedNames.filter((n) => nowNames.includes(n));
+  const orderChanged = common.join("\n") !== nowNames.filter((n) => pin.bySheet.has(n)).join("\n");
+  const perSheet = [];
+  const lost = [];
+  const added = [];
+  for (const name of common) {
+    const now = measured.find((m) => m.sheet === name).keys;
+    const d = multisetDelta(pin.bySheet.get(name), now);
+    perSheet.push({ sheet: name, pinned: pin.bySheet.get(name).length, now: now.length, lost: d.lost, added: d.added });
+    for (const k of d.lost) lost.push({ sheet: name, key: k });
+    for (const k of d.added) added.push({ sheet: name, key: k });
+  }
+  const ok = !missing.length && !extra.length && !orderChanged && perSheet.every((s) => !s.lost.length && !s.added.length);
+  return { missing, extra, orderChanged, perSheet, lost, added, ok };
+}
+
+function readPin(file = PIN_FILE) {
+  if (!existsSync(file)) {
+    throw new Error(`${path.relative(ROOT, file).replace(/\\/g, "/")} does not exist - write it with \`node tools/verify-css-split.mjs --pin\` in the row that pins the sheets`);
+  }
+  return parsePin(readFileSync(file, "utf8"));
+}
+
+// Write the pin from the tree. A pin written over an uncommitted change is a pin of the working tree, so the run
+// says which sheets differ from HEAD: the next commit is what turns it into a claim another reader can check.
+function writePin() {
+  const measured = measureSheetSet(ROOT);
+  const text = pinText(measured);
+  const pin = parsePin(text);
+  writeFileSync(PIN_FILE, text, "utf8");
+  line(`WROTE  ${path.relative(ROOT, PIN_FILE).replace(/\\/g, "/")}`);
+  line(`  ${pin.meta.sheets} sheets, ${pin.meta.rules} rules; ${pin.meta.splitSheets} split sheets hold ${pin.meta.splitRules}`);
+  for (const m of measured) line(`    ${m.sheet.padEnd(22)} ${String(m.keys.length).padStart(5)} rules  ${String(m.bytes).padStart(7)} bytes`);
+  const dirty = execFileSync("git", ["-C", ROOT, "status", "--porcelain", "--", "public"], { encoding: "utf8" }).trim();
+  if (dirty) {
+    line();
+    line("  the sheets are MODIFIED against HEAD:");
+    for (const l of dirty.split("\n")) line(`    ${l}`);
+    line("  the pin records the working tree: commit the sheet change with it, or restore the sheet and re-pin");
+  }
+  line();
+}
+
 
 function preSplitRevision() {
   const fromOpt = opt("--old");
@@ -185,7 +356,7 @@ function halfStream() {
     maxBuffer: 64 * 1024 * 1024,
   });
   // chart.css is not part of style.css's history, but it is part of the page's: the 1.194.0 move took fifteen rules
-  // out of it into board.css. Comparing the nineteen split sheets alone against style.css then reads fifteen rules
+  // out of it into board-table.css. Comparing the split sheets alone against style.css then reads fifteen rules
   // that were never there, so this half judges the split as two claims instead of one frozen file: every rule of
   // style.css is still in the sheets, exactly once and unedited, and every EXTRA rule in the sheets is one chart.css
   // held at this commit - the chart sheet's own later edits stay its business, and the split cannot invent a rule.
@@ -209,23 +380,54 @@ function halfStream() {
   const newRules = parseRules(parts.join("\n"));
   const chartToday = parseRules(readFileSync(path.join(ROOT, "public", "chart.css"), "utf8"));
 
-  line("HALF A  the normalized rule stream");
-  line(`  pre-split revision  ${rev}`);
-  line(`  sheets              ${sheets.length} -> ${sheets.join(", ")}`);
-  for (const s of perSheet) line(`    ${s.sheet.padEnd(22)} ${String(s.rules).padStart(5)} rules  ${String(s.bytes).padStart(7)} bytes`);
-  line(`  old rules           ${oldRules.length}  (${LEGACY_SHEET} at ${rev.slice(0, 8)})`);
-  line(`  new rules           ${newRules.length}`);
-  line(`  chart.css           ${chartRules.length} at that commit, ${chartToday.length} today (compared, not frozen)`);
+  line("HALF A  the rule stream");
+  line(`  pre-split revision  ${rev.slice(0, 8)} (${LEGACY_SHEET}, ${oldRules.length} rules)`);
+  line(`  chart.css           ${chartRules.length} rules at that commit, ${chartToday.length} today (compared, not frozen)`);
+  line();
 
+  // ---- THE PIN ------------------------------------------------------------------------------
+  // The claim a reader's tree can be measured against: the sheets the page links today, against the multiset
+  // tools/css-split-pin.txt holds. This runs first because it is the one that fails when a rule is lost today.
+  const measured = measureSheetSet(ROOT);
+  const pin = readPin();
+  const pinDelta = comparePin(pin, measured);
+  const measuredRules = measured.reduce((a, m) => a + m.keys.length, 0);
+  const measuredSplit = measured.filter((m) => m.sheet !== "chart.css");
+  const measuredSplitRules = measuredSplit.reduce((a, m) => a + m.keys.length, 0);
+  const pinRow = new Map(pinDelta.perSheet.map((s) => [s.sheet, s]));
+  line("  THE PIN");
+  line(`  the pin             tools/css-split-pin.txt: ${pin.meta.sheets} sheets / ${pin.meta.rules} rules (${pin.meta.splitSheets} split sheets hold ${pin.meta.splitRules})`);
+  line(`  the page today      ${measured.length} sheets / ${measuredRules} rules (${measuredSplit.length} split sheets hold ${measuredSplitRules})`);
+  for (const m of measured) {
+    const row = pinRow.get(m.sheet);
+    const mark = row ? `${String(row.pinned).padStart(5)} -> ${String(row.now).padStart(5)}${row.lost.length || row.added.length ? "   DIFFERS" : ""}` : "  NOT IN THE PIN";
+    line(`    ${m.sheet.padEnd(22)} ${String(m.keys.length).padStart(5)} rules  ${String(m.bytes).padStart(7)} bytes  ${mark}`);
+  }
+  ok(
+    "pin: every sheet the page links holds exactly the rules the pin measured, once each and unedited",
+    pinDelta.ok,
+    pinDelta.ok
+      ? `${measuredRules} rules in ${measured.length} sheets`
+      : `${pinDelta.lost.length} lost, ${pinDelta.added.length} added, ${pinDelta.missing.length} sheet(s) gone, ${pinDelta.extra.length} sheet(s) unpinned${pinDelta.orderChanged ? ", load order changed" : ""}`,
+  );
+  for (const n of pinDelta.missing) line(`    sheet gone from the page     ${n}`);
+  for (const n of pinDelta.extra) line(`    sheet the pin does not hold  ${n}`);
+  if (pinDelta.orderChanged) line("    load order changed");
+  for (const l of pinDelta.lost.slice(0, 8)) line(`    lost   ${l.sheet}  ${String(l.key).slice(0, 140)}`);
+  for (const a of pinDelta.added.slice(0, 8)) line(`    added  ${a.sheet}  ${String(a.key).slice(0, 140)}`);
+  if (pinDelta.lost.length > 8 || pinDelta.added.length > 8) {
+    line(`    ... ${pinDelta.lost.length + pinDelta.added.length - 8} more not shown; the first eight of each are above`);
+  }
+  line();
+
+  // ---- THE ORIGIN ---------------------------------------------------------------------------
+  // Provenance: every rule the one sheet held is still on the page or in chart.css today, exactly once. This is the
+  // half that accounts for the pin's 3,321 against the deleted file's 3,061, and it is what refuses a rule that
+  // leaves BOTH the sheets and chart.css.
+  line("  THE ORIGIN");
+  line(`  the deleted file    ${oldRules.length} rules; the ${sheets.length} split sheets today hold ${newRules.length}`);
   const oldKeys = oldRules.map(ruleKey);
   const newKeys = newRules.map(ruleKey);
-  let firstDiff = -1;
-  for (let i = 0; i < Math.max(oldKeys.length, newKeys.length); i += 1) {
-    if (oldKeys[i] !== newKeys[i]) {
-      firstDiff = i;
-      break;
-    }
-  }
   const delta = multisetDelta(oldKeys, newKeys);
 
   // A lost rule and an added rule with the same selector and at-rule context is one EDITED rule, not two unrelated
@@ -284,9 +486,31 @@ function halfStream() {
   }
   const borrowed = addedLeft.length - unattributed.length;
 
-  ok("stream: every rule in the old file is still on the page, exactly once and unedited, or reported as a move",
-    lostLeft.length === 0 && unexplained.length === 0 && unattributed.length === 0,
-    `${lostLeft.length} lost, ${unexplained.length} edited, ${borrowed} borrowed from chart.css, ${unattributed.length} added`);
+  // A rule that left a sheet for chart.css is a MOVE, not a loss: the board-table cut took the legend's twenty-one
+  // rules into chart.css, and while this half pinned the deleted file it read every one of them as lost. Spend one
+  // copy of each lost rule against chart.css as it is TODAY, and name the move in the count.
+  const chartNow = new Map();
+  for (const k of chartToday.map(ruleKey)) chartNow.set(k, (chartNow.get(k) || 0) + 1);
+  const movedOut = [];
+  const gone = [];
+  for (const k of lostLeft) {
+    const n = chartNow.get(k) || 0;
+    if (n > 0) {
+      chartNow.set(k, n - 1);
+      movedOut.push(k);
+    } else {
+      gone.push(k);
+    }
+  }
+
+  // The rest of the extras are rules a later row WROTE into a sheet. They are reported, not refused: this half is a
+  // claim about the rules the one sheet held, and a rule a later row writes is the pin's business - the pin holds it
+  // from the day its row lands, and the pin is what refuses its loss afterwards.
+  const addedSince = unattributed.length;
+
+  ok("origin: every rule of the pre-split file is still on the page or in chart.css today, exactly once and unedited but for the recorded edit",
+    gone.length === 0 && unexplained.length === 0,
+    `${gone.length} lost, ${movedOut.length} moved to chart.css, ${unexplained.length} edited (${accepted.length} accepted), ${borrowed} borrowed from chart.css at the split, ${addedSince} added since`);
   for (const e of accepted) {
     line(`    accepted edit ${selOf(e.after)}: ${declsOf(e.before)} -> ${declsOf(e.after)} (${e.by})`);
   }
@@ -294,33 +518,28 @@ function halfStream() {
     line(`    edited ${String(e.after).slice(0, 150)}`);
     line(`      was  ${String(e.before).slice(0, 150)}`);
   }
-  for (const k of lostLeft.slice(0, 5)) line(`    lost   ${String(k).slice(0, 150)}`);
-  for (const k of unattributed.slice(0, 5)) line(`    added  ${String(k).slice(0, 150)}`);
+  for (const k of movedOut.slice(0, 5)) line(`    moved to chart.css  ${String(k).slice(0, 150)}`);
+  for (const k of gone.slice(0, 5)) line(`    lost   ${String(k).slice(0, 150)}`);
+  for (const k of unattributed.slice(0, 5)) line(`    added since the split  ${String(k).slice(0, 150)}`);
   for (const sel of unspent) line(`    allowance not used: ${sel} - the rule no longer reads as recorded`);
-  if (firstDiff === -1) {
-    ok("stream: selector and declaration sequence is identical", true, `${oldRules.length} rules, in order`);
-  } else {
-    // A moved block changes the order without changing the rules, so the order is reported and the multiset above
-    // decides. The pixel half is what the layout claims; this half is what the rule set claims.
-    line(`  rule order          changed at rule ${firstDiff} (a cross-sheet move); the multiset is the claim`);
-    line(`    old[${firstDiff}] ${String(oldKeys[firstDiff] ?? "(none)").slice(0, 150)}`);
-    line(`    new[${firstDiff}] ${String(newKeys[firstDiff] ?? "(none)").slice(0, 150)}`);
-  }
+  if (addedSince > 5) line(`    ... ${addedSince - 5} more added since the split`);
+  line("  rule order          not a claim here: a cross-sheet move reorders rules, and both claims above are multisets");
   const bytes = perSheet.reduce((a, s) => a + s.bytes, 0);
   line(`  sheet bytes         ${bytes} (old file ${Buffer.byteLength(oldText)})`);
-  line(`  20-sheet total      ${newKeys.length + chartToday.length} rules, the page as loaded (chart.css in its own position)`);
+  line(`  accounted           ${oldRules.length} - ${movedOut.length} moved to chart.css + ${borrowed} borrowed at the split + ${addedSince} added since = ${oldRules.length - movedOut.length + borrowed + addedSince} rules, the pin's ${measuredSplitRules}`);
   line();
   return {
     rev,
     oldRules: oldRules.length,
     newRules: newRules.length,
     sheets: perSheet,
-    identical: firstDiff === -1,
+    pin: { meta: pin.meta, ok: pinDelta.ok, lost: pinDelta.lost.length, added: pinDelta.added.length },
     borrowed,
+    movedToChart: movedOut.length,
+    addedSince,
     edited: unexplained.length,
     accepted: accepted.length,
-    lost: lostLeft.length,
-    unattributed: unattributed.length,
+    lost: gone.length,
   };
 }
 
@@ -933,6 +1152,10 @@ async function halfPixels(rev) {
 }
 
 async function main() {
+  if (PIN_ONLY) {
+    writePin();
+    process.exit(failures ? 1 : 0);
+  }
   mkdirSync(REPORTS, { recursive: true });
   const stream = halfStream();
   if (STREAM_ONLY) process.exit(failures ? 1 : 0);

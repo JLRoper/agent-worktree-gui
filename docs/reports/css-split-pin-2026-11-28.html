@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The css split gate pins the sheets that exist today, and both canaries bite</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap: anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>The css split gate pins the sheets that exist today, and both canaries bite</h1>
+<p class="sub">agent-worktree-gui 1.197.1. Queue row #572. <code>npm run verify:css-split</code> pinned the deleted one-file sheet, so it was red against every tree and could not say whether a row had changed a rule. This row makes the pin the measured multiset of the sheets <code>public/index.html</code> links today, corrects the <code>SURFACES</code> map in the review tool to that same live list, and shows a deleted rule and a renamed sheet each failing the gate by name.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#572 - the stale pin and the stale SURFACES map</dd>
+  <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at f13db8e3, local only; this tree merged back locally, no push and no pull request</dd>
+  <dt>version</dt><dd>1.197.1 unchanged: no CSS byte, route, payload or layout change</dd>
+  <dt>files</dt><dd>tools/verify-css-split.mjs, tools/css-split-pin.txt (new), tools/css-split-review.mjs, test/css-split-pin.test.js (new)</dd>
+  <dt>the pin, before</dt><dd><span class="no">3,061</span> rules in public/style.css at 623f3864, a file that no longer exists</dd>
+  <dt>the pin, after</dt><dd><span class="ok">3,368</span> rules in the 18 sheets the page links, <span class="ok">3,321</span> of them in the 17 the cut produced</dd>
+  <dt>the gate, stream half</dt><dd><span class="ok">PASS pin</span>, <span class="ok">PASS origin</span>, exit 0; the same gate at HEAD read <span class="no">FAIL</span> with 21 lost</dd>
+  <dt>the map</dt><dd>18 sheets, 17 split sheets plus chart.css; the old map would have failed with 4 unmapped and 3 stale names</dd>
+  <dt>canary 1</dt><dd>one rule deleted from initiatives.css: <span class="no">FAIL pin</span>, exit 1, the rule named; origin PASS</dd>
+  <dt>canary 2</dt><dd>console-head.css renamed: pin PASS after a re-pin, <span class="no">FAIL map</span>, exit 1, both names</dd>
+  <dt>tests</dt><dd>test/css-split-pin.test.js <span class="ok">4/4</span>; both canaries are tests, not a one-off run</dd>
+</dl>
+
+<h2>1. What the gate read before this row</h2>
+<p>The gate's HALF A pinned the file the split deleted. Run at this tree's HEAD, with the file as this row found it, it read:</p>
+<pre>$ node tools/verify-css-split.mjs --stream
+  old rules           3061  (public/style.css at 623f3864)
+  new rules           3321
+FAIL  stream: every rule in the old file is still on the page, exactly once and unedited, or reported as a move: 21 lost, 0 edited, 225 borrowed from chart.css, 56 added
+  rule order          changed at rule 76 (a cross-sheet move); the multiset is the claim
+  sheet bytes         619867 (old file 529580)
+  20-sheet total      3368 rules, the page as loaded (chart.css in its own position)
+(exit code 1)</pre>
+<p>That reading is not this row's doing and not a defect in a sheet: it is the pin being a claim about 1.191.0. The page has moved on by 260 rules since the file was deleted, so the comparison can only be red, and the row that owns no CSS at all inherits the same 21 lost. The brief's <b>3,317</b> is the same measurement one landing earlier: with this file's own parser, the 17 sheets at <code>e873ddb0</code> hold <b>3,317</b> rules, and they hold <b>3,321</b> today, because the four sheets rows 445 and 446 left are not the four they deleted.</p>
+
+<table>
+  <tr><th>state</th><th class="num">sheets</th><th class="num">rules</th><th>what it is</th></tr>
+  <tr><td>public/style.css at 623f3864</td><td class="num">1</td><td class="num">3,061</td><td>the deleted file the gate pinned</td></tr>
+  <tr><td>the page at e873ddb0</td><td class="num">17</td><td class="num">3,317</td><td>the number the brief quotes, measured with the same parser</td></tr>
+  <tr><td>the page today</td><td class="num">17</td><td class="num">3,321</td><td>jobs.css, turns.css, rowstrips.css and late.css gone; console-head.css, console-turns.css, model-menu.css and utilities.css added</td></tr>
+  <tr><td>the page today, with chart.css</td><td class="num">18</td><td class="num">3,368</td><td>what the pin holds; the two core/ cards are excluded and said so below</td></tr>
+</table>
+
+<h2>2. The arithmetic that accounts for 3,061 to 3,321</h2>
+<p>The origin half now spends each rule the deleted file held against the place it went. Measured by the gate itself:</p>
+<pre>  the deleted file    3061 rules; the 17 split sheets today hold 3321
+PASS  origin: every rule of the pre-split file is still on the page or in chart.css today, exactly once and unedited but for the recorded edit: 0 lost, 21 moved to chart.css, 0 edited (1 accepted), 225 borrowed from chart.css at the split, 56 added since
+    accepted edit .as-qpane .as-task-agent .as-task-agent-thread: max-width:210px;font-size:10px; -> max-width:320px;font-size:10px; (1.193.0, PR #946 - the queue card's agent line)
+    moved to chart.css  |.legend|position:relative;
+    ...
+  accounted           3061 - 21 moved to chart.css + 225 borrowed at the split + 56 added since = 3321 rules, the pin's 3321</pre>
+<ul>
+  <li><b>21 moved to chart.css.</b> The board-table cut took the legend's rules into the chart sheet. The old gate read every one as lost; a lost rule that chart.css holds today is a move, and the allowance spends one copy of it per copy found, so a duplicated move is still a finding.</li>
+  <li><b>225 borrowed at the split.</b> The 1.194.0 move took fifteen rules out of chart.css into board-table.css, and the split's own report counted the rest; a borrowed rule spends one copy of chart.css at the split's commit, which is why the split cannot invent a rule.</li>
+  <li><b>56 added since.</b> 19 in settings.css (the maintenance menu), 4 in board-table.css (<code>.btn-start-turnover</code> and its two states, <code>.parent-gap</code>) and 33 in initiatives.css (the wave lane table and its dots). A later row's additions are reported, not refused: this half is a claim about the rules the one sheet held, and the pin holds today's additions from the day they land.</li>
+</ul>
+<p>The one accepted edit is the queue card's agent line, recorded at <code>tools/verify-css-split.mjs:330</code> with the landing that made it; an allowance that stops matching is printed as unused rather than hiding a revert.</p>
+
+<h2>3. The pin: the multiset of the sheets that exist today</h2>
+<p><code>tools/css-split-pin.txt</code> is written by measurement, never typed: one line per rule, <code>at-rule context|selector|declarations</code> exactly as the gate's parser normalizes it, grouped under a <code>## &lt;sheet&gt;</code> header in load order and sorted inside each sheet. It is the multiset itself rather than a digest, for two reasons: a re-pin is a readable diff that names the rules a row changed, and a failure names the rule it lost. The header states the counts and the parser refuses a file whose lines disagree with it, so a truncated pin cannot be read as a shorter one.</p>
+<pre># tools/css-split-pin.txt - the rule multiset of the sheets public/index.html links today.
+# Written by `node tools/verify-css-split.mjs --pin`; read by that gate's HALF A. Do not edit by hand:
+# a rule line is `at-rule context|selector|declarations` exactly as the gate parses it, and this header is
+# checked against the lines, so a truncated file is refused rather than read as a shorter pin.
+# sheets 18, rules 3368, split sheets 17, split rules 3321
+## base.css
+@supports not selector(::-webkit-scrollbar)|*|scrollbar-width:thin;scrollbar-color:#333c49 transparent;
+...</pre>
+<table>
+  <tr><th>sheet</th><th class="num">rules</th><th class="num">bytes</th><th>surface</th></tr>
+  <tr><td>base.css</td><td class="num">13</td><td class="num">4,832</td><td>tokens and page resets</td></tr>
+  <tr><td>chrome.css</td><td class="num">72</td><td class="num">17,072</td><td>header and status strip</td></tr>
+  <tr><td>settings.css</td><td class="num">300</td><td class="num">45,899</td><td>the Settings drawer</td></tr>
+  <tr><td>board-table.css</td><td class="num">814</td><td class="num">152,402</td><td>the board table and its controls</td></tr>
+  <tr><td>console.css</td><td class="num">369</td><td class="num">78,336</td><td>the console's frame, body, output box and composer</td></tr>
+  <tr><td>console-head.css</td><td class="num">65</td><td class="num">13,900</td><td>the console's head</td></tr>
+  <tr><td>console-turns.css</td><td class="num">35</td><td class="num">5,829</td><td>the console's turns</td></tr>
+  <tr><td>model-menu.css</td><td class="num">29</td><td class="num">4,765</td><td>the model picker</td></tr>
+  <tr><td>overlays.css</td><td class="num">255</td><td class="num">43,983</td><td>popovers and turn cards</td></tr>
+  <tr><td>utilities.css</td><td class="num">8</td><td class="num">2,502</td><td>the type and status utilities</td></tr>
+  <tr><td>assistant.css</td><td class="num">111</td><td class="num">25,234</td><td>the assistant entry and float shell</td></tr>
+  <tr><td>feedback.css</td><td class="num">226</td><td class="num">30,977</td><td>Clarify, Collisions and Permissions</td></tr>
+  <tr><td>assistant-panes.css</td><td class="num">126</td><td class="num">17,910</td><td>the float's tabs and panes</td></tr>
+  <tr><td>initiatives.css</td><td class="num">439</td><td class="num">93,498</td><td>the initiatives tab</td></tr>
+  <tr><td>panes.css</td><td class="num">120</td><td class="num">16,615</td><td>the Worktrees and Bridge sub-tabs</td></tr>
+  <tr><td>queue.css</td><td class="num">76</td><td class="num">13,601</td><td>the queue cards</td></tr>
+  <tr><td>pipeline.css</td><td class="num">263</td><td class="num">52,512</td><td>pipelines, messages, flow and modal</td></tr>
+  <tr><td>chart.css</td><td class="num">47</td><td class="num">9,777</td><td>the age column and the legend</td></tr>
+</table>
+<p>The pin's set is every sheet the page links except the two <code>core/</code> cards. <code>chart.css</code> belongs in it even though the cut did not produce it: the board-table cut moved the legend's rules there, and the pin has to cover the place they went. The two <code>core/</code> sheets are shared with the standalone pipeline and task pages, so pinning them would widen this gate into those pages' business; the park is named rather than hidden.</p>
+<p><code>node tools/verify-css-split.mjs --pin</code> re-measures the file (the row that changed a sheet runs it) and prints every sheet's count. It also says when the sheets differ from HEAD, because a pin written over an uncommitted change is a pin of the working tree, and the commit is what makes it a claim another reader can check (<code>tools/verify-css-split.mjs:271</code>).</p>
+
+<h2>4. The SURFACES map, corrected to the live list</h2>
+<p>The map in <code>tools/css-split-review.mjs:80</code> named sheets that no longer exist and had no entry for four that do. Rows 445 and 446 are the landings that moved it: <code>jobs.css</code> went into <code>console.css</code>, <code>turns.css</code> became <code>console-turns.css</code> (and part of it stayed in <code>console.css</code>), <code>rowstrips.css</code> became <code>utilities.css</code>, and <code>late.css</code> was dissolved into the sheets around it. The four new sheets are the console's head, its turns, its model picker, and the utilities.</p>
+<table>
+  <tr><th>removed from the map</th><th>where its rules live today</th></tr>
+  <tr><td>jobs.css</td><td>console.css, the console's frame and body</td></tr>
+  <tr><td>turns.css</td><td>console-turns.css, and console.css for the body's share</td></tr>
+  <tr><td>rowstrips.css</td><td>utilities.css for the type and status vocabulary; the console head's buttons are console-head.css</td></tr>
+</table>
+<table>
+  <tr><th>added to the map</th><th>surface it names</th></tr>
+  <tr><td>console-head.css</td><td>the title, meta line, cwd, pipeline chip, status pill and the head's controls</td></tr>
+  <tr><td>console-turns.css</td><td>the turn rail, head and chevron, inline prompt, peek, origin chips and live clock</td></tr>
+  <tr><td>model-menu.css</td><td>the picker the head's model and context readout opens</td></tr>
+  <tr><td>utilities.css</td><td>the panel's type and status utilities, which every surface reads</td></tr>
+</table>
+<p><code>late.css</code> was never in this map; it is named by the review tool's catch-all record, which already says row 446 dissolved it and checks its four blocks where they landed. The brief names it with the other three; the map's defect is the three sheets it lost plus the four it never gained, and this page states the list it actually held.</p>
+<p>The map is now a check, not a comment: <code>mapFindings()</code> (<code>tools/css-split-review.mjs:105</code>) holds every sheet the cut produced to an entry and every entry to a sheet the page links, and <code>npm run review:css-split</code> exits 1 when they disagree (<code>:565</code>, <code>:1183</code>). Against today's page it prints:</p>
+<pre>MAP
+  20 sheets the page links: 17 the cut produced, plus chart.css and the two core/ cards; every one the cut produced has a surface</pre>
+
+<h2>5. The two canaries, run against the tree</h2>
+<p>A gate that has never been seen to fail is a green light that may be wired to nothing. Both canaries were run on this tree and both files restored; <code>git status</code> was clean under <code>public/</code> afterwards, and the pin was byte-identical to the backup (sha256 <code>ad8411fe2f07...</code>).</p>
+
+<h3>Canary 1: one rule deleted from a sheet</h3>
+<p>The rule is <code>#as-initiatives .wave-lane-dot.is-queued</code>, one of the 56 a later row added. That choice is the point: the origin half cannot catch it, because it was never in the deleted file, so only the pin can.</p>
+<pre>$ # delete that one line from public/initiatives.css, then
+$ node tools/verify-css-split.mjs --stream
+  THE PIN
+  the pin             tools/css-split-pin.txt: 18 sheets / 3368 rules (17 split sheets hold 3321)
+  the page today      18 sheets / 3367 rules (17 split sheets hold 3320)
+  ...
+FAIL  pin: every sheet the page links holds exactly the rules the pin measured, once each and unedited: 1 lost, 0 added, 0 sheet(s) gone, 0 sheet(s) unpinned
+    lost   initiatives.css  |#as-initiatives .wave-lane-dot.is-queued|background:var(--tab-idle);
+
+  THE ORIGIN
+  the deleted file    3061 rules; the 17 split sheets today hold 3320
+PASS  origin: every rule of the pre-split file is still on the page or in chart.css today, exactly once and unedited but for the recorded edit: 0 lost, 21 moved to chart.css, 0 edited (1 accepted), 225 borrowed from chart.css at the split, 55 added since
+  accounted           3061 - 21 moved to chart.css + 225 borrowed at the split + 55 added since = 3320 rules, the pin's 3320
+(exit code 1)</pre>
+<p>Restored with <code>git checkout -- public/initiatives.css</code>; the same command then reads <span class="ok">PASS pin</span> and <span class="ok">PASS origin</span>.</p>
+
+<h3>Canary 2: one sheet renamed</h3>
+<p><code>public/console-head.css</code> was renamed to <code>console-head-alt.css</code> and the page re-pointed at it. The pin was re-measured first, so the pin follows the rename and the map is the only claim left to fail: that is what shows the map check is the one that catches a rename.</p>
+<pre>$ mv public/console-head.css public/console-head-alt.css
+$ # point the page's <link> at the new name, then
+$ node tools/verify-css-split.mjs --pin
+WROTE  tools/css-split-pin.txt
+  18 sheets, 3368 rules; 17 split sheets hold 3321
+    console-head-alt.css      65 rules    13900 bytes
+
+$ node tools/verify-css-split.mjs --stream
+PASS  pin: every sheet the page links holds exactly the rules the pin measured, once each and unedited: 3368 rules in 18 sheets
+PASS  origin: every rule of the pre-split file is still on the page or in chart.css today, exactly once and unedited but for the recorded edit: 0 lost, 21 moved to chart.css, 0 edited (1 accepted), 225 borrowed from chart.css at the split, 56 added since
+(exit code 0)
+
+$ npm run review:css-split -- --static
+MAP
+  FAIL  map: 1 sheet(s) with no surface, 1 entry(ies) naming a sheet that is gone, 0 with an empty label
+    unmapped   console-head-alt.css
+    stale      console-head.css
+    the map in this file must name the sheets public/index.html links today, and no others
+
+INVENTORY
+  ...
+(exit code 1)</pre>
+<p>Both files and the pin were restored from copies taken before the rename: the link, the sheet name and the pin's hash all read as they did, and the gate is green again.</p>
+
+<h2>6. What else answered</h2>
+<ul>
+  <li><code>node --test test/css-split-pin.test.js</code>: <span class="ok">4 pass, 0 fail</span>. The four claims are the committed pin against today's sheets, the deleted-rule canary, the renamed-sheet canary, and the truncated pin refused. Both canaries are tests, so a later change that turns the pin into a green light fails the suite rather than waiting for a reader to try it.</li>
+  <li><code>npm run test:module tools/verify-css-split.mjs</code> and <code>npm run test:module tools/css-split-review.mjs</code>: each selects the same file this row added and answers <code>4 pass, 0 fail, exit 0</code>.</li>
+  <li><code>npm run review:css-split -- --static</code> on the restored tree: <span class="ok">exit 0</span>, map PASS, 17 split sheets and chart.css on the page, 3,321 rules in the split sheets.</li>
+  <li><code>node tools/reports-tracked.mjs</code>: exit 0 with this page added to the index (a page under <code>docs/reports</code> that is not tracked is invisible to <code>git status</code> and dies with the worktree).</li>
+  <li><code>node tools/absolute-paths.mjs</code>: <span class="no">red, 9 files</span>, none of them this row's. The offenders are other rows' report pages and <code>test/maintenance.test.js</code>, and every file this row added carries no machine path. The gate is red before and after this row with the same 9.</li>
+  <li><code>node --test test/harness.test.js</code>: <span class="warn">4 pass, 1 fail</span>. The failure is <code>tools/verify-queue-agents.mjs says LIVE GATE but no package.json script runs it</code>, a file and a package entry this row did not touch; it is red at HEAD too.</li>
+  <li><code>node --test test/css-split-pin.test.js test/reports-are-tracked.test.js test/verify-runner.test.js</code>: <span class="ok">15 pass, 0 fail</span>. The first file is this row's four claims, the second is the page above being in the index, the third is the harness runner that will read the new <code>--pin</code> flag's header line.</li>
+  <li><code>node --test</code> over the 46 test files that read the sheets through <code>test/style-sheets.js</code>: <span class="ok">512 pass, 0 fail</span> in 10 s. That is the set a sheet move can break; this row changed no sheet, and the set shows the page still reads as it did.</li>
+  <li><code>npm test</code>: started on the finished tree and <span class="warn">stopped at 26 minutes</span>, under this reader's standing rule that a suite run is cancelled past 20 minutes. At that point it had answered <span class="ok">3,271 assertions passed</span> and <span class="no">24 failed</span>, every failure in a file this row does not touch: the gateway permissions, the settings and rebase routes, the spawn prompts, the worktree junction walk, the scan roots, the queue holds, the harness wiring and the absolute-paths allowlist's own tree. The two of those checked by name are pre-existing: the harness one fails because <code>tools/verify-queue-agents.mjs</code> has no package script, and the absolute-paths one is the 9 files of section 7. The focused sets above are what this row claims.</li>
+</ul>
+
+<h2>7. What is still red, and what this row did not do</h2>
+<ul>
+  <li><b>HALF B, the pixel half, was not re-run by this row.</b> Its before root is HEAD with <code>public/style.css</code> restored from 623f3864, so it compares a 3,061-rule page with today's 3,321-rule page; the two cannot agree and have not since the sheets moved past the deleted file. The reading and the numbers are recorded in <code>docs/reports/late-dissolve-2026-11-28.html</code>, section 9. It is the same staleness in a second place, it predates this row, and this row did not touch it: the multiset claim is HALF A, and <code>--stream</code> is the run that now decides whether a rule moved. The next row in this initiative is the one to either retire that pixel half or rebuild its before root from the sheets as they stood when the claim was live.</li>
+  <li><b>The two <code>core/</code> sheets are not pinned</b>, by design: they are shared with the standalone pipeline and task pages and were never part of the one sheet.</li>
+  <li><b>No CSS byte changed in this row</b>, so no browser capture could show anything a text measurement does not. The two canaries are text measurements for exactly that reason; a renamed sheet and a deleted rule are claims about the rule stream.</li>
+  <li><b>The pin is 325 KB</b>, because it is the multiset and not a hash. That is the trade this row chose: a re-pin diffs as readable rules and a failure names the lost rule, where a per-sheet digest would have been 3 KB and named nothing.</li>
+  <li><b>Version and landing.</b> <code>package.json</code> reads 1.197.1, unchanged. The branch was merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally; nothing was pushed and no pull request was opened.</li>
+</ul>
+
+<h2>8. How to reproduce each number</h2>
+<pre>npm run verify:css-split -- --stream     # the pin and the origin, no browser (this row's claim)
+node tools/verify-css-split.mjs --pin    # re-measure the pin, printing every sheet's count
+npm run review:css-split -- --static     # the map, the inventory, the duplication and the cascade
+node --test test/css-split-pin.test.js   # the four claims, including both canaries
+$ git show HEAD:tools/verify-css-split.mjs &gt; tools/before.mjs; node tools/before.mjs --stream; rm tools/before.mjs
+                                         # the before reading in section 1, from HEAD</pre>
+<p>Line references: the pin's writer <code>tools/verify-css-split.mjs:173</code>, its parser <code>:191</code>, the sheet measurement <code>:231</code>, the comparison <code>:241</code>, the re-pin command <code>:271</code>, the pin's claim in HALF A <code>:382</code>, the origin's move allowance <code>:503</code>, the <code>SURFACES</code> map <code>tools/css-split-review.mjs:80</code>, the map check <code>:105</code>, its print and exit <code>:565</code> and <code>:1183</code>.</p>
+
+</main>
+</body>
+</html>
