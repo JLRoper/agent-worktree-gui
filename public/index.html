@@ -1565,11 +1565,19 @@
        re-exports them on window.WMApp.charts; it declares (and binds its own settings rows), so that order
        costs nothing and nothing here waits on boot. -->
   <script src="/charts.js"></script>
+  <!-- Cut 1 of public/deliverables.js's two (row 521, from the card for that file in
+       docs/reports/module-separation-2026-11-28.html): the popup's place and size on the page - the DL_* floors,
+       deliverGeo, the zoom and room arithmetic, the clamp and the write-back, the remembered rectangle in
+       localStorage, deliverRestore and deliverPosition - and the popup's two gestures, the head's drag and the
+       corner's resize. Loaded before deliverables.js and app.js, which call them by bare name; it declares only,
+       so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/deliver-frame.js"></script>
   <!-- The deliverables list, cut out of app.js (step 3 of the same order of work): the header button's popover,
        its rows, its text filter and kind chips, its place and size on the page, the store read, the seen
        watermark and the two openers. Loaded before app.js, which calls it by bare name and re-exports it on
        window.WMApp.deliverables; it declares only, and the wiring that runs at load (the button's press, the first
-       read, the poll and the close/place listeners) stays in app.js. -->
+       read, the poll and the close/place listeners) stays in app.js. Since row 521 this file is the entry point: its
+       frame - the place, the size and the two gestures - is the /board/deliver-frame.js above. -->
   <script src="/deliverables.js"></script>
   <!-- The header's Clarify popup: one panel built once, the rows by state, the read of /api/clarify/history, the
        keyboard, and the place/size it remembers in localStorage. public/app.js wires the button and the outside
