@@ -96,7 +96,7 @@ tr.row:hover .btn-row-rename { opacity: .9; }
    screen). `is-folded` is the closed chevron; the tooltip and aria-expanded carry the count.
 
    It is PLACED, not laid out: a fixed 16px box centred on the row's guide axis, which is the cell's own padding
-   (12px + 16px * depth) plus half the box, and the same axis the children's L hangs on (public/chart.css). It was a
+   (12px + 16px * depth) plus half the box, and the same axis the children's L hangs on (public/board.css). It was a
    flex item in the name line, which put it after the tick's 7px box and its 2px gap and 9px off that axis - the
    triangle of a parent row sat off to the left of the guide its children were drawn on. A fold that sized itself to
    its glyph would also make one row's name line a pixel wider than the next, so the box stays fixed. */
@@ -123,7 +123,7 @@ tr.row:hover .btn-row-fold { opacity: .9; }
    same column whatever markers the row carries. While the slot sized itself to its contents, a fold pushed its own
    row's text 18px right, so a group's parent row sat in its children's column and a nested parent's fold put its
    name further in than the child's below it. The markers no longer take part in that layout at all: the fold is
-   placed on the guide axis and the L one step to its left (public/chart.css), both against the cell, so the slot is
+   placed on the guide axis and the L one step to its left (public/board.css), both against the cell, so the slot is
    empty space of a fixed width. `:empty { display: none }` was exactly the rule that broke the alignment; it must
    never come back. */
 td.name > .name-line > .row-lead { display: block; flex: none; width: 25px; }

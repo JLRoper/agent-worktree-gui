@@ -290,7 +290,7 @@ test("a board that has just booted groups a round from its own record, with no s
 // ---- what a row WRITES as its indent -------------------------------------------------------------------------------
 //
 // `groupCtxOf` says how deep a row is; `paintRowGroup` is where that number becomes the row's `--child-depth`, and one
-// rule in public/chart.css turns the variable into the indent for EVERY row. That seam is what this half pins, because
+// rule in public/board.css turns the variable into the indent for EVERY row. That seam is what this half pins, because
 // the two ways it can be wrong are both invisible to a depth-only test:
 //
 //   • a row that writes NOTHING (the group parent, before this landed) falls back to the browser's 0 by luck, and a
