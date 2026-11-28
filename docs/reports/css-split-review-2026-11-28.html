@@ -53,10 +53,47 @@ rules match nothing in a running page, and how many sheets a lane must open to c
 is computed by <code>tools/css-split-review.mjs</code>; the split's own six-pane layout numbers are cited from
 <code>docs/reports/css-split.html</code>, not re-run.</p>
 
+<div class="card" style="border-left: 3px solid var(--blue);">
+  <div class="kv">
+    <div>Follow-up: the three moves</div><div>After this review, one change in this branch moved the three worst
+      tangles to the sheets that should own them. The tables in sections 1 to 9 describe the split as reviewed at
+      <code>db287788</code>; this card is the same tool run after the moves
+      (<code>docs/reports/css-split-review/after-fixes-static.json</code>). Every rule was moved verbatim, and the
+      rule multiset across all 22 sheets is identical before and after: 3,380 rules, 0 lost, 0 added, 0 edited.</div>
+    <div>The three moves</div><div>
+      14 cut-dialog rules, <code>late.css</code> to <code>overlays.css</code><br />
+      15 board-table <code>#projects</code> rules, <code>chart.css</code> to <code>board.css</code><br />
+      27 console-composer rules, <code>overlays.css</code> to <code>console.css</code></div>
+    <div>Sheets, before to after</div><div>
+      <code>late.css</code> 68 to 54;
+      <code>overlays.css</code> 288 to 275;
+      <code>console.css</code> 265 to 292;
+      <code>board.css</code> 198 to 213;
+      <code>chart.css</code> 252 to 237 (not one of the 19; it was never counted)</div>
+    <div>19-sheet total</div><div>3,061 to 3,076 rules. The
+      rise is the 15 board-table rules moving from the uncounted <code>chart.css</code> into the counted
+      <code>board.css</code>; no rule was created.</div>
+    <div>late.css now</div><div>54 rules in 3 blocks
+      (22 sliver, 21 legend,
+      11 search), no cut-dialog block. base.css is still 13 tokens and resets.</div>
+    <div>What did not change</div><div>The cascade is still 4 (selector, property) pairs
+      across 3 selectors, with the same winners; 0
+      whole rules are still written twice; the three stale <code>.queue-*</code> selectors are still there.</div>
+    <div>Verification</div><div>A headless harness applied the 22 sheets at <code>db287788</code> and at this branch
+      to the same DOM and compared every computed property on 98 elements plus their <code>::before</code> and
+      <code>::after</code>, at 900x700, 800x250 (the sliver media block) and 340x700 (the narrow container query):
+      <span class="good">0 differences</span>. The split's six-pane proof was re-run too; its board pane differed only
+      by fixture read churn (a status cell landing on the panel's not-read-yet mark during the run), so that half is
+      not cited as a pass.</div>
+  </div>
+</div>
+
 <div class="card verdict">
   <div class="kv">
-    <div>Verdict</div><div><span class="good">A faithful cut, and a split that is only half done.</span>
-      The rule stream moved with no duplicate rule and no reordering, but several surfaces still have no single home.</div>
+    <div>Verdict</div><div><span class="good">A faithful cut, and a split that was only half done at the review
+      commit.</span> The rule stream moved with no duplicate rule and no reordering, but several surfaces had no
+      single home. The follow-up card above records the three moves that fixed the worst of it; the tables in this
+      report are the review's own state.</div>
     <div>Rules in the 19 sheets</div><div><span class="num">3,061</span> rules,
       <span class="num">3,283</span> selector entries,
       <span class="num">10,711</span> declarations, <span class="num">551,343</span> bytes</div>
@@ -410,7 +447,8 @@ and a frozen clock. These are the review's own pictures, not the split's before/
     3,296x2,204 at 2x. The poll rings in the last column are chart.css's rules, not board.css's.</figcaption></figure>
   <figure><img src="css-split-review/console.png" alt="one agent's console" />
     <figcaption><strong>console</strong> (<code>.job[data-thread]</code>, 67 elements).
-    3,072x902. The output box, thought row, tool call and reply box are styled by four different sheets.</figcaption></figure>
+    3,072x902. At the review commit the output box, thought row, tool call and reply box came from four
+    different sheets; the composer moved to console.css in the follow-up, with no visual change.</figcaption></figure>
   <figure><img src="css-split-review/queue-cards.png" alt="the assistant's queue pane" />
     <figcaption><strong>queue cards</strong> (<code>#as-queue</code>, 173 elements).
     958x1,172. queue.css owns 50 of
@@ -470,7 +508,10 @@ and a frozen clock. These are the review's own pictures, not the split's before/
     initiatives.css, with the foreign rules limited to the float's shared group chrome.</li>
 </ul>
 
-<h3>What to do next</h3>
+<h3>What the review recommended, and what landed</h3>
+<p>All three moves below landed after this review as one change in this branch; they are kept here as the review's
+recommendation, and the follow-up card at the top gives the resulting sheet counts. The fourth item is still a
+recommendation, not a change.</p>
 <ol>
   <li>Give the cut dialog a home: move <code>public/late.css:85</code> into overlays.css, where the rest of the
     dialog and question-card styling lives.</li>
@@ -491,9 +532,11 @@ on the fixture and takes a few minutes.</p>
 <pre><code>npm run review:css-split                       # all seven, captures under docs/reports/css-split-review
 node tools/css-split-review.mjs --static        # inventory, duplication, catch-all, cascade (no browser)
 node tools/css-split-review.mjs --no-shots      # browser measurements, no captures</code></pre>
-<p>The run writes <code>docs/reports/css-split-review/numbers.json</code> (every table in this report is read from it)
-and <code>docs/reports/css-split-review/dead-rules.json</code> (all 3,346 measured rules with their match counts and
-at-rule context). Exit 0 means every measurement ran; 1 means one failed; 2 means Playwright is absent and the browser
+<p>The run writes <code>docs/reports/css-split-review/numbers.json</code> (every table in sections 1 to 9 is read from
+it) and <code>docs/reports/css-split-review/dead-rules.json</code> (all 3,346 measured rules with their match counts and
+at-rule context). The follow-up card is a second static run after the three moves, stored in
+<code>docs/reports/css-split-review/after-fixes-static.json</code>; the command is the same, run against the commit
+whose numbers you want. Exit 0 means every measurement ran; 1 means one failed; 2 means Playwright is absent and the browser
 half did not run. The tool imports <code>seedFixture</code> from <code>tools/verify-css-split.mjs</code>, so the
 review and the split's proof use the same board, console, queue, assistant, initiatives and settings panes.</p>
 <p class="small">Measurement limits, stated once: cascade counts exact selectors only, so a variant selector is a
@@ -503,7 +546,9 @@ exhaustive walk of every hover, open dialog and folded row. The split's six-pane
 re-measured, and this review makes no new layout claim.</p>
 
 <p class="small">Report written 2026-11-28. Reviewed commit: main <code>db287788</code> (PR #940, version 1.191.0).
-Tool: <code>tools/css-split-review.mjs</code>. Evidence: <code>docs/reports/css-split-review/</code>.</p>
+The three follow-up moves landed in this branch as version 1.193.0. Tool: <code>tools/css-split-review.mjs</code>.
+Evidence: <code>docs/reports/css-split-review/</code> (<code>numbers.json</code> for the review,
+<code>after-fixes-static.json</code> for the follow-up).</p>
 
 </body>
 </html>

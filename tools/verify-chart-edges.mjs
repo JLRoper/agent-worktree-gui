@@ -7,7 +7,7 @@
 //   node tools/verify-chart-edges.mjs [--shots <dir>]
 //
 // WHAT THIS GUARDS. The chart drew its left boundary as a 1px rule on the wrapper
-// (`#projects section.project > .wt-scroll`, public/chart.css) and nothing at all on the right: the table stopped,
+// (`#projects section.project > .wt-scroll`, public/board.css) and nothing at all on the right: the table stopped,
 // 24px short of the card's own edge, and the right side read as unfinished beside the left rail. The fix is one
 // border plus the padding the last control needs to clear it, so these are the properties that make "matching" and
 // "comfortable" numbers rather than adjectives:
