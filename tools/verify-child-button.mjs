@@ -28,7 +28,8 @@ import { readStyleSheets } from "./style-sheets.mjs";
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 // rowHtml and the actions cell inside it moved to public/render-projects.js in step 7 of
 // docs/reports/module-map-2026-11-07.html; the handler and its delegated listener stayed in app.js.
-const rowSrc = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// ...and on to public/board/project-row.js in row 530's cut 2.
+const rowSrc = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const css = readStyleSheets();
 
 let checks = 0;
@@ -47,7 +48,7 @@ function ok(label, pass, detail = "") {
 const cellAt = rowSrc.indexOf('<td class="row-actions">');
 const cellEnd = cellAt < 0 ? -1 : rowSrc.indexOf("</td>", cellAt);
 const cell = cellAt < 0 || cellEnd < 0 ? "" : rowSrc.slice(cellAt, cellEnd);
-ok("the actions cell is in rowHtml", Boolean(cell), cell ? `${cell.length} chars` : "no `td.row-actions` in public/render-projects.js");
+ok("the actions cell is in rowHtml", Boolean(cell), cell ? `${cell.length} chars` : "no `td.row-actions` in public/board/project-row.js");
 
 const atChild = cell.indexOf("${childBtn}");
 const atRefresh = cell.indexOf("data-refresh-tree=");

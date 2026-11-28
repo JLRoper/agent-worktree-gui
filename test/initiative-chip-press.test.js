@@ -5,7 +5,8 @@
 // tools/verify-initiatives-tab.mjs (claim 10); this file pins the three halves that make that press possible, so a
 // later edit cannot quietly take the keyboard away from the chip or leave the flash class on the card:
 //
-//   1. the MARKUP (public/render-projects.js `initiativeCellHtml`): the chip is a role="button" with a tabindex, its
+//   1. the MARKUP (public/board/project-row.js `initiativeCellHtml`, cut 2 of row 530): the chip is a role="button"
+//      with a tabindex, its
 //      data attribute carries the id the opener needs, its tooltip is unchanged, and a tree with no initiative still
 //      draws the dash the column's rule promises;
 //   2. the PRESS (public/app.js): one delegated click and one delegated keydown, both in the CAPTURE phase (the row's
@@ -21,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 import { readStyleSheets } from "./style-sheets.js";
 
-const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+const projects = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8");
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 

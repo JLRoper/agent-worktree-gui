@@ -1,4 +1,4 @@
-// The worktree row's TURNOVER mark, as the page draws it (public/render-projects.js `rowHtml`).
+// The worktree row's TURNOVER mark, as the page draws it (public/board/project-row.js `rowHtml`, cut 2 of row 530).
 //
 // A project may name a turnover branch - the head line's fourth chip, `turnoverFor` in public/board-scaffold.js, is the
 // one read and `/api/project-turnover` the one write. It is the branch a tree cut for that project starts from, and the
@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 
-const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+const projects = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8");
 const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
 const board = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
 
@@ -23,7 +23,7 @@ const board = readFileSync(new URL("../public/board-scaffold.js", import.meta.ur
 // that stopped reading the configured value (and matched a branch name's shape instead) would fail these tests.
 const columnsCode = sliceBetween(charts, "const CHART_COLUMNS = [", "\nconst WT_COLS");
 const turnoverForCode = sliceBetween(board, "function turnoverFor(name) {", "// Which BASE-REF KIND");
-const rowCode = sliceBetween(projects, "function rowHtml(row, forceOwner = false) {", "// ---- the age column");
+const rowCode = sliceBetween(projects, "function rowHtml(row, forceOwner = false) {", "// ---- end reviewed chip");
 // The grouping region declares `isTurnoverBranchRow` and `parentGapOf`, which the row template calls: the mark and the
 // ∅ are the page's answers about a row's place, so the harness runs that region rather than stubbing it.
 const groupCode = sliceBetween(projects, "// ---- children under their parent", "// ---- end children under their parent");

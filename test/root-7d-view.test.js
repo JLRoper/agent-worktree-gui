@@ -9,8 +9,9 @@ import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 // shownInRoot moved to public/render-projects.js with the folder card it decides, in step 7 of
-// docs/reports/module-map-2026-11-07.html; recentDays stayed in app.js.
-const projectsSrc = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// docs/reports/module-map-2026-11-07.html, and on to public/board/project-order.js in row 530's cut 1;
+// recentDays stayed in app.js.
+const projectsSrc = readFileSync(new URL("../public/board/project-order.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 function cut(name, from = src) {
   const start = from.indexOf(`function ${name}(`);

@@ -23,11 +23,23 @@ import { consoleSource } from "../tools/panel-testkit.mjs";
 // public/dom.js in step 2 of docs/reports/module-map-2026-11-07.html, the chart's arrow (refreshTopToggle,
 // paintTopToggle) to public/charts.js in step 3, the turn head's peek (refreshTurnPeek) to public/turns.js in
 // step 4, and the board's child reads and re-rank (childrenMatching, boardGroups, groupBody, reorderProjects) to
-// public/render-projects.js in step 7. The ranking ticks moved to public/board/anchor.js in cut 6 of
+// public/render-projects.js in step 7; row 530's cut 1 moved them on to public/board/project-order.js, so that
+// script is read too. The ranking ticks moved to public/board/anchor.js in cut 6 of
 // docs/reports/module-separation-2026-11-28.html, so that script is read too.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 // public/board/console.js and its four cuts, in page order.
-const src = `${consoleSource()}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/render-projects.js")}\n${page("public/render-jobs.js")}\n${page("public/board-scaffold.js")}\n${page("public/board/anchor.js")}\n${page("public/app.js")}`;
+const src = `${consoleSource()}
+${page("public/dom.js")}
+${page("public/charts.js")}
+${page("public/turns.js")}
+${page("public/board/project-order.js")}
+${page("public/board/project-row.js")}
+${page("public/board/row-order.js")}
+${page("public/render-projects.js")}
+${page("public/render-jobs.js")}
+${page("public/board-scaffold.js")}
+${page("public/board/anchor.js")}
+${page("public/app.js")}`;
 
 function grab(name) {
   const start = src.indexOf(`function ${name}(`);

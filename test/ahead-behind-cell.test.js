@@ -11,9 +11,10 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 const src = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 // The chart's columns moved to public/charts.js in step 3 of docs/reports/module-map-2026-11-07.html's order of
 // work, so the section pin below reads the file that carries it now; the row's cells moved to
-// public/render-projects.js in step 7, which is where the one-cell-per-column map is read.
+// public/render-projects.js in step 7, and on to public/board/project-row.js in row 530's cut 2, which is
+// where the one-cell-per-column map is read.
 const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
-const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+const projects = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "ahead / behind cell");
 // The two pins at the bottom of this file are pins on a SECTION, cut the way every other slice in test/ is cut: a
 // `// ---- name … // ---- end name` pair travels as one, so an anchor cannot end up outside the section whose closer

@@ -121,7 +121,8 @@ const BUNDLE = {
 
 // The page's own grouping region, run with a stub `state` and a stub `keyOf`: the same functions the browser calls,
 // with no board under them. The region carries DOM painters too; they are declared here and never called.
-const page = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+// Cut 2 of row 530 moved the grouping (childTreeOf, groupCtxOf, nestRowKeys, paintRowGroup) here.
+const page = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8");
 const region = sliceRegion(page, "children under their parent");
 const keyOf = (project, p) => `${project}::${p}`;
 const state = { rows: new Map(), foldedParents: new Set() };

@@ -174,7 +174,8 @@ test("the expansion starts collapsed, and is remembered per row and per card", (
 });
 
 test("the row's strip draws the result chip and ONE collision diamond, and the detail draws neither card", () => {
-  const rowFile = read("public/render-projects.js");
+  // rowHtml and the name/extra cells moved to public/board/project-row.js in row 530's cut 2.
+  const rowFile = read("public/board/project-row.js");
   const scaffold = read("public/board-scaffold.js");
   // ONE CONTROL PER CELL. The collision diamond rides the name line, where the per-pair marks and the counts chip used
   // to sit; that is the strip that costs no height. The result chip is the chart's `reviewedExtra` column: a cell of
@@ -223,7 +224,9 @@ test("the row's strip draws the result chip and ONE collision diamond, and the d
 
 test("an open card survives a re-render, and Escape closes it", () => {
   const scaffold = read("public/board-scaffold.js");
-  const rowFile = read("public/render-projects.js");
+  // placeRow and renderProjectRows, the two paths that repaint a row's chips, moved to public/board/row-order.js
+  // in row 530's cut 3.
+  const rowFile = read("public/board/row-order.js");
   // The popup re-anchors onto the row's NEW chip and repaints its body only when the record it draws moved.
   const paint = sliceBetween(scaffold, "function paintRowChipPops(project = null)", "// ARROWS STEP THE POPUP");
   assert.match(paint, /if \(pop\._anchor !== anchor\)/);
@@ -233,7 +236,9 @@ test("an open card survives a re-render, and Escape closes it", () => {
   // A body redrawn under the reader's caret puts the caret back on the same control.
   assert.match(scaffold, /const at = rowChipFocusables\(pop\)\.indexOf\(document\.activeElement\);/);
   // Every path that replaces a row's chip nodes calls it: placeRow's chip repaint and the project's full rebuild.
-  assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
+  // The full rebuild's call (refreshChips) is cut 1 of row 530, so it is read from the module that carries it now.
+  const order = read("public/board/project-order.js");
+  assert.match(order, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
   assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(name\);/);
   // Keyboard: Escape closes and hands the caret back, the arrows step the card's own controls.
   const keys = sliceBetween(scaffold, 'document.addEventListener("keydown"', "// The popup is fixed");

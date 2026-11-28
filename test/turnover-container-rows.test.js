@@ -28,7 +28,8 @@ import { sliceBetween } from "../tools/panel-testkit.mjs";
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
 // ---- the page's own code, with stubs for the page ---------------------------------------------------------------
-const page = read("public/render-projects.js");
+// Cut 2 of row 530 moved the container rows, the parent line and the row template here.
+const page = read("public/board/project-row.js");
 const region = sliceBetween(page, "// ---- children under their parent", "// ---- reviewed chip");
 const keyOf = (project, p) => `${project}::${p}`;
 const esc = (s) =>

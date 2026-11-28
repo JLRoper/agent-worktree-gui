@@ -41,10 +41,17 @@ import { consoleSource } from "../tools/panel-testkit.mjs";
 // Three classic scripts since the console cut and the render-projects cut (public/index.html):
 // board/console.js, then render-projects.js, then app.js. A classic script's names are page-wide, so a region is
 // read from the script that now carries it - reorderProjects, reorder and placeRow moved to public/render-projects.js
-// in step 7 of docs/reports/module-map-2026-11-07.html.
+// in step 7 of docs/reports/module-map-2026-11-07.html, and reorderProjects on to public/board/project-order.js in
+// row 530's cut 1.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
 // public/board/console.js and its four cuts, in page order.
-const src = `${consoleSource()}\n${page("public/render-projects.js")}\n${page("public/board/anchor.js")}\n${page("public/app.js")}`;
+const src = `${consoleSource()}
+${page("public/board/project-order.js")}
+${page("public/board/project-row.js")}
+${page("public/board/row-order.js")}
+${page("public/render-projects.js")}
+${page("public/board/anchor.js")}
+${page("public/app.js")}`;
 
 const begin = src.indexOf("// ---- moving nodes without losing what is scrolled inside them");
 const end = src.indexOf("// ---- end moving nodes without losing what is scrolled inside them");
