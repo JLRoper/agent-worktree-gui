@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Row 412 landing audit: the ten commits were already in the turnover</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 24px 64px; background: #14161a; color: #d7dbe0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 25px; margin: 0 0 4px; color: #f2f5f8; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f2f5f8; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: #cfd6dd; }
+  .sub { color: #8b949e; margin: 0 0 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 6px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #242a31; vertical-align: top; }
+  th { color: #9aa4af; font-weight: 600; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { color: #9ecbff; }
+  pre { background: #1b1f25; border: 1px solid #262c34; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #cfd6dd; }
+  .met { color: #7ee787; } .unmet { color: #ff9c94; } .warn { color: #f0c674; }
+  .box { background: #1b1f25; border: 1px solid #262c34; border-left: 3px solid #4d7ea8; border-radius: 4px; padding: 12px 14px; margin: 12px 0; }
+  .box p { margin: 6px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 5px 0; }
+  .foot { margin-top: 40px; color: #7d8791; font-size: 12.5px; border-top: 1px solid #242a31; padding-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 412 landing audit: the ten commits were already in the turnover</h1>
+<p class="sub">Read at <code>20261127_2134_TASK-405_row-405-is-the-complete</code> head <code>0f9ad68c</code> (1.197.0) on 2026-11-28, working tree clean. The landing branch <code>wtgui/row-412-is-the-complete-brief-watchdog-ef231a</code> was at <code>45b5fca4</code>.</p>
+
+<div class="box">
+<p><b>Verdict: there was nothing to merge.</b> The branch tip <code>45b5fca4</code> is an ancestor of the turnover head, <code>git cherry -v</code> prints nothing for it, and <code>git merge</code> answers "Already up to date." The merge that brought the row in is <code>da4238d8</code>, whose second parent is <code>45b5fca4</code>, and it predates this worktree.</p>
+<p>The brief's version conflict does not exist either: the branch reads 1.194.1, the turnover reads 1.197.0, and no merge was performed, so nothing was resolved down to the branch's number. This audit's own landing reads 1.197.1, a patch above the turnover's 1.197.0, and the changelog file was not touched at all.</p>
+</div>
+
+<h2>What the brief expected, and what the history says</h2>
+<table>
+<tr><th>Claim in the brief</th><th>What the repository says</th></tr>
+<tr><td>The branch holds 10 commits cut from main 1.194.1 and is not yet in the turnover</td><td>The branch holds the 10 commits, and all of them are reachable from the turnover head. <code>git merge-base --is-ancestor wtgui/row-412-is-the-complete-brief-a-watchdog-dfe6da 20261127_2134_TASK-405_row-405-is-the-complete</code> exits 0. <code>git cherry -v &lt;turnover&gt; &lt;branch&gt;</code> prints no lines, which is what "every patch is already upstream" looks like.</td></tr>
+<tr><td>Merge the branch into this tree</td><td>The tree was cut from the turnover at <code>7ba2337c</code>, which already contained <code>da4238d8</code> (the merge of this branch). The tree was fast-forwarded to the moving turnover head twice while this run measured: first to <code>96e5b974</code>, then to <code>0f9ad68c</code>. Zero commits were ahead of either.</td></tr>
+<tr><td>Resolve the version by hand to 1.197.1</td><td>No conflict was presented, because no merge applied. The branch's 1.194.1 and the turnover's 1.197.0 never met in a working tree. This audit's landing declares 1.197.1 on top of the turnover's 1.197.0; the row's own 1.194.1 is untouched history.</td></tr>
+<tr><td>Report the merge commit</td><td>The merge commit is <code>da4238d8</code>, and it already existed. No new merge commit can be created for an ancestor: <code>git merge &lt;branch&gt;</code> refuses to write one and exits with "Already up to date."</td></tr>
+</table>
+
+<h3>The same landing exists twice under different SHAs</h3>
+<p>A content-identical replay of the same work sits on a line cut from main's <code>349c13dd</code>: <code>366c82b2</code> (watchdog fix), <code>657fee83</code> (queuesweep), <code>ef5d5120</code> (the neutral fixture path), <code>ba6bfd71</code> (the evidence page), <code>8071ce52</code> (the page's version table). The branch carries the same five under <code>deb3dc22</code>, <code>45cd834d</code>, <code>65afaf52</code>, <code>23de66a0</code>, <code>0370f78f</code>. The changed lines of the two fix commits are identical: 386 added/removed lines each, byte-for-byte after sorting, and the page is the same blob <code>aa62ccf1</code> on both lines.</p>
+<p>Both lines reach the turnover head, and the file holds one copy of each function (one <code>sentryOwnerOf</code>, one <code>announceWatchdog</code>, and so on), so the duplicate is content, not a double application. Its cost is that the page's <code>file:line</code> citations were written against the branch's 1.194.1 tree and later landings moved <code>lib/assistant.js</code> under them; the re-read is below.</p>
+
+<h2>Version and changelog</h2>
+<table>
+<tr><th>Reading</th><th>Value</th></tr>
+<tr><td>Branch version at <code>45b5fca4</code></td><td>1.194.1</td></tr>
+<tr><td>Turnover version at <code>0f9ad68c</code></td><td>1.197.0</td></tr>
+<tr><td>main version at <code>2338e54f</code></td><td>1.196.1</td></tr>
+<tr><td><code>node tools/version.mjs check --base origin/main</code></td><td><span class="met">ok</span>: branch 1.197.0, origin/main 1.196.1 (<code>2338e54f</code>)</td></tr>
+<tr><td>This audit's landing</td><td>1.197.1, declared in <code>package.json</code> and anchored by the annotated tag <code>v1.197.1</code></td></tr>
+<tr><td>Changelog file</td><td>Still ends at <code>v1.196.0</code>; the landing did not rewrite or re-render it</td></tr>
+<tr><td><code>node tools/changelog.mjs --check</code></td><td><span class="warn">refused</span>: 2 version tags name a commit main never carried (<code>v1.194.1</code> at <code>0370f78f</code>, <code>v1.195.1</code> at <code>b5c4ac70</code>); "Nothing was rendered."</td></tr>
+<tr><td><code>node tools/verify-version-tags.mjs</code></td><td><span class="unmet">FAIL</span>: 31 findings across 790 version bumps, including missing tags for <code>v1.196.2</code> and <code>v1.197.0</code></td></tr>
+</table>
+<p>The changelog did not move backwards because it did not move: the renderer refuses on two branch-only tags that predate this run, so the file on disk is the same one the turnover head already carried. Those two findings are turnover-level, not row 412's.</p>
+
+<h2>The tests and gates, as run</h2>
+<p>All of the following ran in this tree at <code>0f9ad68c</code> with <code>git status --porcelain</code> empty, before this landing's commit. <code>env node</code> is used because this bash aliases <code>node</code> to <code>winpty node.exe</code>.</p>
+<table>
+<tr><th>Command</th><th>Answer</th></tr>
+<tr><td><code>node --test test/watchdog-owner-routing.test.js test/panel-watch.test.js test/queue-sweep.test.js</code></td><td><span class="met">29 tests, 29 pass, 0 fail</span></td></tr>
+<tr><td><code>node --test test/watchdog-owner-routing.test.js</code></td><td><span class="met">5 tests, 5 pass, 0 fail</span></td></tr>
+<tr><td><code>node --test test/panel-watch.test.js</code></td><td><span class="met">10 tests, 10 pass, 0 fail</span></td></tr>
+<tr><td><code>node --test test/queue-sweep.test.js</code></td><td><span class="met">14 tests, 14 pass, 0 fail</span></td></tr>
+<tr><td><code>node --test test/assistant-alerts-owners.test.js test/quiet-alert.test.js test/watchdog-turn-chip.test.js</code></td><td><span class="met">19 tests, 19 pass, 0 fail</span></td></tr>
+<tr><td><code>node --test test/worktree-assistant.test.js</code></td><td><span class="unmet">11 tests, 8 pass, 3 fail</span> (pre-existing, below)</td></tr>
+<tr><td><code>node --test test/absolute-paths.test.js</code></td><td><span class="unmet">17 tests, 15 pass, 2 fail</span> (pre-existing, below)</td></tr>
+<tr><td><code>node tools/absolute-paths.mjs</code></td><td><span class="unmet">refused</span>: 5 files naming a folder on this machine (pre-existing, below)</td></tr>
+<tr><td><code>node tools/version.mjs check --base origin/main</code></td><td><span class="met">ok</span>: branch above origin/main</td></tr>
+<tr><td><code>node tools/changelog.mjs --check</code></td><td><span class="warn">refused</span>: two off-main version tags; nothing rendered</td></tr>
+<tr><td><code>node tools/verify-version-tags.mjs</code></td><td><span class="unmet">FAIL</span>: 31 findings</td></tr>
+</table>
+
+<h2>Every failure, and why it is not this row's</h2>
+<p>Each failing set ran on the turnover head itself, so yes: every failure below also fails at the turnover head. The tree was at <code>0f9ad68c</code> with an empty <code>git status --porcelain</code>, which is the same bytes a fresh checkout of that commit carries.</p>
+
+<h3>test/worktree-assistant.test.js: 8 pass, 3 fail</h3>
+<ul>
+<li><code>the setter stores an id, answers with the updated row, and survives a restart</code></li>
+<li><code>an unknown assistant id is refused and the stored owner does not move</code></li>
+<li><code>the label is the role's, read at read time: two roles read as two labels and a rename needs no write</code></li>
+</ul>
+<p>The row's own page already named these three as pre-existing on a clean archive of its base, and the same three fail here on the turnover head. <code>test/worktree-assistant.test.js</code> is not one of the row's 11 files, and the row's watchdog-owner tests all pass. The failures sit in the handover store's role label and restart path, not in the watchdog routing this row changed.</p>
+
+<h3>test/absolute-paths.test.js: 15 pass, 2 fail, and the tool refuses 5 files</h3>
+<p>The two failing cases are <code>this repository's own tree passes - the allowlist matches what is really there</code> and <code>the commit being pushed is what is judged, and its own allowlist goes with it</code>. The five files the tool names, and the commit that first added each, are all off this row's branch:</p>
+<table>
+<tr><th>File</th><th>First commit</th><th>On row 412's branch?</th></tr>
+<tr><td><code>docs/reports/console-gate-band-452.html</code></td><td><code>3e50a4a0</code> (row 452's landing)</td><td>no</td></tr>
+<tr><td><code>docs/reports/landing-cut-2026-11-28.html</code></td><td><code>3001364b</code> (row 402's landing cut)</td><td>no</td></tr>
+<tr><td><code>docs/reports/wave-lane-counts/lane-counts.json</code></td><td><code>4f3633be</code> (row 491's lane report)</td><td>no</td></tr>
+<tr><td><code>docs/reports/wave-views-cut-2026-11-28.html</code></td><td><code>a359f37f</code> (a later cut report)</td><td>no</td></tr>
+<tr><td><code>test/maintenance.test.js</code></td><td><code>a69d1cb3</code> (the 1.196.0 settings prune)</td><td>no</td></tr>
+</table>
+<p>Row 412's own page, <code>docs/reports/row-412-watchdog-owner-routing.html</code>, names no absolute path and is not among the five.</p>
+
+<h2>The row's page, checked against the code</h2>
+<table>
+<tr><th>Claim on the page</th><th>At the turnover head</th></tr>
+<tr><td>29 tests, 29 pass, 0 fail on the three named files</td><td><span class="met">matches</span></td></tr>
+<tr><td>5 tests, 5 pass for <code>test/watchdog-owner-routing.test.js</code> alone</td><td><span class="met">matches</span></td></tr>
+<tr><td><code>worktree-assistant</code> 8 pass, 3 fail, pre-existing</td><td><span class="met">matches</span>, same three cases</td></tr>
+<tr><td><code>test/absolute-paths.test.js</code> at 17 of 17</td><td><span class="unmet">does not reproduce</span>: 15 of 17, on five files from later landings (table above)</td></tr>
+<tr><td>The label is one function, <code>ownerSuffix</code> and <code>withOwner</code> in <code>lib/panel-watch.js</code></td><td><span class="met">matches</span>: lines 81 and 91, unchanged</td></tr>
+<tr><td>The queuesweep text is <code>QUEUE_SWEEP_CHECKS</code> at <code>lib/assistant/wakes.js:60</code></td><td><span class="met">matches</span>: line 60, unchanged</td></tr>
+<tr><td>The sweep's own half is pinned at <code>test/panel-watch.test.js:148</code> and <code>:170</code></td><td><span class="met">matches</span>: both lines still land on the assertions the page describes</td></tr>
+<tr><td>Branch 1.194.1, local merge into the turnover, merge commit reported</td><td><span class="met">matches</span>: the branch reads 1.194.1 at <code>45b5fca4</code>, and <code>da4238d8</code> is that merge</td></tr>
+<tr><td>Nine <code>lib/assistant.js</code> line citations</td><td><span class="warn">shifted</span>: see the re-read below</td></tr>
+</table>
+
+<h2>Citations re-read at the turnover head</h2>
+<p>The page is a 1.194.1 record, so its line numbers are checkable at <code>45b5fca4</code>. At <code>0f9ad68c</code> they sit 16 to 22 lines lower, because <code>eed25b95</code> and later landings added lines above them. A reader who wants the current lines should use this table.</p>
+<table>
+<tr><th>Page cites</th><th>Code</th><th>At <code>45b5fca4</code></th><th>At <code>0f9ad68c</code></th><th>Delta</th></tr>
+<tr><td><code>lib/assistant.js:3146</code></td><td><code>assistantIdForThread</code></td><td>3146</td><td>3162</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:3215</code></td><td><code>ownerOfTree</code></td><td>3215</td><td>3231</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:3266</code></td><td><code>queueOwnerForJob</code></td><td>3266</td><td>3282</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:3289</code></td><td><code>sentryOwnerOf</code></td><td>3289</td><td>3305</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:3342</code></td><td><code>watchdogRecipients</code></td><td>3342</td><td>3358</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:3365</code></td><td><code>openWatchdogAlert</code></td><td>3365</td><td>3381</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:3413</code></td><td><code>announceWatchdog</code></td><td>3413</td><td>3429</td><td>+16</td></tr>
+<tr><td><code>lib/assistant.js:4988</code></td><td>the close-on-settle <code>byId</code> loop</td><td>4988</td><td>5008</td><td>+20</td></tr>
+<tr><td><code>lib/assistant.js:5794</code></td><td><code>queueRowForJob</code></td><td>5794 (comment; the definition is 5796)</td><td>5816</td><td>+22</td></tr>
+<tr><td><code>lib/panel-watch.js:81</code></td><td><code>ownerSuffix</code></td><td>81</td><td>81</td><td>0</td></tr>
+<tr><td><code>lib/panel-watch.js:91</code></td><td><code>withOwner</code></td><td>91</td><td>91</td><td>0</td></tr>
+<tr><td><code>lib/assistant/wakes.js:60</code></td><td><code>QUEUE_SWEEP_CHECKS</code></td><td>60</td><td>60</td><td>0</td></tr>
+<tr><td><code>test/panel-watch.test.js:148</code></td><td>the LONG RUN owner assertion</td><td>148</td><td>148</td><td>0</td></tr>
+<tr><td><code>test/panel-watch.test.js:170</code></td><td>the owner-unknown test</td><td>170</td><td>170</td><td>0</td></tr>
+</table>
+
+<h2>What this landing changed</h2>
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>docs/reports/row-412-landing-audit-2026-11-28.html</code></td><td>This page: the landing state, the duplicate copy, the test and gate counts, and the citation re-read</td></tr>
+<tr><td><code>docs/reports/row-412-watchdog-owner-routing.html</code></td><td>One pointer beside the subtitle: the page's line numbers are 1.194.1 values and where the re-read lives</td></tr>
+<tr><td><code>package.json</code></td><td>1.197.0 to 1.197.1, a patch above the turnover, with the annotated tag <code>v1.197.1</code></td></tr>
+</table>
+
+<p class="foot">Row 412, assistant-3. The runs above were taken at <code>0f9ad68c</code> with an empty <code>git status --porcelain</code>; the merge that already carried the row is <code>da4238d8</code>; the branch is <code>wtgui/row-412-is-the-complete-brief-watchdog-ef231a</code> at <code>45b5fca4</code>. This page opens without a server, a build step, or the transcript it was written in.</p>
+</main>
+</body>
+</html>

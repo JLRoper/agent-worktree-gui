@@ -18,7 +18,7 @@ import { readStyleSheets } from "./style-sheets.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // conversationHtml, the card head the chip is drawn in, moved to public/render-jobs.js in step 7 of
 // docs/reports/module-map-2026-11-07.html; the chip builder itself stayed in app.js.
-const src = `${readFileSync(path.join(root, "public/app.js"), "utf8")}\n${readFileSync(path.join(root, "public/render-jobs.js"), "utf8")}`;
+const src = `${readFileSync(path.join(root, "public/app.js"), "utf8")}\n${readFileSync(path.join(root, "public/board/stream-body.js"), "utf8")}\n${readFileSync(path.join(root, "public/board/conversation.js"), "utf8")}\n${readFileSync(path.join(root, "public/render-jobs.js"), "utf8")}`;
 const css = readStyleSheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- pipeline chip");

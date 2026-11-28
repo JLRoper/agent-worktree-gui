@@ -19,7 +19,8 @@ import { consoleSource } from "../tools/panel-testkit.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8").replace(/\r\n/g, "\n");
 const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
-const jobsSrc = read("public/render-jobs.js");
+// Cut 1 of render-jobs.js: the row is emitted by turnBody, in public/board/stream-body.js.
+const jobsSrc = `${read("public/board/stream-body.js")}\n${read("public/render-jobs.js")}`;
 const cssRaw = readStyleSheets();
 const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
 

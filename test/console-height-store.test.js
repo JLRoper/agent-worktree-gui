@@ -24,8 +24,8 @@ import { consoleSource } from "../tools/panel-testkit.mjs";
 // that now carries it - renderConversation moved to public/render-jobs.js in step 7 of
 // docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-// public/board/console.js and its four cuts, in page order (public/index.html).
-const src = `${consoleSource()}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
+// public/board/console.js and its four cuts, in page order; then the card's three scripts.
+const src = `${consoleSource()}\n${page("public/board/stream-body.js")}\n${page("public/board/conversation.js")}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
 
 
 function grab(name) {

@@ -41,7 +41,8 @@ const frame = globalThis.WMApp.core.consoleFormat;
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const turns = read("../public/turns.js");
 const assistant = read("../public/assistant.js");
-const jobs = read("../public/render-jobs.js");
+// Cut 1 of render-jobs.js: the turn body is public/board/stream-body.js, loaded first.
+const jobs = `${read("../public/board/stream-body.js")}\n${read("../public/render-jobs.js")}`;
 const markdown = read("../public/core/console-markdown.js");
 const board = consoleSource(); // public/board/console.js and its four cuts, in page order
 const html = read("../public/index.html");

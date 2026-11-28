@@ -25,8 +25,8 @@ import { consoleSource } from "../tools/panel-testkit.mjs";
 // that now carries it - the turn body and the card signature moved to public/render-jobs.js in step 7 of
 // docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
-// public/board/console.js and its four cuts, in page order (public/index.html).
-const source = `${consoleSource()}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
+// public/board/console.js and its four cuts, in page order; then the card's scripts and the page's own.
+const source = `${consoleSource()}\n${page("public/board/stream-body.js")}\n${page("public/board/conversation.js")}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const part = (a, b) => {

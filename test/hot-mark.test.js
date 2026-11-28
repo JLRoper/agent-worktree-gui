@@ -206,7 +206,7 @@ test("a turn starting or stopping repaints it, on every seam a turn change passe
   const scaffold = read("public/board-scaffold.js");
   const repaint = sliceBetween(scaffold, "function repaintAgentState()", "// The project header");
   assert.match(repaint, /paintHotButton\(\)/, "every turn change passes through repaintAgentState");
-  const jobs = read("public/render-jobs.js");
+  const jobs = ["public/board/stream-body.js", "public/board/conversation.js", "public/render-jobs.js"].map((f) => read(f)).join("\n");
   assert.match(jobs, /paintHotButton\(\)/, "a job frame repaints it too");
   const app = read("public/app.js");
   // tickApprovals was cut out of app.js into public/board/approvals.js (cut 1 of the eight in
