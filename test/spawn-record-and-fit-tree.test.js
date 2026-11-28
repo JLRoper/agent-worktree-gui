@@ -214,7 +214,7 @@ test("a SPAWN line over 2,000 characters cuts a worker, is journalled, and the b
   const input = String(p.gw.posts[0].input || "");
   assert.ok(input.includes(tail), "the worker was handed the END of the brief, not a 2,000-character cut");
 
-  // …and the journal says which line it was: the started line and the turn's own count, both naming the length.
+  // ...and the journal says which line it was: the started line and the turn's own count, both naming the length.
   const started = kinds(p.assistant, "spawned");
   assert.equal(started.length, 1, "the started line is journalled");
   assert.match(started[0].text, /new worktree in demo/);
