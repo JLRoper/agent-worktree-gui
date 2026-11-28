@@ -7973,8 +7973,8 @@ async function cutChildTree(btn) {
 //
 // The R in the row's Kind column is that control (`kindMarkHtml`, public/render-projects.js). It opens an inline
 // confirm in the same shape as the delete question, because a lift changes what a later push is allowed to do. The
-// confirm says the one thing it does - the tree's push stops meeting the research refusal - and the answer is written
-// on the record, so a restart keeps it. Nothing is pushed here and no branch moves.
+// confirm says the one thing it does - the tree's push stops being parked on the permission card - and the answer is
+// written on the record, so a restart keeps it. Nothing is pushed here and no branch moves.
 const kindConfirmEls = new Map(); // row key -> the inline <tr> that is asking
 
 function kindConfirmOf(key) {
