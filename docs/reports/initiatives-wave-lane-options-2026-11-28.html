@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One wave, five drawings: the Initiatives lane at the panel's real width</title>
+<link rel="icon" href="data:,">
+<style>
+:root { --ink:#1b2026; --dim:#5b6672; --line:#d7dde4; --bg:#fbfcfd; --code:#f1f3f6; --ok:#1f7a4d; --no:#a12d2d; --stage-w:1304px; }
+* { box-sizing:border-box; }
+body { margin:0; padding:34px 28px 72px; background:var(--bg); color:var(--ink); font:15px/1.6 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+main { max-width:1420px; margin:0 auto; }
+.prose { max-width:1000px; }
+h1 { font-size:26px; line-height:1.25; margin:0 0 6px; letter-spacing:-0.01em; }
+h2 { font-size:18px; margin:38px 0 10px; padding-top:16px; border-top:1px solid var(--line); }
+h3 { font-size:14px; margin:22px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:.07em; }
+p { margin:9px 0; }
+.sub { color:var(--dim); margin:0 0 20px; font-size:14px; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; background:var(--code); padding:1px 5px; border-radius:3px; }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px; padding:12px 14px; overflow:auto; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.55; margin:10px 0; white-space:pre-wrap; }
+table { border-collapse:collapse; width:100%; margin:12px 0; font-size:13.5px; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; white-space:nowrap; }
+td.opt { font-weight:700; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.today { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; color:var(--dim); }
+.facts { display:grid; grid-template-columns:210px 1fr; gap:5px 16px; margin:16px 0 0; font-size:14px; }
+.facts dt { color:var(--dim); }
+.facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+.note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:14px 0; }
+.bad { color:var(--no); font-weight:600; }
+.good { color:var(--ok); font-weight:600; }
+ul, ol { margin:8px 0 8px 22px; padding:0; }
+li { margin:5px 0; }
+.shots { display:flex; flex-direction:column; gap:14px; margin:14px 0 6px; align-items:flex-start; }
+.shots figure { margin:0; }
+.shots img { display:block; max-width:100%; height:auto; border:1px solid #23262d; border-radius:8px; }
+.shots figcaption { font-size:12px; color:var(--dim); margin-top:5px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.shots figure.narrow img { border-color:#3a3f49; }
+.optbody { border:1px solid var(--line); border-radius:10px; padding:16px 18px 10px; margin:18px 0 26px; background:#fff; }
+.optbody h3 { margin-top:0; color:var(--ink); text-transform:none; letter-spacing:0; font-size:16px; }
+.optbody .what { margin-top:6px; }
+.optbody .tags { display:flex; gap:6px; margin:8px 0 0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+.optbody .tags span { border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
+.optbody .metrics { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin:12px 0 4px; }
+.optbody .metrics div { border:1px solid var(--line); border-radius:6px; padding:6px 8px; background:#fafbfc; }
+.optbody .metrics b { display:block; font-size:16px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.optbody .metrics span { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+.optbody h4 { font-size:13px; margin:14px 0 4px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; }
+.reco { border:1px solid #bfd7c7; background:#f2f8f4; border-radius:10px; padding:16px 18px; margin:16px 0; }
+.reco h3 { margin-top:0; color:var(--ink); text-transform:none; letter-spacing:0; font-size:17px; }
+
+/* ---- the specimen stage: a dark slice of the panel, the wave column exactly as wide as the panel's ---- */
+.stage-frame { position:fixed; left:-20000px; top:0; margin:0; }
+body.capture .stage-frame { position:static; left:auto; margin:12px 0; }
+body.capture .capture-note { display:none; }
+.stage { width:var(--stage-w); max-width:100%; container-type:inline-size; background:#15171c; color:#c9ced8; border-radius:10px; padding:12px 0 16px; border:1px solid #2b2f38;
+  font:12px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+.stage, .stage * { box-sizing:border-box; }
+.init-wavefold { padding:0; }
+.init-sechead { display:flex; align-items:center; gap:8px; padding-left:24px; margin-bottom:8px; color:#c9ced8; font-size:12px; font-weight:600; }
+.init-sechead .seclabel { display:inline-flex; align-items:center; gap:6px; }
+.init-sechead .chip.zero { font-size:10px; padding:0 6px; border:1px solid #2b2f38; border-radius:999px; color:#7d8593; }
+.init-mini { font-size:10.5px; padding:0 7px; height:19px; display:inline-flex; align-items:center; border:1px solid #2b2f38; border-radius:4px; color:#aab1bd; }
+.wavenote { margin-left:auto; font-weight:400; font-size:11px; color:#79818f; }
+.init-waves { position:relative; display:flex; flex-direction:column; gap:20px; padding-left:24px; }
+.init-waves::before { content:""; position:absolute; left:9px; top:2px; bottom:2px; width:2px; border-radius:2px; background:#3a404b; }
+.wave-row { position:relative; min-width:0; padding:10px 12px; border:1px solid #2b2f38; border-radius:8px; background:#1c1f26; }
+.wave-row::before { content:""; position:absolute; left:-15px; top:-1px; bottom:-1px; width:2px; background:#3a404b; }
+.wave-row[data-wave-state="running"]::before { background:#3fb950; }
+.wave-row[data-wave-state="done"]::before { background:#a371f7; }
+.wave-row[data-wave-current="true"] { border-color:#3a404b; background:linear-gradient(180deg,#22262e,#1c1f26); box-shadow:inset 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.35); }
+.wpos { position:absolute; left:-25px; top:13px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:1px solid #3a404b; border-radius:50%; background:#1c1f26; color:#7d8593; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:10.5px; line-height:1; z-index:2; }
+.wave-row[data-wave-state="running"] .wpos { border-color:#2f6b3a; color:#3fb950; }
+.wave-row[data-wave-state="done"] .wpos { border-color:#2f6b3a; color:#a371f7; }
+.wave-row[data-wave-current="true"] .wpos { border-width:2px; border-color:#3fb950; color:#d6dbe4; background-color:#1c1f26; background-image:linear-gradient(rgba(63,185,80,.12),rgba(63,185,80,.12)); }
+.whead { display:flex; flex-wrap:wrap; align-items:center; gap:2px 8px; min-width:0; }
+.wtitle { flex:0 1 auto; min-width:0; max-width:min(100%,760px); font-size:13px; font-weight:600; line-height:1.35; letter-spacing:-.005em; color:#d6dbe4; overflow-wrap:anywhere; }
+.chip { display:inline-flex; align-items:center; gap:4px; height:18px; padding:0 6px; border:1px solid #2b2f38; border-radius:999px; font-size:10px; font-weight:500; line-height:1.4; white-space:nowrap; color:#aab1bd; background:transparent; }
+.chip.current { color:#d8c7ff; border-color:#5b4a86; background:rgba(163,113,247,.14); }
+.chip.auto { color:#7d8593; background:#181b21; }
+.chip.gate { font-size:10px; }
+.chip.gate i { width:5px; height:5px; border-radius:50%; background:currentColor; display:inline-block; }
+.chip.gate.none { color:#79818f; border-style:dashed; border-color:#2b2f38; }
+.wgates { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; }
+.mstate.is-running { color:#3fb950; border-color:#2f6b3a; background:rgba(63,185,80,.12); }
+.mstate.is-queued { color:#79818f; border-color:#2f3a46; }
+.mstate.is-done { color:#a371f7; border-color:#2f6b3a; }
+.wjoin { color:#79818f; font-size:11px; line-height:1.5; }
+.wjoin b { display:block; margin-bottom:2px; color:#d6dbe4; font-size:10.5px; font-weight:600; letter-spacing:.01em; }
+.wjoin span { color:#aab1bd; }
+.otag { display:inline-flex; align-items:center; justify-content:center; height:18px; padding:0 5px; border:1px solid #2f3a46; border-radius:4px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:10px; color:#aab1bd; background:#22262e; }
+.proj { min-width:0; overflow-wrap:anywhere; padding:0 5px; border-radius:3px; background:#22262e; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:10px; color:#79818f; }
+.reports { margin-left:auto; }
+.mid { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-weight:600; font-size:11px; color:#79818f; font-variant-numeric:tabular-nums; }
+.lread { margin-left:8px; font-size:11px; color:#79818f; }
+.lhead { display:flex; align-items:center; gap:0; }
+.wactions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; margin-top:8px; }
+.wactions .init-mini { height:20px; font-size:10px; }
+
+/* ---- O1: today, ported from public/initiatives.css ---- */
+.o1 .wave-member { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; width:100%; min-width:0; min-height:28px; padding:3px 8px; border:1px solid #2b2f38; border-radius:5px; background:#22262e; font-size:12px; line-height:1.5; }
+.o1 .wave-member > * { min-width:0; max-width:100%; }
+.o1 .wave-member-id { flex:0 0 auto; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-weight:600; font-size:11px; color:#79818f; font-variant-numeric:tabular-nums; }
+.o1 .wave-member-title { flex:1 1 12ch; min-width:0; overflow-wrap:anywhere; color:#aab1bd; }
+.o1 .wave-member-title { appearance:none; margin:0; padding:0; border:0; background:transparent; font:inherit; text-align:left; }
+.o1 .wave-member .reports { margin-left:auto; }
+.o1 .wave-lanes { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+.o1 .wave-lane { min-width:0; padding:8px 12px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o1 .wave-lane .chip { height:18px; padding:0 6px; }
+.o1 .wave-lane-read { margin-left:8px; font-size:11px; color:#79818f; }
+.o1 .wave-members { display:flex; flex-direction:column; gap:4px; margin-top:6px; min-width:0; }
+.o1 .wclose { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.o1 .wclose > .wave-lanes { margin-top:0; }
+.o1 .wclose > .wjoin { margin-top:0; padding:8px 10px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o1 .wave-members.one { margin-top:10px; }
+@container (min-width:900px) {
+  .o1 .wave-member { display:grid; grid-template-columns:44px auto 80px minmax(0,1fr) 150px auto; gap:8px; width:100%; }
+  .o1 .wave-member .reports { margin-left:0; }
+  .o1 .wave-lanes { grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); }
+  .o1 .wclose { flex-direction:row; align-items:flex-start; }
+  .o1 .wclose > .wave-lanes { flex:1 1 auto; min-width:0; }
+  .o1 .wclose > .wjoin { flex:0 0 196px; align-self:stretch; }
+}
+
+/* ---- O2: lane bands, the manifest row kept, always a grid ---- */
+.o2 .bandlanes { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.o2 .wave-lane { min-width:0; padding:8px 12px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o2 .wave-lane .chip { height:18px; padding:0 6px; }
+.o2 .wave-lane-read { margin-left:8px; font-size:11px; color:#79818f; }
+.o2 .wave-members { display:flex; flex-direction:column; gap:4px; margin-top:6px; min-width:0; }
+.o2 .wave-member { display:grid; grid-template-columns:44px auto 80px minmax(0,1fr) 150px auto; gap:8px; align-items:center; width:100%; min-width:0; min-height:28px; padding:3px 8px; border:1px solid #2b2f38; border-radius:5px; background:#22262e; font-size:12px; line-height:1.5; }
+.o2 .wave-member > * { min-width:0; max-width:100%; }
+.o2 .wave-member-id { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-weight:600; font-size:11px; color:#79818f; }
+.o2 button.wave-member-title { appearance:none; margin:0; padding:0; border:0; background:transparent; font:inherit; text-align:left; overflow-wrap:anywhere; color:#aab1bd; }
+.o2 .wjoin { margin-top:10px; padding:8px 10px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o2 .wave-members.one { margin-top:10px; }
+
+/* ---- O3: manifest table ---- */
+.o3 .lsum { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:9px; }
+.o3 .lsum-cell { display:inline-flex; align-items:center; gap:0; }
+.o3 .manifest { margin-top:8px; border:1px solid #2b2f38; border-radius:6px; overflow:hidden; background:#181b21; }
+.o3 .mhead, .o3 .mrow { display:grid; grid-template-columns:120px 44px 34px 80px minmax(0,1fr) 150px auto; gap:8px; align-items:center; padding:4px 8px; min-width:0; }
+.o3 .mhead { font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; color:#79818f; border-bottom:1px solid #2b2f38; background:#1c1f26; }
+.o3 .mrow { border-bottom:1px solid #232730; font-size:12px; line-height:1.5; }
+.o3 .mrow:last-child { border-bottom:0; }
+.o3 .lane-cell { display:flex; align-items:center; gap:5px; min-width:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:10px; color:#79818f; border-left:2px solid #3a404b; padding-left:6px; overflow-wrap:anywhere; }
+.o3 .lane-cell.rep { color:#4d5563; border-left-color:#2b2f38; justify-content:center; }
+.o3 .dot { width:6px; height:6px; border-radius:50%; flex:0 0 auto; }
+.o3 .dot.is-running { background:#3fb950; }
+.o3 .dot.is-queued { background:#79818f; }
+.o3 .mtitle { overflow-wrap:anywhere; color:#aab1bd; }
+.o3 .wjoin { margin-top:8px; padding:8px 10px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o3 .manifest.one { margin-top:10px; }
+.o3 .manifest.one .mrow { border-bottom:0; }
+
+/* ---- O4: two-line cards ---- */
+.o4 .wave-lanes { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+.o4 .wave-lane { min-width:0; padding:8px 12px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o4 .wave-lane .chip { height:18px; padding:0 6px; }
+.o4 .wave-lane-read { margin-left:8px; font-size:11px; color:#79818f; }
+.o4 .wave-members { display:flex; flex-direction:column; gap:4px; margin-top:6px; min-width:0; }
+.o4 .wave-member { display:block; width:100%; min-width:0; padding:5px 8px; border:1px solid #2b2f38; border-radius:5px; background:#22262e; font-size:12px; line-height:1.5; }
+.o4 .mtitle { display:block; overflow-wrap:anywhere; color:#c3c9d3; }
+.o4 .mmeta { display:flex; flex-wrap:wrap; align-items:center; gap:3px 8px; margin-top:3px; font-size:10px; }
+.o4 .wclose { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.o4 .wclose > .wave-lanes { margin-top:0; }
+.o4 .wclose > .wjoin { margin-top:0; padding:8px 10px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o4 .wave-members.one { margin-top:10px; }
+@container (min-width:900px) {
+  .o4 .wave-lanes { grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); }
+  .o4 .wclose { flex-direction:row; align-items:flex-start; }
+  .o4 .wclose > .wave-lanes { flex:1 1 auto; min-width:0; }
+  .o4 .wclose > .wjoin { flex:0 0 196px; align-self:stretch; }
+}
+
+/* ---- O5: lane matrix ---- */
+.o5 .matrix { margin-top:10px; border:1px solid #2b2f38; border-radius:6px; background:#181b21; padding:8px; display:flex; flex-direction:column; gap:8px; }
+.o5 .mheads, .o5 .mrow5 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.o5 .mhead5 { display:flex; align-items:center; gap:0; min-width:0; padding-bottom:6px; border-bottom:1px solid #2b2f38; }
+.o5 .mcell { min-width:0; padding:6px 8px; border:1px solid #2b2f38; border-radius:5px; background:#22262e; font-size:12px; line-height:1.5; }
+.o5 .mcell.empty { display:flex; align-items:center; justify-content:center; border-style:dashed; color:#4d5563; background:transparent; font-size:11px; min-height:46px; }
+.o5 .mcell .mtitle { display:block; overflow-wrap:anywhere; color:#c3c9d3; }
+.o5 .mcell .mmeta { display:flex; flex-wrap:wrap; align-items:center; gap:3px 8px; margin-top:3px; font-size:10px; }
+.o5 .mcell .reports { margin-left:auto; }
+.o5 .wjoin { margin-top:8px; padding:8px 10px; border:1px solid #2b2f38; border-left:2px solid #3a404b; border-radius:0 5px 5px 0; background:#181b21; }
+.o5 .mrow5.single { grid-template-columns:minmax(0,1fr); }
+.o5 .matrix.one { margin-top:10px; }
+</style>
+</head>
+<body>
+<main>
+<h1>One wave, five drawings</h1>
+<p class="sub">agent-worktree-gui 1.195.0, branch <code>wtgui/report-only-row-nothing-lands-no-public-c7afbf</code>, on top of the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. Report only: nothing under <code>public/</code> or <code>lib/</code> changes, no version bump, no push, no pull request. Prepared for row #464 in assistant-3's queue, 2026-11-28.</p>
+
+<div class="prose">
+<dl class="facts">
+  <dt>the mechanism</dt><dd>public/core/waves-lane.js:272-300 (lane row, lanes block), :137 (member row), :411-415 (the lane block and the join note)</dd>
+  <dt>the stylesheet</dt><dd>public/initiatives.css:1077-1170 (lanes, member row, the 900px breakpoint), :1016-1024 (the 196px closing note)</dd>
+  <dt>the painter</dt><dd>public/assistant.js:4610 (laneHtml inside the initiative card)</dd>
+  <dt>the fold</dt><dd>lib/waves.js:1253 waveLanes, :1443 deriveWaveState, :1783 stateWord</dd>
+  <dt>the fixture</dt><dd>tools/initiatives-fixture.mjs, seeded by tools/capture-wave-lane-options.mjs</dd>
+  <dt>the browser</dt><dd>tools/browser.mjs (Playwright), headless, 1x device scale for the panel, 1x for the stages</dd>
+  <dt>the widths</dt><dd>the panel's real wave column 1304px at the widest float; the 900px panel gives 804px</dd>
+  <dt>the data</dt><dd>one wave, two lanes, three members, both gates drawn; one closed wave beneath</dd>
+</dl>
+
+<h2>1. What this report is, and what it is not</h2>
+<p>The Initiatives tab draws a wave as a station: a title, a state word, an entry and an exit gate, then its lanes and their members. This report renders the same wave, with the same three members across the same two lanes, five ways. Each drawing is real HTML and real CSS, photographed at the panel's real wave column and at the 900px panel, through the repository's own browser harness and its own fixture. Nothing in the report is a mock: the first option is the panel's current drawing, class for class, and its title and wrap counts match the fixture panel's within a font's rounding. It is the baseline every other option is measured against.</p>
+<p>The failure this row is about is not a colour, a font or a spacing. It is a width budget. The member row is a six-column manifest; the lane that holds it is about half the card. The columns are fixed at 44px for the id, the owner chip, 80px for the state, 150px for the project and the reports chip, plus five 8px gaps. That is 404px of the lane's 497px, so the title - the one thing a reader actually reads - is handed 93px. The reader's screenshot shows the result: titles that wrap every two or three words, and a wave box as tall as a paragraph. The fixture measures it in section 2.</p>
+<p class="note">The reader's screenshot (<code>2026-11-28T05-50-11-image.png</code>) is this drawing: the same wave, the same two lanes and the same three members. The fixture boots the panel at its widest float (1384x860 layout px at a 1400x1000 window), where the pane measures 1382px, the card 1364px and the wave column 1304px; every number in this report is that fixture's, not a guess at the reader's screen. The titles, ids, lanes and gates in every drawing below are that wave's: #444, #446 and #445, lanes public/index.html and unlaned, entry and exit both no gate, one closed wave beneath.</p>
+
+<h2>2. Today, measured</h2>
+<div class="shots">
+  <figure><img src="wave-lane-options/today-wide.png" alt="The real panel's wave lane at the widest float"><figcaption>The real panel, widest float: pane 1382px, wave column 1304px, wave box 413px.</figcaption></figure>
+  <figure class="narrow"><img src="wave-lane-options/today-narrow.png" alt="The real panel's wave lane at the 900px panel"><figcaption>The real panel at 900px wide: pane 882px, wave column 804px, wave box 413px.</figcaption></figure>
+</div>
+<table>
+  <tr><th>the real panel</th><th>pane</th><th>wave column</th><th>lane</th><th>member title</th><th>wraps per title (#444 / #446 / #445)</th><th>wave box</th><th>member row</th></tr>
+  <tr><td>widest float (1384px)</td><td class="n">1382px</td><td class="n">1304px</td><td class="n">521px</td><td class="n">93px</td><td class="n">6 / 7 / 7</td><td class="n">413px</td><td class="n">grid</td></tr>
+  <tr><td>900px panel</td><td class="n">882px</td><td class="n">804px</td><td class="n">754px</td><td class="n">419px</td><td class="n">2 / 2 / 2</td><td class="n">413px</td><td class="n">flex</td></tr>
+</table>
+<div class="prose">
+<p>Two things in that table are worth naming. First, the unreadable case is the <em>wide</em> one: at the widest float the two lanes share the card, each lane is 521px, the member row is a grid, and the title gets 93px. Second, at the 900px panel the lanes stack and the row falls back to the wrapped flex drawing, so its title gets 419px and two lines - the wave box is still 413px tall, but its height now comes from stacking the lanes, not from wrapping the words. The box height alone would hide the defect; the title width and the wrap count are the numbers that show it.</p>
+<p>The O1 stage in section 3 is this drawing, class for class: its title measures 90px against the panel's 93px (the same 404px of fixed columns, a font's rounding) and its box 418px against 413px (the stage's controls row is a few px taller). It is what the other options are measured against, not a mock.
+<p>The closed wave beneath proves where the fault is. It holds one member and no lane of its own, so its member row is drawn at the card's full width; its title gets the whole flexible track and reads in one line. The same row, the same CSS, the same font: the only difference is that the lane above it is half the width.</p>
+
+<p class="note">The measurements in this report were taken on 2026-11-28 by <code>node tools/capture-wave-lane-options.mjs</code>. The ledger is <code>docs/reports/wave-lane-options/measurements.json</code>; the stages are static HTML in this file, photographed through the same Playwright harness as the panel. The fixture's home is a scratch directory, never <code>~/.wag</code>, and the capture never opens a socket to the reader's 7331 listener: it reads that listener's pid from <code>netstat</code> only, never from the panel. The run recorded the same listener before and after (pid 30056, from <code>netstat</code> only; the ledger holds the pair), and the fixture's own panel is on a random port, asserted not 7331: no socket to 7331 is opened by the tool.</p>
+</div>
+
+<h2>3. Five mechanisms</h2>
+<table>
+  <tr><th>lane</th><th>members</th><th>the lane's read</th></tr>
+  <tr><td class="n">public/index.html</td><td>#444 running (M3, agent-worktree-gui), #446 queued (M3, agent-worktree-gui)</td><td>runs in 1 tree</td></tr>
+  <tr><td class="n">unlaned</td><td>#445 queued (M3, agent-worktree-gui)</td><td>runs in 0 trees</td></tr>
+</table>
+<p>The wave's entry gate and exit gate are both <code>no check - no gate</code>, its switch is off, it owes the join (<code>2 lanes</code>), and its state is <code>running</code> because #444 is. Beneath it, the closed wave <em>The front-end modules split along the same surface seams as the sheets</em> holds one done member (#447) and no lane of its own, so it is the control: the same member row at the card's full width.</p>
+<p class="prose">Every option below draws the same wave and the same closed wave beneath it. The captures are the option's own stage at 1304px (the real wave column) and at 804px (the wave column inside a 900px panel). The numbers under each drawing are measured from that drawing, not copied from the panel.</p>
+
+</div>
+<section class="optbody o1" id="o1" data-option="O1">
+  <h3>O1 - Station boxes, six-column member row</h3>
+  <div class="tags"><span>today</span><span>baseline</span></div>
+  <p class="what">Today's drawing. Each lane is a box; every member is one six-column grid row: a 44px id, the owner chip, an 80px state, the title as the only flexible track, a 150px project tag and the reports chip. The lanes sit side by side while the pane is at least 900px, with the 196px closing note beside them.</p>
+  <div class="metrics">
+    <div><b>90px</b><span>title, real column</span></div>
+    <div><b>7 / 7 / 7</b><span>wraps, real column</span></div>
+    <div><b>418px</b><span>wave box, real</span></div>
+    <div><b>407px</b><span>title, 900px panel</span></div>
+    <div><b>392px</b><span>wave box, 900px</span></div>
+  </div>
+  <div class="shots">
+    <figure><img src="wave-lane-options/o1-wide.png" alt="O1 photographed at the panel's real wave column, 1304px" width="1304"><figcaption>O1 at the real wave column: 1304px. Title 90px, wraps 7 / 7 / 7, wave box 418px.</figcaption></figure>
+    <figure class="narrow"><img src="wave-lane-options/o1-narrow.png" alt="O1 photographed at the 900px panel, 804px wave column" width="804"><figcaption>O1 at the 900px panel: wave column 804px. Title 407px, wraps 2 / 2 / 2, wave box 392px.</figcaption></figure>
+  </div>
+  <div class="stage-frame"><div class="stage" data-stage="O1"><div class="init-wavefold"><div class="init-sechead"><span class="seclabel">Waves <span class="chip zero">2</span></span><span class="init-mini">+ Add a wave</span><span class="wavenote">read from the wave store</span></div><div class="init-waves"><div class="wave-row" data-wave-id="wave-split" data-wave-state="running" data-wave-current="true" data-layout="lane-grid"><div class="whead"><span class="wpos">W1</span><span class="wtitle">The 1.191.0 split three tangles: the board table home sheet, the console sub-sheets, and late.css dissolved</span><span class="chip mstate is-running">running</span><span class="chip current">current</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="wclose"><div class="wave-lanes" data-wave-lanes="2"><div class="wave-lane" data-wave-lane="public/index.html" data-lane-state="running"><div class="lhead"><span class="chip mstate is-running">lane public/index.html - running</span><span class="lread">runs in 1 tree</span></div><div class="wave-members"><div class="wave-member" data-wave-member="444"><b class="wave-member-id">#444</b><span class="otag">M3</span><span class="chip mstate is-running">running</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Give the board table home sheet 46 of 316 rules live in board.css and 270 come from 11 others</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div><div class="wave-member" data-wave-member="446"><b class="wave-member-id">#446</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Dissolve late.css: 62 rules, 62 sole definitions - the cut file, the 316 window, the legend popover and the search</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div></div><div class="wave-lane" data-wave-lane="unlaned" data-lane-state="queued"><div class="lhead"><span class="chip mstate is-queued">lane unlaned - queued</span><span class="lread">runs in 0 trees</span></div><div class="wave-members"><div class="wave-member" data-wave-member="445"><b class="wave-member-id">#445</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Break the console eight-sheet surface into sub-sheets: 56 of its 102 rules live outside console.css</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div></div></div><div class="wjoin"><b>2 lanes</b><span>closing this wave is ONE commit that names them all</span></div></div>
+  <div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div><div class="wave-row" data-wave-id="wave-closed" data-wave-state="done"><div class="whead"><span class="wpos">W2</span><span class="wtitle">The front-end modules split along the same surface seams as the sheets</span><span class="chip mstate is-done">done</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="wave-members one"><div class="wave-member" data-wave-member="447"><b class="wave-member-id">#447</b><span class="otag">M3</span><span class="chip mstate is-done">done</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Split public/app.js along the sheet seams: 316 rules, one entry point</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div></div></div></div></div>
+  <h4>Why it works, or does not</h4>
+  <p>The columns are fixed and the lane is not. At the pane's real width each lane measures 521px, its content 497px, and the fixed columns plus gaps ask for 404px, so the title track is handed the 93px that is left. The title is where the reader reads.</p>
+  <h4>What it costs</h4>
+  <p>No change. This is the baseline every other option is measured against.</p>
+  <h4>What it risks</h4>
+  <p>131 characters of title in a 93px column: 6 to 7 wrapped lines per member and a 413px wave box. The state and the owner still line up, which is why the defect survives review: the row looks ordered while the words are unreadable.</p>
+</section><section class="optbody o2" id="o2" data-option="O2">
+  <h3>O2 - Lane bands, full-width manifest row</h3>
+  <div class="tags"><span>stacked</span><span>proposal</span></div>
+  <p class="what">The lanes stop sharing the width. Each lane becomes a full-width band, one above the other, and the member row keeps today's six-column manifest. Because every band is as wide as the card, the fixed columns never crowd the title.</p>
+  <div class="metrics">
+    <div><b>822px</b><span>title, real column</span></div>
+    <div><b>1 / 1 / 1</b><span>wraps, real column</span></div>
+    <div><b>346px</b><span>wave box, real</span></div>
+    <div><b>322px</b><span>title, 900px panel</span></div>
+    <div><b>394px</b><span>wave box, 900px</span></div>
+  </div>
+  <div class="shots">
+    <figure><img src="wave-lane-options/o2-wide.png" alt="O2 photographed at the panel's real wave column, 1304px" width="1304"><figcaption>O2 at the real wave column: 1304px. Title 822px, wraps 1 / 1 / 1, wave box 346px.</figcaption></figure>
+    <figure class="narrow"><img src="wave-lane-options/o2-narrow.png" alt="O2 photographed at the 900px panel, 804px wave column" width="804"><figcaption>O2 at the 900px panel: wave column 804px. Title 322px, wraps 2 / 2 / 2, wave box 394px.</figcaption></figure>
+  </div>
+  <div class="stage-frame"><div class="stage" data-stage="O2"><div class="init-wavefold"><div class="init-sechead"><span class="seclabel">Waves <span class="chip zero">2</span></span><span class="init-mini">+ Add a wave</span><span class="wavenote">read from the wave store</span></div><div class="init-waves"><div class="wave-row" data-wave-id="wave-split" data-wave-state="running" data-wave-current="true" data-layout="bands"><div class="whead"><span class="wpos">W1</span><span class="wtitle">The 1.191.0 split three tangles: the board table home sheet, the console sub-sheets, and late.css dissolved</span><span class="chip mstate is-running">running</span><span class="chip current">current</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="bandlanes"><div class="wave-lane" data-wave-lane="public/index.html" data-lane-state="running"><div class="lhead"><span class="chip mstate is-running">lane public/index.html - running</span><span class="lread">runs in 1 tree</span></div><div class="wave-members"><div class="wave-member" data-wave-member="444"><b class="wave-member-id">#444</b><span class="otag">M3</span><span class="chip mstate is-running">running</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Give the board table home sheet 46 of 316 rules live in board.css and 270 come from 11 others</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div><div class="wave-member" data-wave-member="446"><b class="wave-member-id">#446</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Dissolve late.css: 62 rules, 62 sole definitions - the cut file, the 316 window, the legend popover and the search</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div></div><div class="wave-lane" data-wave-lane="unlaned" data-lane-state="queued"><div class="lhead"><span class="chip mstate is-queued">lane unlaned - queued</span><span class="lread">runs in 0 trees</span></div><div class="wave-members"><div class="wave-member" data-wave-member="445"><b class="wave-member-id">#445</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Break the console eight-sheet surface into sub-sheets: 56 of its 102 rules live outside console.css</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div></div></div>
+    <div class="wjoin"><b>2 lanes</b><span>closing this wave is ONE commit that names them all</span></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div><div class="wave-row" data-wave-id="wave-closed" data-wave-state="done"><div class="whead"><span class="wpos">W2</span><span class="wtitle">The front-end modules split along the same surface seams as the sheets</span><span class="chip mstate is-done">done</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="wave-members one"><div class="wave-member" data-wave-member="447"><b class="wave-member-id">#447</b><span class="otag">M3</span><span class="chip mstate is-done">done</span><button type="button" class="mtitle wave-member-title" tabindex="-1">Split public/app.js along the sheet seams: 316 rules, one entry point</button><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div></div></div></div></div>
+  <h4>Why it works, or does not</h4>
+  <p>One column change in the lane container, and the member grid is drawn at the band's width instead of only above a 900px pane. The row, its chips and its markup are untouched; the title track takes the width the band now has.</p>
+  <h4>What it costs</h4>
+  <p>The lanes are no longer side by side at any width, so the wave stops showing that its work runs in parallel. The closing note has to move under the lanes at every width.</p>
+  <h4>What it risks</h4>
+  <p>The wave grows taller as lanes are added, and a reader scanning two lanes has to compare down the page rather than across. The 2-lane close is still stated in words, but the picture no longer carries it.</p>
+</section><section class="optbody o3" id="o3" data-option="O3">
+  <h3>O3 - Manifest table, lane as a column</h3>
+  <div class="tags"><span>manifest</span><span>proposal</span></div>
+  <p class="what">No lane boxes at all. One table holds every member, sorted by lane, with a 120px lane column that names the lane on its first row and a dot on the repeats. A summary strip above the table keeps each lane's state and read sentence in one line.</p>
+  <div class="metrics">
+    <div><b>711px</b><span>title, real column</span></div>
+    <div><b>1 / 1 / 1</b><span>wraps, real column</span></div>
+    <div><b>295px</b><span>wave box, real</span></div>
+    <div><b>211px</b><span>title, 900px panel</span></div>
+    <div><b>421px</b><span>wave box, 900px</span></div>
+  </div>
+  <div class="shots">
+    <figure><img src="wave-lane-options/o3-wide.png" alt="O3 photographed at the panel's real wave column, 1304px" width="1304"><figcaption>O3 at the real wave column: 1304px. Title 711px, wraps 1 / 1 / 1, wave box 295px.</figcaption></figure>
+    <figure class="narrow"><img src="wave-lane-options/o3-narrow.png" alt="O3 photographed at the 900px panel, 804px wave column" width="804"><figcaption>O3 at the 900px panel: wave column 804px. Title 211px, wraps 3 / 4 / 3, wave box 421px.</figcaption></figure>
+  </div>
+  <div class="stage-frame"><div class="stage" data-stage="O3"><div class="init-wavefold"><div class="init-sechead"><span class="seclabel">Waves <span class="chip zero">2</span></span><span class="init-mini">+ Add a wave</span><span class="wavenote">read from the wave store</span></div><div class="init-waves"><div class="wave-row" data-wave-id="wave-split" data-wave-state="running" data-wave-current="true" data-layout="table"><div class="whead"><span class="wpos">W1</span><span class="wtitle">The 1.191.0 split three tangles: the board table home sheet, the console sub-sheets, and late.css dissolved</span><span class="chip mstate is-running">running</span><span class="chip current">current</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="lsum"><span class="lsum-cell"><span class="chip mstate is-running">lane public/index.html - running</span><span class="lread">runs in 1 tree</span></span><span class="lsum-cell"><span class="chip mstate is-queued">lane unlaned - queued</span><span class="lread">runs in 0 trees</span></span></div>
+    <div class="manifest"><div class="mhead"><span>lane</span><span>id</span><span>owner</span><span>state</span><span>title</span><span>project</span><span>reports</span></div><div class="mrow wave-member" data-wave-member="444" data-layout="table"><span class="lane-cell"><i class="dot is-running"></i>public/index.html</span><b class="mid">#444</b><span class="otag">M3</span><span class="chip mstate is-running">running</span><span class="mtitle wave-member-title">Give the board table home sheet 46 of 316 rules live in board.css and 270 come from 11 others</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div><div class="mrow wave-member" data-wave-member="446" data-layout="table"><span class="lane-cell rep">·</span><b class="mid">#446</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><span class="mtitle wave-member-title">Dissolve late.css: 62 rules, 62 sole definitions - the cut file, the 316 window, the legend popover and the search</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div><div class="mrow wave-member" data-wave-member="445" data-layout="table"><span class="lane-cell"><i class="dot is-queued"></i>unlaned</span><b class="mid">#445</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><span class="mtitle wave-member-title">Break the console eight-sheet surface into sub-sheets: 56 of its 102 rules live outside console.css</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div>
+    <div class="wjoin"><b>2 lanes</b><span>closing this wave is ONE commit that names them all</span></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div><div class="wave-row" data-wave-id="wave-closed" data-wave-state="done"><div class="whead"><span class="wpos">W2</span><span class="wtitle">The front-end modules split along the same surface seams as the sheets</span><span class="chip mstate is-done">done</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="manifest one"><div class="mrow wave-member" data-wave-member="447"><span class="lane-cell rep">one lane</span><b class="mid">#447</b><span class="otag">M3</span><span class="chip mstate is-done">done</span><span class="mtitle wave-member-title">Split public/app.js along the sheet seams: 316 rules, one entry point</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></div></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div></div></div></div></div>
+  <h4>Why it works, or does not</h4>
+  <p>A flat table gives the title the widest track of any option, and every member is one row, so three members compare down a single column. The lane is data in a column, not a container.</p>
+  <h4>What it costs</h4>
+  <p>The lane's own block, its left border and its read sentence are replaced by a summary strip and a column. That is new markup, not a CSS-only change, and the panel's lane identity becomes a cell value.</p>
+  <h4>What it risks</h4>
+  <p>The grouping is weaker: a reader follows the lane column rather than seeing two islands of work. Repeating the lane name darkens the table, and the summary strip can drift from the rows if a later change paints them separately.</p>
+</section><section class="optbody o4" id="o4" data-option="O4">
+  <h3>O4 - Two-line cards, lane width for the title</h3>
+  <div class="tags"><span>cards</span><span>proposal</span></div>
+  <p class="what">The lanes stay side by side. Each member becomes a two-line block instead of a six-column row: the title takes the whole lane width on the first line, and the id, owner, state, project and reports chip follow on a second, wrapping meta line.</p>
+  <div class="metrics">
+    <div><b>475px</b><span>title, real column</span></div>
+    <div><b>2 / 2 / 2</b><span>wraps, real column</span></div>
+    <div><b>288px</b><span>wave box, real</span></div>
+    <div><b>707px</b><span>title, 900px panel</span></div>
+    <div><b>413px</b><span>wave box, 900px</span></div>
+  </div>
+  <div class="shots">
+    <figure><img src="wave-lane-options/o4-wide.png" alt="O4 photographed at the panel's real wave column, 1304px" width="1304"><figcaption>O4 at the real wave column: 1304px. Title 475px, wraps 2 / 2 / 2, wave box 288px.</figcaption></figure>
+    <figure class="narrow"><img src="wave-lane-options/o4-narrow.png" alt="O4 photographed at the 900px panel, 804px wave column" width="804"><figcaption>O4 at the 900px panel: wave column 804px. Title 707px, wraps 1 / 1 / 1, wave box 413px.</figcaption></figure>
+  </div>
+  <div class="stage-frame"><div class="stage" data-stage="O4"><div class="init-wavefold"><div class="init-sechead"><span class="seclabel">Waves <span class="chip zero">2</span></span><span class="init-mini">+ Add a wave</span><span class="wavenote">read from the wave store</span></div><div class="init-waves"><div class="wave-row" data-wave-id="wave-split" data-wave-state="running" data-wave-current="true" data-layout="lane-grid"><div class="whead"><span class="wpos">W1</span><span class="wtitle">The 1.191.0 split three tangles: the board table home sheet, the console sub-sheets, and late.css dissolved</span><span class="chip mstate is-running">running</span><span class="chip current">current</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="wclose"><div class="wave-lanes" data-wave-lanes="2"><div class="wave-lane" data-wave-lane="public/index.html" data-lane-state="running"><div class="lhead"><span class="chip mstate is-running">lane public/index.html - running</span><span class="lread">runs in 1 tree</span></div><div class="wave-members"><div class="wave-member" data-wave-member="444"><span class="mtitle wave-member-title">Give the board table home sheet 46 of 316 rules live in board.css and 270 come from 11 others</span><span class="mmeta"><b class="mid">#444</b><span class="otag">M3</span><span class="chip mstate is-running">running</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div><div class="wave-member" data-wave-member="446"><span class="mtitle wave-member-title">Dissolve late.css: 62 rules, 62 sole definitions - the cut file, the 316 window, the legend popover and the search</span><span class="mmeta"><b class="mid">#446</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div></div></div><div class="wave-lane" data-wave-lane="unlaned" data-lane-state="queued"><div class="lhead"><span class="chip mstate is-queued">lane unlaned - queued</span><span class="lread">runs in 0 trees</span></div><div class="wave-members"><div class="wave-member" data-wave-member="445"><span class="mtitle wave-member-title">Break the console eight-sheet surface into sub-sheets: 56 of its 102 rules live outside console.css</span><span class="mmeta"><b class="mid">#445</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div></div></div></div><div class="wjoin"><b>2 lanes</b><span>closing this wave is ONE commit that names them all</span></div></div>
+  <div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div><div class="wave-row" data-wave-id="wave-closed" data-wave-state="done"><div class="whead"><span class="wpos">W2</span><span class="wtitle">The front-end modules split along the same surface seams as the sheets</span><span class="chip mstate is-done">done</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="wave-members one"><div class="wave-member" data-wave-member="447"><span class="mtitle wave-member-title">Split public/app.js along the sheet seams: 316 rules, one entry point</span><span class="mmeta"><b class="mid">#447</b><span class="otag">M3</span><span class="chip mstate is-done">done</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div></div></div></div></div>
+  <h4>Why it works, or does not</h4>
+  <p>The title is the only thing that needs width, and it gets the lane's full content width: 475px inside the card's padding at the real pane. The chips keep their meaning and their order; they stop being columns, which is what was squeezing the words.</p>
+  <h4>What it costs</h4>
+  <p>One member rule block. The markup order stays the same, the chips keep their order, and no JS changes. At a pane below 900px the lanes already stack, so the drawing has one narrow case to keep readable.</p>
+  <h4>What it risks</h4>
+  <p>Members no longer align chip-for-chip down a column, so comparing two members' owners takes a second look. A very long project name can push the reports chip to a third line, and the wave grows a little with each member.</p>
+</section><section class="optbody o5" id="o5" data-option="O5">
+  <h3>O5 - Lane matrix, members aligned by slot</h3>
+  <div class="tags"><span>matrix</span><span>proposal</span></div>
+  <p class="what">The lanes are columns and their members are aligned by ordinal: the first member of each lane shares a row, the second shares the next. A lane with no member at that slot shows an empty cell. Each cell is a two-line tile, title first.</p>
+  <div class="metrics">
+    <div><b>595px</b><span>title, real column</span></div>
+    <div><b>1 / 1 / 1</b><span>wraps, real column</span></div>
+    <div><b>329px</b><span>wave box, real</span></div>
+    <div><b>345px</b><span>title, 900px panel</span></div>
+    <div><b>365px</b><span>wave box, 900px</span></div>
+  </div>
+  <div class="shots">
+    <figure><img src="wave-lane-options/o5-wide.png" alt="O5 photographed at the panel's real wave column, 1304px" width="1304"><figcaption>O5 at the real wave column: 1304px. Title 595px, wraps 1 / 1 / 1, wave box 329px.</figcaption></figure>
+    <figure class="narrow"><img src="wave-lane-options/o5-narrow.png" alt="O5 photographed at the 900px panel, 804px wave column" width="804"><figcaption>O5 at the 900px panel: wave column 804px. Title 345px, wraps 2 / 2 / 2, wave box 365px.</figcaption></figure>
+  </div>
+  <div class="stage-frame"><div class="stage" data-stage="O5"><div class="init-wavefold"><div class="init-sechead"><span class="seclabel">Waves <span class="chip zero">2</span></span><span class="init-mini">+ Add a wave</span><span class="wavenote">read from the wave store</span></div><div class="init-waves"><div class="wave-row" data-wave-id="wave-split" data-wave-state="running" data-wave-current="true" data-layout="matrix"><div class="whead"><span class="wpos">W1</span><span class="wtitle">The 1.191.0 split three tangles: the board table home sheet, the console sub-sheets, and late.css dissolved</span><span class="chip mstate is-running">running</span><span class="chip current">current</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="matrix"><div class="mheads"><div class="mhead5"><span class="chip mstate is-running">lane public/index.html - running</span><span class="lread">runs in 1 tree</span></div><div class="mhead5"><span class="chip mstate is-queued">lane unlaned - queued</span><span class="lread">runs in 0 trees</span></div></div><div class="mrow5"><div class="mcell" data-wave-member="444"><span class="mtitle wave-member-title">Give the board table home sheet 46 of 316 rules live in board.css and 270 come from 11 others</span><span class="mmeta"><b class="mid">#444</b><span class="otag">M3</span><span class="chip mstate is-running">running</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div><div class="mcell" data-wave-member="445"><span class="mtitle wave-member-title">Break the console eight-sheet surface into sub-sheets: 56 of its 102 rules live outside console.css</span><span class="mmeta"><b class="mid">#445</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div></div><div class="mrow5"><div class="mcell" data-wave-member="446"><span class="mtitle wave-member-title">Dissolve late.css: 62 rules, 62 sole definitions - the cut file, the 316 window, the legend popover and the search</span><span class="mmeta"><b class="mid">#446</b><span class="otag">M3</span><span class="chip mstate is-queued">queued</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div><div class="mcell empty">no member in this lane</div></div></div>
+    <div class="wjoin"><b>2 lanes</b><span>closing this wave is ONE commit that names them all</span></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div><div class="wave-row" data-wave-id="wave-closed" data-wave-state="done"><div class="whead"><span class="wpos">W2</span><span class="wtitle">The front-end modules split along the same surface seams as the sheets</span><span class="chip mstate is-done">done</span></div><div class="wgates"><span class="chip gate none"><i></i>entry no check - no gate</span><span class="chip gate none"><i></i>exit no check - no gate</span><span class="chip auto">auto off</span></div>
+    <div class="matrix one"><div class="mrow5 single"><div class="mcell" data-wave-member="447"><span class="mtitle wave-member-title">Split public/app.js along the sheet seams: 316 rules, one entry point</span><span class="mmeta"><b class="mid">#447</b><span class="otag">M3</span><span class="chip mstate is-done">done</span><span class="proj">agent-worktree-gui</span><span class="chip reports">reports</span></span></div></div></div><div class="wactions"><span class="init-mini">Edit</span><span class="init-mini">Up</span><span class="init-mini">Down</span><span class="init-mini">Delete</span></div></div></div></div></div></div>
+  <h4>Why it works, or does not</h4>
+  <p>This is the only drawing that shows the wave's parallel structure directly: what lane A is doing at stage 1 sits beside what lane B is doing at stage 1. It is the picture of a join, not a list of members.</p>
+  <h4>What it costs</h4>
+  <p>New markup and a transposed reading order. It pays off only when the lanes run in lockstep and hold comparable members; uneven lanes leave empty cells.</p>
+  <h4>What it risks</h4>
+  <p>A screen reader now reads across lanes, not down one, so the lane grouping survives visually but not in DOM order. Empty slots are honest but they take space, and at the 900px pane each cell is narrow enough that the longest title wraps two lines.</p>
+</section>
+<div class="prose">
+<h2>4. Side by side</h2>
+<p class="prose">The same numbers for every drawing, at both widths. "Title" is the width of the member title's box on the widest of the three members; "wraps" is the line count for #444 / #446 / #445; "wave box" is the height of the first wave's station box.</p>
+<table>
+  <tr><th>option</th><th>mechanism</th><th>title at 1304px</th><th>wraps</th><th>wave box</th><th>lanes</th><th>title at 804px</th><th>wraps</th><th>wave box</th></tr>
+  <tr><td class="opt">O1</td><td>Station boxes, six-column member row</td><td class="n">90px</td><td class="n">7 / 7 / 7</td><td class="n">418px</td><td>side by side</td><td class="n">407px</td><td class="n">2 / 2 / 2</td><td class="n">392px</td></tr><tr><td class="opt">O2</td><td>Lane bands, full-width manifest row</td><td class="n">822px</td><td class="n">1 / 1 / 1</td><td class="n">346px</td><td>stacked bands</td><td class="n">322px</td><td class="n">2 / 2 / 2</td><td class="n">394px</td></tr><tr><td class="opt">O3</td><td>Manifest table, lane as a column</td><td class="n">711px</td><td class="n">1 / 1 / 1</td><td class="n">295px</td><td>one table</td><td class="n">211px</td><td class="n">3 / 4 / 3</td><td class="n">421px</td></tr><tr><td class="opt">O4</td><td>Two-line cards, lane width for the title</td><td class="n">475px</td><td class="n">2 / 2 / 2</td><td class="n">288px</td><td>side by side</td><td class="n">707px</td><td class="n">1 / 1 / 1</td><td class="n">413px</td></tr><tr><td class="opt">O5</td><td>Lane matrix, members aligned by slot</td><td class="n">595px</td><td class="n">1 / 1 / 1</td><td class="n">329px</td><td>two columns</td><td class="n">345px</td><td class="n">2 / 2 / 2</td><td class="n">365px</td></tr>
+</table>
+<div class="prose">
+<p>The spread is the finding. Today's title track is 90px at the real column and wraps 7 / 7 / 7 times; a full-width manifest row (O2) hands the title 822px and one or two lines; the table (O3) gives 711px; the two-line card (O4) gives 475px, which is the lane's whole content width; the matrix (O5) gives 595px per cell. At the 900px panel every option is readable, so the choice is not about the narrow case: it is about what the wave must still show when the panel is at its widest.</p>
+<p>None of the five overflows its stage at either width. That matters because a title track that collapses to zero does not wrap: it overflows, and an overflow is the one failure a screenshot can hide under a scrollbar that is not there.</p>
+</div>
+
+<h2>5. The trade-offs, numbered</h2>
+<div class="prose">
+<ol>
+  <li><b>O1, the current drawing.</b> Keep it only if the panel is never wider than about 900px. At the widest float the title track is 90px and the members wrap 7 / 7 / 7 times; the row's alignment is real, but it aligns chips around words nobody can read. This is the baseline, not a candidate.</li>
+  <li><b>O2, lane bands.</b> The widest title of any option that keeps a lane block (822px) and the smallest CSS change, but the lanes are stacked at every width, so the wave stops showing that its work is parallel. Choose it if the reader reads lanes one at a time and never compares them; that is not how this wave closes.</li>
+  <li><b>O3, the manifest table.</b> The most compact of the five and the easiest to scan down a column (711px titles, 295px box). It is also the largest change: the lane's box, its read sentence and its left border become a column value and a summary strip, so the lane stops being a thing on the card and becomes a fact in a table. At the 900px panel its seven columns squeeze the title to 211px and 3 / 4 / 3 wraps. A good second choice if density matters more than the lane's identity.</li>
+  <li><b>O4, the two-line card.</b> The candidate this report recommends: 475px title at the real column, lanes still side by side, one rule block, no markup change. Its cost is the column alignment of the chips, which is the smallest thing any of these options gives up.</li>
+  <li><b>O5, the lane matrix.</b> The only drawing that aligns the lanes row for row, so stage 1 of one lane sits beside stage 1 of the other (595px cells, 329px box). It pays off when lanes run in lockstep; here one lane has two members and the other one, so it draws an empty cell and a row-wise reading order. Keep it for a wave whose lanes are stages of one pipeline, not for this one.</li>
+</ol>
+<h2>6. The recommendation</h2>
+<div class="prose">
+<h3>Before it lands, the implementer would prove</h3>
+<ul>
+  <li>At the real wave column (1304px), every member title measures at least 400px and wraps at most three lines; the wave box for three members stays under 300px.</li>
+  <li>At the 900px panel, the lanes stack and the title keeps at least 400px; no stage overflows horizontally at either width.</li>
+  <li>The member row still draws id, owner, state, title, project and reports in that order, and the reports chip still takes the right edge.</li>
+  <li>Every word is still the route's: the state, the gate words, the lane read and the join sentence are unchanged by the drawing.</li>
+  <li>The closed wave beneath keeps its full-width row: it is the control that proves the row is fine when it has the width.</li>
+</ul>
+</div>
+<div class="reco">
+<h3>Adopt O4, the two-line card, and keep the lanes side by side</h3>
+<p>O4 is the only option that keeps each lane's own block and the two lanes side by side while giving the title the lane's full width; the close still reads as two parallel lanes that one commit names together. At the real wave column each lane is 521px, the title takes 475px and reads in 2 / 2 / 2 lines instead of 7 / 7 / 7; the wave box falls from 418px to 288px. At the 900px panel the lanes stack and the same card reads in 1 / 1 / 1 lines with 707px. The change is one member rule block: no markup change, no JS, no new state.</p>
+<p>The two-line card also keeps the row's order - id, owner, state, title, project, reports - which is the order row 295 settled on. It stops being a column alignment, and that is the trade: comparing two members' owners now takes a glance at a meta line instead of a column. That is a smaller cost than a title that cannot be read.</p>
+</div>
+</div>
+</main>
+</body>
+</html>
