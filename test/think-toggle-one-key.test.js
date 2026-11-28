@@ -18,9 +18,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
-const consoleSrc = readSource("public/board/console.js");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
 const renderSrc = readSource("public/render-jobs.js");
 const turnsSrc = readSource("public/turns.js");
 const appSrc = readSource("public/app.js");

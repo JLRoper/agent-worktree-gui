@@ -337,6 +337,33 @@ export function queueCardsSource() {
   }).join("\n");
 }
 
+// The console's source AS THE PAGE LOADS IT. public/board/console.js was cut four ways (row #533, card 9 of
+// docs/reports/module-separation-2026-11-28.html): the entry point keeps the line vocabulary, and console-stream,
+// console-tools, console-rows and job-line are classic scripts beside it. A cut that has not landed yet is an empty
+// string rather than an error, so one helper serves every stage of the split. CRLF is normalised because every caller
+// treats the source as text and slices it by marker.
+const CONSOLE_FILES = [
+  "board/console.js",
+  "board/console-stream.js",
+  "board/console-tools.js",
+  "board/console-rows.js",
+  "board/job-line.js",
+];
+export function consoleSource() {
+  return CONSOLE_FILES.map((rel) => {
+    const abs = path.join(ROOT, "public", rel);
+    return existsSync(abs) ? readFileSync(abs, "utf8").replace(/\r\n/g, "\n") : "";
+  }).join("\n");
+}
+
+// The same files as <script> tags in the same order, for a fixture page that serves THIS checkout's public/**. The
+// console's cuts are page globals, so a fixture that loads the entry point alone loads a console with holes in it.
+export function consoleScriptTags() {
+  return CONSOLE_FILES.filter((rel) => existsSync(path.join(ROOT, "public", rel)))
+    .map((rel) => `<script src="/public/${rel}"></script>`)
+    .join("\n");
+}
+
 const sourceCache = new Map();
 export function readSource(relPath) {
   const abs = path.resolve(ROOT, relPath);

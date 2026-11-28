@@ -14,10 +14,11 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { readStyleSheets } from "./style-sheets.js";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8").replace(/\r\n/g, "\n");
-const consoleSrc = read("public/board/console.js");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
 const jobsSrc = read("public/render-jobs.js");
 const cssRaw = readStyleSheets();
 const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");

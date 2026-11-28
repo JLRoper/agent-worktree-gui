@@ -15,6 +15,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 await import("../public/core/type-stream.js");
 const { createDrawStream, createReasoningHold, MAX_HOLD_MS } = globalThis.wtType;
@@ -224,7 +225,7 @@ test("a frame the page does not want held is never held, thought or no thought",
 // Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
 // script's names are page-wide, so a rule is read from the script that now carries it.
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-const con = readFileSync(new URL("../public/board/console.js", import.meta.url), "utf8");
+const con = consoleSource(); // public/board/console.js and its four cuts, in page order
 
 test("the page holds frames before the line gate, and lets the queue go before the turn's last line", () => {
   const append = con.slice(con.indexOf("function appendJobLine(evt)"), con.indexOf("function recordJobLine(evt)"));

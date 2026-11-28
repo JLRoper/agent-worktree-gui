@@ -10,11 +10,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { loadPlaywright } from "../tools/browser.mjs";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 // Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
 // script's names are page-wide, so a region is read from the script that now carries it.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+// public/board/console.js and its four cuts, in page order (public/index.html).
+const src = `${consoleSource()}\n${page("public/app.js")}`;
 
 
 function region(startText, endText, tail) {

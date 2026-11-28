@@ -12,9 +12,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceRegion } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceRegion } from "../tools/panel-testkit.mjs";
 
-const code = sliceRegion(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "console row text");
+const code = sliceRegion(consoleSource() + "\n" + readSource("public/app.js"), "console row text"); // public/board/console.js and its cuts
 const linkifyText = (text) => (/https?:\/\//i.test(text) ? `<a class="out-link">${text}</a>` : String(text));
 const make = new Function("document", "linkifyText", `${code}\nreturn { drawRowText, rowTakesTail };`);
 

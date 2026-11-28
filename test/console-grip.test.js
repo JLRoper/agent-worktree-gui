@@ -21,12 +21,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { readStyleSheets } from "./style-sheets.js";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const appSrc = page("public/app.js");
 const gripSrc = page("public/core/console-grip.js");
 const jobsSrc = page("public/render-jobs.js");
-const consoleSrc = page("public/board/console.js");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
 const projectsSrc = page("public/render-projects.js");
 const css = readStyleSheets();
 
