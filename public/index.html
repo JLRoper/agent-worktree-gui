@@ -1598,6 +1598,12 @@
        in, the card template, and the render and update path that keeps a card on the page. Loaded before app.js,
        which calls them by bare name and re-exports them on window.WMApp.jobs; it declares only, so that order costs
        nothing and nothing here waits on boot. -->
+  <!-- The body a turn draws, cut out of render-jobs.js (cut 1 of the two in
+       docs/reports/module-separation-2026-11-28.html, section 15): one stream of the panel's console lines,
+       the reasoning rows inside it, the thinking placeholder, and the turn's own block around the body.
+       Loaded before render-jobs.js and app.js, which call them by bare name; it declares only, so that
+       order costs nothing and nothing here waits on boot. -->
+  <script src="/board/stream-body.js"></script>
   <script src="/render-jobs.js"></script>
   <!-- The cleanup chip's drop-all selection: which plan rows carry the drop label, the count on the button, the
        sentence its confirm shows, the plan re-checked at press time, and the loop that carries on past a refusal.
