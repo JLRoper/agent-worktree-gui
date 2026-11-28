@@ -7,7 +7,7 @@
 // ONE session. Alerts, watches, messages and the pad used to be the float's own tabs beside the sessions; they are
 // the session's own sub-tabs now, and each pane is filled for the assistant whose tab holds it. `public/index.html`
 // carries both rows and the pane nesting, `public/assistant.js` the one {assistant, subTab} record behind them,
-// `public/style.css` the row and the pass-through panes. What is driven:
+// `public/assistant-panes.css` the row and the pass-through panes. What is driven:
 //
 //   1. the top row is four buttons — "Assistant #1" first, then Role, Watchdog and Bridge, no Settings and none of
 //      the four lists — and the second row is a separate row BELOW it (measured, not read from the markup) holding eight:

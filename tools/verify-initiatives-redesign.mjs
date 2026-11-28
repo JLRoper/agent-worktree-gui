@@ -136,7 +136,7 @@ const packageDeps = () => {
 };
 
 const dashScan = () => {
-  const tracked = ["public/assistant.js", "public/style.css"];
+  const tracked = ["public/assistant.js", "public/initiatives.css"];
   const fresh = ["tools/initiatives-fixture.mjs", "tools/initiatives-measure.mjs", "tools/capture-initiatives-redesign.mjs", "tools/verify-initiatives-redesign.mjs"];
   const hits = [];
   const add = (rel, lineNo, text) => {

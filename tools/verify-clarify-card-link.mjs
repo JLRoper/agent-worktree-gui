@@ -14,7 +14,7 @@
 // HOW IT IS PROVED, AND WHY NOT BY READING THE SOURCE. `questionPrompt` is sliced out of public/app.js and
 // `esc` / `linkifyText` out of public/core/dom-format.js - the SHIPPED functions, with only the card's own
 // read state handed in - and the markup that returns is written onto a page that loads the shipped
-// public/style.css. A real Chromium opens it, reads the anchor's attributes and computed style, and CLICKS
+// every sheet the page links. A real Chromium opens it, reads the anchor's attributes and computed style, and CLICKS
 // it: the click has to open the smoke-test report, which is then captured. So the evidence is a picture of
 // the card and a picture of the page the link opened, not an assertion that one would.
 //
@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 
 import { withBrowser } from "./browser.mjs";
 import { sliceBetween } from "./panel-testkit.mjs";
+import { styleLinkTags } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -149,7 +150,7 @@ const cardPage = (markup) => `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>a parked clarify card - the smoke-test report link in its question</title>
-<link rel="stylesheet" href="/public/style.css">
+${styleLinkTags({ root: ROOT })}
 <style>
   body { padding: 28px 22px 60px; }
   .stage { max-width: 980px; margin: 0 auto; }
@@ -159,7 +160,7 @@ const cardPage = (markup) => `<!DOCTYPE html>
 </head>
 <body>
 <main class="stage">
-  <p class="cap">public/app.js questionPrompt - the shipped question row, on the shipped public/style.css</p>
+  <p class="cap">public/app.js questionPrompt - the shipped question row, on the shipped sheets</p>
   <div class="job" data-thread="wtgui-clarify-link">
 ${markup}
   </div>

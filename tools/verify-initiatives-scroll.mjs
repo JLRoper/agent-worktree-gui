@@ -7,11 +7,11 @@
 //
 // WHAT THIS GATE PROVES. The reader's report: with several initiatives expanded the list runs past the bottom of the
 // assistant float and there is no scroll bar, so the cards below the fold cannot be reached. The cause is the sheet,
-// not the painter - `.as-pane` carries padding and nothing else (public/style.css:4438), and the rule that turns a
+// not the painter - `.as-pane` carries padding and nothing else (public/assistant-panes.css), and the rule that turns a
 // pane into a pass-through box (display flex, flex 1, min-height 0) is scoped to `[data-pane^="assistant-"]`
-// (public/style.css:5058), while the Initiatives pane is `data-pane="initiatives"` (public/index.html:1149) and is
+// (public/assistant-panes.css), while the Initiatives pane is `data-pane="initiatives"` (public/index.html:1149) and is
 // painted by public/assistant.js from GET /api/initiatives. The float's body clips its children
-// (`.as-body:has(.as-subpane[data-subpane="chat"]:not(.hidden))`, public/style.css:5055), so the pane grew past the
+// (`.as-body:has(.as-subpane[data-subpane="chat"]:not(.hidden))`, public/pipeline.css), so the pane grew past the
 // window and the overflow was painted nowhere.
 //
 // Measured on the real page at 1440x900, against a panel of its own:

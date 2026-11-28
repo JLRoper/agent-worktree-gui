@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openPage, withBrowser } from "./browser.mjs";
+import { styleLinkTags } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.PANEL_ROOT ? path.resolve(process.env.PANEL_ROOT) : path.join(HERE, "..");
@@ -35,7 +36,7 @@ const FRAME = RECORD.split("\n").slice(0, 2).join("\n");
 
 const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>settled tail</title>
-<link rel="stylesheet" href="/public/style.css">
+${styleLinkTags({ root: ROOT })}
 </head>
 <body style="margin:0;padding:18px;background:#0d1117">
 <div class="job" id="card" style="max-width:620px">

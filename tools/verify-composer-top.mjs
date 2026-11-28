@@ -6,8 +6,8 @@
 //   node tools/verify-composer-top.mjs --shots <dir>           # where the screenshots go
 //   node tools/verify-composer-top.mjs --json <file>           # keep the raw ledger
 //
-// THE ASK. `public/style.css` puts a flex spacer before the turns of the assistant's chat
-// (`.job-body::before { content: ""; flex: 1 0 auto; }`) so a conversation shorter than the panel starts at its
+// THE ASK. The chat sub-pane's sheet puts a flex spacer before the turns of the assistant's chat
+// (`.job-body::before { content: ""; flex: 1 0 auto; }`, public/pipeline.css) so a conversation shorter than the panel starts at its
 // foot instead of leaving dead panel under the last line. With EVERY turn folded there is no console to read, so
 // that spacer is the wrong way round: it spends the free room between the agent head and the first folded row, and
 // pushes the one thing the reader came for — the reply box and its token strip — to the bottom of a panel whose

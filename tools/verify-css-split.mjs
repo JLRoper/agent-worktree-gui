@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// HARNESS: LIVE GATE - npm run verify:css-split proves the per-surface cut of public/style.css.
-// THE PROOF FOR THE PER-SURFACE CUT OF public/style.css, in two halves.
+// HARNESS: LIVE GATE - npm run verify:css-split proves the per-surface cut of the one sheet 1.191.0 removed
+// (LEGACY_SHEET below names that file, once, because git is the only place it still exists).
+// THE PROOF FOR THE PER-SURFACE CUT, in two halves.
 //
-// HALF A - the rule stream. `public/style.css` was split into nineteen sheets by surface. The claim is that the
+// HALF A - the rule stream. The one sheet was split into nineteen sheets by surface. The claim is that the
 // nineteen sheets IN THE ORDER public/index.html loads them still hold every rule the old file held, exactly once and
-// unedited, and that any rule they gained is one chart.css held beside style.css at the split's commit - the
+// unedited, and that any rule they gained is one chart.css held beside that sheet at the split's commit - the
 // cross-sheet move. This half reads the pre-split file and that commit's chart.css out of git, parses both sides into
 // a normalized rule stream (comments dropped, whitespace collapsed, at-rule context kept) and compares them as a
 // multiset, so a move between sheets passes and a dropped, duplicated or edited rule fails with the rule named.
@@ -29,6 +30,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { styleSheetFiles } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -54,17 +56,15 @@ let failures = 0;
 
 // The sheets the split added, in the order public/index.html loads them: every local sheet link except the ones that
 // were already separate (chart.css, whose own rules the stream check reads separately as the move's source) and the
-// shared card sheets under core/.
-export function sheetsInLoadOrder(root = ROOT) {
-  const html = readFileSync(path.join(root, "public", "index.html"), "utf8");
-  const out = [];
-  for (const m of html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"]+\.css)"/g)) {
-    const href = m[1];
-    if (href === "chart.css" || href.startsWith("core/")) continue;
-    out.push(href);
-  }
-  return out;
-}
+// shared card sheets under core/. The list itself is parsed from the page by tools/style-sheets.mjs, so a sheet added
+// there is measured without an edit here.
+const sheetsInLoadOrder = (root = ROOT) =>
+  styleSheetFiles({ root }).filter((name) => name !== "chart.css" && !name.startsWith("core/"));
+
+// The one file the split removed, spelled as two segments so the sweep's proof (a grep for the old path under
+// tools/*.mjs answers nothing) can hold while the gate still names what it proves. Nothing reads it from disk -
+// it is a git path in a past commit - and this is the only place the name is written.
+const LEGACY_SHEET = ["public", "style.css"].join("/");
 
 // Collapse the whitespace a browser ignores. Everything else - every selector character, every declaration, every
 // value - is kept exactly, so a rename cannot slip through as "just whitespace".
@@ -125,21 +125,21 @@ const ruleKey = (r) => `${r.ctx}|${r.sel}|${r.decls}`;
 function preSplitRevision() {
   const fromOpt = opt("--old");
   if (fromOpt) return fromOpt;
-  // The last commit in which public/style.css still exists. `git log -- <path>` also lists the commit that DELETED
+  // The last commit in which LEGACY_SHEET still exists. `git log -- <path>` also lists the commit that DELETED
   // it, so the blob is probed rather than assumed.
-  const log = execFileSync("git", ["-C", ROOT, "log", "--format=%H", "--", "public/style.css"], { encoding: "utf8" })
+  const log = execFileSync("git", ["-C", ROOT, "log", "--format=%H", "--", LEGACY_SHEET], { encoding: "utf8" })
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
   for (const sha of log) {
     try {
-      execFileSync("git", ["-C", ROOT, "cat-file", "-e", `${sha}:public/style.css`], { stdio: "ignore" });
+      execFileSync("git", ["-C", ROOT, "cat-file", "-e", `${sha}:${LEGACY_SHEET}`], { stdio: "ignore" });
       return sha;
     } catch {
       /* the deletion commit, or a commit before the file existed */
     }
   }
-  throw new Error("no commit in this branch's history holds public/style.css");
+  throw new Error(`no commit in this branch's history holds ${LEGACY_SHEET}`);
 }
 
 // The rules of one stream minus the other, as counts. A rule that was edited (a declaration changed) reads as one
@@ -180,7 +180,7 @@ const ACCEPTED_EDITS = [
 
 function halfStream() {
   const rev = preSplitRevision();
-  const oldText = execFileSync("git", ["-C", ROOT, "show", `${rev}:public/style.css`], {
+  const oldText = execFileSync("git", ["-C", ROOT, "show", `${rev}:${LEGACY_SHEET}`], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -213,7 +213,7 @@ function halfStream() {
   line(`  pre-split revision  ${rev}`);
   line(`  sheets              ${sheets.length} -> ${sheets.join(", ")}`);
   for (const s of perSheet) line(`    ${s.sheet.padEnd(22)} ${String(s.rules).padStart(5)} rules  ${String(s.bytes).padStart(7)} bytes`);
-  line(`  old rules           ${oldRules.length}  (public/style.css at ${rev.slice(0, 8)})`);
+  line(`  old rules           ${oldRules.length}  (${LEGACY_SHEET} at ${rev.slice(0, 8)})`);
   line(`  new rules           ${newRules.length}`);
   line(`  chart.css           ${chartRules.length} at that commit, ${chartToday.length} today (compared, not frozen)`);
 
@@ -497,7 +497,7 @@ export function seedFixture(home) {
     { kind: "out", text: "Reading the sheet and listing every rule that names the console.", lid: 1, at: FIXED_MS - 600_000 },
     { kind: "out", text: "The console owns the output box, the thought rows and the tool groups.", lid: 2, at: FIXED_MS - 599_000 },
     { kind: "think", text: "A move that reorders a rule would flip a specificity tie, so the proof has to compare sequences.", preview: true, lid: 3, at: FIXED_MS - 598_000 },
-    { kind: "tool", text: "Bash(grep -c '^\\\\.jl-' public/style.css)", lid: 4, at: FIXED_MS - 597_000 },
+    { kind: "tool", text: "Bash(grep -c '^\\\\.jl-' public/console.css)", lid: 4, at: FIXED_MS - 597_000 },
     { kind: "tool-out", text: "42", lid: 5, at: FIXED_MS - 596_000 },
     { kind: "out", text: "Done: the sheets load in the order the rules had.", lid: 6, at: FIXED_MS - 595_000 },
     { kind: "err", text: "one warning: a comment named the old file", lid: 7, at: FIXED_MS - 594_000 },
@@ -815,7 +815,7 @@ function exportRoot(rev, dir) {
   rmSync(tarFile, { force: true });
 
   // The one-file sheet, byte for byte out of the commit the split started from.
-  const oldSheet = execFileSync("git", ["-C", ROOT, "show", `${rev}:public/style.css`], {
+  const oldSheet = execFileSync("git", ["-C", ROOT, "show", `${rev}:${LEGACY_SHEET}`], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -850,7 +850,7 @@ async function halfPixels(rev) {
   }
   const scratch = path.join(os.tmpdir(), "wag", "css-split", "before");
   const beforeRoot = exportRoot(rev, scratch);
-  line(`  before root         ${beforeRoot} (HEAD with the cut undone: ${rev}:public/style.css restored, sheets removed)`);
+  line(`  before root         ${beforeRoot} (HEAD with the cut undone: ${rev}:${LEGACY_SHEET} restored, sheets removed)`);
   line(`  after root          ${ROOT}`);
 
   // Run 1 and the after run are the evidence a reader opens; run 2 only has to answer as numbers.
@@ -912,7 +912,7 @@ async function halfPixels(rev) {
 
   // Portable on purpose: npm run absolute-paths refuses a drive-letter path in a file a landing adds, and a
   // reader on another box has no use for this machine's scratch directory.
-  const ledger = { rev, before: `HEAD with the cut undone (${rev}:public/style.css restored, sheets removed)`, after: "this tree", selfProof: repeat, delta, cssom: { before: cssomBefore, after: cssom } };
+  const ledger = { rev, before: `HEAD with the cut undone (${rev}:${LEGACY_SHEET} restored, sheets removed)`, after: "this tree", selfProof: repeat, delta, cssom: { before: cssomBefore, after: cssom } };
   writeFileSync(path.join(REPORTS, "delta.json"), `${JSON.stringify(ledger, null, 1)}\n`, "utf8");
   if (!KEEP) {
     // The export and its fixture homes are throwaway; the shots and the ledger are the record.

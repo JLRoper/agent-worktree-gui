@@ -23,7 +23,7 @@
 //              answers) fills the frame with the whole change; with the store empty the same rows draw the cut
 //              row instead
 //   inspected  that the fold is one delegated handler and one attribute (read off public/app.js and
-//              public/style.css), not per-renderer markup
+//              public/console.css), not per-renderer markup
 //
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN, counts a failure and
 // exits non-zero rather than passing on a half that never ran.
@@ -823,7 +823,7 @@ async function main() {
   console.log("re-derives the diff out of the DOM and is what the swapped pair's read-back has to survive).");
   console.log("WHAT WAS INSPECTED, NOT DRIVEN: that the fold is one delegated handler and one attribute, that the folded");
   console.log("state lives beside the code box's own set, and that the cut row's words and the swapped pair's marker are");
-  console.log("in public/core/console-format.js with their CSS in public/style.css.");
+  console.log("in public/core/console-format.js with their CSS in public/console.css.");
   if (!failures) console.log("CONSOLE-BOXES-OK");
 }
 

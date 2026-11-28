@@ -4,7 +4,8 @@
 //   node tools/capture-docked-console.mjs --width 480 --out .../after-480.png     # the docked rail
 //   PANEL_ROOT=<extracted base> node tools/capture-docked-console.mjs --out .../before.png --expect broken
 //
-// The page is a fixture, but the surface in it is the real one: the root's public/style.css, its core/dom-format.js,
+// The page is a fixture, but the surface in it is the real one: the root's own sheets (public/index.html's links,
+// read in its order), its core/dom-format.js,
 // core/console-format.js and core/console-markdown.js, and its public/board/console.js - and then the shipped
 // `subConsoleHtml` is called with the message as lib/subagents.js stores it (ONE line, its newlines inside) and the
 // result is dropped under a real sub-row. So the before and after pictures differ only by the root being served.
@@ -17,6 +18,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openPage, withBrowser } from "./browser.mjs";
+import { styleLinkTags } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.PANEL_ROOT ? path.resolve(process.env.PANEL_ROOT) : path.join(HERE, "..");
@@ -57,7 +59,7 @@ const ok = (name, cond, extra = "") => {
 
 const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>docked console</title>
-<link rel="stylesheet" href="/public/style.css">
+${styleLinkTags({ root: ROOT })}
 </head>
 <body style="margin:0;padding:18px;background:#0d1117">
 <div class="subagents mono" id="host">
