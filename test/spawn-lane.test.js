@@ -62,7 +62,7 @@ async function ask(p, { task = "", tree = "", project = "proj", assistantId = ""
   const handler = createSpawnCheckRoutes({
     assistant: p.assistant,
     getProjects: () => [p.project],
-    config: { token: "secret" },
+    config: { token: "tok-test-alpha" },
     sendJson: (res, status, body) => {
       out.status = status;
       out.body = body;
@@ -75,7 +75,7 @@ async function ask(p, { task = "", tree = "", project = "proj", assistantId = ""
   if (project) query.set("project", project);
   if (assistantId) query.set("assistantId", assistantId);
   const url = new URL(`http://localhost${SPAWN_CHECK_PATH}${query.toString() ? `?${query}` : ""}`);
-  await handler({ method: "GET", headers: { "x-panel-token": "secret" } }, {}, SPAWN_CHECK_PATH, url);
+  await handler({ method: "GET", headers: { "x-panel-token": "tok-test-alpha" } }, {}, SPAWN_CHECK_PATH, url);
   return out;
 }
 

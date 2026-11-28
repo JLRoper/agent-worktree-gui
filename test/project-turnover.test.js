@@ -352,7 +352,7 @@ test("the route answers the shapes a caller can send, and its read carries the c
     assert.match(h.sent[0].payload.error, /PUT is not allowed/);
   }
   {
-    const h = harness({ body: { project: "alpha", turnoverBranch: "feature/x" }, token: "secret" });
+    const h = harness({ body: { project: "alpha", turnoverBranch: "feature/x" }, token: "tok-test-alpha" });
     h.req.authorised = false;
     await h.routes(h.req, {}, TURNOVER_PATH, new URL(`http://x${TURNOVER_PATH}`));
     assert.equal(h.sent[0].status, 403);
