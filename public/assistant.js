@@ -1615,6 +1615,10 @@
     }, 2600);
     const row = typeof hotRowFor === "function" ? hotRowFor(hit.thread) : null;
     if (row) hotOpenPath(row);
+    // A thread no worktree claims lives in the Unattached agents card, and that card ships folded (row 416):
+    // a search hit IS the explicit link to an agent inside it, so the press has to open the card before the
+    // card it lands on can be seen.
+    else if (typeof revealCard === "function") revealCard("agents");
     if (state.collapsedJobs?.has?.(hit.thread)) state.collapsedJobs.delete(hit.thread);
     renderConversation(hit.thread);
     let card = document.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
@@ -2491,9 +2495,11 @@
       const key = keyOf(row.project, row.path);
       if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
     } else {
-      // Unattached: the Agents section is its home.
+      // Unattached: the Agents section is its home. A stored fold leaves the card hidden, and the link has to
+      // open it: `fixed-collapsed` is the class applyFixedCollapse writes (a plain `collapsed` is never on this
+      // card, so the old check could not fire).
       const fixed = document.getElementById("agents");
-      if (fixed && fixed.classList.contains("collapsed")) revealCard("agents");
+      if (fixed && fixed.classList.contains("fixed-collapsed")) revealCard("agents");
     }
     jumpToAgent(thread);
   }
