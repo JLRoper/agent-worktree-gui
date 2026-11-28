@@ -4,16 +4,40 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.182.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.189.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-770 releases from v0.1.0 (2026-10-20) to v1.182.0 (2026-11-27), 2730 commits between the tags. Every release is anchored by an
+772 releases from v0.1.0 (2026-10-20) to v1.189.1 (2026-11-27), 2734 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.189.1 — 2026-11-27 · 2 commits
+
+[`9230587`](https://github.com/JLRoper/agent-worktree-gui/commit/9230587067cb91cce5c7985b6dd2df04f1589278) · [compare v1.189.0...v1.189.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.189.0...v1.189.1)
+
+### Fixed
+
+- fix(turnover): the row's cut sentence is drawn from the stored kind ([`8f46fde`](https://github.com/JLRoper/agent-worktree-gui/commit/8f46fdeb4b44fd8356e793c36de991dd96e362d2))
+
+### Other
+
+- chore: 1.189.1 - the version this landing carries ([`9230587`](https://github.com/JLRoper/agent-worktree-gui/commit/9230587067cb91cce5c7985b6dd2df04f1589278))
+
+## v1.189.0 — 2026-11-27 · 2 commits
+
+[`623f386`](https://github.com/JLRoper/agent-worktree-gui/commit/623f386458c545827a9bc3350bfc861310175299) · [compare v1.182.0...v1.189.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.182.0...v1.189.0)
+
+### Docs & tests
+
+- docs: render the changelog - 770 releases ([`151d0e6`](https://github.com/JLRoper/agent-worktree-gui/commit/151d0e6627c75bd8f22890cd0bd96dd243ee304d))
+
+### Other
+
+- Land the turnover branch 20261127_1422_TASK-371_build-the-initiative-tag (1.189.0) (#937) ([`623f386`](https://github.com/JLRoper/agent-worktree-gui/commit/623f386458c545827a9bc3350bfc861310175299))
 
 ## v1.182.0 — 2026-11-27 · 2 commits
 
