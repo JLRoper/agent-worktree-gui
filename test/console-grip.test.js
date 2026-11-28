@@ -6,7 +6,8 @@
 // for the settled card. What this file carries is the half a layout-free test can hold down:
 //
 //   the ARITHMETIC   outGripStep (the pointer expressed from the TOP edge the press froze) and outGripRelease (the one
-//                    clamp), driven out of `public/app.js` in a VM just as console-height-store.test.js drives the
+//                    clamp), driven out of `public/core/console-grip.js` in a VM just as console-height-store.test.js
+//                    drives the
 //                    height store. The old arithmetic - the drawn height plus this move's travel - is what let a
 //                    second loop cancel a drag while looking correct in the height alone.
 //   the SHAPE        the markup puts the grip in a `.out-box` with the console, the sheet has no `resize` handle left
@@ -23,11 +24,24 @@ import { readStyleSheets } from "./style-sheets.js";
 
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const appSrc = page("public/app.js");
+const gripSrc = page("public/core/console-grip.js");
 const jobsSrc = page("public/render-jobs.js");
 const consoleSrc = page("public/board/console.js");
 const projectsSrc = page("public/render-projects.js");
 const css = readStyleSheets();
 
+// The grip's three top-level functions, taken by name from the module that owns them (public/core/console-grip.js).
+// The first cut of this file sliced them out of app.js; the cluster is one file now, so the slice is a plain region
+// between two neighbouring declarations and the VM runs the SAME source the page loads.
+function gripRegion(from, to) {
+  const start = gripSrc.indexOf(from);
+  assert.ok(start >= 0, `the module carries ${from}`);
+  const end = gripSrc.indexOf(to, start);
+  assert.ok(end > start, `${from} is still followed by ${to}`);
+  return gripSrc.slice(start, end);
+}
+
+// A top-level function of a classic script (public/board/console.js and public/app.js still declare these at column 0).
 function grab(src, name) {
   const start = src.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `the page still carries ${name}()`);
@@ -36,13 +50,17 @@ function grab(src, name) {
   return src.slice(start, end + 3);
 }
 
-const context = { Math, Number };
+// The module's four regions, by the declaration that opens each and the one that follows it.
+const PRESS = gripRegion("function press(e)", "function move(e)");
+const MOVE = gripRegion("function move(e)", "function watch(d)");
+const END = gripRegion("function end(e)", 'document.addEventListener("pointerdown", press, true)');
+
+const context = { Math, Number, globalThis: undefined };
 vm.createContext(context);
-vm.runInContext(
-  [grab(appSrc, "outGripStep"), grab(appSrc, "outGripLimit"), grab(appSrc, "outGripRelease")].join("\n"),
-  context,
-);
-const { outGripStep, outGripLimit, outGripRelease } = context;
+context.globalThis = context;
+vm.runInContext(gripSrc, context);
+const grip = context.wtConsoleGrip;
+const { step: outGripStep, limit: outGripLimit, release: outGripRelease } = grip;
 
 // ---- the arithmetic of one move -------------------------------------------------------------------------------
 test("a step is the pointer expressed from the top edge the press froze", () => {
@@ -106,19 +124,49 @@ test("the limit is ONE function, applied by every move and again by the release"
   // The bounce this ended: the move ran free and the release clamped to the room, so a past-room drag drew a height
   // the pointerup took back (120px). Now the move holds the box to the same band, so the release's call returns the
   // height already on the box. A second arithmetic is how the two came to disagree; a clamp that never ran on a move
-  // is how the corner came to show a size it would lose.
-  assert.equal(appSrc.split("outGripRelease(").length - 1, 2, "one definition and one call: the release commits the number");
-  assert.ok(grab(appSrc, "endOutGrip").includes("outGripRelease(d.h, d.min, d.room)"), "and the call is the release's, on the room the press read");
-  assert.equal(
-    appSrc.split("outGripLimit(").length - 1,
-    3,
-    "one definition and two callers: outGripRelease delegates to it, and the move handler holds the box to it",
-  );
-  assert.ok(grab(appSrc, "outGripRelease").includes("outGripLimit(h, min, max)"), "the release IS the limit, not a second arithmetic");
-  const move = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
-  assert.ok(move.includes("outGripLimit(want, d.min, d.room)"), "the move stops the box on the floor and the room under the frozen top");
-  assert.ok(move.includes("d.want = want"), "and keeps the pointer's own request for the gates to judge the corner by");
-  assert.equal(appSrc.split("outGripStep(").length - 1, 2, "a step is written in one place too");
+  // is how the corner came to show a size it would lose. The module is the only copy: one `limit` definition, one
+  // `release` that delegates to it, and one move that holds the box to it.
+  assert.equal(gripSrc.split("function limit(").length - 1, 1, "one clamp definition, in the module");
+  assert.equal(gripSrc.split("function release(").length - 1, 1, "one release, and it is the same arithmetic");
+  assert.ok(gripRegion("function release(", "function capOf(").includes("limit(h, min, room)"), "the release IS the limit, not a second arithmetic");
+  assert.ok(MOVE.includes("limit(want, d.min, d.room)"), "the move stops the box on the floor and the room under the frozen top");
+  assert.ok(MOVE.includes("d.want = want"), "and keeps the pointer's own request for the gates to judge the corner by");
+  assert.equal(gripSrc.split("function step(").length - 1, 1, "a step is written in one place too");
+  assert.equal(gripSrc.split("step(d.top, d.grab, e.clientY / d.z)").length - 1, 1, "and called once, from the move");
+  // app.js keeps only the wiring: one install() and the four predicates the rest of the page asks by name.
+  assert.equal(appSrc.split("wtConsoleGrip.install(").length - 1, 1, "the page installs the module once");
+  for (const name of ["outDragging", "outGripHoldsCard", "outGripLive", "outGripDefer"]) {
+    assert.ok(grab(appSrc, name).includes("consoleGrip."), `${name} delegates to the module`);
+  }
+});
+
+// ---- the one band: the fix this landing carries ---------------------------------------------------------------
+test("the band divides the pane and the viewport by the same zoom", () => {
+  // The defect, in one assertion. The old room was `innerHeight - top / zoom - 8`: the viewport's height was taken
+  // VISUAL and the top edge LAYOUT, so a box whose frozen top was at 300 visual px stopped at
+  //   100%: 900 - 300 - 8            = 592  (the edge, by luck)
+  //    90%: 900 - 300/0.9 - 8        = 558.6 visual  - 10% of the screen short of the 892px pane bottom
+  //   110%: 900 - 300/1.1 - 8        = 619.3 layout - 89px past the bottom
+  // The band takes both edges in visual px and divides both by the same scale.
+  const at = (z) => grip.band({ top: 300 / z, z, floor: 18, paneBottom: 892, viewport: 900 });
+  for (const z of [1, 0.9, 1.1]) {
+    const b = at(z);
+    const visualBottom = (300 / z + b.room) * z;
+    assert.ok(Math.abs(visualBottom - (892 - 8 * z)) < 0.001, `the box's bottom lands on the pane edge minus the gap at ${z * 100}%`);
+    assert.equal(b.edge, "pane", `the pane is the nearer edge at ${z * 100}%`);
+  }
+  // The two old numbers, now the two edges the band keeps beside the answer: at 90% the pane room is 10% larger than
+  // the old subtraction, and at 110% it is 10% smaller - the asymmetry the reader felt as a stop that "just stops".
+  assert.equal(at(0.9).room, at(0.9).paneRoom, "the room is the nearer edge");
+  assert.ok(at(0.9).paneRoom < at(0.9).viewRoom, "the pane is nearer than the viewport at 90%");
+  assert.ok(at(0.9).room > 558.6, "90% gets its tenth back");
+  assert.ok(at(1.1).room < 619.3, "110% no longer draws past the bottom");
+  // No pane (a card on the board) leaves the viewport as the only edge; the floor is always the floor.
+  const board = grip.band({ top: 300, z: 1, floor: 34, paneBottom: null, viewport: 900 });
+  assert.equal(board.edge, "viewport");
+  assert.equal(board.room, 592);
+  assert.equal(grip.band({ top: 880, z: 1, floor: 34, paneBottom: null, viewport: 900 }).room, 34, "a top below the floor's room is the floor");
+  assert.equal(grip.band({ top: 300, z: 1, floor: 34, paneBottom: null, viewport: NaN }).room, 34, "an unreadable viewport is not licence to draw any height");
 });
 
 test("a limit clamped on a move is the height the release would keep", () => {
@@ -138,14 +186,12 @@ test("a limit clamped on a move is the height the release would keep", () => {
 });
 
 test("the height is written through the one owner, and a move is the pointer from the frozen top", () => {
-  const start = appSrc.indexOf('"pointermove"');
-  assert.ok(start > 0, "the move handler is still there");
-  const handler = appSrc.slice(start, appSrc.indexOf("function endOutGrip(", start));
-  assert.ok(handler.includes("outGripStep(d.top, d.grab, e.clientY / d.z)"), "the press's top edge, not the drawn box, with the pointer in layout px");
-  assert.equal(handler.includes("getBoundingClientRect().height"), false, "no second measurement of the height per move");
-  assert.ok(handler.includes("setOutHeight(d.out, h)"), "written through the one writer of --out-h");
-  assert.equal(/\.out\.style\.height\s*=/.test(appSrc), false, "and never through style.height on the console");
-  assert.ok(handler.includes('style.maxHeight = "none"'), "with the sheet's cap lifted off it");
+  assert.ok(MOVE.includes("step(d.top, d.grab, e.clientY / d.z)"), "the press's top edge, not the drawn box, with the pointer in layout px");
+  assert.equal(MOVE.includes("getBoundingClientRect().height"), false, "no second measurement of the height per move");
+  assert.ok(MOVE.includes("hooks.setHeight(d.out, h)"), "written through the one writer of --out-h, handed in by app.js");
+  assert.ok(appSrc.includes("setHeight: (out, px) => setOutHeight(out, px)"), "and that writer is setOutHeight");
+  assert.equal(/\.out\.style\.height\s*=/.test(appSrc) || /\.out\.style\.height\s*=/.test(gripSrc), false, "never through style.height on the console");
+  assert.ok(MOVE.includes('style.maxHeight = "none"'), "with the sheet's cap lifted off it");
 });
 
 test("the sheet resolves the console's height from the variable, and the gesture owns the transcript's offset", () => {
@@ -163,19 +209,15 @@ test("the sheet resolves the console's height from the variable, and the gesture
     false,
     "no overflow-anchor: none for the whole page - only the transcript the gesture is dragging loses it",
   );
-  const pressAt = appSrc.indexOf("// The grip's own press.");
-  const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
-  assert.ok(press.includes('setProperty("overflow-anchor", "none"'), "the press stands the anchor down on the transcript it drags");
-  assert.ok(press.includes("bodyTop: scrollport ? scrollport.scrollTop : null"), "and records the offset it must hold");
-  const handler = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
-  assert.ok(handler.includes("setScroll(d.body, d.bodyTop)"), "every move re-asserts the frozen offset");
-  assert.ok(grab(appSrc, "endOutGrip").includes('removeProperty("overflow-anchor")'), "the release gives the anchor back");
+  assert.ok(PRESS.includes('setProperty("overflow-anchor", "none"'), "the press stands the anchor down on the transcript it drags");
+  assert.ok(PRESS.includes("bodyTop: scrollport ? scrollport.scrollTop : null"), "and records the offset it must hold");
+  assert.ok(MOVE.includes("hooks.setScroll(d.body, d.bodyTop)"), "every move re-asserts the frozen offset");
+  assert.ok(END.includes('removeProperty("overflow-anchor")'), "the release gives the anchor back");
   // The release does NOT put a following transcript back on its foot: that write is a scroll of exactly the drag's
   // travel, and it is what undid every drag that ever worked.
-  const release = grab(appSrc, "endOutGrip");
-  assert.equal(/setScroll\(d\.body/.test(release), false, "the release writes no foot");
+  assert.equal(/hooks\.setScroll\(d\.body/.test(END), false, "the release writes no foot");
   assert.ok(
-    release.includes("noteCardBodyScroll(d.body, 0)"),
+    END.includes("hooks.noteScroll(d.body, 0)"),
     "it records where the drag left the transcript, with no 8px tail band: the gap is the drag's own, and the band let the release's repaint scroll it away",
   );
 });
@@ -203,11 +245,12 @@ test("a console the reader has sized is drawn at its number, not grown into the 
 
 test("one writer: no path sets a console's height except setOutHeight", () => {
   // setOutHeight is the only place that writes the variable, and the three callers are the three paths that own the
-  // number: the gesture, the remembered height a rebuild restores, and the float's slack console drag.
+  // number: the gesture, the remembered height a rebuild restores, and the float's slack console drag. The gesture's
+  // two calls are `hooks.setHeight`, handed in once by app.js's install().
   assert.ok(grab(consoleSrc, "setOutHeight").includes('setProperty("--out-h"'), "the writer, in one place");
   assert.ok(grab(consoleSrc, "applyStoredHeight").includes("setOutHeight(o, h)"), "a rebuilt console restores through it");
-  assert.ok(appSrc.includes("setOutHeight(out, r.height / z)") && appSrc.includes("setOutHeight(d.out, h)"), "the press (in layout px) and the release");
-  assert.ok(grab(appSrc, "endOutGrip").includes("setOutHeight(d.out, h)"), "the release clamps into the same variable");
+  assert.ok(PRESS.includes("hooks.setHeight(out, r.height / z)") && END.includes("hooks.setHeight(d.out, h)"), "the press (in layout px) and the release");
+  assert.ok(appSrc.includes("setHeight: (out, px) => setOutHeight(out, px)"), "and the hook is the same writer");
   assert.equal(/cons\.style\.height\s*=/.test(page("public/assistant.js")), false, "the float's console drag goes through it too");
 });
 
@@ -228,7 +271,7 @@ test("the rebuild paths that would replace the node defer to the release", () =>
   assert.ok(grab(jobsSrc, "renderJobs").includes("globalThis.outGripLive?.()"), "the unattached list's wholesale rebuild");
   assert.ok(grab(jobsSrc, "renderConversation").includes("globalThis.outGripHoldsCard?.(el)"), "and the one card a console lives in");
   assert.ok(grab(projectsSrc, "renderProjectRows").includes("outGripLive()"), "and a project's rows");
-  assert.ok(grab(appSrc, "endOutGrip").includes("if (d.deferred)"), "the release is what draws them");
+  assert.ok(END.includes("if (d.deferred)"), "the release is what draws them");
 });
 
 // ---- the cap the second drag needs, and the fold flush under the pointer -------------------------------------
@@ -243,11 +286,15 @@ function gripCapPage() {
     // The browser's own rule: an inline max-height wins over the sheet's.
     getComputedStyle: (el) => ({ maxHeight: el.style.maxHeight || el.sheetCap || "" }),
   });
-  vm.runInContext(
-    [grab(appSrc, "outGripCap"), grab(appSrc, "outGripCapStyle"), grab(appSrc, "outGripLimit"), grab(appSrc, "outGripRelease")].join("\n"),
-    context,
-  );
-  return context;
+  context.globalThis = context;
+  vm.runInContext(gripSrc, context);
+  const api = context.wtConsoleGrip;
+  return {
+    outGripCap: api.capOf,
+    outGripCapStyle: api.capStyle,
+    outGripRelease: api.release,
+    getComputedStyle: context.getComputedStyle,
+  };
 }
 
 test("a second drag on a box the first one took past the cap still knows the sheet's cap", () => {
@@ -308,15 +355,12 @@ test("a command-card fold flush under the pointer waits for the release instead 
 });
 
 test("the gesture hands its own pointer the whole way", () => {
-  const pressAt = appSrc.indexOf("// The grip's own press.");
-  assert.ok(pressAt > 0, "the press handler is still there");
-  const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
-  assert.ok(press.includes("setPointerCapture(e.pointerId)"), "captured, so a release outside the card still ends it");
-  assert.ok(press.includes("e.button !== 0"), "and only the primary button starts a resize");
-  assert.ok(press.includes("top: r.top / z"), "the press freezes the box's top edge, in layout px");
-  assert.ok(press.includes("grab: (r.bottom - e.clientY) / z"), "and where inside the grip the hand landed, in layout px");
-  assert.ok(press.includes("setOutHeight(out, r.height / z)"), "the press pins the height it found, in layout px, through the one writer");
-  assert.ok(grab(appSrc, "endOutGrip").includes("d.hadVar"), "which a press that never moved puts back");
+  assert.ok(PRESS.includes("setPointerCapture(e.pointerId)"), "captured, so a release outside the card still ends it");
+  assert.ok(PRESS.includes("e.button !== 0"), "and only the primary button starts a resize");
+  assert.ok(PRESS.includes("top: r.top / z"), "the press freezes the box's top edge, in layout px");
+  assert.ok(PRESS.includes("grab: (r.bottom - e.clientY) / z"), "and where inside the grip the hand landed, in layout px");
+  assert.ok(PRESS.includes("hooks.setHeight(out, r.height / z)"), "the press pins the height it found, in layout px, through the one writer");
+  assert.ok(END.includes("d.hadVar"), "which a press that never moved puts back");
 });
 
 // ---- the units: a press on a zoomed page is a press, not a resize ------------------------------------------------
@@ -325,19 +369,22 @@ test("every length the gesture keeps is a layout length, and the pointer is divi
   // drawn height (a VISUAL rect) and wrote it straight into `--out-h` (a LAYOUT length), so on a page at 90% the box
   // came back at 90% of itself - a resize nobody asked for. The scale is read once and every number is converted at
   // the boundary: the press, the move's pointer, the edge watch's drift, and the release's room.
-  assert.ok(grab(appSrc, "outGripZoom").includes("getComputedStyle(document.documentElement).zoom"), "the page's own zoom is the scale");
-  const pressAt = appSrc.indexOf("// The grip's own press.");
-  const press = appSrc.slice(pressAt, appSrc.indexOf('"pointermove",', pressAt));
-  assert.ok(press.includes("const z = outGripZoom()"), "read once, at the press");
-  assert.ok(press.includes("z,") && press.includes("from: r.height / z"), "and kept on the gesture record");
-  const move = appSrc.slice(appSrc.indexOf('"pointermove"'), appSrc.indexOf("function endOutGrip("));
-  assert.ok(move.includes("e.clientY / d.z"), "the move's pointer is divided by it");
-  assert.ok(grab(appSrc, "outGripEdgeWatch").includes("getBoundingClientRect().top / d.z"), "so is the edge watch's drift");
-  assert.ok(press.includes("Math.round(window.innerHeight - r.top / z - OUT_GRIP_ROOM)"), "the press reads the room under the frozen top edge");
-  assert.ok(press.includes("room,"), "and keeps it on the record");
-  assert.ok(grab(appSrc, "endOutGrip").includes("outGripRelease(d.h, d.min, d.room)"), "which the release clamps to, not a fresh read");
+  assert.ok(gripSrc.includes("getComputedStyle(document.documentElement).zoom"), "the page's own zoom is the scale");
+  assert.ok(PRESS.includes("const z = zoom()"), "read once, at the press");
+  assert.ok(PRESS.includes("z,") && PRESS.includes("from: r.height / z"), "and kept on the gesture record");
+  assert.ok(MOVE.includes("e.clientY / d.z"), "the move's pointer is divided by it");
+  assert.ok(gripRegion("function watch(d)", "function end(e)").includes("getBoundingClientRect().top / d.z"), "so is the edge watch's drift");
+  // THE ROOM'S UNIT MIX, the defect this landing is for: `innerHeight - r.top / z` took a VISUAL viewport height and a
+  // LAYOUT top edge, so at 90% the box stopped a tenth of the viewport short and at 110% it drew past the screen. The
+  // band divides BOTH the pane's bottom and the viewport by the same scale, and the one arithmetic is asserted here
+  // rather than the shape of a subtraction.
+  assert.ok(PRESS.includes("paneBottom: scrollport ? scrollport.getBoundingClientRect().bottom : null"), "the pane's own bottom is read at the press");
+  assert.ok(PRESS.includes("viewport: window.innerHeight"), "beside the viewport's");
+  assert.ok(gripSrc.includes("paneBottom") && gripSrc.includes("/ z - top - gap"), "and both are divided by the zoom in the one band");
+  assert.ok(PRESS.includes("edge: bounds.edge"), "the edge that stopped it is named on the record");
+  assert.ok(END.includes("one(d.h, d.min, d.room)"), "which the release clamps to, not a fresh read");
   assert.equal(
-    /setOutHeight\(out, r\.height\)/.test(appSrc),
+    /setOutHeight\(out, r\.height\)/.test(appSrc) || /setOutHeight\(out, r\.height\)/.test(gripSrc),
     false,
     "nothing writes the visual rect back as a layout height",
   );
