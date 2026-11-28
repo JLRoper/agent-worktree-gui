@@ -201,7 +201,7 @@ body.capture .capture-note { display:none; }
   <dt>the fixture</dt><dd>tools/initiatives-fixture.mjs, seeded by tools/capture-wave-lane-options.mjs</dd>
   <dt>the browser</dt><dd>tools/browser.mjs (Playwright), headless, 1x device scale for the panel, 1x for the stages</dd>
   <dt>the widths</dt><dd>the panel's real wave column 1304px at the widest float; the 900px panel gives 804px</dd>
-  <dt>the data</dt><dd>one wave, two lanes, three members, both gates drawn; one closed wave beneath</dd>
+  <dt>the data</dt><dd>one wave, two lanes, three members, both gates drawn; one closed wave beneath; the same stages at four and six lanes in section 5</dd>
 </dl>
 
 <h2>1. What this report is, and what it is not</h2>
@@ -376,20 +376,44 @@ body.capture .capture-note { display:none; }
 <p>None of the five overflows its stage at either width. That matters because a title track that collapses to zero does not wrap: it overflows, and an overflow is the one failure a screenshot can hide under a scrollbar that is not there.</p>
 </div>
 
-<h2>5. The trade-offs, numbered</h2>
+<h2>5. When a wave holds more lanes</h2>
+<div class="prose">
+<p>The fixture above is the reader's wave: two lanes, three members. It is not the shape a wave takes once a lane is a file and a piece of work spans projects: a wave can hold one lane per surface, several of them in each project. The reader asked whether that changes the recommendation. It does. The 90px title at two lanes is not the bottom of this mechanism; it is the last readable state before it collapses.</p>
+<p>The probe adds lanes to the same four stages, one member per added lane, with the new lanes from a second project as well as this one (public/core/dom.js, late.css, and a Java file in optym-integration-multi). No stylesheet changes: it measures the CSS already in this page, and <code>node tools/probe-wave-lane-scaling.mjs</code> rewrites the captures and <code>lane-scaling.json</code>.</p>
+<table>
+  <tr><th>mechanism</th><th>2 lanes (the fixture)</th><th>4 lanes</th><th>6 lanes</th></tr>
+  <tr><td class="opt">O1</td><td>title 90px, 7 wraps, box 418px</td><td class="bad">title 0px, 95 wraps, box 4,972px, 2 rows of lanes</td><td class="bad">already failed at the third lane</td></tr>
+  <tr><td class="opt">O2</td><td>822px, 1 wrap, 346px</td><td>822px, 1 wrap, 502px</td><td>822px, 1 wrap, 658px</td></tr>
+  <tr><td class="opt">O3</td><td>711px, 1 wrap, 295px</td><td>711px, 1 wrap, 403px</td><td>711px, 1 wrap, 493px</td></tr>
+  <tr><td class="opt">O4</td><td>475px, 2 wraps, 288px</td><td>299px, 3 wraps, 478px, 3 + 1 lanes</td><td>299px, 3 wraps, 478px, 2 rows of 3</td></tr>
+</table>
+<div class="shots">
+  <figure><img src="wave-lane-options/o1-3lanes.png" alt="Today's mechanism with a third lane" width="1304"><figcaption>O1 at three lanes: the title track is 0px, every title wraps one character per line, and the wave box is 3,226px.</figcaption></figure>
+  <figure><img src="wave-lane-options/o2-4lanes.png" alt="O2 with four lanes" width="1304"><figcaption>O2 at four lanes: four full-width bands, 822px titles, a 502px box.</figcaption></figure>
+  <figure><img src="wave-lane-options/o3-4lanes.png" alt="O3 with four lanes" width="1304"><figcaption>O3 at four lanes: five members in one table, 711px titles, a 403px box; the 120px lane column breaks a long Java path.</figcaption></figure>
+  <figure><img src="wave-lane-options/o4-4lanes.png" alt="O4 with four lanes" width="1304"><figcaption>O4 at four lanes: three lanes in the first row and the fourth alone in the second, 299px titles, a 478px box.</figcaption></figure>
+</div>
+<p><b>O1 does not degrade; it stops working.</b> At three lanes each lane is 344px. The six fixed columns and their gaps ask for 404px, so the title track is handed 0px: the words wrap one character per line, the wave box is 3,226px, and at four lanes it is 4,972px in two rows of lanes. The 90px title at two lanes is the last state where the row reads at all.</p>
+<p><b>O2 scales linearly.</b> Every lane is a full-width band, so the title keeps 822px and one line at every count; the box grows about 78px per lane, from 346px at two to 502px at four and 658px at six. It survives any lane count, and it gives up the side-by-side picture at every one.</p>
+<p><b>O3 scales with members, not lane headers.</b> Its title is 711px and one line at every count; the box grows one row per member, 403px at four lanes and 493px at six. It is the most compact of the three that survive and the only one whose lane count does not add a header row per lane. Its cost shows in the four-lane capture: the 120px lane column breaks public/core/dom.js mid-token, so an implementation widens that track or puts a short label in it and the full path on its title.</p>
+<p><b>O4 survives but stops being the best.</b> The title is 299px and two to three lines at four lanes, and the box is 478px. The auto-fit grid puts three lanes in the first row and the fourth alone in the second, with its lane read squeezed into a vertical strip, and at six lanes it is two rows of three. It is a two-lane (or three-lane) drawing, not a many-lane one.</p>
+<p>The lane count is the missing dimension in the first recommendation. It decides: two lanes is O4; three or more is O3, or O2 if the lane has to stay a block; O1 is not a candidate at any count.</p>
+</div>
+
+<h2>6. The trade-offs, numbered</h2>
 <div class="prose">
 <ol>
-  <li><b>O1, the current drawing.</b> Keep it only if the panel is never wider than about 900px. At the widest float the title track is 90px and the members wrap 7 / 7 / 7 times; the row's alignment is real, but it aligns chips around words nobody can read. This is the baseline, not a candidate.</li>
+  <li><b>O1, the current drawing.</b> Keep it only if a wave never holds more than two lanes and the panel is never wider than about 900px. At the widest float the title track is 90px and the members wrap 7 / 7 / 7 times; at three lanes it is 0px and the box 3,226px; the row's alignment is real, but it aligns chips around words nobody can read. This is the baseline, not a candidate.</li>
   <li><b>O2, lane bands.</b> The widest title of any option that keeps a lane block (822px) and the smallest CSS change, but the lanes are stacked at every width, so the wave stops showing that its work is parallel. Choose it if the reader reads lanes one at a time and never compares them; that is not how this wave closes.</li>
-  <li><b>O3, the manifest table.</b> The most compact of the five and the easiest to scan down a column (711px titles, 295px box). It is also the largest change: the lane's box, its read sentence and its left border become a column value and a summary strip, so the lane stops being a thing on the card and becomes a fact in a table. At the 900px panel its seven columns squeeze the title to 211px and 3 / 4 / 3 wraps. A good second choice if density matters more than the lane's identity.</li>
-  <li><b>O4, the two-line card.</b> The candidate this report recommends: 475px title at the real column, lanes still side by side, one rule block, no markup change. Its cost is the column alignment of the chips, which is the smallest thing any of these options gives up.</li>
+  <li><b>O3, the manifest table.</b> The many-lane recommendation: 711px titles and one line at every count, a 403px box at four lanes and 493px at six, and the most compact of the three that survive. It is also the largest change: the lane's box, its read sentence and its left border become a column value and a summary strip, so the lane stops being a thing on the card and becomes a fact in a table. At the 900px panel its seven columns squeeze the title to 211px and 3 / 4 / 3 wraps, and at four lanes its 120px lane column needs width, or a short label, for a long Java path.</li>
+  <li><b>O4, the two-line card.</b> The two-lane recommendation: 475px title and a 288px box with the lanes side by side, one rule block, no markup change. At four lanes it is 299px, three wraps and a 478px box, and the grid orphans the fourth lane. Adopt it only with a cap at two lanes and a fallback to O2 or O3 beyond.</li>
   <li><b>O5, the lane matrix.</b> The only drawing that aligns the lanes row for row, so stage 1 of one lane sits beside stage 1 of the other (595px cells, 329px box). It pays off when lanes run in lockstep; here one lane has two members and the other one, so it draws an empty cell and a row-wise reading order. Keep it for a wave whose lanes are stages of one pipeline, not for this one.</li>
 </ol>
-<h2>6. The recommendation</h2>
+<h2>7. The recommendation</h2>
 <div class="prose">
 <h3>Before it lands, the implementer would prove</h3>
 <ul>
-  <li>At the real wave column (1304px), every member title measures at least 400px and wraps at most three lines; the wave box for three members stays under 300px.</li>
+  <li>At the real wave column (1304px) and at four lanes, the chosen mechanism keeps every member title at least 300px and at most three wraps, with the wave box under 500px. O1's 0px and 4,972px is the failure it must not reproduce.</li>
   <li>At the 900px panel, the lanes stack and the title keeps at least 400px; no stage overflows horizontally at either width.</li>
   <li>The member row still draws id, owner, state, title, project and reports in that order, and the reports chip still takes the right edge.</li>
   <li>Every word is still the route's: the state, the gate words, the lane read and the join sentence are unchanged by the drawing.</li>
@@ -397,9 +421,9 @@ body.capture .capture-note { display:none; }
 </ul>
 </div>
 <div class="reco">
-<h3>Adopt O4, the two-line card, and keep the lanes side by side</h3>
-<p>O4 is the only option that keeps each lane's own block and the two lanes side by side while giving the title the lane's full width; the close still reads as two parallel lanes that one commit names together. At the real wave column each lane is 521px, the title takes 475px and reads in 2 / 2 / 2 lines instead of 7 / 7 / 7; the wave box falls from 418px to 288px. At the 900px panel the lanes stack and the same card reads in 1 / 1 / 1 lines with 707px. The change is one member rule block: no markup change, no JS, no new state.</p>
-<p>The two-line card also keeps the row's order - id, owner, state, title, project, reports - which is the order row 295 settled on. It stops being a column alignment, and that is the trade: comparing two members' owners now takes a glance at a meta line instead of a column. That is a smaller cost than a title that cannot be read.</p>
+<h3>Adopt O3 for a wave whose lanes can multiply; keep O4 for the two-lane case</h3>
+<p>With two lanes O4 is the best drawing: 475px titles, two wraps, a 288px box, the lanes side by side. With the lanes this wave will actually hold - one per file, several projects - O4 is 299px and three lines, and at four lanes its grid puts three lanes in the first row and the fourth alone in the second; O1 collapses to a 0px title at the third lane. O3 keeps a 711px title at every count (a 403px box at four lanes and 493px at six) and grows with members, not with lane headers. Its cost is the lane's block: the lane becomes a column and its read sentence a summary strip, and the 120px lane column needs widening, or a short label with the full path on its title, before a Java path fits.</p>
+<p>If the lane must stay a block, O2 is the fallback: 822px titles and one line at every count, 502px at four lanes and 658px at six. The one thing not to keep is O1: 90px at two lanes was the last readable state of it.</p>
 </div>
 </div>
 </main>
