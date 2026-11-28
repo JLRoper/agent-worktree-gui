@@ -227,9 +227,34 @@ node --check lib/restart-checks.js  # no output, exit 0</pre>
     <li>No full suite. The focused module sets above are the evidence.</li>
   </ul>
 
-  <!-- LANDING -->
+  <h2>9. Landed: the merge, and the head that moved under it</h2>
+  <p>
+    The branch was merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally at
+    <code>f9bd6509</code>, whose parents are <code>59097534</code> (the turnover) and <code>83e956ef</code> (this
+    branch). The merge adds one path, this page, and changes no code:
+    <code>git diff --stat 59097534 f9bd6509</code> is this file's 235 lines and nothing else.
+  </p>
+  <table>
+    <tr><th>When</th><th>Turnover tip</th><th>What moved it</th></tr>
+    <tr><td>when the row was read</td><td><code>0ce44e77</code></td><td>the row 470 landing</td></tr>
+    <tr><td>08:44</td><td><code>edd9873c</code></td><td>row 515's initiative-write cut</td></tr>
+    <tr><td>08:50</td><td><code>b4f88ad9</code></td><td>row 515's cut page, docs only</td></tr>
+    <tr><td>08:54, the tip the merge was made against</td><td><code>59097534</code></td><td>row 513's merge, carrying row 534's recheck page</td></tr>
+  </table>
+  <p class="cite">
+    The merge was made with <code>git merge-tree --write-tree</code> and <code>git commit-tree</code> rather than a
+    <code>git merge</code> in the turnover worktree: that worktree held another run's nine staged files, and a plain
+    merge is refused while the index is dirty. The merge tree was read back against the tip before the ref moved, the
+    new page was checked out into the turnover worktree and staged on its own, and the other nine files' staged diff
+    hashes the same before and after: <code>0383e2fa</code>.
+  </p>
+  <p class="cite">
+    No push, no pull request, no version bump. The turnover stays local at <code>f9bd6509</code> for the reader to
+    land when they choose.
+  </p>
 
-  <p class="foot">Row 511, module-separation plan entry 16. Measured on this tree at <code>0654d6e2</code>, with the turnover read at <code>0ce44e77</code> and <code>edd9873c</code>.</p>
+
+  <p class="foot">Row 511, module-separation plan entry 16. Measured on this tree at <code>0654d6e2</code>, with the turnover read at <code>0ce44e77</code>, <code>edd9873c</code>, <code>b4f88ad9</code> and <code>59097534</code>.</p>
 </main>
 </body>
 </html>
