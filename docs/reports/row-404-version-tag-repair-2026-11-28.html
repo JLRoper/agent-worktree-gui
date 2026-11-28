@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 404: the version tags are settled, and both release tools refuse a tag main never carried</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 24px 64px; background: #14161a; color: #d7dbe0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: #f2f5f8; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f2f5f8; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  h3 { font-size: 15px; margin: 22px 0 6px; color: #e6ebf0; }
+  .sub { color: #8b949e; margin: 0 0 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid #242a31; vertical-align: top; }
+  th { color: #9aa4af; font-weight: 600; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { color: #9ecbff; }
+  pre { background: #1b1f25; border: 1px solid #262c34; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #cfd6dd; }
+  .met { color: #7ee787; } .unmet { color: #ff9c94; } .warn { color: #f0c674; }
+  .cite { color: #7d8791; font-size: 12.5px; }
+  .box { background: #1b1f25; border: 1px solid #262c34; border-left: 3px solid #4d7ea8; border-radius: 4px; padding: 12px 14px; margin: 12px 0; }
+  .quote { border-left: 3px solid #3a424c; padding-left: 12px; color: #b3bcc6; margin: 10px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .foot { margin-top: 40px; color: #7d8791; font-size: 12.5px; border-top: 1px solid #242a31; padding-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 404: the version tags are settled, and both release tools refuse a tag main never carried</h1>
+  <p class="sub">1.194.3 - the tag repair, the render from main, and one ancestry rule shared by the changelog and the gate.</p>
+
+  <div class="box">
+    <b>Done.</b> <code>v1.192.0</code> exists as an annotated tag at <code>00fa30b0</code>, the commit on main that
+    declared it. <code>v1.191.1</code> was re-pointed from a row 400 branch commit to <code>14bddc9f</code>, main's own
+    declaration. <code>v1.193.0</code> now names <code>bad07428</code>, the commit main carries. <code>v1.193.1</code>
+    was deleted: main never carried it, and the branch that held it is named below. Both release tools now refuse a
+    version tag whose commit is not an ancestor of main, naming the tag and the branch, and
+    <code>npm run changelog</code> renders main's history so its top section is the version main reads.
+  </div>
+
+  <h2>The base moved three times while the row was measured, so the invariant is the one that was proven</h2>
+  <p>
+    The row was written against main at <code>ef80d92d</code>, package.json <code>1.192.0</code>. Landings arrived
+    while the repair was being made, and the row's own sentence ("main's top section is 1.192.0") became a statement
+    about a base that had moved. The durable form is the row's title - <i>main's top section is the version main
+    reads</i> - and that is what the render and the gate below prove.
+  </p>
+  <table>
+    <tr><th>When (EST)</th><th>main</th><th>package.json</th><th>CHANGELOG releases</th><th>What it means here</th></tr>
+    <tr><td>row written</td><td><code>ef80d92d</code></td><td>1.192.0</td><td>777</td><td>the brief's measurement</td></tr>
+    <tr><td>23:54</td><td><code>c2ecc060</code></td><td>1.193.0</td><td>779</td><td>the first gate measurement (17 findings)</td></tr>
+    <tr><td>00:08</td><td><code>632af659</code></td><td>1.194.0</td><td>780</td><td>a second landing, after the tag repair</td></tr>
+    <tr><td>00:45</td><td><code>b5d4a3a6</code></td><td>1.194.3</td><td>781</td><td>the base every final number below was measured on</td></tr>
+  </table>
+  <p class="cite">
+    <code>git log -1 --format='%h %ci %s' main</code> at 01:07 EST on 2026-11-28; the render and the gate were run
+    against this base. The branch this tree rolls up into (20261127_2134_TASK-405) reads 1.195.0, above it.
+  </p>
+
+  <h2>The tag table: what each tag said, what was done, what it says now</h2>
+  <table>
+    <tr><th>Tag</th><th>Before</th><th>main's declaration of that number</th><th>Action</th><th>After</th></tr>
+    <tr>
+      <td><code>v1.192.0</code></td>
+      <td class="unmet">did not exist, in any clone or on origin</td>
+      <td><code>00fa30b0</code> "chore: 1.192.0 - the version this landing carries"</td>
+      <td><span class="met">created</span> annotated, pushed: <code>node tools/version.mjs tag --ref 00fa30b0 --force --push</code></td>
+      <td><code>00fa30b0</code> local and origin</td>
+    </tr>
+    <tr>
+      <td><code>v1.191.1</code></td>
+      <td class="unmet"><code>32ebdd16</code> (tag object <code>eaa88235</code>), a "chore: 1.191.1" commit on
+        <code>wtgui/row-400-is-the-complete-brief-a-settled-9f2e0e</code> and its origin copy</td>
+      <td><code>14bddc9f</code> "chore: 1.191.1 - the version this landing carries" (main carries 1.191.1, so the tag
+        is a re-point, not a deletion)</td>
+      <td><span class="met">re-pointed</span>: <code>node tools/version.mjs tag --ref 14bddc9f --force --push</code>
+        ("moved from 32ebdd1663")</td>
+      <td><code>14bddc9f</code> local and origin (forced)</td>
+    </tr>
+    <tr>
+      <td><code>v1.193.0</code></td>
+      <td class="warn">this checkout: <code>01830fdb</code>, the turnover's own 1.193.0 bump on
+        <code>20261127_1422_TASK-371_build-the-initiative-tag</code>; origin: <code>bad07428</code></td>
+      <td><code>bad07428</code> "chore: 1.193.0 - the version this landing carries"</td>
+      <td><span class="met">settled</span>: the checkout's tag was refreshed to origin's anchor;
+        <code>version.mjs tag --ref bad07428 --force</code> then reported "already an annotated tag at bad07428d0 -
+        nothing to do". No push was needed.</td>
+      <td><code>bad07428</code> local and origin</td>
+    </tr>
+    <tr>
+      <td><code>v1.193.1</code></td>
+      <td class="unmet"><code>4379fc2f</code> (tag object <code>47f9ea69</code>), a "chore: 1.193.1" commit on
+        <code>wtgui/row-412-is-the-complete-brief-a-watchdog-dfe6da</code>; never pushed to origin</td>
+      <td class="unmet">none - main went 1.193.0 to 1.194.0, so 1.193.1 is a number main never carried</td>
+      <td><span class="met">deleted</span>: <code>git tag -d v1.193.1</code>. Nothing to delete on origin; the branch
+        is named here and in the merge commit, and row 412's own landing re-anchors the number if it ever lands.</td>
+      <td>absent</td>
+    </tr>
+  </table>
+  <p class="cite">
+    Before-state read with <code>git cat-file -p &lt;tag&gt;</code>, <code>git for-each-ref refs/tags</code> and
+    <code>git ls-remote --tags origin</code>; main's declarations from the package.json walk
+    (<code>tools/release-history.mjs</code>), not from the tag itself.
+  </p>
+
+  <h2>What the tools now refuse, in one rule with two named exceptions</h2>
+  <p>
+    A version tag is a repository-wide claim, and a reader of main can only follow a commit main took. So a tag whose
+    commit is not an ancestor of main is not an anchor, whatever package.json at that commit says.
+  </p>
+  <ul>
+    <li>
+      <b>The gate</b> (<code>npm run verify:version-tags</code>) reports <code>off-main</code> when a version tag main
+      does not carry is still held by a branch, naming the tag, its commit and every branch that holds it.
+      <span class="cite">tools/verify-version-tags.mjs:121-137, tools/release-history.mjs:257-276</span>
+    </li>
+    <li>
+      <b>A <code>wrong-commit</code> finding now says the same</b> about a tag the walk does join: the message ends
+      with the commit's ancestry and the branch holding it.
+      <span class="cite">tools/verify-version-tags.mjs:162-167</span>
+    </li>
+    <li>
+      <b>The renderer</b> (<code>npm run changelog</code>) refuses before writing anything when a section it is about
+      to write names a release whose tag's commit main never carried.
+      <span class="cite">tools/changelog.mjs:404-431, 444-452</span>
+    </li>
+    <li>
+      <b>Exception 1, the branch's own bump.</b> A branch's newest number, tagged on the commit that declared it, is
+      still held rather than refused - that is the pre-landing anchor <code>version.mjs apply</code> writes, and the
+      landing moves it onto the commit main carries.
+      <span class="cite">tools/release-history.mjs:262-272</span>
+    </li>
+    <li>
+      <b>Exception 2, the fossil.</b> A tag no branch holds at all cannot be landed from, so it is reported as a note
+      rather than a refusal no reader can act on. The gate prints 47 of them as notes on this history.
+      <span class="cite">tools/release-history.mjs:198-214, tools/verify-version-tags.mjs:141-157</span>
+    </li>
+  </ul>
+  <p>
+    The renderer's refusal is scoped to the sections it writes, and that scope is what makes it usable: a kept
+    section is the file's business and the gate's, and another branch's unlanded bump is not a claim a render of main
+    makes. Without the scope, a render of main in this live repository refuses on a neighbour's draft tag.
+    <span class="cite">tools/changelog.mjs:16-28</span>
+  </p>
+  <pre>changelog: refused - 1 version tag names a commit main never carried, so the section would link a sha no reader
+of main can open: v0.2.0 at f1660d5116 (held by wtgui/side). Re-point each tag at the commit main carries, or
+delete it and name the branch that held it. Nothing was rendered.</pre>
+  <p class="cite">the refusal, verbatim, from the fixture in test/changelog-off-main.test.js</p>
+
+  <h2>The render: main's top section is the version main reads, and no section exists for a number main skipped</h2>
+  <pre>$ node tools/changelog.mjs --ref main
+changelog: wrote CHANGELOG.md - 781 releases (781 kept, 0 rendered), 2766 commits, 699242 chars, links from origin
+
+$ node tools/changelog.mjs --ref main --check
+changelog: CHANGELOG.md is current - 781 releases
+
+$ grep -n '^## v1\.19' CHANGELOG.md | head -7
+18:## v1.194.3 (2026-11-28, 3 commits)
+31:## v1.194.0 (2026-11-27, 5 commits)
+46:## v1.193.0 (2026-11-27, 5 commits)
+67:## v1.192.0 (2026-11-27, 3 commits)
+83:## v1.191.3 (2026-11-27, 4 commits)
+100:## v1.191.2 (2026-11-27, 5 commits)
+118:## v1.191.1 (2026-11-27, 2 commits)</pre>
+  <p>
+    The top section is 1.194.3, the version main reads at the time of measurement. There is no section for
+    <code>v1.193.1</code>, <code>v1.193.2</code>, <code>v1.194.1</code>, <code>v1.194.2</code> or
+    <code>v1.194.4</code>: those numbers live on branches, and main's walk jumps 1.194.0 to 1.194.3 the same way it
+    jumped 1.193.0 to 1.194.0. The render is current on main's history (781 releases), and the only change it made
+    to main's own 781-release file is the header's anchor sentence, which now states the rule:
+  </p>
+  <div class="quote">
+    Every release is anchored by an annotated tag at the commit that first declared its version on main;
+    <code>npm run verify:version-tags</code> fails when a bump has no tag, or when a version tag names a commit main
+    never carried.
+  </div>
+
+  <h2>Evidence: the gate before and after, on the same base</h2>
+  <table>
+    <tr><th>Run</th><th>Base</th><th>Bumps</th><th>Findings</th></tr>
+    <tr>
+      <td>before this branch's changes, before the repair</td>
+      <td><code>c2ecc060</code> (1.193.0)</td><td>779</td>
+      <td class="unmet">17: 4 backwards, 8 wrong-commit, 5 missing (v1.192.0 among the missing; v1.191.1 wrong-commit)</td>
+    </tr>
+    <tr>
+      <td>this branch, after the repair</td>
+      <td><code>b5d4a3a6</code> (1.194.3)</td><td>781</td>
+      <td class="warn">23: 4 backwards, 7 wrong-commit, 4 missing, 8 off-main</td>
+    </tr>
+  </table>
+  <p>
+    The row's three defects are closed: <code>v1.192.0</code> is no longer missing, <code>v1.191.1</code> no longer
+    reads wrong-commit, and <code>v1.193.1</code> is gone with its branch named. The 8 <code>off-main</code> findings
+    are the new rule doing its job on tags that were already there - listed below, each with the branch to settle it -
+    and the 4 backwards, 4 missing and 7 wrong-commit findings are the legacy noise this row did not scope (the same
+    classes that were red before it started).
+    <span class="cite">tools/verify-version-tags.mjs --ref main --json, measured 01:07 EST</span>
+  </p>
+  <h3>The tests this change adds, and the set that proves it</h3>
+  <pre>$ node --test --test-concurrency=3 test/changelog-off-main.test.js test/changelog-scope.test.js \
+    test/changelog-incremental.test.js test/changelog-links.test.js test/release-tags.test.js \
+    test/version-claim.test.js test/version-tags.test.js test/version-check.test.js test/push-guard.test.js \
+    test/release-notes.test.js
+tests 74 - pass 74 - fail 0</pre>
+  <ul>
+    <li>gate: a side-branch tag main never carried is refused <i>by name and branch</i>; a tag no branch holds stays a note; the branch's own pre-landing anchor is held. <span class="cite">test/version-tags.test.js:287-345</span></li>
+    <li>renderer: a side-branch tag is refused and nothing is written; a tag back on main's commit renders with main's version at the top; a neighbour's draft above main's newest does not block the render. <span class="cite">test/changelog-off-main.test.js:56-124</span></li>
+  </ul>
+
+  <h2>What is left, named</h2>
+  <p>
+    The new rule finds 8 version tags that a branch still holds on a commit main never carried. Each is a real
+    off-main claim; none is a defect this row introduced, and each has the same two dispositions:
+  </p>
+  <table>
+    <tr><th>Tag</th><th>Commit</th><th>Held by</th></tr>
+    <tr><td><code>v1.121.2</code></td><td><code>6ae43851</code></td><td><code>wtgui/unblock-worktree-creation-in-c-638385</code> (+ origin)</td></tr>
+    <tr><td><code>v1.184.0</code>, <code>v1.184.1</code>, <code>v1.187.0</code></td><td><code>e41b215b</code>, <code>7f6afcc4</code>, <code>7b5756eb</code></td><td><code>20261127_1422_TASK-371_build-the-initiative-tag</code> and the six branches merged from it (+ origin)</td></tr>
+    <tr><td><code>v1.194.4</code></td><td><code>960044f9</code></td><td><code>wtgui/make-the-kind-column-name-what-a-tree-87bc8d</code> (+ origin) - a live draft</td></tr>
+    <tr><td><code>v1.57.16</code>, <code>v1.57.19</code></td><td><code>c1edd132</code>, <code>992b1ce8</code></td><td><code>fix/pool-retire-safe</code></td></tr>
+    <tr><td><code>v1.76.17</code></td><td><code>93ad5b4a</code></td><td><code>backup/wtgui-round-one-parent-tree-2026-11-10</code></td></tr>
+  </table>
+  <p>
+    The legacy findings the row did not scope, unchanged in class: 4 backwards transitions (1.76.13 to 1.76.12,
+    1.79.0 to 1.78.0, 1.170.0 to 1.169.9, 1.171.0 to 1.170.5), 7 wrong-commit anchors (v1.76.22, v1.76.23, v1.91.2,
+    v1.92.4, v1.142.2, v1.169.9, v1.170.5) and 4 missing tags (v1.82.2, v1.173.2, v1.189.0, v1.191.0 - the last was
+    declared in a merge resolution, so <code>version.mjs tag</code> refuses to invent an anchor for it). And 47 tags
+    are fossils no branch holds; they are notes, not findings, and deleting them is a cleanup row's job.
+  </p>
+
+  <h2>How the landing was done</h2>
+  <p>
+    The work is two commits on <code>wtgui/row-404-is-re-scoped-and-its-lane-is-641bbc</code> (<code>cb477327</code>
+    the tools, tests, docs and render; <code>f34f87dd</code> the merge of <code>origin/main</code>), merged into the
+    turnover branch locally. No branch was pushed and no pull request was opened: that branch is where this project's
+    work rolls up. The tag repairs are the only remote writes, because the gate reads origin's tags and a local-only
+    repair would be undone by the next fetch.
+  </p>
+
+  <div class="foot">
+    Measured in C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-404-is-re-scoped-and-its-lane-is-641bbc on
+    2026-11-28 at 01:07 EST, with main at <code>b5d4a3a6</code> (1.194.3). Every number above comes from a command in
+    this worktree; the tag rows from <code>git cat-file</code>/<code>git ls-remote</code>, the findings from
+    <code>tools/verify-version-tags.mjs --json</code>, the render from <code>tools/changelog.mjs --ref main</code>.
+  </div>
+</main>
+</body>
+</html>
