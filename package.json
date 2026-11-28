@@ -31,6 +31,7 @@
     "verify:reviewed-extra": "node tools/verify-reviewed-extra.mjs",
     "verify:row-chips": "node tools/verify-row-chips.mjs",
     "verify:branch-kind": "node tools/verify-branch-kind.mjs",
+    "verify:parent-line": "node tools/verify-parent-line.mjs",
     "verify:turnover-policy": "node tools/verify-turnover-policy.mjs",
     "verify:legend": "node tools/verify-legend.mjs",
     "verify:css-split": "node tools/verify-css-split.mjs",
