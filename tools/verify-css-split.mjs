@@ -225,7 +225,9 @@ const gi = (cwd, args, extraEnv = {}) =>
     stdio: ["ignore", "pipe", "pipe"],
   }).replace(/\r/g, "").trim();
 
-function seedFixture(home) {
+// Exported for tools/css-split-review.mjs, which measures the split's RESULT against the same fixture
+// the split's proof used: the same board, console, queue, assistant, initiatives and settings panes.
+export function seedFixture(home) {
   rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   const repos = path.join(home, "repos");
   mkdirSync(repos, { recursive: true });
