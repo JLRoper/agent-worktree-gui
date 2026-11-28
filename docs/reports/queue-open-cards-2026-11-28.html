@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>The queue tab drew two of five running rows</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --card: #151a22; --line: #262c37;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482; --blue: #7fb2e8;
+    --good: #7ec699; --bad: #e08a8a; --warn: #d8b06a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { margin: 0 0 6px; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
+  h2 { margin: 44px 0 10px; font-size: 21px; line-height: 1.25; }
+  h3 { margin: 26px 0 6px; font-size: 15px; color: var(--text); }
+  p { max-width: 80ch; color: #c6cdd8; }
+  .sub { margin: 0 0 26px; color: var(--dim); font-size: 13px; }
+  .verdict { margin: 24px 0; padding: 16px 18px; border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 8px; background: var(--panel); }
+  .verdict.after { border-left-color: var(--good); }
+  .verdict strong { color: var(--text); }
+  .scores { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 6px; }
+  .score { flex: 1 1 190px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  .score b { display: block; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .score span { color: var(--dim); font-size: 12px; }
+  .score.bad b { color: var(--bad); }
+  .score.good b { color: var(--good); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 8px; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--bad); }
+  .good { color: var(--good); }
+  .warn { color: var(--warn); }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; color: #c9d6e8; background: #11161d; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  pre { margin: 12px 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #11161d; color: #c9d6e8; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  ul, ol { max-width: 80ch; color: #c6cdd8; }
+  li { margin: 4px 0; }
+  .note { margin: 18px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--dim); font-size: 13px; }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The queue tab drew two of five running rows</h1>
+<p class="sub">Row 443, measured on the live panel 2026-11-28. Worktree <code>row-443-is-the-complete-brief-the-queue-131c33</code>, branch <code>wtgui/row-443-is-the-complete-brief-the-queue-131c33</code>, merged into the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code>.</p>
+
+<div class="verdict">
+  <strong>What the reader saw.</strong> The tab's caption read <code>4 queued - 5 running - 1 parked - 190 done</code>, taken from the store, and the list under it drew <strong>two</strong> running cards, #438 and #443. Three rows with live runs, #402, #404 and #411, had no card at all. Nothing had failed, nothing was skipped: a window meant to bound the tab's finished history was hiding work the assistant was carrying.
+</div>
+
+<h2>The acceptance from the row</h2>
+<p>The row's own words: <em>the tab must draw one card per open row, each with its agent line, its run chip and its state, and the count it shows must equal the store's <code>counts.running</code></em>. Then: <em>drawn open cards must equal counts.running plus counts.queued, with #402, #404, #411, #438 and #443 all drawn while they run</em>. Two repaint cases ride with it: a queue event that flips a fifth row to running must add its card within one poll, and a page loaded while two rows were queued must show both running after the next poll, with no reload.</p>
+
+<h2>Store against the drawn list, side by side</h2>
+<p>Both columns are one moment in one sandbox: 200 rows with contiguous ids 244 to 443 (the panel hands ids out in order), five of them running, four queued, one parked, 190 finished, and the three running rows the reader lost are older than the newest twenty ids. The store column is <code>GET /api/assistant/queue?assistantId=assistant-1</code>, read by the gate from the same payload the caption is built from.</p>
+
+<table>
+  <thead>
+    <tr><th>moment</th><th class="num">running</th><th class="num">queued</th><th class="num">parked</th><th class="num">done</th><th class="num">cards drawn</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>the store (<code>counts</code>)</td><td class="num">5</td><td class="num">4</td><td class="num">1</td><td class="num">190</td><td class="num">-</td></tr>
+    <tr><td>drawn before the fix (commit <code>895e7282</code>)</td><td class="num bad">2</td><td class="num bad">3</td><td class="num bad">0</td><td class="num">15</td><td class="num bad">20</td></tr>
+    <tr><td>drawn after the fix (commit <code>39f7c721</code>)</td><td class="num good">5</td><td class="num good">4</td><td class="num good">1</td><td class="num">20</td><td class="num good">30</td></tr>
+  </tbody>
+</table>
+
+<p>Before the fix the pane drew twenty cards of a 200-row queue and every one of the ten open rows it dropped was invisible: #402, #404, #411 (running), #300 (parked) and #420 (queued). After it, all ten open rows are drawn, the finished history is still the newest twenty, and the note under the list says <code>showing 30 of 200 - 170 older tasks not shown</code>. Before, that note said <code>180 older tasks not shown</code> beside a list that had silently dropped ten rows above it.</p>
+
+<h2>Two causes, not one</h2>
+
+<h3>1. The window counted task ids, not states</h3>
+<p><code>queueWindowRows</code> took the twenty highest task ids whatever their state and drew only those (<code>public/queue-cards.js:105</code> at <code>895e7282</code>). Ids are handed out in order, so the highest ids are the newest tasks, and any OPEN row older than the twenty newest fell out of the list. The caption above it is built from <code>view.counts</code>, which counts every row in the store, so the two halves of the same pane disagreed: five running above, two below.</p>
+
+<h3>2. The view was re-read on a clock, not on a change</h3>
+<p><code>renderAssistantQueue</code> asked for a queue read only when its cached view was more than twenty seconds old. The pane is repainted by every board frame, but a repaint inside those twenty seconds drew the old view, so a page open while rows went running kept showing them queued until the clock elapsed. Measured on the pre-fix tree, a row flipped to running through the panel's own route had still not drawn as running after 8,000 ms.</p>
+
+<h2>The fix</h2>
+<table>
+  <thead><tr><th>where</th><th>what changed</th></tr></thead>
+  <tbody>
+    <tr><td><code>public/queue-cards.js:123</code></td><td><code>queueWindowRows</code> splits the rows: every queued, running and parked row is drawn, always, in the pane's own bucket/order; the twenty-row window applies to the <code>done</code> bucket only.</td></tr>
+    <tr><td><code>public/queue-cards.js:921</code></td><td><code>queueMoreHtml</code> now takes the drawn and total counts and leads with <code>showing N of M</code>, so a hidden row is never silent even when what is hidden is only history.</td></tr>
+    <tr><td><code>lib/assistant/queue.js:977</code></td><td><code>readQueueFile</code> carries its own <code>stamp</code> (mtime + size) in the result it caches, so the stamp costs no second stat and moves on any writer's write.</td></tr>
+    <tr><td><code>lib/assistant.js:1342</code>, <code>:4369</code>, <code>:1262</code></td><td><code>queueView</code> returns that stamp; <code>assistantList</code> returns it per assistant as <code>queueStamp</code>; <code>queueStampOf</code> is the one stat behind both.</td></tr>
+    <tr><td><code>public/queue-cards.js:945</code></td><td>the pane re-reads when the stamp MOVES and not otherwise: one read per change, none for a board frame that changed nothing, and the twenty-second clock stays as the fallback for a payload that names no stamp.</td></tr>
+  </tbody>
+</table>
+<p>The stamp is what makes the repaint case work for a writer the panel never hears from: an <code>assistant</code> frame covers this panel's own queue writes, and the stamp covers a queue file written by a script, a worker or another panel, which is read on the page's next poll.</p>
+
+<h2>The proof</h2>
+<p><code>tools/verify-assistant-queue-open-cards.mjs</code> is a new live gate (declared <code>// HARNESS: LIVE GATE</code>, wired as <code>npm run verify:assistant-queue-open-cards</code>). It boots its own sandbox panel and a headless Chromium, seeds the reader's queue shape through the route's own file path, and drives the real float and the real Queue sub-tab.</p>
+
+<div class="scores">
+  <div class="score bad"><b>17/36</b><span>checks before the fix (commit 895e7282)</span></div>
+  <div class="score good"><b>36/36</b><span>checks after the fix (commit 39f7c721)</span></div>
+  <div class="score good"><b>35 ms</b><span>a route write to the card, after the fix</span></div>
+  <div class="score good"><b>82 ms</b><span>a page poll to two flipped cards, after the fix</span></div>
+</div>
+
+<h3>What it asserts</h3>
+<ol>
+  <li>The caption equals the store's counts, both read from the same payload.</li>
+  <li>The drawn cards agree with the store state for state, and every running row (#402, #404, #411, #438, #443) has a card, an agent line of its own and a run chip carrying its own run id.</li>
+  <li>The finished history is still the newest twenty, and the note reads <code>showing 30 of 200 - 170 older tasks not shown</code>.</li>
+  <li>Repaint case 1: #420, queued and under the newest twenty ids, flips to running through <code>POST /api/assistant/queue</code> and draws as running 35 ms later with no reload; the drawn running count moves 5 to 6 with the store.</li>
+  <li>Repaint case 2: two rows that were queued on screen are flipped by writing the queue file from outside the panel (no assistant frame rides that), and one call to the page's own <code>resync()</code> draws both as running 82 ms later, no reload; the drawn running count reads 8 against the store's 8.</li>
+</ol>
+
+<h3>The same rule without a browser</h3>
+<p>Three cases in <code>test/assistant-queue-pane.test.js</code> pin the same two rules over the pane's own region: the window draws every open row however old its id (<code>:314</code>), the stamp gate reads once per move and not per paint (<code>:336</code>), and the note names the remainder and what is drawn (<code>:356</code>). The existing window test keeps its twenty-finished-rows arithmetic, and <code>tools/verify-assistant-queue-window.mjs</code> follows the new counts (21, 71 and 121 cards for its 120-finished plus one queued fixture, <code>36/36</code>).</p>
+
+<h2>What else was run, and what was already red</h2>
+<table>
+  <thead><tr><th>run</th><th>result</th></tr></thead>
+  <tbody>
+    <tr><td><code>node --test test/assistant-queue-pane.test.js test/queue-task-refs.test.js test/assistant-queue.test.js test/assistant-queue-ui.test.js</code></td><td class="good">102/102 pass</td></tr>
+    <tr><td><code>npm run verify:assistant-queue-open-cards</code></td><td class="good">36/36 pass</td></tr>
+    <tr><td><code>node tools/verify-assistant-queue-window.mjs</code></td><td class="good">36/36 pass</td></tr>
+    <tr><td><code>node tools/verify-queue-agents.mjs</code></td><td class="good">71/71 pass</td></tr>
+    <tr><td><code>node tools/verify-assistant-queue-ui.mjs</code></td><td class="warn">52 checks, 5 failed - the same 5 fail on an untouched <code>git archive</code> of the base commit (the fixture's lane conflict is not derived, and one row measures 115 px against a 100 px cap)</td></tr>
+    <tr><td><code>node tools/verify-queue-cards.mjs</code></td><td class="warn">8 checks, 2 failed - the same 2 fail on the base export (it opens <code>public/style.css</code>, which the 1.190.0 split removed, and the same lane conflict)</td></tr>
+    <tr><td>full suite, half A: <code>node --test --test-concurrency=4 --test-timeout=60000</code> over 218 files</td><td class="warn">1937 tests, 1919 pass, 12 fail, 2 cancelled, 4 skipped. The twelve red names are the families this repo's own notes record for a worktree (the settings route, gateway permissions reading a <code>config.json</code> a worktree does not carry, the junctioned <code>node_modules</code> walk, the initiatives permission asks, the child and reply routes), plus <code>every declared harness is wired</code> whose named file (<code>tools/verify-queue-agents.mjs</code>) has no npm script on the base either, plus one contention flake: <code>a parked row's reason and detail</code> passes 62/62 when its file is run alone.</td></tr>
+    <tr><td>full suite, half B: 248 files</td><td class="warn">stalled after 2062 tests with no summary block (the host stall the repo's own notes describe), then re-run under <code>--test-concurrency=2</code>: chunk 2 printed 292 tests, 261 pass, 30 fail; chunks 1 and 3 hit their 330 s bound with no summary. Three sibling <code>npm test</code> runs were live on the same host (39 node processes), which is what the 60 s test timeouts and the panel/port failures read as. The chunk's queue-related names were re-run alone on this branch and on the base export: <code>queue-sweep</code> and <code>refresh-row-route</code> pass here, and the two that fail (<code>queue-state-hold-route</code>'s hold-kind sentence, <code>rebase-route</code>/<code>reconcile</code>) fail with identical names on the untouched base export.</td></tr>
+  </tbody>
+</table>
+
+<h3>What the suite could and could not answer</h3>
+<p>Half A is a complete run and its twelve red names are the environment's and the base's, not this diff's. Half B could not be completed on this box while three other full suites were running: it stalled, then its chunks timed out, and the one chunk that printed a summary carries contention failures whose queue-related names pass here when run alone. The verdict this report stands on is the focused set, the three live gates and the base-export pairs above, all of which ran to completion; the half-B tail is named as unmeasured rather than reported as green.</p>
+
+<h2>Re-run it</h2>
+<pre>cd C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-443-is-the-complete-brief-the-queue-131c33
+npm run verify:assistant-queue-open-cards
+node --test test/assistant-queue-pane.test.js</pre>
+
+<div class="note">
+  <strong>Scope of this landing.</strong> The row asked for a version above main's, a push and a pull request; this tree's LANDING block says the opposite: merge into the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, push nothing, open no pull request, and leave that branch where it is for the reader to land. The block's own sentence decides the push, so the work is merged locally and the numbers above travel in the merge commit and on the row.
+</div>
+
+<footer>Measured on this worktree, 2026-11-28. Store numbers read from <code>GET /api/assistant/queue?assistantId=assistant-1</code>; drawn numbers read from the live DOM (<code>#as-queue .as-task</code>, <code>data-as-qstate</code>) in headless Chromium.</footer>
+
+</main>
+</body>
+</html>
