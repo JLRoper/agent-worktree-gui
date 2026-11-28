@@ -188,7 +188,7 @@ window.WMApp.jobs = {
 // module that would rather reach it than a page global.
 window.WMApp.scaffold = {
   panelMapCache, panelMap, invalidatePanelMap, agentsByPathCache, threadRowKeyCache, agentsByPath, agentsFor,
-  knownThreads, LIVE_STATUS, turnLive, approvalLive, convLive, agentsRunning, isAgentRunning, panelFor, isRowLive,
+  knownThreads, LIVE_STATUS, TERMINAL_STATUS, turnLive, approvalLive, convLive, agentsRunning, isAgentRunning, panelFor, isRowLive,
   hermesTitle, sigChips, paintRowChips, livenessLines, agentBadgeHtml, repaintAgentState,
   headTitle, chipsHtml, hostChipHtml, hostPanelHtml, repaintHostPanel, proposeHostMapping, saveHostMapping,
   RULES_FALLBACK_CAPS, rulesCaps, rulesFor, rulesBarOpen, rulesChipSig, rulesChipHtml, refreshRulesChip,
