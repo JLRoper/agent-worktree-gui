@@ -8,7 +8,7 @@
 //
 // So it measures CONTENT and PROPORTION, not containment: the words the drawing actually prints, their font size,
 // the ink area against the card's own area, how many stages are on screen at once, and which of the six questions the
-// data itself can answer at all. Nothing here is a fix; public/pipeline-flow.js, public/style.css and public/app.js
+// data itself can answer at all. Nothing here is a fix; public/pipeline-flow.js, the sheets and public/app.js
 // are held by another branch and are not touched.
 //
 //   node tools/verify-pipeline-flow-usability.mjs                    # print the reading, write shots to %TEMP%

@@ -236,7 +236,8 @@ const PAGE_HELPERS = (gripInset) => {
         boxH: obr ? +obr.height.toFixed(2) : null,
         boxFlex: ob ? getComputedStyle(ob).flex : "",
         // The grip's bottom edge against the console's: 0 is the console's own corner, and a positive number is the
-        // blank a stretched wrapper leaves under it (the slack turn's free room - see public/style.css:7012).
+        // blank a stretched wrapper leaves under it (the slack turn's free room - see the `.is-slack` flex rules in
+        // public/pipeline.css).
         gripGap: obr ? +(gr.bottom - r.bottom).toFixed(2) : null,
         varH: varRaw,
         varPx: varRaw ? parseFloat(varRaw) : null,
@@ -287,7 +288,7 @@ const PAGE_HELPERS = (gripInset) => {
     },
     mark: () => { W.node = out(); W.bodyNode = body(); return true; },
     // The transcript on its foot: the reader's state while a live turn is being read, and the state the legend
-    // (public/style.css:1559) says the corner gesture stands the page's tail pin down for.
+    // (the chat sub-pane's spacer in public/pipeline.css) says the corner gesture stands the page's tail pin down for.
     foot: () => {
       const b = body();
       if (!b) return null;

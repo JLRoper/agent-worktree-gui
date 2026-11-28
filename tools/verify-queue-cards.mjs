@@ -5,8 +5,9 @@
 // Brief (queue row #71): the pane renders cards, and "unowned" is gone. What this gate drives, in order:
 //
 //   1. a panel of its own (tools/panel-testkit.mjs: throwaway data directory, a scanned repo, a free port) with a
-//      SEEDED queue file written straight to disk — a running task with two agents, a queued task whose files clash
-//      with it, a parked task with no owner (the record that used to paint "unowned") and a done one;
+//      SEEDED queue file written straight to disk - a stale running task with two agents, a queued task whose files
+//      clash with a LIVE running holder (a run seeded into the job store, because the lane rule reads liveness and
+//      not the state word), a parked task with no owner (the record that used to paint "unowned") and a done one;
 //   2. the real pane in headless Chromium, at 1280 then 340 wide: every row renders as a card (a surface, a
 //      non-zero border-radius, a visible gap to the next card), the actions row sits at the card's bottom edge, and
 //      every fact the row carried before is still on it — the head (#id, title, state mark), one sub-row per agent
@@ -26,6 +27,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { freePort, ROOT, waitFor } from "./panel-testkit.mjs";
 import { loadPlaywright } from "./browser.mjs";
+import { readStyleSheets } from "./style-sheets.mjs";
 
 const WATCHDOG_MS = Number(process.env.PANEL_VERIFY_WATCHDOG_MS || 240_000);
 const watchdog = setTimeout(() => {
@@ -69,8 +71,12 @@ const outDir = process.env.QUEUE_CARDS_OUT || path.join(tmpdir(), "wtgui-queue-c
 mkdirSync(outDir, { recursive: true });
 
 // The seed: one task per state, with the fields the row draws. Task 1's two threads are one CURRENT run and one
-// earlier one, task 2's files clash with task 1's (the SKIPPED note), and task 3 has NO owner — the record that used
-// to print the label this brief deletes. Every task has an agent, so every row draws a pill.
+// earlier one, and it names no run id and has no live run behind either thread, so it is STALE - the note. Task 5 is
+// the LIVE holder the lane rule needs: its run is in the sandbox job store (below), its files overlap task 2's, and
+// task 2 is queued behind it, so the SKIPPED note reads "files in use by #5". Before the lane rule landed (queue row
+// 293) ANY running row made a queued row skip; now only a row a LIVE job is working does, which is why the stale and
+// the live row are both here. Task 3 has NO owner - the record that used to print the label this brief deletes.
+// Every task has an agent, so every row draws a pill.
 const at = new Date("2026-11-02T09:00:00.000Z").toISOString();
 const TASKS = [
   {
@@ -85,7 +91,7 @@ const TASKS = [
     thread: "seed-thread-before",
     threads: ["seed-thread-before", "seed-thread-live"],
     worktree: "C:/dev/agent-worktree-gui/.worktrees/queue-cards-seed",
-    files: ["public/assistant.js", "public/style.css", "tools/verify-queue-cards.mjs", "test/assistant-queue-ui.test.js", "package.json"],
+    files: ["public/assistant.js", "public/queue.css", "tools/verify-queue-cards.mjs", "test/assistant-queue-ui.test.js", "package.json"],
     attempts: 2,
   },
   {
@@ -122,6 +128,21 @@ const TASKS = [
     thread: "seed-thread-done",
     threads: ["seed-thread-done"],
   },
+  {
+    id: 5,
+    title: "Hold the lane on the split sheets",
+    detail: "the live holder a queued row waits behind",
+    state: "running",
+    owner: "assistant-1",
+    createdBy: "reader",
+    createdAt: at,
+    startedAt: at,
+    runId: "seed-run-holder",
+    thread: "seed-thread-holder",
+    threads: ["seed-thread-holder"],
+    files: ["public/assistant.js", "public/queue.css"],
+    attempts: 1,
+  },
 ];
 
 let panel = null;
@@ -135,6 +156,38 @@ try {
   const port = await freePort();
   ok("the sandbox port is not the live one", port !== 7331, `port ${port}`);
   note(`temp root ${dir}`);
+
+  // THE LIVE HOLDER'S RUN. A queued row is skipped only by a row a LIVE job is working (lib/spawn-check.js
+  // `liveRowHolders`), so task 5's run has to exist in the job store. The store is read at boot, the sandbox's
+  // gateway is a dead port, and the boot reconcile skips a restored run it cannot ask about ("a restored turn stays
+  // live and pending") - so one record, written before the panel starts, reads LIVE for the whole gate.
+  const jobsFile = path.join(dir, "logs", "jobs.json");
+  mkdirSync(path.dirname(jobsFile), { recursive: true });
+  writeFileSync(
+    jobsFile,
+    `${JSON.stringify(
+      {
+        savedAt: at,
+        jobs: [
+          {
+            id: "hold0001",
+            runId: "seed-run-holder",
+            thread: "seed-thread-holder",
+            turn: 0,
+            prompt: "seed: hold the lane on the split sheets",
+            cwd: path.join(dir, "panel-cwd"),
+            worktreePath: path.join(dir, "holder-tree"),
+            status: "running",
+            startedAt: at,
+            lines: [{ kind: "out", text: "holding the lane", lid: 1, at: new Date(at).getTime() }],
+          },
+        ],
+      },
+      null,
+      1,
+    )}\n`,
+    "utf8",
+  );
 
   const configPath = path.join(dir, "config.json");
   writeFileSync(
@@ -151,6 +204,8 @@ try {
         scanMode: "all",
         defaultCwd: path.join(dir, "panel-cwd"),
         projectsCacheFile: path.join(dir, "logs", "projects.json"),
+        // The seeded store above, named explicitly so the gate does not lean on the sandbox layout rule.
+        jobsFile,
         // A dead port and a switched-off sentry: this gate is a store and a pane, and nothing here may wake a model.
         apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
         assistant: { enabled: false, autonomy: "draft", seconds: 3600, maxWakesPerHour: 0 },
@@ -208,20 +263,22 @@ try {
   ok("Assistant #1's queue is found at boot", before?.found === true, JSON.stringify({ found: before?.found, error: before?.error }));
   const queueFile = before?.file || "";
   ok("…and names a queue.json on disk", existsSync(queueFile), slash(queueFile));
-  writeFileSync(queueFile, `${JSON.stringify({ version: 1, nextId: 5, tasks: TASKS }, null, 2)}\n`, "utf8");
+  writeFileSync(queueFile, `${JSON.stringify({ version: 1, nextId: 6, tasks: TASKS }, null, 2)}\n`, "utf8");
   const seeded = await view();
-  check("the route reads the seed: four tasks, one per state", seeded?.tasks?.map((t) => [t.id, t.state]), [[1, "running"], [2, "queued"], [3, "parked"], [4, "done"]]);
-  ok("…the running task is stale (no live run behind its thread), so the row has a note to draw", seeded?.tasks?.find((t) => t.id === 1)?.stale === true, String(seeded?.tasks?.find((t) => t.id === 1)?.staleWhy || ""));
-  ok("…the queued task is skipped against it, so the row has its reason", /files in use by #1/.test(seeded?.tasks?.find((t) => t.id === 2)?.skipped || ""), seeded?.tasks?.find((t) => t.id === 2)?.skipped || "(none)");
+  check("the route reads the seed: five tasks, one running pair, every other state once", seeded?.tasks?.map((t) => [t.id, t.state]), [[1, "running"], [2, "queued"], [3, "parked"], [4, "done"], [5, "running"]]);
+  ok("…the first running task is stale (no live run behind its threads), so the row has a note to draw", seeded?.tasks?.find((t) => t.id === 1)?.stale === true, String(seeded?.tasks?.find((t) => t.id === 1)?.staleWhy || ""));
+  ok("…the second running task is LIVE, its run answered by the seeded store", seeded?.tasks?.find((t) => t.id === 5)?.stale !== true, String(seeded?.tasks?.find((t) => t.id === 5)?.staleWhy || "(live)"));
+  ok("…the queued task is skipped against the live holder, so the row has its reason", /files in use by #5/.test(seeded?.tasks?.find((t) => t.id === 2)?.skipped || ""), seeded?.tasks?.find((t) => t.id === 2)?.skipped || "(none)");
+  ok("…and the stale row holds no lane: the skip names the live holder, never #1", !/files in use by #1\b/.test(seeded?.tasks?.find((t) => t.id === 2)?.skipped || ""));
   // A second assistant, so the row's ➡️ Move control (and its title/aria-label) is part of "every glyph".
   const made = await fetch(`${base}/api/assistant/assistants`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   ok("a second assistant exists, so every row draws its Move glyph", made.status === 201, `HTTP ${made.status}`);
 
   // The source half of "unowned appears nowhere": a label deleted from the renderer cannot come back silently.
   const assistantSrc = readFileSync(path.join(ROOT, "public/assistant.js"), "utf8");
-  const styleSrc = readFileSync(path.join(ROOT, "public/style.css"), "utf8");
+  const styleSrc = readStyleSheets({ root: ROOT });
   ok("public/assistant.js carries no \"unowned\" string", !assistantSrc.includes("unowned"));
-  ok("public/style.css no longer has an .as-task-owner rule", !styleSrc.includes(".as-task-owner"));
+  ok("no sheet the page links carries an .as-task-owner rule", !styleSrc.includes(".as-task-owner"));
 
   // ---- the pane, in a browser --------------------------------------------------------------------
   console.log("\n== the pane, in a real browser ==");
@@ -249,10 +306,10 @@ try {
     await page.click('#as-subtabs [data-as-subtab="queue"]');
     await page.waitForSelector("#as-queue:not(.hidden)");
 
-    const rowsReady = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 4), {
+    const rowsReady = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 5), {
       timeoutMs: 20_000,
       stepMs: 200,
-      what: "the four seeded cards to paint",
+      what: "the five seeded cards to paint",
     });
     ok("the pane paints one card per task", rowsReady, `${await page.locator("#as-queue .as-task").count()} card(s)`);
     if (!rowsReady) note(`pane text: ${(await page.locator("#as-queue").innerText()).replace(/\s+/g, " ").slice(0, 700)}`);
@@ -313,8 +370,9 @@ try {
       });
 
     const wide = await snap();
-    check("the cards are the four seeded tasks, in state order", wide.rows.map((r) => [r.id, r.title]), [
+    check("the cards are the five seeded tasks, running first then queue order", wide.rows.map((r) => [r.id, r.title]), [
       ["1", "Land the queue cards"],
+      ["5", "Hold the lane on the split sheets"],
       ["2", "Tighten the meta line"],
       ["3", "Park on the DBA's verify"],
       ["4", "Ship the removed label"],
@@ -341,24 +399,27 @@ try {
     // the facts the row carried before -------------------------------------------------------------
     check("the head still carries #id, title and the state mark", wide.rows.map((r) => [r.headId, r.mark]), [
       ["#1", "●"],
+      ["#5", "●"],
       ["#2", "○"],
       ["#3", "⏸"],
       ["#4", "✓"],
     ]);
     check("one sub-row per agent, with its thread", wide.rows.map((r) => r.agents.map((a) => a.thread)), [
       ["seed-thread-before", "seed-thread-live"],
+      ["seed-thread-holder"],
       ["seed-thread-queued"],
       ["seed-thread-parked"],
       ["seed-thread-done"],
     ]);
     ok("…each agent wearing a pill with a word and the card's own class", wide.rows.every((r) => r.agents.length && r.agents.every((a) => a.pill && /\bpill\b/.test(a.pillClass))), JSON.stringify(wide.rows.map((r) => r.agents.map((a) => [a.pill, a.pillClass]))));
     ok("no row fell back to the no-agent placeholder", wide.rows.every((r) => !r.placeholder));
-    ok("the meta line still names the tree and the files", /tree .*queue-cards-seed/.test(wide.rows[0]?.meta || "") && /files public\/assistant\.js, public\/style\.css/.test(wide.rows[0]?.meta || ""), wide.rows[0]?.meta);
+    ok("the meta line still names the tree and the files", /tree .*queue-cards-seed/.test(wide.rows[0]?.meta || "") && /files public\/assistant\.js, public\/queue\.css/.test(wide.rows[0]?.meta || ""), wide.rows[0]?.meta);
     ok("…and truncates a long file list rather than growing the card", /… · /.test(wide.rows[0]?.meta || ""), wide.rows[0]?.meta);
     ok("the running row says STALE with its why", /^STALE — that thread has no live run/.test(wide.rows[0]?.note || ""), wide.rows[0]?.note);
-    ok("the queued row says SKIPPED with the clash", /^SKIPPED — files in use by #1/.test(wide.rows[1]?.note || ""), wide.rows[1]?.note);
-    ok("the parked row says parked with its reason", /^parked — waiting on the DBA's verify$/.test(wide.rows[2]?.note || ""), wide.rows[2]?.note);
-    ok("the done row is still greyed in place", wide.rows[3]?.opacity !== "1", `opacity ${wide.rows[3]?.opacity}`);
+    ok("the live holder row draws no stale or skipped note", !wide.rows[1]?.note, wide.rows[1]?.note || "(none)");
+    ok("the queued row says SKIPPED with the clash", /^SKIPPED — files in use by #5/.test(wide.rows[2]?.note || ""), wide.rows[2]?.note);
+    ok("the parked row says parked with its reason", /^parked — waiting on the DBA's verify$/.test(wide.rows[3]?.note || ""), wide.rows[3]?.note);
+    ok("the done row is still greyed in place", wide.rows[4]?.opacity !== "1", `opacity ${wide.rows[4]?.opacity}`);
     ok("every glyph is drawn with its title= and aria-label=", wide.rows.every((r) => r.glyphs.length >= 5 && r.glyphs.every((g) => g.title && g.aria && g.text)), JSON.stringify(wide.rows[0]?.glyphs.map((g) => [g.act, g.text, g.aria])));
     ok("…including the ➡️ Move control", wide.rows.every((r) => r.glyphs.some((g) => g.act === "move" && g.aria === "Move")));
 
@@ -389,16 +450,16 @@ try {
       await page.click('#as-subtabs [data-as-subtab="queue"]');
     }
     await page.waitForSelector("#as-queue:not(.hidden)", { timeout: 25_000 });
-    const narrowReady = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 4), {
+    const narrowReady = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 5), {
       timeoutMs: 20_000,
       stepMs: 200,
-      what: "the four cards to paint at 340 wide",
+      what: "the five cards to paint at 340 wide",
     });
-    ok("the narrow window paints all four cards again", narrowReady, `${await page.locator("#as-queue .as-task").count()} card(s)`);
+    ok("the narrow window paints all five cards again", narrowReady, `${await page.locator("#as-queue .as-task").count()} card(s)`);
     await page.locator("#as-queue .as-task").first().scrollIntoViewIfNeeded().catch(() => {});
     await page.waitForTimeout(250);
     const narrow = await snap();
-    ok("the narrow pane still paints all four cards", narrow.rows.length === 4, `${narrow.rows.length} card(s)`);
+    ok("the narrow pane still paints all five cards", narrow.rows.length === 5, `${narrow.rows.length} card(s)`);
     ok("…each still a card with a non-zero radius", narrow.rows.every((r) => r.radius > 0), JSON.stringify(narrow.rows.map((r) => r.radius)));
     ok("…still with visible spacing between them", narrow.rows.slice(1).every((r, i) => r.top - narrow.rows[i].bottom >= 4), JSON.stringify(narrow.rows.slice(1).map((r, i) => Math.round((r.top - narrow.rows[i].bottom) * 10) / 10)));
     ok("…still with its agent pill and glyphs", narrow.rows.every((r) => r.agents.every((a) => a.pill) && r.glyphs.length >= 5));

@@ -483,7 +483,7 @@ try {
         }
 
         // ---- the wide float: the same lane in the panel's floating frame, at a width where the member row is the
-        // GRID drawing (public/style.css `@container (min-width: 900px)`). The dock above never reaches that query, so
+        // GRID drawing (public/initiatives.css `@container (min-width: 900px)`). The dock above never reaches that query, so
         // without this pass the six-column row would be shipped unmeasured.
         console.log("\n== the wide float ==");
         const frame = await post(base, "/api/settings/general", { body: { dockMode: "floating" } });

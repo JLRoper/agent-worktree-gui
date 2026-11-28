@@ -79,12 +79,12 @@ const listenersOn = (port) => {
 const now = Date.now();
 const iso = (min) => new Date(now - min * 60_000).toISOString();
 const SEED = [
-  { id: 1, title: "Land the queue row's facts-first redesign", state: "running", files: ["public/assistant.js", "public/style.css"], project: "agent-worktree-gui", worktree: "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/queue-row-facts-3f2a19", thread: "wtgui-land-queue-facts-3f2a19", threads: ["wtgui-land-queue-facts-3f2a19"], attempts: 2, detail: "The row reads what it is, its state and what it is waiting on; everything else is folded." },
+  { id: 1, title: "Land the queue row's facts-first redesign", state: "running", files: ["public/assistant.js", "public/queue.css"], project: "agent-worktree-gui", worktree: "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/queue-row-facts-3f2a19", thread: "wtgui-land-queue-facts-3f2a19", threads: ["wtgui-land-queue-facts-3f2a19"], attempts: 2, detail: "The row reads what it is, its state and what it is waiting on; everything else is folded." },
   { id: 6, title: "Prove the folded row in a real browser", state: "queued", files: ["tools/verify-assistant-queue-ui.mjs"], order: 1, project: "agent-worktree-gui", detail: "The harness drives this page, not jsdom." },
   { id: 2, title: "Re-skin the queue's row and its chrome", state: "queued", files: ["public/assistant.js"], order: 2, project: "agent-worktree-gui" },
   { id: 3, title: "Tighten the queue rail's spacing", state: "queued", files: ["tools/verify-assistant-queue-ui.mjs"], order: 3, hold: { kind: "task", value: "#1", since: iso(80) } },
   { id: 4, title: "SQL verify for the queue store", state: "parked", reason: "waiting on the DBA's verify", hold: { kind: "manual", since: iso(65) }, files: ["db/queue.sql"], project: "agent-worktree-gui" },
-  { id: 5, title: "Split the queue row's meta line", state: "done", files: ["public/style.css"], doneAt: iso(30), doneBy: "panel", project: "agent-worktree-gui" },
+  { id: 5, title: "Split the queue row's meta line", state: "done", files: ["public/queue.css"], doneAt: iso(30), doneBy: "panel", project: "agent-worktree-gui" },
 ];
 const ROWS = SEED.length;
 

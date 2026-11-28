@@ -20,6 +20,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openPage, withBrowser } from "./browser.mjs";
+import { styleLinkTags } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.PANEL_ROOT ? path.resolve(process.env.PANEL_ROOT) : path.join(HERE, "..");
@@ -58,7 +59,7 @@ const NONBLANK = SEGMENTS.filter((s) => s !== "");
 // drives it - one frame, the whole line - then settled through the page's own path.
 const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>one line, every block</title>
-<link rel="stylesheet" href="/public/style.css">
+${styleLinkTags({ root: ROOT })}
 </head>
 <body style="margin:0;padding:18px;background:#0d1117">
 <div class="job" id="card" style="max-width:760px">

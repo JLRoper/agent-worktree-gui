@@ -7,7 +7,7 @@
 // WHAT THIS IS. docs/plan/deliverables-handback.md puts one header button beside HUMAN and one popover listing every
 // deliverable the panel has recorded, newest first, each row with its age. This gate boots a throwaway panel
 // (tools/panel-testkit.mjs) which serves the real `server.js`, `public/index.html`, `public/app.js` and
-// `public/style.css`, and drives the page in headless Chromium.
+// every sheet the page links, and drives the page in headless Chromium.
 //
 // WHAT CHANGED, AND WHY IT MATTERS. The first version of this file answered `GET /api/deliverables` and
 // `POST /api/deliverables/open` from Playwright route handlers because the backend had not landed — and that is

@@ -6,7 +6,8 @@
 //   node tools/verify-assistant-float-header.mjs --shots <dir>
 //
 // THE DEFECT. `public/assistant.js` drew a watch deadline's draining bar as `<span class="as-bar">`, and
-// `public/style.css` gave `.as-bar` its box late in the file (`width: 78px; height: 4px; overflow: hidden`). The
+// `public/assistant-panes.css` gave `.as-bar` its box late in that sheet (`width: 78px; height: 4px; overflow:
+// hidden`). The
 // assistant's TITLE ROW is also `.as-bar` — so the later rule became the header's own box: 78 px wide, 15 px tall
 // (4 + the two 7 px paddings + the 1 px border), 478 px of content inside it. `#assistant { overflow: hidden }` then
 // cut the name and the mode chip off at the float's top edge: the name's box started at y = 79.2 while the float

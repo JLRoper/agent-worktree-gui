@@ -258,7 +258,7 @@ const shot = async (page, name, selector = "#as-initiatives") => {
 const WIDTHS = [
   { label: "480px dock", dock: 480, viewport: { width: 1440, height: 900 } },
   { label: "720px dock", dock: 720, viewport: { width: 1440, height: 900 } },
-  // The wide container splits the OPEN card into its words and its cast (public/style.css's 1000px container
+  // The wide container splits the OPEN card into its words and its cast (public/initiatives.css's 1000px container
   // query), so it is a second drawing of the same card and the title has to stay put there too.
   { label: "1100px dock, the split plate", dock: 1100, viewport: { width: 2200, height: 900 } },
 ];
