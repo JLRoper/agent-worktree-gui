@@ -3,8 +3,10 @@
 // became per-surface sheets. It is not a proof that the cut is faithful (tools/verify-css-split.mjs is
 // that proof); it asks the next question: is the RESULT a good split of the work, or only a good copy?
 //
-// Seven measurements, each one computed, never typed in:
+// Eight measurements, each one computed, never typed in:
 //
+//   map            every sheet the cut produced has a surface in the SURFACES map, and every entry names a
+//                  sheet public/index.html links today. A rename fails here by name.
 //   inventory      lines, bytes, rule blocks, selector entries and declarations per sheet, and each
 //                  sheet's share of the whole.
 //   duplication    selectors that live in more than one sheet, identical declaration blocks repeated
@@ -63,24 +65,30 @@ const num = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : v);
 
 // Every local sheet public/index.html loads, in load order. chart.css and the two core/ card sheets
 // were never part of the one panel sheet; they are still in the order because the cascade measurement needs the
-// whole list, but a "split sheet" is one of the nineteen the cut produced. The list is parsed from the page by
-// tools/style-sheets.mjs, so a sheet added there is reviewed without an edit here.
+// whole list, but a "split sheet" is one of the sheets the cut produced and the page still links. The list is
+// parsed from the page by tools/style-sheets.mjs, so a sheet added there is reviewed without an edit here, and
+// the SURFACES map below is checked against it (mapFindings).
 export function stylesheetsInLoadOrder(root = ROOT) {
   return styleSheetFiles({ root }).map((href) => ({ href, split: !(href === "chart.css" || href.startsWith("core/")) }));
 }
 
-// The surface each sheet owns, as the split's own report names it.
+// The surface each sheet owns, as the split's own reports name it. THE MAP IS CHECKED AGAINST THE PAGE: a live
+// sheet the cut produced with no entry, or an entry naming a sheet that is gone, fails `npm run review:css-split`
+// (see mapFindings). Rows 445 and 446 dissolved jobs.css, turns.css, rowstrips.css and late.css into the sheets
+// below, and added console-head.css, console-turns.css, model-menu.css and utilities.css, so this is the list of
+// sheets that exist today - not the list the cut produced in 1.191.0.
 export const SURFACES = {
-  "base.css": "tokens and resets",
+  "base.css": "tokens and page resets",
   "chrome.css": "header and status strip",
   "settings.css": "Settings drawer and its tabs",
   "board-table.css": "the board table, its rows, controls, chips and strips",
-  "jobs.css": "job cards",
-  "console.css": "the console: agent pane and thought rows",
-  "turns.css": "conversation turns",
+  "console.css": "the console's frame, body, output box and composer",
+  "console-head.css": "the console's head: title, meta, cwd, pipeline chip, status and controls",
+  "console-turns.css": "the console's turns: rail, head, prompt, peek and origin chips",
+  "model-menu.css": "the model picker the console head's readout opens",
   "overlays.css": "deliverables, reply box, question cards, ghost turns",
-  "rowstrips.css": "the console head's buttons and the panel's type/status utilities",
-  "assistant.css": "the assistant entry, spawn strip and float shell",
+  "utilities.css": "the panel's type and status utilities",
+  "assistant.css": "the assistant entry, spawn strip, float shell and search chrome",
   "feedback.css": "Clarify, Collisions and Permissions controls",
   "assistant-panes.css": "the float's tabs, panes, search and settings",
   "initiatives.css": "the initiatives tab",
@@ -89,6 +97,20 @@ export const SURFACES = {
   "pipeline.css": "pipeline window, messages, flow and modal",
   "chart.css": "the age column and the legend",
 };
+
+// The map against the page. The defect this exists for: rows 445 and 446 deleted four sheets and added four, and the
+// map kept naming three of the deleted ones (late.css was never in it, and the tool's catch-all record already says
+// row 446 dissolved it) while the four that exist read as "no surface". A renamed sheet is the same defect on one
+// name - so the check is the sheet LIST, not only the labels: every sheet the cut produced must have an entry, and
+// every entry must name a sheet the page links.
+export function mapFindings(order = stylesheetsInLoadOrder()) {
+  const live = order.map((entry) => entry.href);
+  const split = order.filter((entry) => entry.split).map((entry) => entry.href);
+  const unmapped = split.filter((name) => !Object.hasOwn(SURFACES, name));
+  const stale = Object.keys(SURFACES).filter((name) => !live.includes(name));
+  const unlabeled = split.filter((name) => Object.hasOwn(SURFACES, name) && !String(SURFACES[name] || "").trim());
+  return { live, split, unmapped, stale, unlabeled, ok: !unmapped.length && !stale.length && !unlabeled.length };
+}
 
 // ---------------------------------------------------------------------------------------------
 // A CSS reader: rules with their at-rule context and declarations, no package needed
@@ -530,7 +552,8 @@ export function staticHalf() {
   const dup = duplication(sheets);
   const cat = catchAll(sheets);
   const cas = cascade(sheets);
-  return { sheets, inventory: inv, duplication: dup, catchAll: cat, cascade: cas };
+  const map = mapFindings(sheets.map((s) => ({ href: s.href, split: s.split })));
+  return { sheets, inventory: inv, duplication: dup, catchAll: cat, cascade: cas, map };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -538,7 +561,20 @@ export function staticHalf() {
 // ---------------------------------------------------------------------------------------------
 
 function printStatic(result) {
-  const { inventory: inv, duplication: dup, catchAll: cat, cascade: cas } = result;
+  const { inventory: inv, duplication: dup, catchAll: cat, cascade: cas, map } = result;
+
+  line("MAP");
+  if (map.ok) {
+    line(`  ${map.live.length} sheets the page links: ${map.split.length} the cut produced, plus chart.css and the two core/ cards; every one the cut produced has a surface`);
+  } else {
+    line(`  FAIL  map: ${map.unmapped.length} sheet(s) with no surface, ${map.stale.length} entry(ies) naming a sheet that is gone, ${map.unlabeled.length} with an empty label`);
+    for (const name of map.unmapped) line(`    unmapped   ${name}`);
+    for (const name of map.stale) line(`    stale      ${name}`);
+    for (const name of map.unlabeled) line(`    unlabeled  ${name}`);
+    line("    the map in this file must name the sheets public/index.html links today, and no others");
+  }
+  line("");
+
   line("INVENTORY");
   line(`  ${"sheet".padEnd(22)} ${"lines".padStart(6)} ${"bytes".padStart(8)} ${"rules".padStart(6)} ${"sels".padStart(6)} ${"decls".padStart(7)} ${"bytes%".padStart(7)} ${"rules%".padStart(7)}`);
   for (const s of inv.sheets) {
@@ -1145,6 +1181,7 @@ let failures = 0;
 async function main() {
   const result = staticHalf();
   printStatic(result);
+  if (!result.map.ok) failures += 1;
 
   let browser = null;
   if (!STATIC_ONLY) {
@@ -1204,6 +1241,7 @@ async function main() {
   const payload = {
     generatedAt: new Date().toISOString(),
     generatedFrom: ".", // a repo-relative marker: a committed artifact must not name this machine's folder
+    map: result.map,
     inventory: result.inventory,
     duplication: result.duplication,
     catchAll: result.catchAll,
