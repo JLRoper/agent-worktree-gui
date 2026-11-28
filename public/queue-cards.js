@@ -89,12 +89,19 @@ window.WMApp.queueCards = function queueCards(deps) {
   let queueDrag = null;
   let queueDragEnded = 0;
   const queueDropNotes = new Map(); // assistantId -> the sentence a blocked drop left on the pane
-  // How much of the list the pane draws. A queue holds up to 200 tasks and the pane is rebuilt on every board tick and
-  // after every action, so drawing the whole history is a page nobody reads and a DOM the poll keeps paying for. The
-  // window lives HERE, outside the painter, keyed by assistant: a repaint reads it back instead of starting at 20 again.
+  // How much of the FINISHED history the pane draws. A queue holds up to 200 tasks and the pane is rebuilt on every
+  // board tick and after every action, so drawing the whole history is a page nobody reads and a DOM the poll keeps
+  // paying for. The window lives HERE, outside the painter, keyed by assistant: a repaint reads it back instead of
+  // starting at 20 again.
+  //
+  // IT NEVER APPLIES TO AN OPEN ROW, and that was the defect the reader photographed on 2026-11-28: the window counted
+  // from the newest task ID, so a RUNNING row whose id was older than the twenty newest (#402, #404 and #411, three live
+  // runs) had no card at all while the caption above it - built from the store's own counts - read "5 running". The tab
+  // is the work the assistant is CARRYING, so every queued, running and parked row is drawn; the history is the only
+  // thing a window may hide, and the note under the list says how much of it.
   const QUEUE_FIRST = 20;
   const QUEUE_MORE = 50;
-  const queueShown = new Map(); // assistantId -> how many of the newest tasks the pane draws
+  const queueShown = new Map(); // assistantId -> how many of the newest FINISHED tasks the pane draws
   const queueWindowOf = (id) => {
     const n = Number(queueShown.get(String(id)));
     return Number.isFinite(n) && n >= QUEUE_FIRST ? n : QUEUE_FIRST;
@@ -110,17 +117,21 @@ window.WMApp.queueCards = function queueCards(deps) {
         .slice(0, shown)
         .map((t) => String(t.id)),
     );
-  // The window's rows in DRAWING order. The active buckets keep `queueSorted`'s order (a queued card's drag position is
-  // the reader's), and the finished bucket reads newest first: its useful end is the latest work, and "Load 50 more" then
-  // appends older rows UNDER the ones on screen instead of inserting them out of sight above.
+  // The window's rows in DRAWING order. Every OPEN row first, always, in `queueSorted`'s order (a queued card's drag
+  // position is the reader's); then the finished bucket, newest first, down to the window. "Load 50 more" appends older
+  // finished rows UNDER the ones on screen instead of inserting them out of sight above.
   const queueWindowRows = (sorted, shown) => {
-    const ids = queueWindowIds(sorted, shown);
-    const visible = (Array.isArray(sorted) ? sorted : []).filter((t) => ids.has(String(t.id)));
-    return [
-      ...visible.filter((t) => t.state !== "done"),
-      ...visible.filter((t) => t.state === "done").sort((a, b) => Number(b.id) - Number(a.id)),
-    ];
+    const rows = Array.isArray(sorted) ? sorted : [];
+    const open = rows.filter((t) => t.state !== "done");
+    const finished = rows.filter((t) => t.state === "done");
+    const ids = queueWindowIds(finished, shown);
+    return [...open, ...finished.filter((t) => ids.has(String(t.id))).sort((a, b) => Number(b.id) - Number(a.id))];
   };
+  // The queue file's stamp, off the assistant row the board already carries. It is the server's own mtime+size for
+  // state/assistants/<id>/queue.json (lib/assistant/queue.js `readQueueFile`), so it moves on ANY write - this panel's,
+  // a script's, another panel's - which is what a clock cannot tell the pane. "" when the payload names none, and that is
+  // not "unchanged": the twenty-second clock is then the only guard, exactly as it was before the stamp existed.
+  const queueStampOf = (id) => String(sessionById(id)?.queueStamp || "");
 
   // ---- a task id is a reference into this pane -------------------------------------------------------
   //
@@ -902,14 +913,16 @@ window.WMApp.queueCards = function queueCards(deps) {
     return rows.length ? "" : `<div class="as-help" ${at}>(empty — this assistant is carrying nothing)</div>`;
   }
 
-  // The one control under the list. It appends the next-newest slice of the tasks the window is still hiding, and it
+  // The one control under the list. It appends the next slice of the FINISHED tasks the window is still hiding, and it
   // RETIRES at the end of the list: with nothing hidden there is no control to draw, not a disabled button that costs a
-  // line forever. The count in the note is the truth the label does not spell out when fewer than 50 are left.
-  function queueMoreHtml(id, hidden) {
+  // line forever. Every open row is drawn ABOVE it, so what this hides is history - and the note leads with "showing N
+  // of M" because a list that hides a row without saying so is exactly how this tab came to read as one agent working
+  // while five were running. The count after the dash is what the label does not spell out when fewer than 50 are left.
+  function queueMoreHtml(id, hidden, drawn = 0, total = 0) {
     const left = Number(hidden) || 0;
     if (left <= 0) return "";
     const more = Math.min(QUEUE_MORE, left);
-    return `<div class="as-qmore"><button type="button" class="as-qmore-btn" data-as-qact="more" data-as-qown="${esc(id)}" title="append the next ${more} older task${more === 1 ? "" : "s"} - the list opens at the newest ${QUEUE_FIRST}, and this control goes away when every task is shown">Load ${more} more</button><span class="as-qmore-note">${left} older task${left === 1 ? "" : "s"} not shown</span></div>`;
+    return `<div class="as-qmore"><button type="button" class="as-qmore-btn" data-as-qact="more" data-as-qown="${esc(id)}" title="append the next ${more} older task${more === 1 ? "" : "s"} - the list opens at the newest ${QUEUE_FIRST} FINISHED tasks (every queued, running and parked row is always drawn), and this control goes away when every task is shown">Load ${more} more</button><span class="as-qmore-note">showing ${Number(drawn) || 0} of ${Number(total) || 0} - ${left} older task${left === 1 ? "" : "s"} not shown</span></div>`;
   }
   function renderAssistantQueue(id = activeSessionId(), force = false) {
     const host = hostFor(id, "queue");
@@ -922,7 +935,15 @@ window.WMApp.queueCards = function queueCards(deps) {
     // Ask for a read BEFORE the paint when the cache is missing or old: the paint then says it is reading instead of
     // "not read yet" for a frame, and the answer repaints it WITHOUT forcing another read (see loadQueue's .finally).
     const before = queueCache.get(id);
-    if (force || !before || Date.now() - Number(before.at || 0) > 20_000) void loadQueue(id);
+    // WHAT MAKES A QUEUE "OLD" IS THE FILE, NOT A CLOCK. This pane is repainted by every board frame - a row event, an
+    // assistant event, the page's own 30 s anti-entropy read - and a read per paint is the request loop this pane was
+    // fixed for once. The panel puts the queue file's mtime+size stamp on the assistant row (lib/assistant.js
+    // `assistantList`), so a queue that MOVED gets exactly one read and an unchanged one gets none: the reader's defect
+    // was a page whose rows went running while the pane kept a view up to twenty seconds old. The twenty-second clock
+    // stays as the fallback for a payload that names no stamp (an older server, a queue file that is not there).
+    const stamp = queueStampOf(id);
+    const moved = Boolean(stamp) && String(before?.view?.stamp || "") !== stamp;
+    if (force || !before || moved || Date.now() - Number(before.at || 0) > 20_000) void loadQueue(id);
     // The agents' statuses come from their own route, and a paint asks for it at most every few seconds: the pane is
     // repainted by the board poll, so a read per paint would be the request loop the queue pane was fixed for once.
     if (!queueJobs.at || Date.now() - queueJobs.at > 5_000) void loadQueueJobs();
@@ -978,7 +999,7 @@ window.WMApp.queueCards = function queueCards(deps) {
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
         ${dropNote ? `<div class="as-qdrop" data-as-qdrop="${esc(id)}" role="status">${esc(dropNote)}</div>` : ""}
         ${visible.map((t) => taskCardHtml(t, "full", { own: id, jobs: queueJobs.byThread, byId, alerts: state.assistant?.alerts || [] })).join("")}
-        ${queueMoreHtml(id, hidden)}
+        ${queueMoreHtml(id, hidden, visible.length, sorted.length)}
       </div>`;
   }
 
