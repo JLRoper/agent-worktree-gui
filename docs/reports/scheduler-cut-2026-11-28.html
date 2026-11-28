@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The scheduler cut: lib/scheduler.js into lib/scheduler-lifecycle.js and lib/scheduler-passes.js</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 220px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap:anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The scheduler cut: one file into two</h1>
+<p class="sub">agent-worktree-gui 1.197.0. Row #538, cut of the module-separation plan's entry 14: <code>lib/scheduler.js</code>, 1,648 lines, split into the two cuts the plan names. A pure move, one commit per cut, everything behind the existing export.</p>
+
+<dl class="facts">
+  <dt>base commit</dt><dd>e2a79719, the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code></dd>
+  <dt>turnover at merge</dt><dd>7ba2337c; no commit between e2a79719 and it touches lib/scheduler.js, so the merge needs no resolution</dd>
+  <dt>branch</dt><dd>wtgui/row-538-is-one-cut-of-the-module-13f5d5</dd>
+  <dt>lib/scheduler.js before</dt><dd>1,648 lines</dd>
+  <dt>lib/scheduler.js after</dt><dd>345 lines</dd>
+  <dt>new files</dt><dd>lib/scheduler-lifecycle.js (872 lines), lib/scheduler-passes.js (475 lines)</dd>
+  <dt>moved</dt><dd>1,259 lines in two blocks: 802 (768 non-blank) and 457 (442 non-blank)</dd>
+  <dt>export surface</dt><dd>3 module names and 42 method names before, the same 3 and 42 after</dd>
+  <dt>focused suite</dt><dd>14 files, 80 tests, 80 pass, 0 fail, at the base and after each cut</dd>
+</dl>
+
+<h2>1. The two cuts</h2>
+<p>The plan's card (entry 14 of <code>docs/reports/module-separation-2026-11-28.html</code>, read from commit 2ffacfef) names two new files and the base ranges they take. Every range was re-measured on e2a79719 before a line moved. The card's first range ends at 1,078 because it includes the blank line before the passes section; the moved code itself is 276-1,077.</p>
+<table>
+  <tr><th>commit</th><th>cut</th><th>new file</th><th>base range</th><th class="n">lines</th><th class="n">non-blank</th><th>what moves</th></tr>
+  <tr><td class="tool">ce37c014</td><td class="n">1</td><td class="tool">lib/scheduler-lifecycle.js</td><td class="tool">276-1,077</td><td class="n">802</td><td class="n">768</td><td>the lifecycle, the visible set, the tier gate and the promotion, the liveness pass, the session roots, the row read</td></tr>
+  <tr><td class="tool">1981e84c</td><td class="n">2</td><td class="tool">lib/scheduler-passes.js</td><td class="tool">1,079-1,535</td><td class="n">457</td><td class="n">442</td><td>markScanComplete, fastPass, fullScan, fullPassProject, fullPass, reconcile, agentCountFor</td></tr>
+</table>
+<p>Cut 1 declares <code>export class SchedulerLifecycle</code>; cut 2 declares <code>export class SchedulerPasses extends SchedulerLifecycle</code>; <code>lib/scheduler.js</code> declares <code>export class Scheduler extends SchedulerPasses</code>. Each method was Scheduler's own, so <code>this</code> is still the Scheduler instance and every call site inside the class is the line it was. Nothing was renamed.</p>
+
+<h2>2. What the line counts say</h2>
+<pre>before
+  1648 lib/scheduler.js
+after
+   345 lib/scheduler.js
+   872 lib/scheduler-lifecycle.js
+   475 lib/scheduler-passes.js
+after cuts together, 1692 lines (the base's 1,648 plus 44 lines of new headers,
+imports and class wrappers)</pre>
+<p>The base loses its two blocks exactly: 1,648 - 802 - 457 = 389 lines stay in <code>lib/scheduler.js</code>. The plan card's "about 388 lines stay" is that number.</p>
+<p>What stays: the file's header, the constructor and its config, <code>ctxFor</code> (the read queue), <code>adoptWorktree</code>, <code>maybeFetch</code> and <code>fetchPass</code>, plus the re-export of <code>yieldToLoop</code> and <code>staggeredReads</code>. The two readers and <code>norm</code> moved into the lifecycle module with the methods that need them; the passes import them from there.</p>
+
+<h2>3. The export surface, before and after</h2>
+<p>Read from the module, not from the text: <code>Object.keys(import("./lib/scheduler.js"))</code> for the exports, and a walk of the prototype chain from <code>Scheduler.prototype</code> to <code>Object.prototype</code> for the methods. The walk is what makes the check honest after a prototype layer is introduced: an own-property read of <code>Scheduler.prototype</code> alone would call 30 methods missing when they are one link up the chain.</p>
+<table>
+  <tr><th></th><th class="n">before</th><th class="n">after</th><th>names</th></tr>
+  <tr><td>module exports</td><td class="n">3</td><td class="n">3</td><td class="tool">Scheduler, staggeredReads, yieldToLoop</td></tr>
+  <tr><td>methods on the chain</td><td class="n">42</td><td class="n">42</td><td class="tool">see the list below</td></tr>
+</table>
+<pre>adoptWorktree, agentCountFor, boardPass, claudeRoots, constructor, countTiers, ctxFor,
+decorate, decorateReadRows, deferRow, dueAfter, enqueueDue, fastPass, fetchPass,
+fullPass, fullPassProject, fullScan, intervalFor, isProjectVisible, livenessPass,
+markScanComplete, maybeFetch, noteVisible, openProject, priorityFor, projectLocals,
+projectScanDue, projectTier, promoteNow, promoteProject, reconcile, remoteAnswers,
+scanOne, scanRow, sessionRoots, start, stop, tick, tierPass, viewingLive,
+visibilityReport, visibleOnly</pre>
+<p>The comparison is a set equality, not a count: the sorted list before the cut and the sorted list after it are identical, with no name missing and none added. The two checks were run after <i>each</i> commit, so cut 1 is proved on its own and cut 2 is proved with cut 1 in place.</p>
+
+<h2>4. The removed lines reappear verbatim</h2>
+<p>Each block was taken from the base commit, not from the edit in progress, and compared to the block that follows the new class declaration. Line endings are the working tree's own; the base blob and the new files print the same 802 and 457 lines.</p>
+<pre>git show e2a79719:lib/scheduler.js | sed -n '276,1077p'   # 802 lines, 768 non-blank
+git show e2a79719:lib/scheduler.js | sed -n '1079,1535p'  # 457 lines, 442 non-blank
+
+python: base[275:1077] == lifecycle[start : start+802]     -> True
+python: base[1078:1535] == passes[start : start+457]       -> True
+python: the 802-line block in lib/scheduler.js after cut 1 -> False (gone)
+python: the 457-line block in lib/scheduler.js after cut 2 -> False (gone)</pre>
+<p>The diff of <code>lib/scheduler.js</code> from the base to the head adds only the lines the two cuts require: five import lines (two of them the base's own import lines narrowed), the re-export, the class declaration with its new parent, and the one <code>super();</code> call with its comment. No method body appears in it.</p>
+
+<h3>The one added statement</h3>
+<p>A derived class constructor must call <code>super()</code> before it reads <code>this</code>. The first cut-1 test run found it: 34 of 71 tests failed with <code>ReferenceError: Must call super constructor in derived class before accessing 'this'</code>. The fix is the one call at the top of the constructor, and it is the only statement either cut adds to a body:</p>
+<pre>    // The lifecycle layer is a prototype layer, not a state holder: every field the instance reads is
+    // still set here, and the base constructor has nothing to do. Required by `extends`, nothing else.
+    super();</pre>
+<p>The base has no such failure because the construct does not exist there; it is a property of the cut, not a defect the base shares.</p>
+
+<h2>5. The focused tests</h2>
+<p>The set is the file's own selector, <code>npm run test:module lib/scheduler.js</code>, which runs the test files that name or import it. It is 14 files: <span class="small">base-ref, boot-rows-before-answers, boot-spawns, discovery-tiers, meta-off-loop, pr-cell, promotion-serialisation, remote-answers-yield, root-scan-chip, scan-defer-backoff, scan-defer-retry, tier-signal-workers, tree-cache-reconcile, worktree-board</span>.</p>
+<table>
+  <tr><th>tree</th><th class="n">tests</th><th class="n">pass</th><th class="n">fail</th><th>note</th></tr>
+  <tr><td>base e2a79719, before any edit</td><td class="n">80</td><td class="n">80</td><td class="n">0</td><td>the baseline the other two are read against</td></tr>
+  <tr><td>after cut 1, first run</td><td class="n">71</td><td class="n">37</td><td class="n">34</td><td>all 34 are the missing <code>super()</code>; suites stop at construction</td></tr>
+  <tr><td>after cut 1, with <code>super()</code></td><td class="n">80</td><td class="n">80</td><td class="n">0</td><td>ce37c014's committed state</td></tr>
+  <tr><td>after cut 2</td><td class="n">80</td><td class="n">80</td><td class="n">0</td><td>1981e84c, the tree this page is written on</td></tr>
+</table>
+<p>No failure in either committed state, so there is no failing test to compare against the base: the base run is 80 pass and 0 fail, the cut-1 and cut-2 runs are 80 pass and 0 fail. The intermediate 34 are described above and are not in the committed tree.</p>
+<p>The two new modules are reached through the old one: <code>npm run test:module lib/scheduler-lifecycle.js -- --list</code> and the same for <code>lib/scheduler-passes.js</code> each answer 13 test files, every one of them through <code>lib/scheduler.js</code>. No test file was edited, and no import site was edited.</p>
+
+<h2>6. What this page did not do</h2>
+<ul>
+  <li>No version bump. The package stays at 1.197.0.</li>
+  <li>No push and no pull request. The branch merges into the turnover locally; the turnover branch is where the work rolls up and the reader decides when it lands.</li>
+  <li>No full suite run. The row's proof is the focused set above; the full suite is a landing gate, not this cut's.</li>
+  <li>No behaviour change is claimed. The two files hold the same method bodies the base held; the tests are the evidence that the panel still builds a scheduler and drives it.</li>
+</ul>
+
+<h2>7. Commands</h2>
+<pre>wc -l lib/scheduler.js lib/scheduler-lifecycle.js lib/scheduler-passes.js
+git show e2a79719:lib/scheduler.js | sed -n '276,1077p'
+git show e2a79719:lib/scheduler.js | sed -n '1079,1535p'
+node --input-type=module -e 'import * as m from "./lib/scheduler.js";
+  const walk = (c) => { const s = new Set(); let p = c.prototype;
+    while (p && p !== Object.prototype) { Object.getOwnPropertyNames(p).forEach((k) => s.add(k)); p = Object.getPrototypeOf(p); }
+    return [...s].sort(); };
+  console.log(Object.keys(m).sort(), walk(m.Scheduler));'
+npm run test:module lib/scheduler.js</pre>
+
+<p class="small">Every number on this page was read on the branch in the facts list. The base ranges are the plan card's, re-measured on e2a79719 with <code>sed -n</code>; the span boundaries were spot-checked before a line moved.</p>
+
+</main>
+</body>
+</html>
