@@ -120,6 +120,8 @@ const viewRoom = hasView ? Number(opts.viewport) / z - top - gap : null;    // c
   <tr><td><code>verify-console-resize.mjs</code>, after</td><td>49</td><td class="ok">PASS</td></tr>
   <tr><td><code>verify-console-height.mjs</code>, band broken (canary)</td><td>2 of 66</td><td class="bad">FAIL</td></tr>
   <tr><td><code>verify-console-resize.mjs</code>, band broken (canary)</td><td>2 of 49</td><td class="bad">FAIL</td></tr>
+  <tr><td><code>verify-console-height.mjs</code>, on the merged turnover branch (2nd run)</td><td>66</td><td class="ok">PASS</td></tr>
+  <tr><td><code>verify-console-resize.mjs</code>, on the merged turnover branch</td><td>49</td><td class="ok">PASS</td></tr>
 </table>
 <p>The six new readings these gates now print on a passing run:</p>
 <pre>PASS  each console has viewport room under it for the 420px drag the band must allow  row 651.96875px home 606.78125px want &gt; 440px
@@ -178,6 +180,37 @@ RESULT: FAIL (2 checks)</pre>
   <code>public/index.html</code> itself, in cascade order. The two gates that did open the removed file
   (<code>verify-console-boxes.mjs</code>, <code>verify-console-fonts.mjs</code>) were converted by
   <code>5270cac9</code>.
+</p>
+
+<h2>The merge found a sibling</h2>
+<p>
+  This tree was cut from <code>3eaccda0</code>. By the time it merged, the turnover branch also carried row 416
+  (<code>d9931fcd</code>), which makes the Unattached agents card start minimized: <code>FIXED_DEFAULT_COLLAPSED</code>
+  in <code>public/app.js</code> writes the fold before the first paint. Both gates waited for a visible
+  <code>pre.job-out</code> at load, and the one console on that page at load lives in that card, so on the merged branch
+  both timed out before their first check. Neither gate had ever seen the other change; the merge was where they met.
+</p>
+<p>
+  Each gate now opens the card the way a reader does, a press on its own head, and only when it is folded
+  (<code>tools/verify-console-height.mjs:458</code>, <code>tools/verify-console-resize.mjs:336</code>). The press records
+  the choice in <code>wm.fixedChosen</code>, so the reload each gate drives finds the card open instead of waiting on a
+  hidden console.
+</p>
+
+<h2>What this row does not explain</h2>
+<p>
+  On the merged branch one run of <code>verify-console-height.mjs</code> failed its first drag: the box went 320 to 360
+  and the gesture's record was already cleared, so the corner stopped following the hand at 40px. The next run of the
+  same gate passed all 66 checks, and on this tree the drag has passed every run. A console whose node is replaced
+  under the hand ends the gesture by design (<code>public/core/console-grip.js</code> move: a dead grip is a gesture that
+  outlives its node), so the two candidates are a repaint that replaced the row's console mid-drag and a release the
+  page received. It is not a symptom of the band arithmetic: the same press, room and limit pass on the next run.
+</p>
+<p>
+  The gate now prints a <code>DRAG-DIED</code> line when that happens, naming which of the two it was
+  (<code>tools/verify-console-height.mjs:354</code>), so the next occurrence is a finding rather than a bare short
+  drag. It is recorded here because a reader landing this row should know the count and not read "1 of 2" as
+  arithmetic.
 </p>
 
 <h2>Reproduce</h2>
