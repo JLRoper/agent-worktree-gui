@@ -523,8 +523,16 @@ function applySnapshot(data) {
 // THE DELTA's job pane: the cards that moved, merged the way a `job` frame merges one (`updateJob`), never the
 // wholesale replacement applyJobSnapshot does - a delta's list is partial by design, and reading it as "these are
 // all the jobs there are" would empty every other card on the board.
+//
+// The merge runs in BATCH mode (public/render-jobs.js jobsBatch/flushJobBatch): a boot's or a reconnect's delta
+// carries the whole job list at once, and the per-card path repaints the page once per card - renderConversation
+// falls back to a full list rebuild for every card whose row is collapsed, and repaintAgentState sweeps every row
+// and project. Measured on the seeded sandbox (2026-11-27): worst cold-load long task 15.7s, 13.4s of it
+// querySelector self time inside those passes. In batch mode each card is still merged and an on-page card still
+// repainted in place; only the global repaints (the one list rebuild, the owner rows, the landings) are deferred to
+// the single flush below, which runs AFTER repaintAgentState() so the rows and chips it paints are the final ones.
 function applyJobDelta(jobs, dropped) {
-  for (const job of jobs) if (job && job.id) updateJob(job);
+  for (const job of jobs) if (job && job.id) updateJob(job, { batch: true });
   for (const id of dropped) {
     const prev = state.jobs.get(id);
     state.jobs.delete(id);
@@ -535,6 +543,7 @@ function applyJobDelta(jobs, dropped) {
   }
   if (dropped.length) scheduleRenderJobs();
   repaintAgentState();
+  flushJobBatch();
   invalidatePanelMap();
 }
 
