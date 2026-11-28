@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
+import { queueCardsSource } from "../tools/panel-testkit.mjs";
 
 await import("../public/pipeline-modal.js");
 const { keyIntent } = globalThis.PipelineModal;
@@ -170,7 +171,7 @@ test("the Pipeline tab has the dropdown, the editor and the control that opens t
   assert.match(app, /pipeline-select"\)\?\.addEventListener\("change"/, "the dropdown is what changes the selection");
   // The queue row's press moved to public/queue-cards.js when the queue cards were cut out of assistant.js;
   // the handler that opens the modal in position mode stayed in assistant.js.
-  const queue = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+  const queue = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
   assert.match(queue, /data-as-qflow=/, "a queue row carries the position-mode press");
   const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
   assert.match(assistant, /mode: "position"/, "and it opens the modal in position mode");

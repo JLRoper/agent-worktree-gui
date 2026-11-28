@@ -15,10 +15,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { queueCardsSource, sliceRegions } from "../tools/panel-testkit.mjs";
 
-const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
-const region = sliceRegion(cards, "the queue sub-tab");
+const cards = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
+const region = sliceRegions(cards, "the queue sub-tab");
 
 const esc = (v) =>
   String(v ?? "")

@@ -1683,7 +1683,21 @@
        question chips, the agents under a task, the window of rows drawn, the reader's order and the drag, and
        the reads and the one write path behind them. Loaded after app.js and before assistant.js, because the
        panel calls its factory when it loads and hands it that file's own helpers; it declares only, so that
-       order costs nothing and nothing here waits on boot. -->
+       order costs nothing and nothing here waits on boot.
+
+       THE ROW is its own file now (entry 8 of docs/reports/module-separation-2026-11-28.html's split plan):
+       the pane's state, the row and its head, the chips, the agents under a task and the reader's order. It is
+       loaded FIRST of the queue's files because /queue-cards.js builds it when its own factory is called; it
+       declares one factory and no page names, so the order among these files is all that matters.
+
+       THE DRAG is next: the pointer gesture, its record and the pane's edge crawl. It reads the row cut and the
+       card cut by name, so it is built last; here it only has to load before /queue-cards.js.
+
+       THE CARD is last of the three: the full card in both modes, the paint, the two reads and the one write path.
+       It reads the row cut and asks the drag one question, so /queue-cards.js is what puts them in build order. -->
+  <script src="/board/queue-row.js"></script>
+  <script src="/board/queue-drag.js"></script>
+  <script src="/board/queue-detail.js"></script>
   <script src="/queue-cards.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
