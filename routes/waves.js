@@ -16,6 +16,15 @@
 // every assistant's queue. `init.waves` is folded from the store on every snapshot, so a wave created here appears in
 // the tab on its next read, with its stations and lanes, without a websocket, a cache or a client change.
 //
+// THIS ROUTE IS THE STORE'S LIVE ANSWER, AND THE TAB'S READ CHECKS ITS MEMO AGAINST IT. The store (lib/waves.js) is the
+// authority on whether a wave exists, what its record says and whether the file can be read; this route answers that
+// state on every request, while GET /api/initiatives answers a document it keeps for a moment (routes/initiatives.js
+// `cachedView`). The tab's memo therefore carries the wave store's file, status and `mtimeMs:size` stamp plus the
+// member rows that can open or close a wave, and it is not served once any of them has moved: a wave authored here, a
+// hand-edited file, or a file that became unreadable is answered by a fresh fold rather than by a lane this route
+// would contradict. Nothing here reads that memo, so no write to the store can be answered from a document built
+// before it.
+//
 // A WRITER CHANGES THE RECORD AND NOTHING ELSE. The seven fields `pickWave` validates, plus provenance, are the whole
 // of what these routes can write. A wave never owns a tree, never stores its state, never stores a lane, and its auto
 // open is a fact about a read: a posted `state` or `lanes` is REFUSED BY NAME by the same door the loader uses, never
