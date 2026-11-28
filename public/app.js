@@ -15095,6 +15095,9 @@ function selectSettingsTab(key) {
   // The Prompt tab measures the built briefing on the server, so it is a read, refreshed when the reader comes back to
   // a stale answer and loaded once at boot (the tab is drawn from the panel's own state, not from this page's).
   if (key === "prompt" && Date.now() - promptBudgetLoadedAt > 15000) void loadPromptBudget();
+  // Storage & cleanup is a walk of three folders on the server, so the General tab asks again when its answer is old
+  // rather than on every repaint: the first read happens at script load, beside the other tabs'.
+  if (key === "general" && Date.now() - maintenanceLoadedAt > 15000) void loadMaintenance();
 }
 
 // The per-tab counts the search hands over: a badge on the tab's chrome, and the same number in the tab's own
@@ -19168,6 +19171,207 @@ $("general-dock")?.addEventListener("change", () => {
   if (value !== "docked" && value !== "floating") return paintGeneralSettings(state.settings || {});
   void saveGeneralSettings({ dockMode: value }, "assistant pane");
 });
+
+// ---- settings > storage & cleanup ------------------------------------------------------------
+// Two reads of one route. GET /api/maintenance answers with the three disposable folders this panel writes, the size
+// each holds now and a read-only census of the processes the panel started; POST /api/maintenance/clean removes one
+// target, or with `dryRun: true` only counts what it would remove. A bounded clean is a real possibility, so an
+// answer that leaves entries behind is SAID rather than drawn as a success: the row offers the next press.
+//
+// Every field is read defensively: this tab is the whole General pane, and a section that throws over a missing
+// `bytes` would take the scan rows above it down with it. The last good answer is kept, the way the release notes
+// keep theirs — a failed Refresh is a notice over the list, not a blank box.
+const MAINTENANCE_TARGETS_ID = "maintenance-targets";
+const MAINTENANCE_PROCESSES_ID = "maintenance-processes";
+const MAINTENANCE_PROCESSES_SUMMARY_ID = "maintenance-processes-summary";
+const MAINTENANCE_REFRESH_ID = "btn-maintenance-refresh";
+const MAINTENANCE_RESULT_ID = (target) => `maintenance-result-${target}`;
+let maintenanceIndex = null;
+let maintenanceLoadedAt = 0;
+let maintenanceLoading = null;
+const MAINTENANCE_RESULTS = new Map();
+
+function maintenanceMb(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return "size unknown";
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function maintenanceSize(bytes, files) {
+  const f = Number(files);
+  const fileText = Number.isFinite(f) ? `${f.toLocaleString("en-US")} file${f === 1 ? "" : "s"}` : "file count unknown";
+  return `${maintenanceMb(bytes)} · ${fileText}`;
+}
+
+function maintenanceDuration(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s < 0) return "unknown age";
+  const whole = Math.round(s);
+  if (whole < 60) return `${whole}s`;
+  const m = Math.floor(whole / 60);
+  if (m < 60) return `${m}m ${whole % 60}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
+// The census line: counts only, because the route hands over arrays and the reader is owed a sentence, not a kill
+// button. A field the answer omits reads "unknown", never "0" — zero is a fact and an absent array is not.
+function maintenanceProcessLine(processes) {
+  if (!processes || typeof processes !== "object") return "process census not answered";
+  const sandbox = Array.isArray(processes.sandboxPanels) ? processes.sandboxPanels : null;
+  const tests = Array.isArray(processes.testRunners) ? processes.testRunners.length : null;
+  const orphans = Array.isArray(processes.orphanPids) ? processes.orphanPids.length : null;
+  let oldest = null;
+  if (sandbox) {
+    for (const p of sandbox) {
+      const age = Number(p && p.ageSeconds);
+      if (Number.isFinite(age) && (oldest === null || age > oldest)) oldest = age;
+    }
+  }
+  const sandboxText = sandbox
+    ? `${sandbox.length} sandbox panel${sandbox.length === 1 ? "" : "s"}${oldest === null ? "" : ` · oldest ${maintenanceDuration(oldest)}`}`
+    : "sandbox panels unknown";
+  const testText = tests === null ? "test runners unknown" : `${tests} test runner${tests === 1 ? "" : "s"}`;
+  const orphanText = orphans === null ? "orphan panels unknown" : `${orphans} orphan panel${orphans === 1 ? "" : "s"}`;
+  return `${sandboxText} · ${testText} · ${orphanText}`;
+}
+
+function maintenanceResultHtml(target) {
+  const held = MAINTENANCE_RESULTS.get(target);
+  return held
+    ? `<div class="maintenance-result mono${held.bad ? " bad" : ""}" id="${esc(MAINTENANCE_RESULT_ID(target))}">${esc(held.text)}</div>`
+    : `<div class="maintenance-result mono" id="${esc(MAINTENANCE_RESULT_ID(target))}"></div>`;
+}
+
+function maintenanceTargetHtml(t) {
+  const target = String((t && t.id) || "");
+  const name = String((t && t.label) || target || "target");
+  const detail = t && t.detail ? `<div class="maintenance-detail">${esc(String(t.detail))}</div>` : "";
+  const blocked = t && t.blockedReason ? `<div class="maintenance-detail bad">${esc(String(t.blockedReason))}</div>` : "";
+  const canClean = !t || t.removable !== false;
+  const cleanTitle = canClean
+    ? `remove what ${name} holds — a bounded run removes a slice and says how many entries remain`
+    : `${name} is not removable right now`;
+  return (
+    `<div class="maintenance-target" data-maintenance-target="${esc(target)}">` +
+    `<div class="maintenance-head">` +
+    `<span class="maintenance-label">${esc(name)}</span>` +
+    `<span class="maintenance-size mono">${esc(maintenanceSize(t && t.bytes, t && t.files))}</span>` +
+    `</div>` +
+    detail +
+    blocked +
+    `<div class="maintenance-actions">` +
+    `<button type="button" data-maintenance-preview="${esc(target)}" title="${esc(`dry run: count what a clean of ${name} would remove, and remove nothing`)}">Preview</button>` +
+    `<button type="button" data-maintenance-clean="${esc(target)}" title="${esc(cleanTitle)}"${canClean ? "" : " disabled"}>Clean</button>` +
+    `</div>` +
+    maintenanceResultHtml(target) +
+    `</div>`
+  );
+}
+
+// Paint from the last good answer, keeping any per-row result already on screen. `error` is the notice a failed
+// Refresh adds ABOVE the list the reader already had, never instead of it.
+function paintMaintenance(error = null) {
+  const box = document.getElementById(MAINTENANCE_TARGETS_ID);
+  const census = document.getElementById(MAINTENANCE_PROCESSES_ID);
+  const summary = document.getElementById(MAINTENANCE_PROCESSES_SUMMARY_ID);
+  if (!box) return;
+  const data = maintenanceIndex;
+  const targets = data && Array.isArray(data.targets) ? data.targets : [];
+  const notice = error ? `<div class="maintenance-state bad">${esc(`the panel could not answer for storage sizes — ${error}`)}</div>` : "";
+  if (!data) {
+    box.innerHTML = error ? notice : `<div class="maintenance-state">reading storage sizes…</div>`;
+  } else {
+    const rows = targets.length
+      ? targets.map(maintenanceTargetHtml).join("")
+      : `<div class="maintenance-state">the panel answered with no cleanup targets</div>`;
+    box.innerHTML = notice + rows;
+  }
+  if (census) {
+    census.textContent = error && !data ? "process census not read" : maintenanceProcessLine(data && data.processes);
+  }
+  if (summary) summary.textContent = data ? `${targets.length} target${targets.length === 1 ? "" : "s"}` : "not read";
+}
+
+async function loadMaintenance() {
+  if (maintenanceLoading) return maintenanceLoading;
+  maintenanceLoading = (async () => {
+    try {
+      const r = await apiFetch("/api/maintenance", {}, { timeoutMs: 20000 });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.error || `HTTP ${r.status}`);
+      if (d && d.ok === false) throw new Error(d.error || "the panel refused the read");
+      maintenanceIndex = d && typeof d === "object" ? d : {};
+      maintenanceLoadedAt = Date.now();
+      paintMaintenance();
+    } catch (e) {
+      paintMaintenance(e.message || String(e));
+    } finally {
+      maintenanceLoading = null;
+    }
+  })();
+  return maintenanceLoading;
+}
+
+function paintMaintenanceResult(target, text, bad) {
+  if (text) MAINTENANCE_RESULTS.set(target, { text: String(text), bad: Boolean(bad) });
+  else MAINTENANCE_RESULTS.delete(target);
+  const node = document.getElementById(MAINTENANCE_RESULT_ID(target));
+  if (!node) return;
+  node.textContent = text ? String(text) : "";
+  node.classList.toggle("bad", Boolean(bad));
+}
+
+function maintenanceResultText(d, dryRun) {
+  if (d && d.refused) return `refused: ${d.refused}`;
+  const files = Number(d && d.removedFiles) || 0;
+  const bytes = Number(d && d.removedBytes) || 0;
+  const remaining = Number(d && d.remaining) || 0;
+  const verb = dryRun ? "would remove" : "removed";
+  const head = `${verb} ${files} file${files === 1 ? "" : "s"} · ${maintenanceMb(bytes)}`;
+  return remaining > 0 ? `${head} · ${remaining} entries remain — run Clean again` : head;
+}
+
+async function runMaintenance(target, dryRun) {
+  if (!target || MAINTENANCE_RESULTS.get(target)?.busy) return;
+  MAINTENANCE_RESULTS.set(target, { text: dryRun ? "counting what a clean would remove…" : "cleaning…", bad: false, busy: true });
+  const node = document.getElementById(MAINTENANCE_RESULT_ID(target));
+  if (node) node.textContent = dryRun ? "counting what a clean would remove…" : "cleaning…";
+  try {
+    const r = await apiFetch(
+      "/api/maintenance/clean",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, dryRun }) },
+      { timeoutMs: 60000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || `HTTP ${r.status}`);
+    if (d && d.ok === false && !d.refused) throw new Error(d.error || "the clean was refused");
+    MAINTENANCE_RESULTS.delete(target);
+    paintMaintenanceResult(target, maintenanceResultText(d, dryRun), Boolean(d && d.refused));
+    // A clean moved real bytes, so the sizes above are stale by definition: ask again and keep the row's result.
+    if (!dryRun) {
+      maintenanceLoadedAt = 0;
+      void loadMaintenance();
+    }
+  } catch (e) {
+    MAINTENANCE_RESULTS.delete(target);
+    paintMaintenanceResult(target, `could not ${dryRun ? "preview" : "clean"} ${target}: ${e.message}`, true);
+  }
+}
+
+document.getElementById(MAINTENANCE_REFRESH_ID)?.addEventListener("click", () => void loadMaintenance());
+document.getElementById(MAINTENANCE_TARGETS_ID)?.addEventListener("click", (e) => {
+  const preview = e.target.closest?.("[data-maintenance-preview]");
+  const clean = e.target.closest?.("[data-maintenance-clean]");
+  if (preview) void runMaintenance(preview.getAttribute("data-maintenance-preview"), true);
+  else if (clean) void runMaintenance(clean.getAttribute("data-maintenance-clean"), false);
+});
+paintMaintenance();
+void loadMaintenance();
+
+// ---- end settings > storage & cleanup
 
 // ---- Settings → Prompt: what one turn's prompt is built from, section by section ----------------
 // The Prompt tab is a PICTURE of the briefing the panel builds, not a second budget written here: the server measures
