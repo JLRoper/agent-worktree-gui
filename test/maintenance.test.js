@@ -499,7 +499,7 @@ test("hermes-checkpoints falls back to a directory walk when `checkpoints status
 test("the route: the GET paints five targets and the two clean verbs answer the house shape", async (t) => {
   const dir = await sandbox(t);
   const home = await hermesHomeWithStores(dir);
-  const config = { ...configOf(dir), token: "secret" };
+  const config = { ...configOf(dir), token: "tok-test-alpha" };
   const runHermes = cliStub({
     "sessions prune": ok(pruneTable({ header: 4, rows: 4 })),
     "checkpoints prune": ok("Deleted orphan: 0\nDeleted stale: 2\n"),
@@ -516,7 +516,7 @@ test("the route: the GET paints five targets and the two clean verbs answer the 
   assert.equal(runHermes.calls.length, 0, "the GET never runs the CLI");
 
   const dry = await call("POST", MAINTENANCE_CLEAN_PATH, {
-    token: "secret",
+    token: "tok-test-alpha",
     body: { target: "hermes-sessions", dryRun: true, olderThanHours: 12 },
   });
   assert.equal(dry.status, 200);
@@ -525,7 +525,7 @@ test("the route: the GET paints five targets and the two clean verbs answer the 
   assert.ok(runHermes.calls.every((call_) => call_.args.includes("12h")), "the body's threshold reaches the CLI");
 
   const refused = await call("POST", MAINTENANCE_CLEAN_PATH, {
-    token: "secret",
+    token: "tok-test-alpha",
     body: { target: "hermes-checkpoints", dryRun: false },
   });
   assert.equal(refused.status, 200);
@@ -536,7 +536,7 @@ test("the route: the GET paints five targets and the two clean verbs answer the 
 test("the route: a Hermes clean refused by a live run answers 200 with the reason in `refused`", async (t) => {
   const dir = await sandbox(t);
   const home = await hermesHomeWithStores(dir);
-  const config = { ...configOf(dir), token: "secret" };
+  const config = { ...configOf(dir), token: "tok-test-alpha" };
   const runHermes = async () => {
     throw new Error("the CLI must not be reached while the board is busy");
   };
@@ -548,7 +548,7 @@ test("the route: a Hermes clean refused by a live run answers 200 with the reaso
   });
 
   const out = await call("POST", MAINTENANCE_CLEAN_PATH, {
-    token: "secret",
+    token: "tok-test-alpha",
     body: { target: "hermes-sessions", dryRun: false },
   });
   assert.equal(out.status, 200, "a refusal is an answer, not an error status");
@@ -602,7 +602,7 @@ function harness({
   runHermes = silentHermes,
   hermes = { bin: null },
 }) {
-  const state = { body: {}, token: "secret", log: [] };
+  const state = { body: {}, token: "tok-test-alpha", log: [] };
   const handles = createMaintenanceRoutes({
     getConfig: () => config,
     jobs: { list: () => jobs },
@@ -633,7 +633,7 @@ function harness({
 
 test("the route: GET answers without a token, POST needs one, and an unknown target is a 400", async (t) => {
   const dir = await sandbox(t);
-  const config = { ...configOf(dir), scratchDir: path.join(dir, "scratch"), scratchDirSource: "config", token: "secret" };
+  const config = { ...configOf(dir), scratchDir: path.join(dir, "scratch"), scratchDirSource: "config", token: "tok-test-alpha" };
   await writeFiles(config.scratchDir, ["x.txt"]);
   const { call } = harness({ config });
 
@@ -647,7 +647,7 @@ test("the route: GET answers without a token, POST needs one, and an unknown tar
   const denied = await call("POST", MAINTENANCE_CLEAN_PATH, { body: { target: "scratch", dryRun: true } });
   assert.equal(denied.status, 403);
 
-  const bogus = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "secret", body: { target: "everything" } });
+  const bogus = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "tok-test-alpha", body: { target: "everything" } });
   assert.equal(bogus.status, 400);
   assert.match(bogus.body.error, /target must be one of: scratch, state-temp, log-archives/);
 
@@ -663,11 +663,11 @@ test("the route: a refused clean answers 200 with the reason in `refused`, never
   const scratch = path.join(dir, "scratch");
   await writeFiles(scratch, ["held.txt"]);
   await writeFile(path.join(scratch, ".wag-scratch"), "", "utf8");
-  const config = { ...configOf(dir), scratchDir: scratch, scratchDirSource: "config", token: "secret" };
+  const config = { ...configOf(dir), scratchDir: scratch, scratchDirSource: "config", token: "tok-test-alpha" };
   // A live run working inside the folder is the refusal a route test can produce without touching a real disk root.
   const { call } = harness({ config, jobs: [{ id: "job-7", status: "running", cwd: path.join(scratch, "job-7") }] });
 
-  const refused = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "secret", body: { target: "scratch", dryRun: false } });
+  const refused = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "tok-test-alpha", body: { target: "scratch", dryRun: false } });
   assert.equal(refused.status, 200, "a refusal is an answer, not an error status");
   assert.equal(refused.body.ok, true);
   assert.match(String(refused.body.refused), /scratch is in use: a live run is working/, "the reason travels in `refused`");
@@ -678,20 +678,20 @@ test("the route: a refused clean answers 200 with the reason in `refused`, never
 
 test("the route: a clean dry run returns the contract shape and a real press deletes", async (t) => {
   const dir = await sandbox(t);
-  const config = { ...configOf(dir), scratchDir: path.join(dir, "scratch"), scratchDirSource: "config", token: "secret" };
+  const config = { ...configOf(dir), scratchDir: path.join(dir, "scratch"), scratchDirSource: "config", token: "tok-test-alpha" };
   await mkdir(config.scratchDir, { recursive: true });
   await writeFile(path.join(config.scratchDir, ".wag-scratch"), "", "utf8");
   await writeFiles(config.scratchDir, ["gone.txt"], { bytes: 6 });
   const { call } = harness({ config });
 
-  const dry = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "secret", body: { target: "scratch", dryRun: true } });
+  const dry = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "tok-test-alpha", body: { target: "scratch", dryRun: true } });
   assert.equal(dry.status, 200);
   assert.deepEqual(Object.keys(dry.body).sort(), ["dryRun", "ms", "ok", "remaining", "removedBytes", "removedFiles", "target"]);
   assert.equal(dry.body.dryRun, true);
   assert.equal(dry.body.removedFiles, 1);
   assert.ok((await readdir(config.scratchDir)).includes("gone.txt"));
 
-  const real = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "secret", body: { target: "scratch", dryRun: false } });
+  const real = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "tok-test-alpha", body: { target: "scratch", dryRun: false } });
   assert.equal(real.status, 200);
   assert.equal(real.body.dryRun, false);
   assert.equal(real.body.removedFiles, 1);

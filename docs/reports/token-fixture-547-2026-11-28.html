@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 547: the route tests' token fixture no longer reads as a credential</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap: anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 547: the route tests' token fixture no longer reads as a credential</h1>
+<p class="sub">agent-worktree-gui. Queue row #547. The tests that drive the panel's HTTP routes passed one fixture value under the key <code>token</code> at 23 lines in seven files, and that key/value pair is the shape a provider-side content filter can read as a credential assignment and redact, which is what breaks a tool call that echoes the file. This page records the one-value change, the grep counts that prove the shape is gone, and the focused test runs that prove nothing else moved.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#547, the credential-shaped token fixture</dd>
+  <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at a870ded6, cut into wtgui/read-row-547-s-detail-first-6334f7</dd>
+  <dt>the change</dt><dd>one fixture value, 23 lines in 7 test files, key and every assertion unchanged</dd>
+  <dt>the row claimed</dt><dd>3 files, 11 occurrences (project-turnover:355, assistant-digest-route:36, maintenance:502, 519, 528, 539, 551, 605, 636, 650, 666)</dd>
+  <dt>the grep found</dt><dd><span class="warn">7 files, 23 fixture lines</span>: 19 <code>token: &lt;value&gt;</code> assignments, 2 <code>"x-panel-token": &lt;value&gt;</code> header values, 2 <code>token = &lt;value&gt;</code> default parameters</dd>
+  <dt>grep after</dt><dd><span class="ok">0, 0 and 0</span> - each pattern exits 1 with no output at <code>HEAD</code> across the tracked tree</dd>
+  <dt>focused run (3 named files)</dt><dd><span class="ok">44 tests, 44 pass, 0 fail</span> before and <span class="ok">44 tests, 44 pass, 0 fail</span> after</dd>
+  <dt>further files (4)</dt><dd><span class="ok">35 tests, 35 pass, 0 fail</span> after the change</dd>
+  <dt>syntax</dt><dd><code>node --check</code> clean on all 7 files</dd>
+  <dt>line endings</dt><dd>CRLF before and after, checked with <code>file</code> on all 7</dd>
+  <dt>not touched</dt><dd>docs (row 573 owns it), <code>public/index.html</code>, version (1.197.1), no test deleted, no line moved between blocks</dd>
+  <dt>the commit</dt><dd><code>d83d445b</code> on this branch; the landing merge into the turnover branch is its child on that branch, taken locally, nothing pushed</dd>
+</dl>
+
+<h2>1. What the row asked for, and where its file list was short</h2>
+<p>The row names three files and quotes the fixture eleven times. The exercised shape is <code>token: &lt;quoted value&gt;</code>, and the same value is also passed as the <code>x-panel-token</code> header in two of the route harnesses and as a default parameter in two others, so a grep for the assignment alone undercounts the places a worker can echo. A tracked grep for the assignment shape found 19 lines in seven files, and the wider fixture shapes added 4 more lines in three of those files.</p>
+<p>Two details of the row's own quote are stale rather than wrong. The excerpt at <code>test/project-turnover.test.js</code> carries a list-shaped <code>turnoverBranches</code> entry; the file today passes the single-key <code>turnoverBranch</code> at <code>test/project-turnover.test.js:355</code>, because the turnover policy grew a second key after that diff was taken. The row's maintenance list stops at 666; the same test's later calls at 670, 681, 687 and 694 carry the shape too.</p>
+
+<table>
+  <tr><th>file</th><th>lines changed</th><th>shape</th><th>in the row's list</th></tr>
+  <tr><td class="tool">test/project-turnover.test.js</td><td>355</td><td class="tool">token: value</td><td>yes</td></tr>
+  <tr><td class="tool">test/maintenance.test.js</td><td>502, 519, 528, 539, 551, 605, 636, 650, 666, 670, 681, 687, 694</td><td class="tool">token: value</td><td>the first 9, not 670/681/687/694</td></tr>
+  <tr><td class="tool">test/assistant-digest-route.test.js</td><td>34, 36</td><td class="tool">token = value, token: value</td><td>36 only, not 34</td></tr>
+  <tr><td class="tool">test/project-rules.test.js</td><td>193</td><td class="tool">token: value</td><td>no</td></tr>
+  <tr><td class="tool">test/reuse-policy.test.js</td><td>163, 176</td><td class="tool">token: value, "x-panel-token": value</td><td>no</td></tr>
+  <tr><td class="tool">test/spawn-check.test.js</td><td>62, 71</td><td class="tool">token = value, token: value</td><td>no</td></tr>
+  <tr><td class="tool">test/spawn-lane.test.js</td><td>65, 78</td><td class="tool">token: value, "x-panel-token": value</td><td>no</td></tr>
+</table>
+<p class="note">The four further files are the same class of fixture in the same directory: the route harness's own token, the header the harness sends and the config the route compares it to. None of them is a doc and none carries a test's assertion, so the row's acceptance (no credential-shaped fixture left in a tracked test file) could not be met without them. Their line counts and assertion bodies are unchanged apart from the value.</p>
+
+<h2>2. The change, by line number</h2>
+<p>The edit was made by line number against the bytes on disk, so CRLF survived. Only the quoted value on each named line was replaced; the key, the indentation, the surrounding object and every <code>assert</code> line are byte-identical. The new value is <code>tok-test-alpha</code>, the example the row itself suggests: it reads as a test fixture, not as a credential.</p>
+<pre># the shape of each hunk: 23 insertions, 23 deletions, one value per line
+-  const config = { ...configOf(dir), token: &lt;retired&gt; };
++  const config = { ...configOf(dir), token: "tok-test-alpha" };
+-  const state = { body: {}, token: &lt;retired&gt;, log: [] };
++  const state = { body: {}, token: "tok-test-alpha", log: [] };
+-  const h = harness({ body: { project: "alpha", turnoverBranch: "feature/x" }, token: &lt;retired&gt; });
++  const h = harness({ body: { project: "alpha", turnoverBranch: "feature/x" }, token: "tok-test-alpha" });</pre>
+<p>Nothing compares against the old value, which is why one value is enough: in each harness the request's token and the config's token are the same fixture, so they still match, and the refusal tests still pass a different value deliberately (for example <code>token: "wrong"</code> at <code>test/assistant-digest-route.test.js:69</code>) to get their 403. Replacing the fixture value keeps every one of those meanings.</p>
+
+<h2>3. The proof</h2>
+<p>The retired value is not written in this page, in the commit message or in any command quoted here. Each grep builds its pattern from two shell variables, so the key and the value never sit in one string. The same three commands were run at <code>HEAD~1</code> (before) and at <code>HEAD</code> (after), over every tracked file, from the tree root.</p>
+<pre>$ k=token; v=&lt;retired&gt;
+$ git grep -cE "$k[[:space:]]*:[[:space:]]*\"$v\"" HEAD~1 -- test/
+HEAD~1:test/assistant-digest-route.test.js:1
+HEAD~1:test/maintenance.test.js:13
+HEAD~1:test/project-rules.test.js:1
+HEAD~1:test/project-turnover.test.js:1
+HEAD~1:test/reuse-policy.test.js:1
+HEAD~1:test/spawn-check.test.js:1
+HEAD~1:test/spawn-lane.test.js:1
+
+$ git grep -cE "$k[[:space:]]*:[[:space:]]*\"$v\"" HEAD -- .
+$ echo $?
+1
+
+$ git grep -cE "\"x-panel-$k\"[[:space:]]*:[[:space:]]*\"$v\"" HEAD~1 -- test/
+HEAD~1:test/reuse-policy.test.js:1
+HEAD~1:test/spawn-lane.test.js:1
+$ git grep -cE "\"x-panel-$k\"[[:space:]]*:[[:space:]]*\"$v\"" HEAD -- .
+$ echo $?
+1
+
+$ git grep -cE "$k[[:space:]]*=[[:space:]]*\"$v\"" HEAD~1 -- test/
+HEAD~1:test/assistant-digest-route.test.js:1
+HEAD~1:test/spawn-check.test.js:1
+$ git grep -cE "$k[[:space:]]*=[[:space:]]*\"$v\"" HEAD -- .
+$ echo $?
+1</pre>
+<p>So the assignment shape went from 19 lines in 7 files to none, the header shape from 2 to none, and the default-parameter shape from 2 to none: 23 fixture lines in all, matching the diff's 23 insertions and 23 deletions. The bare word on its own still appears in documentation prose (33 lines in one design note), which is why the proof is stated on the assignment shapes rather than on the word; documentation is row 573's and is untouched here.</p>
+
+<h3>Focused test runs</h3>
+<p>Only the named files, run from this tree with the same command before and after the edit, and the count is identical:</p>
+<pre>$ env node --test test/project-turnover.test.js test/maintenance.test.js test/assistant-digest-route.test.js
+  before: tests 44, pass 44, fail 0, cancelled 0, skipped 0   (25,277 ms)
+  after:  tests 44, pass 44, fail 0, cancelled 0, skipped 0   (25,532 ms)
+
+$ env node --test test/project-rules.test.js test/reuse-policy.test.js test/spawn-check.test.js test/spawn-lane.test.js
+  after:  tests 35, pass 35, fail 0, cancelled 0, skipped 0   (89,508 ms)</pre>
+<p>The four further files were run after the change only, because they were not in this row's before run and their edit is the same single value. The three named files were not run a second time for the four-file edit, since none of the four is imported by them.</p>
+
+<h3>Syntax and line endings</h3>
+<pre>$ for f in test/project-turnover.test.js test/maintenance.test.js test/assistant-digest-route.test.js \
+           test/project-rules.test.js test/reuse-policy.test.js test/spawn-check.test.js test/spawn-lane.test.js
+  do env node --check "$f"; done
+  exit 0, no output
+
+$ file test/*.test.js | grep -E "project-turnover|maintenance|assistant-digest-route|project-rules|reuse-policy|spawn-check|spawn-lane"
+  all 7: "JavaScript source" with "CRLF line terminators"</pre>
+
+<h2>4. What was not touched</h2>
+<ul>
+  <li>No documentation file changed: <code>git diff --stat HEAD~1 HEAD</code> lists the seven test files and nothing else.</li>
+  <li><code>public/index.html</code> did not change.</li>
+  <li><code>package.json</code> did not change; the version is still 1.197.1 and no bump was made.</li>
+  <li>No test was deleted, skipped or renamed, and no line moved between blocks: the diff is 23 one-line replacements.</li>
+  <li>No assertion changed, and the refusal fixtures that need a different value (<code>token: "wrong"</code>) still pass their own.</li>
+</ul>
+
+<h2>5. Landing</h2>
+<p>The change is commit <code>d83d445b</code> on <code>wtgui/read-row-547-s-detail-first-6334f7</code>, and this page is the commit after it. The branch merges into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally and is not pushed, because that branch has not landed and a remote copy of this tree would be a branch nobody asked for. The merge commit is the child of this page's commit on the turnover branch. No pull request was opened, and the turnover branch is left where the reader can land it.</p>
+<p class="small">Evidence taken in this worktree on 2026-11-28, from the working tree and from <code>git grep</code> at <code>HEAD~1</code> and <code>HEAD</code>. Commands are quoted as run; the retired fixture value is referred to but not reproduced.</p>
+</main>
+</body>
+</html>

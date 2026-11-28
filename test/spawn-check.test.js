@@ -59,7 +59,7 @@ function fixture(t) {
   return { dir, project, jobs, assistant, rows, held, free, checkout };
 }
 
-async function ask(p, { task = "", tree = "", project = "proj", assistantId = "", token = "secret", method = "GET" } = {}) {
+async function ask(p, { task = "", tree = "", project = "proj", assistantId = "", token = "tok-test-alpha", method = "GET" } = {}) {
   const out = { status: null, body: null, handled: false };
   const send = (res, status, body) => {
     out.status = status;
@@ -68,7 +68,7 @@ async function ask(p, { task = "", tree = "", project = "proj", assistantId = ""
   const handler = createSpawnCheckRoutes({
     assistant: p.assistant,
     getProjects: () => [p.project],
-    config: { token: "secret" },
+    config: { token: "tok-test-alpha" },
     sendJson: send,
     authorised: (req, t) => req.headers["x-panel-token"] === t,
   });
