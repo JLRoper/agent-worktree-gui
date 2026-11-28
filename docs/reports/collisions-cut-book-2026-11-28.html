@@ -193,6 +193,8 @@ git show e62aee97:lib/collision-book.js | sed -n '51,1188p' | sha256sum
     <tr><td>The export surface before and after: <code>Object.keys</code> of each module, sorted, diffed</td><td class="met">57 names both times, diff clean</td></tr>
     <tr><td>The seven test files on the turnover head <code>67371958</code>, before any edit</td><td class="met">88 tests, 88 pass, 0 fail</td></tr>
     <tr><td>The same seven files on this tree, after the cut</td><td class="met">88 tests, 88 pass, 0 fail</td></tr>
+    <tr><td><code>node --check</code> on both files, and the 57-name surface, on the merged tree <code>78abf217</code></td><td class="met">both parse; 57 names, diff clean</td></tr>
+    <tr><td>The same seven files on the merged tree <code>78abf217</code></td><td class="met">88 tests, 88 pass, 0 fail</td></tr>
     <tr><td><code>node tools/verify-collisions.mjs</code></td><td class="met">40/40 checks passed</td></tr>
     <tr><td><code>node tools/verify-collision-absence.mjs</code></td><td class="met">27/27 checks passed</td></tr>
     <tr><td><code>npm test</code> (the full suite)</td><td class="warn">not run: the row's gate is the focused set, and no pull request is opened</td></tr>
@@ -206,7 +208,8 @@ git show e62aee97:lib/collision-book.js | sed -n '51,1188p' | sha256sum
     Nothing was red, so there is no failure to compare against the head. The seven files are the six that name this
     module plus <code>test/spawn-lane.test.js</code>, the same set row 507 quoted. <code>npm run test:changed</code>
     selects most of the suite here because <code>lib/assistant.js</code> imports this module, which is a whole-suite
-    check rather than a one-cut check.
+    check rather than a one-cut check. The merged-tree rows are section 7's landing read on the commit that carries
+    this cut into the turnover.
   </p>
 
   <h2>6. What this cut did not do</h2>
@@ -219,33 +222,48 @@ git show e62aee97:lib/collision-book.js | sed -n '51,1188p' | sha256sum
       nothing. No push, no pull request.</li>
   </ul>
 
-  <h2>7. Landed: the merge into the turnover, measured before it was made</h2>
+  <h2>7. Landed: the merge, and the head that moved under it</h2>
   <p>
     The cut is merged locally into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> from this row branch,
-    <code>wtgui/row-508-is-the-second-cut-of-lib-fa1eaa</code>. Nothing is pushed and no pull request exists: the
+    <code>wtgui/row-508-is-the-second-cut-of-lib-fa1eaa</code>, as <code>78abf217</code>. Its parents are
+    <code>c02f48f2</code> (the turnover tip at the moment of the merge) and <code>b9e07477</code> (this page's
+    original commit, whose parent is the cut <code>e62aee97</code>). Nothing is pushed and no pull request exists: the
     turnover is where the work rolls up, and the reader decides when it leaves this machine.
   </p>
   <p>
-    The merge brings together the turnover head <code>67371958</code> and this page's own commit, whose parent is the
-    cut <code>e62aee97</code>. Its result was read before the merge rather than after it, so that this page could
-    state it without quoting a commit that contains the page:
+    The turnover moved while this cut was in flight. This cut was cut from <code>67371958</code>; two other rows
+    landed before the merge could be made: row 513 at <code>835db929</code> (06:48:31) and row 538 at
+    <code>c02f48f2</code> (06:49:49). That is a live board, not a defect in this cut: between them they touch
+    <code>lib/pipelines.js</code>, <code>lib/pipeline-validate.js</code>, <code>lib/task-pipeline-drive.js</code>,
+    <code>lib/task-pipeline-document.js</code>, <code>lib/task-pipeline-tree.js</code> and their two pages, none of
+    them this cut's files, and the merge was clean.
   </p>
-<pre>git merge-tree --write-tree 67371958 e62aee97
-# 1dbdf771ccc1c9ca356337fd3ae8aa1770b510bb
-git rev-parse e62aee97^{tree}
-# 1dbdf771ccc1c9ca356337fd3ae8aa1770b510bb</pre>
   <p>
-    The merged tree is exactly the cut's tree. That is the strongest form of "no conflict" available here: the merge
-    adds no line that neither side already had, and the seven-file run on the cut tree (88 pass, 0 fail) is the merged
-    tree's count, not an approximation of it. The merge commit itself is the turnover's tip after this run; it is
-    named in the row's final report rather than in this page, because this page is inside it.
+    Against the head this cut was cut from, the merge was arithmetic: <code>git merge-tree --write-tree 67371958
+    e62aee97</code> answered <code>1dbdf771</code>, and that is what <code>e62aee97^{tree}</code> already was, so no
+    line could have conflicted there. The merge that actually landed was made against the moved head:
+  </p>
+<pre>git merge --no-ff wtgui/row-508-is-the-second-cut-of-lib-fa1eaa
+# Merge made by the 'ort' strategy.
+git log -1 --format='%H %P'          # 78abf217... c02f48f2... b9e07477...
+git rev-parse 78abf217^{tree}        # 2691522f...
+git diff --name-only e62aee97 78abf217
+# the two rows' five lib files and two pages, and this cut's own page; no other file</pre>
+  <p>
+    The merged tree is the cut's tree plus those two landings, and everything this page claims was read there:
+    <code>node --check</code> parses on both files, the export surface is the same 57 names with the sorted lists
+    diffing clean, and the seven test files answer 88 pass, 0 fail on the merged tree itself. This section was
+    rewritten on the row branch after that merge, so the numbers it prints are the landing's own rather than a
+    prediction; its first version quoted only the pre-flight measurement above, which was true of the head the cut was
+    cut from and stopped being the whole story when the head moved.
   </p>
 
   <p class="foot">
     Base <code>67371958</code> (<code>20261127_2134_TASK-405_row-405-is-the-complete</code>); the cut is
     <code>e62aee97</code> on <code>wtgui/row-508-is-the-second-cut-of-lib-fa1eaa</code>; merged into the turnover as
-    the merge of <code>67371958</code> and this page's commit; measured 2026-11-28. Every line number in this page is a
-    1-based line in the file named beside it.
+    <code>78abf217</code>, parents <code>c02f48f2</code> and <code>b9e07477</code>; this page's landing section was
+    then corrected and landed as a docs-only follow-up merge. Measured 2026-11-28. Every line number in this page is
+    a 1-based line in the file named beside it.
   </p>
 </main>
 </body>
