@@ -76,6 +76,7 @@ import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
 import { ParentBook, isMainName } from "./lib/parents.js";
+import { parentLineFor } from "./lib/parent-line.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
 import { BRANCH_KINDS, CHILD_KINDS, KIND_LABELS, cutParentChoices, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
@@ -4764,6 +4765,46 @@ function withTreeKinds(snap) {
   return snap;
 }
 
+// WHERE A TREE WAS CUT FROM, in the row's own words (lib/parent-line.js). The row already carries the resolved parent
+// (`row.parent` / `row.parentSource`, from the parent book by way of the scan); what it could not say is HOW SURE that
+// answer is. This stamps the sentence onto the row, from two sources and never a third:
+//
+//   recorded    the cut book (`branch-parents.json`) through lib/worktrees.js `recordedParentFor`, keyed tag:<six hex>
+//               then tree:<path>. `jobs.loadParents()` is the ONE read of that file per snapshot - the same cost
+//               `withTreeKinds` already pays per row, spent once instead of once per row.
+//   reconstructed  the parent book (lib/parents.js), which is the only reconstruction path, with its reason. A
+//               backfilled answer is LABELLED reconstructed; it is never drawn as a record.
+//
+// A row that is the project's own checkout has no parent to name (it IS the base), and a row that is the project's
+// turnover branch has nothing above it - lib/parent-line.js says so for the second, and this leaves the first alone.
+function withParentLines(snap) {
+  const book = typeof jobs.loadParents === "function" ? jobs.loadParents() : null;
+  for (const project of snap.projects || []) {
+    const checkout = normTreePath(project.path || "");
+    const turnovers = new Set(turnoverBranchesOf(project).map((entry) => String(entry.branch || "").trim().toLowerCase()).filter(Boolean));
+    for (const row of project.worktrees || []) {
+      if (checkout && normTreePath(row.path || "") === checkout) {
+        delete row.parentLine;
+        continue;
+      }
+      const branch = String(row.branch || "").trim();
+      const rec = parents && typeof parents.get === "function" && branch ? parents.get(project.name, branch) : null;
+      row.parentLine = parentLineFor({
+        book,
+        tree: row.path,
+        branch,
+        parent: (rec && rec.parent) || row.parent || null,
+        parentSource: (rec && rec.parentSource) || row.parentSource || "unknown",
+        why: (rec && rec.why) || "",
+        refused: (rec && rec.refused) || "",
+        mainBranch: project.mainBranch || null,
+        turnover: Boolean(branch) && turnovers.has(branch.toLowerCase()),
+      });
+    }
+  }
+  return snap;
+}
+
 // The reader's lock travels with the snapshot the way the naming ledger does: git knows nothing about it, the
 // scanner must not have to, and the row is where it has to be visible. A row with no `lock` is unlocked — absence is
 // the default, so an unlocked row costs nothing on the wire and a store that cannot be read cannot make a tree look
@@ -5046,7 +5087,7 @@ function snapshotBody() {
   // second call. The initiatives are the same kind of fact and are applied here for the same reason. THE REVIEW LANE
   // IS APPLIED LAST OF ALL, so a row's delivery is on the row whenever a snapshot leaves this function - nothing above
   // it can strip the field.
-  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(withTreeKinds(snap))))));
+  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(withParentLines(withTreeKinds(snap)))))));
 }
 
 const heartbeat = setInterval(() => {
