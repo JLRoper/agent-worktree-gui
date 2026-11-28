@@ -9,11 +9,12 @@
 //                  sheet's share of the whole.
 //   duplication    selectors that live in more than one sheet, identical declaration blocks repeated
 //                  across sheets, and the same rule written twice.
-//   catch-all      what public/base.css and public/late.css still hold that belongs to a surface.
-//                  base.css is classified rule by rule as token, reset or surface. late.css is small
-//                  enough to name by BLOCK (the sliver layout, the cut dialog, the legend, the search
-//                  popovers), and each block is checked against the sheet that should own it: a rule
-//                  whose exact selector no other sheet carries is a sole definition, not an override.
+//   catch-all      what public/base.css still holds that belongs to a surface, classified rule by rule
+//                  as token, reset or surface - and the record of public/late.css, dissolved by row 446.
+//                  The four blocks late.css held at the 1.191.0 split (the sliver layout, the cut dialog,
+//                  the legend, the search popovers' chrome) are each checked against the sheet that owns
+//                  that surface now: a rule there whose exact selector no other sheet carries is a sole
+//                  definition, which is why it belonged in a surface sheet and not in a catch-all.
 //   cascade        (selector, property) pairs set by two or more sheets, and the sheet that wins by load
 //                  order (with !important taken first). The top ten by conflict count are listed.
 //   dead           rules whose selector matches zero elements in the running page, measured in a real
@@ -86,12 +87,8 @@ export const SURFACES = {
   "panes.css": "the assistant's Worktrees and Bridge sub-tabs",
   "queue.css": "the queue cards and the assistant queue pane",
   "pipeline.css": "pipeline window, messages, flow and modal",
-  "late.css": "late overrides: the sliver window and the search popovers",
   "chart.css": "the age column and the legend",
 };
-
-// The two catch-all sheets the review asks about by name.
-const CATCH_ALL = ["base.css", "late.css"];
 
 // ---------------------------------------------------------------------------------------------
 // A CSS reader: rules with their at-rule context and declarations, no package needed
@@ -360,11 +357,12 @@ function duplication(sheets) {
   };
 }
 
-// What a catch-all sheet still holds, measured by the BLOCK it holds rather than by a guessed token
-// owner. public/late.css is small enough (68 rules) that each block can be named from the selector
-// family it is written for, and the claim "this block belongs to that surface" can be checked by
-// grepping the sheet that surface owns. public/base.css is checked the same way: a rule that is a
-// token, a reset or a page element is not a surface rule, and there are no others.
+// What a catch-all sheet still holds, measured by the BLOCK rather than by a guessed token owner.
+// public/base.css is classified rule by rule: a rule that is a token, a reset or a page element is not a
+// surface rule, and there are no others. public/late.css is GONE - row 446 dissolved it - and the four
+// blocks it held at the 1.191.0 split are checked against the sheet that owns each surface today: the
+// sliver window against the three sheets its rules split into, the cut dialog against overlays.css, the
+// legend against chart.css, and the search popovers' drag/grip chrome against assistant.css.
 const BASE_RULE_KIND = (sel) => {
   if (sel === ":root") return "token";
   if (sel === "*" || /^\*::?-(webkit|moz)-/.test(sel)) return "reset";
@@ -373,115 +371,84 @@ const BASE_RULE_KIND = (sel) => {
   return "surface";
 };
 
-const LATE_BLOCKS = [
+const DISSOLVED_BLOCKS = [
   {
     id: "sliver",
-    label: "the sliver-window layout: header, shell, agent cards and folders",
-    home: ["chrome.css", "board-table.css"],
+    label: "the sliver window: the page column, the header and the board",
+    home: ["chrome.css", "board-table.css", "assistant.css"],
     test: (r) => r.ctx.some((c) => /@media\s*\(max-height:\s*300px\)/i.test(c)),
   },
   {
-    id: "cut",
-    label: "the cut dialog",
-    home: ["overlays.css"],
-    test: (r) => r.selectors.some((s) => /^\.cut-/.test(s)),
-    note: "no .cut- rule exists in overlays.css; public/app.js:7884 creates the dialog",
-  },
-  {
-    id: "legend",
-    label: "the chart legend and its popover",
-    home: ["chart.css"],
-    test: (r) => r.selectors.some((s) => /^\.legend/.test(s)),
-    note: "moved to chart.css with the board table's cut; late.css holds none",
-  },
-  {
     id: "search",
-    label: "the assistant and hot-agent search popovers",
+    label: "the search popovers' drag strip, close x and resize grip",
     home: ["assistant.css"],
-    test: (r) => r.selectors.some((s) => /^\.(as|ha)-search/.test(s)),
+    // The popovers' own frames are .as-search-pop's (assistant.css) and .ha-search-pop's
+    // (assistant-panes.css), and were never late.css's; the drag/grip chrome is what moved.
+    test: (r) =>
+      r.selectors.some(
+        (s) => /\.(as|ha)-search-(drag|grip|x)\b/.test(s) || /\.(as|ha)-search-pop\.is-(moving|resizing)\b/.test(s),
+      ),
   },
 ];
 
-function catchAll(sheets) {
-  const out = {};
-  for (const name of CATCH_ALL) {
-    const s = sheets.find((x) => x.href === name);
-    const rules = s.rules.filter((r) => !r.keyframe);
-    const entry = {
-      sheet: name,
-      surface: SURFACES[name],
-      lines: s.lines,
-      bytes: s.bytes,
-      rules: rules.length,
-      blocks: [],
-      examples: [],
-      surfaceRules: 0,
-    };
-    if (name === "base.css") {
-      const kinds = { token: 0, reset: 0, surface: 0 };
-      for (const r of rules) {
-        const kind = BASE_RULE_KIND(r.sel);
-        kinds[kind] += 1;
-        if (kind === "surface" && entry.examples.length < 8) entry.examples.push({ selector: r.sel, kind });
+// A rule whose exact selector appears in no sheet but the one holding it: these are the rules that made a
+// catch-all a bad home, because nothing else defined them and nothing had to override them.
+function soleDefinitionIndex(sheets) {
+  const owners = new Map();
+  for (const s of sheets) {
+    for (const r of s.rules) {
+      for (const sel of r.selectors) {
+        if (!owners.has(sel)) owners.set(sel, new Set());
+        owners.get(sel).add(s.href);
       }
-      entry.kinds = kinds;
-      entry.surfaceRules = kinds.surface;
-      entry.verdict = kinds.surface === 0
-        ? "holds nothing but the token layer and page resets"
-        : `${kinds.surface} rules name a surface outside the token layer`;
-    } else {
-      for (const block of LATE_BLOCKS) {
-        const list = rules.filter(block.test);
-        if (!list.length) continue;
-        const tokens = new Set();
-        for (const r of list) {
-          for (const sel of r.selectors) {
-            for (const m of sel.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) tokens.add(`.${m[1]}`);
-            for (const m of sel.matchAll(/#([\w-]+)/g)) tokens.add(`#${m[1]}`);
-          }
-        }
-        // Does the sheet that owns this surface actually name these tokens anywhere in its selectors?
-        const homeRules = sheets.filter((x) => block.home.includes(x.href)).flatMap((x) => x.rules);
-        const defined = new Set();
-        for (const r of homeRules) {
-          for (const sel of r.selectors) {
-            for (const m of sel.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(`.${m[1]}`);
-            for (const m of sel.matchAll(/#([\w-]+)/g)) defined.add(`#${m[1]}`);
-          }
-        }
-        const absent = [...tokens].filter((t) => !defined.has(t));
-        // Rules whose exact selector appears in no other sheet at all: late.css is their only
-        // definition, so the "late override" is really the surface's only styling.
-        const elsewhere = new Set();
-        for (const other of sheets) {
-          if (other.href === name) continue;
-          for (const r of other.rules) for (const sel of r.selectors) elsewhere.add(sel);
-        }
-        const sole = list.filter((r) => r.selectors.every((sel) => !elsewhere.has(sel)));
-        entry.blocks.push({
-          id: block.id,
-          soleDefinitions: sole.length,
-          soleExamples: sole.slice(0, 4).map((r) => r.sel),
-          label: block.label,
-          home: block.home,
-          rules: list.length,
-          decls: list.reduce((a, r) => a + r.decls.length, 0),
-          bytes: list.reduce((a, r) => a + Buffer.byteLength(`${r.sel} { ${r.body} }`), 0),
-          selectors: list.map((r) => r.sel).slice(0, 6),
-          tokens: [...tokens].sort(),
-          absentFromHome: absent.sort(),
-          note: block.note || "",
-        });
-        for (const r of list.slice(0, 2)) {
-          if (entry.examples.length < 10) entry.examples.push({ selector: r.sel, block: block.id, ctx: r.ctx });
-        }
-      }
-      const covered = entry.blocks.reduce((a, b) => a + b.rules, 0);
-      entry.surfaceRules = covered;
-      entry.unresolved = rules.length - covered;
-      entry.verdict = `${entry.blocks.length} blocks across ${new Set(entry.blocks.flatMap((b) => b.home)).size} surface sheets; ${entry.blocks.filter((b) => b.absentFromHome.length).length} block(s) name tokens their own sheet never defines`;
     }
-    out[name] = entry;
+  }
+  return (rule, sheet) => rule.selectors.every((sel) => [...(owners.get(sel) || [])].every((owner) => owner === sheet));
+}
+
+function catchAll(sheets) {
+  const isSole = soleDefinitionIndex(sheets);
+  const out = { base: null, dissolved: [] };
+
+  const s = sheets.find((x) => x.href === "base.css");
+  const rules = s.rules.filter((r) => !r.keyframe);
+  const base = {
+    sheet: "base.css",
+    surface: SURFACES["base.css"],
+    lines: s.lines,
+    bytes: s.bytes,
+    rules: rules.length,
+    examples: [],
+    kinds: { token: 0, reset: 0, surface: 0 },
+  };
+  for (const r of rules) {
+    const kind = BASE_RULE_KIND(r.sel);
+    base.kinds[kind] += 1;
+    if (kind === "surface" && base.examples.length < 8) base.examples.push({ selector: r.sel, kind });
+  }
+  base.surfaceRules = base.kinds.surface;
+  base.verdict = base.kinds.surface === 0
+    ? "holds nothing but the token layer and page resets"
+    : `${base.kinds.surface} rules name a surface outside the token layer`;
+  out.base = base;
+
+  for (const block of DISSOLVED_BLOCKS) {
+    const list = [];
+    for (const sheet of sheets) {
+      for (const r of sheet.rules) if (!r.keyframe && block.test(r)) list.push({ rule: r, sheet: sheet.href });
+    }
+    const bySheet = {};
+    for (const x of list) bySheet[x.sheet] = (bySheet[x.sheet] || 0) + 1;
+    out.dissolved.push({
+      id: block.id,
+      label: block.label,
+      home: block.home,
+      rules: list.length,
+      bySheet,
+      sole: list.filter((x) => isSole(x.rule, x.sheet)).length,
+      strays: Object.keys(bySheet).filter((name) => !block.home.includes(name)),
+      selectors: list.map((x) => x.rule.sel).slice(0, 6),
+    });
   }
   return out;
 }
@@ -589,13 +556,15 @@ function printStatic(result) {
   line("");
 
   line("CATCH-ALL");
-  const base = cat["base.css"];
+  const base = cat.base;
   line(`  base.css: ${num(base.rules)} rules; token ${base.kinds.token}, reset ${base.kinds.reset}, surface ${base.kinds.surface} - ${base.verdict}`);
-  const late = cat["late.css"];
-  line(`  late.css: ${num(late.rules)} rules in ${late.blocks.length} blocks, ${num(late.unresolved)} unresolved - ${late.verdict}`);
-  for (const b of late.blocks) {
-    line(`    ${String(b.rules).padStart(3)} rules  ${b.label.padEnd(58)} home ${b.home.join(" + ")}${b.absentFromHome.length ? `  (${b.absentFromHome.length} token(s) never named there)` : ""}`);
+  line(`  late.css: gone (row 446) - ${cat.dissolved.length} blocks checked where they landed, each in a sheet that owns its surface`);
+  for (const b of cat.dissolved) {
+    const where = Object.entries(b.bySheet).map(([sheet, n]) => `${sheet} ${n}`).join(", ");
+    line(`    ${String(b.rules).padStart(3)} rules  ${b.label.padEnd(52)} ${where}${b.strays.length ? `  STRAY ${b.strays.join(", ")}` : ""}  (${b.sole} sole definition${b.sole === 1 ? "" : "s"})`);
   }
+  line("    its cut dialog left for overlays.css in 1.192.0 and its chart legend for chart.css with the board table's cut;");
+  line("    neither is a catch-all any more, and neither test runs here because neither block was this row's to move.");
   line("");
 
   line("CASCADE");
