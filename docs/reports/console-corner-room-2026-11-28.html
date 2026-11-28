@@ -37,7 +37,8 @@
   <h1>The console corner: which number stopped the drag, and the one band that replaces it</h1>
   <p class="sub">Measured and fixed on 2026-11-28 in <code>agent-worktree-gui</code>, row #411. Branch
   <code>wtgui/row-411-is-the-complete-brief-the-turn-8c3221</code>, cut from the turnover branch
-  <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. Version <code>1.195.0</code>.</p>
+  <code>20261127_2134_TASK-405_row-405-is-the-complete</code> and rebased onto <code>origin/main</code>'s
+  <code>1.194.3</code> for its landing. Version <code>1.195.0</code>.</p>
 
   <div class="verdict">
     <strong>The short answer.</strong> The drag was stopped by the <em>room</em> number, and that room was computed from
@@ -47,7 +48,7 @@
     on a 110% page it was too tall and the box drew past the bottom. The pane's own bottom was never consulted at all.
     The fix is one band from one module: the stop is <code>min(pane room, viewport room)</code>, in one unit, and the
     record names which edge it was. The grip's 406 lines left <code>public/app.js</code> for
-    <code>public/core/console-grip.js</code>, and two gates now read that band instead of re-deriving it.
+    <code>public/core/console-grip.js</code>, and four console gates now read that band instead of re-deriving it.
   </div>
 
   <h2>1. What the reader reported, and what was measured</h2>
@@ -175,23 +176,36 @@ edge     = room === paneRoom ? "pane" : "viewport"</pre>
     pointer handling. 8 of 8.</li>
     <li><code>tools/verify-console-grip-band.mjs</code> (new): one band, both edges, three zooms, two window heights,
     grow and shrink: 26 checks. It reads the band from the module the page serves and never re-derives a room.</li>
+    <li><code>tools/verify-console-height.mjs</code>: the drag presses the grip (the console's own corner stopped being
+    the gesture's target when the grip became its own element) and the fixture is centred so the viewport room the
+    band measures is inside it: 60 of 60. Before this cut the same gate pressed the old native corner and expected
+    420px inside a 320px room: 30 of 59 checks failed.</li>
+    <li><code>tools/verify-console-resize.mjs</code>: the up leg's floor now comes from
+    <code>wtConsoleGripDrag.min</code>, the module's own number, instead of "every step is 20px forever". The floor is
+    34px and the last step lands on it: 41 of 41.</li>
   </ul>
+  <p>The two gates that opened the deleted <code>public/style.css</code> now read the sheets
+  <code>public/index.html</code> loads in order, and the fonts gate's reasoning-row selector follows the class the
+  one-console-stream cut left (<code>.jl-think</code>).</p>
   <p><strong>One clamp.</strong> Before, five places in <code>app.js</code> computed or applied a band: the press's room
   (<code>:10829</code>), the floor read (<code>:10724</code>), <code>outGripLimit</code> (<code>:10812</code>),
   <code>outGripRelease</code> (<code>:10998</code>) and the move's clamp (<code>:10923</code>). After, there is one
   <code>band()</code> and one <code>limit()</code> in the module, and the move and the release are its only callers.</p>
 
   <h2>7. What ran</h2>
+  <p class="small muted">Run at the rebased tip (<code>origin/main</code>'s <code>1.194.3</code>) for the landing; the
+  row's earlier cut ran the same family at the pre-rebase tip.</p>
   <table>
     <thead><tr><th>Check</th><th>Result</th><th>Case count</th></tr></thead>
     <tbody>
-      <tr><td><code>node --test test/console-*.test.js test/placed-nodes.test.js test/board-lookups.test.js</code></td><td><span class="tag good">PASS</span></td><td>113 tests</td></tr>
-      <tr><td><code>tools/verify-console-grip-band.mjs</code> (new)</td><td><span class="tag good">PASS</span></td><td>26 checks</td></tr>
-      <tr><td><code>tools/verify-console-corner-drag.mjs --serve &lt;tree&gt;</code></td><td><span class="tag good">PASS</span></td><td>98 ok, 0 failures</td></tr>
-      <tr><td><code>tools/verify-console-resize-release.mjs</code></td><td><span class="tag good">PASS</span></td><td>8 checks</td></tr>
-      <tr><td><code>tools/verify-console-corner-tail.mjs</code></td><td><span class="tag good">PASS</span></td><td>its own count</td></tr>
-      <tr><td><code>tools/verify-console-render.mjs</code>, <code>diff</code>, <code>lost-text</code></td><td><span class="tag good">PASS</span></td><td>33, all, all</td></tr>
-      <tr><td><code>tools/measure-console-press-only.mjs --serve &lt;tree&gt;</code></td><td><span class="tag good">ran</span></td><td>press-only rows</td></tr>
+      <tr><td><code>tools/verify-console-grip-band.mjs</code> (three zooms, two window heights, both edges, grow and shrink)</td><td><span class="tag good">PASS</span></td><td>26 checks</td></tr>
+      <tr><td><code>tools/verify-console-height.mjs</code></td><td><span class="tag good">PASS</span></td><td>60 checks</td></tr>
+      <tr><td><code>tools/verify-console-resize.mjs</code></td><td><span class="tag good">PASS</span></td><td>41 checks</td></tr>
+      <tr><td><code>tools/verify-console-corner-drag.mjs --serve &lt;tree&gt;</code></td><td><span class="tag good">PASS</span></td><td>no failures</td></tr>
+      <tr><td><code>tools/verify-console-resize-release.mjs</code></td><td><span class="tag good">PASS</span></td><td>8/8, delta 0 at every zoom</td></tr>
+      <tr><td><code>tools/verify-console-fonts.mjs</code></td><td><span class="tag good">PASS</span></td><td>347/347</td></tr>
+      <tr><td><code>node --test test/console-*.test.js test/placed-nodes.test.js test/board-lookups.test.js</code></td><td><span class="tag good">PASS</span></td><td>234 tests</td></tr>
+      <tr><td><code>npm run absolute-paths</code></td><td><span class="tag good">clean</span></td><td>2,515 tracked files, none new</td></tr>
     </tbody>
   </table>
   <h3>Red on the branch before this cut too, and therefore not the extraction's</h3>
@@ -200,35 +214,32 @@ edge     = room === paneRoom ? "pane" : "viewport"</pre>
   <table>
     <thead><tr><th>Tool</th><th>Branch</th><th>Base export</th><th>Why</th></tr></thead>
     <tbody>
-      <tr><td><code>verify-console-height.mjs</code></td><td>30/59 fail</td><td>30/59 fail</td><td>the fixture drags to 420px and expects it, but its pane's room is ~320; the gate encodes the viewport-only band this row replaces</td></tr>
-      <tr><td><code>verify-console-resize.mjs</code></td><td>4 checks fail</td><td>4 checks fail</td><td>same fixture, same expectation</td></tr>
+      <tr><td><code>verify-console-boxes.mjs</code></td><td>source checks pass; the browser half stops at its own fixture</td><td>same</td><td>it reads the split sheets now, but the fixture forces the tallied group (<code>wtgui.toolGroups=1</code>) while its checks read <code>.call</code> blocks, which that mode does not draw - a separate cut, not this row's</td></tr>
       <tr><td><code>verify-console-corner-slow-drag.mjs</code></td><td>4 fail</td><td>4 fail</td><td>expects the release to put the transcript back on its foot; the code deliberately does not write the foot the gesture took away</td></tr>
       <tr><td><code>verify-console-settled-tail.mjs</code></td><td>1 fail</td><td>1 fail</td><td>whole-message length on a docked console</td></tr>
       <tr><td><code>verify-console-jitter.mjs --headless</code></td><td>11/17</td><td>11/17</td><td>environment-dependent timing</td></tr>
-      <tr><td><code>verify-console-boxes.mjs</code>, <code>verify-console-fonts.mjs</code></td><td>reads <code>public/style.css</code></td><td>same</td><td>the sheet was split into per-surface files by an earlier cut; these gates still open the old path</td></tr>
       <tr><td><code>verify-console-multi-block-line.mjs</code></td><td>needs live job 6073fb2a</td><td>same</td><td>a live board fixture, not code</td></tr>
       <tr><td><code>verify-console-column-fit.mjs</code>, <code>verify-console-zoom.mjs</code></td><td>sandbox spawn refused</td><td>same</td><td>a live run holds the tree each one cuts; environmental</td></tr>
     </tbody>
   </table>
-  <p class="small muted">The two updated gates and the new gate all pass on the branch and are red or not-run on the base
-  for the same reason, which is the point: the old gates could not see the unit mix because they re-derived the band. The
-  new gate reads it. The full suite was run once, separately: <code>npm test</code> from this tree reached 3,946 passing tests and 26
-  failing ones before the runner was stopped at 27 minutes without printing its summary. None of the 26 names the
-  console or the grip: they are the panel's live-state routes (settings, permissions, waves, initiatives, rebase,
-  park, scratch, paths, discovery, the board's own state). One of them was this page - on disk, not in the index -
-  which <code>test/reports-are-tracked.test.js</code> exists to catch; it is force-added now and that test passes
-  4/4. The console family is the separate run above, and it is green.</p>
+  <p class="small muted">The gates that read the band now pass at the rebased tip, and the two that opened the split
+  sheets no longer fail on the deleted path. The full suite was run once on the row's pre-rebase cut: <code>npm test</code>
+  reached 3,946 passing tests and 26 failing ones before the runner was stopped at 27 minutes without printing its
+  summary. None of the 26 names the console or the grip: they are the panel's live-state routes (settings, permissions,
+  waves, initiatives, rebase, park, scratch, paths, discovery, the board's own state). The landing did not rerun the
+  full suite; it ran the console family above, and it is green.</p>
 
   <h2>8. Where this lands</h2>
   <p>Branch <code>wtgui/row-411-is-the-complete-brief-the-turn-8c3221</code>, cut from
-  <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. It is merged back into that turnover branch locally, and
-  pushed nowhere: no new remote branch and no pull request, because the turnover
-  branch is the branch this work rolls up to and the reader decides when it lands. The turnover branch is left
-  unpushed (<code>origin/20261127_2134_TASK-405_row-405-is-the-complete</code> is behind it). Version
-  <code>1.195.0</code>, above <code>origin/main</code>'s <code>1.194.0</code>; 1.194.0 is anchored, so the bump skipped
-  it, and the merge resolved the turnover's own <code>1.194.1</code> in favour of <code>1.195.0</code>.</p>
+  <code>20261127_2134_TASK-405_row-405-is-the-complete</code> and rebased onto <code>origin/main</code> at
+  <code>632af659</code> (version <code>1.194.3</code>). It is merged back into that turnover branch LOCALLY, and pushed
+  nowhere: no new remote branch and no pull request, because the turnover branch is the branch this work rolls up to and
+  the reader decides when it lands. The turnover branch's own ref holds that merge and is left unpushed
+  (<code>origin/20261127_2134_TASK-405_row-405-is-the-complete</code> is untouched). Version <code>1.195.0</code>, above
+  <code>origin/main</code>'s <code>1.194.3</code>.</p>
   <p class="small muted">Reproduce: <code>node tools/verify-console-grip-band.mjs</code> (26 checks, boots its own
-  panel), <code>node tools/verify-console-corner-drag.mjs --serve &lt;tree&gt;</code> (the 98-case matrix).</p>
+  panel), <code>node tools/verify-console-corner-drag.mjs --serve &lt;tree&gt;</code> (its two-width, two-size, two-edge
+  matrix).</p>
 </main>
 </body>
 </html>
