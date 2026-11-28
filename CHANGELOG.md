@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.195.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.196.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-783 releases from v0.1.0 (2026-10-20) to v1.195.0 (2026-11-28), 2776 commits between the tags. Every release is anchored by an
+784 releases from v0.1.0 (2026-10-20) to v1.196.0 (2026-11-28), 2782 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.196.0 — 2026-11-28 · 6 commits
+
+[`c7cf6da`](https://github.com/JLRoper/agent-worktree-gui/commit/c7cf6da4759d94c16f102198c476496a5cedf380) · [compare v1.195.0...v1.196.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.195.0...v1.196.0)
+
+### Added
+
+- feat(settings): the sessions target offers an unused-for window (24h / 7d / 30d) ([`8ec9933`](https://github.com/JLRoper/agent-worktree-gui/commit/8ec9933af124d9b5b44b7c1cc6c5868c6a89ab46))
+- feat(settings): prune Hermes session and checkpoint stores from storage & cleanup ([`a69d1cb`](https://github.com/JLRoper/agent-worktree-gui/commit/a69d1cb3d86fdcd3b083abfbefd19a65a6cde5e4))
+
+### Fixed
+
+- fix(settings): the Processes heading shows the census, not the target count ([`a3dbdec`](https://github.com/JLRoper/agent-worktree-gui/commit/a3dbdec39c8282e3bd026f2d9f7c0c27cd38c3a4))
+- fix(settings): a Hermes prune's press waits past its VACUUM ([`7f70c6a`](https://github.com/JLRoper/agent-worktree-gui/commit/7f70c6a417233699f5bdf954bce535e4a752c08f))
+
+### Docs & tests
+
+- docs: render the changelog - 783 releases ([`52708bb`](https://github.com/JLRoper/agent-worktree-gui/commit/52708bbf69a3bd22e16eeb820a63b82600ba6ff6))
+
+### Other
+
+- chore: 1.196.0 - the version this landing carries ([`c7cf6da`](https://github.com/JLRoper/agent-worktree-gui/commit/c7cf6da4759d94c16f102198c476496a5cedf380))
 
 ## v1.195.0 — 2026-11-28 · 5 commits
 
