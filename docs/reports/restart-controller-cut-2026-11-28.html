@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 512: the restart controller cut out of lib/restart.js, and the proof that no export moved</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  .names { columns:3; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+  .methods { columns:2; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 512: the restart controller cut out of lib/restart.js, and the proof that no export moved</h1>
+<p class="sub">agent-worktree-gui 1.197.1, branch <code>wtgui/row-512-is-the-second-cut-of-lib-restart-9cdf37</code>, the cut committed on <code>74531fd6</code>, cut from the turnover branch's head <code>0ce44e77</code>. All line numbers are on this branch.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#512</dd>
+  <dt>the plan card</dt><dd>module-separation entry 16, lib/restart.js, controller half</dd>
+  <dt>the commit</dt><dd>74531fd6 - the cut, committed before the report page</dd>
+  <dt>the cut</dt><dd>lib/restart.js (1025 lines) -&gt; lib/restart.js (61) + lib/restart-controller.js (979)</dd>
+  <dt>the moved half</dt><dd>the banner comment and the whole RestartController class</dd>
+  <dt>the re-export</dt><dd>lib/restart.js:39 imports gatewayIdentity; :43 re-exports 15 names; :51 re-exports RestartController</dd>
+  <dt>exports</dt><dd>17 before, 17 after, 0 missing, 0 added</dd>
+  <dt>the proof</dt><dd>npm run test:module lib/restart-controller.js - 5 files, 56 tests, 56 pass, 0 fail</dd>
+  <dt>the same cut</dt><dd>npm run test:module lib/restart.js - 6 files, 92 tests, 90 pass, 2 fail</dd>
+  <dt>the base</dt><dd>the same 92 / 90 / 2 at 0ce44e77 before the cut</dd>
+  <dt>push / PR</dt><dd>none - the merge is local, origin keeps its ref</dd>
+</dl>
+
+<h2>1. What moved, and what stayed</h2>
+<p>The brief was the second cut of the same file: take the restart controller out of <code>lib/restart.js</code> into <code>lib/restart-controller.js</code>, a pure move, with <code>lib/restart.js</code> re-exporting every name it loses so no caller changes. Row 511 cut the checks out of the same file; this row is the controller half, and after it <code>lib/restart.js</code> is an entry point and nothing else.</p>
+<p>What went to the new file, at the line each unit now sits on. The class is <code>lib/restart-controller.js:34</code>, its constructor <code>:35</code>, and it still runs to the file's last line <code>:979</code>:</p>
+<div class="methods">
+  constructor :35<br>
+  readRecord :118, writeRecord :128<br>
+  queueForDisk :141, persistQueue :156<br>
+  consumedFrom :173, consumedForDisk :186, consumedEntry :190, consume :198<br>
+  restoreQueue :220, note :288, state :294, emitState :311<br>
+  request :324, cancel :412, livesOn :433<br>
+  loop :441, execute :472, finish :504<br>
+  interruptRunning :525<br>
+  executeGateway :574, restartGateway :618, runRestartCommand :645<br>
+  waitForNewPid :673, stopAndStartGateway :696<br>
+  stopGatewayProcess :729, spawnGatewayProcess :759<br>
+  gatewayStatePath :787, writeRestartLog :793<br>
+  proveGatewayTurn :803, executePanel :812, spawnPanelReplacement :848<br>
+  resumePending :875, waitForGateway :934, wakeOnce :956
+</div>
+<p>What stayed is text, not code: the module's own header (<code>lib/restart.js:1-38</code>, whose last four lines are now the note that both halves are their own files), the fifteen-name re-export of <code>lib/restart-checks.js</code> at <code>:43-47</code>, the new re-export of <code>RestartController</code> at <code>:51</code>, and the <code>gatewayIdentity</code> re-export at <code>:61</code> with its comment above it. The parent declares nothing: not one function, constant or class.</p>
+<p>The new file keeps the fifteen private names off the public surface. <code>lib/restart-checks.js</code> exports twenty names, five of them (<code>TERMINAL_RUN</code>, <code>MAX_CONSUMED</code>, <code>sleep</code>, <code>nowIso</code>, <code>clip</code>) only so a reader can import them back; the controller reads those five and thirteen of the fifteen, and re-exports none of them. The direction is one-way: <code>lib/restart-controller.js:16-31</code> imports <code>node:fs</code>, <code>node:child_process</code>, <code>node:path</code>, <code>node:url</code>, <code>node:crypto</code>, <code>./hermes-runtime.js</code>, <code>./jobs.js</code>, <code>./paths.js</code>, <code>./log.js</code> and <code>./restart-checks.js</code>, and nothing from <code>lib/restart.js</code>.</p>
+
+<h2>2. The move is pure</h2>
+<p>A move that carries a quiet edit is not a move, so both files were composed from <code>git show 0ce44e77:lib/restart.js</code> rather than from the edited tree, and every claim below is a comparison against that blob with CRLF and LF normalised on both sides. The checkout hands the working files CRLF and <code>git show</code> hands the blob LF.</p>
+<table>
+  <tr><th>direction</th><th class="n">lines checked</th><th>result</th></tr>
+  <tr><td>the class, base <code>lib/restart.js:79-1025</code> against <code>lib/restart-controller.js:33-979</code></td><td class="n">947</td><td><span class="ok">947 identical, 0 changed</span></td></tr>
+  <tr><td>the imports, base <code>:39-46</code>, <code>:49</code> and <code>:54-58</code> against <code>lib/restart-controller.js:16-23</code>, <code>:25</code> and <code>:27-31</code></td><td class="n">14</td><td><span class="ok">14 identical</span>: ten import statements, none narrowed, because the class reads every name they bring</td></tr>
+  <tr><td>what the parent keeps: base <code>:1-34</code>, <code>:60-66</code>, <code>:68-76</code></td><td class="n">50</td><td><span class="ok">50 identical</span>, at <code>lib/restart.js:1-34</code>, <code>:41-47</code>, <code>:53-61</code></td></tr>
+  <tr><td>the moved code still in the parent</td><td class="n">310 long lines</td><td><span class="ok">absent</span>: none of the 310 moved lines of 30+ characters appears in <code>lib/restart.js</code>, and no moved method name survives there</td></tr>
+  <tr><td>the declaration partition</td><td class="n">1 declaration</td><td><span class="ok">1 = 1</span>: the base's only top-level declaration, <code>RestartController</code>, is declared once, in the new file, and the parent declares none</td></tr>
+</table>
+<p>The 973 lines the diff removes are these: 947 moved, 14 import statements re-created byte for byte in the new file, 4 lines of the old row-511 note replaced by the new one, and 8 lines that did not travel - the two comment blocks that explained the imports (<code>:48</code> and <code>:51-53</code>), two blank lines between the import groups, and the blank pair at <code>:77-78</code> before the banner. The 9 lines the diff adds are the 4-line note, the one-line <code>gatewayIdentity</code> import, the 2-line note and the re-export of <code>RestartController</code>, and one blank.</p>
+<p>One line moved to the same directory, so it still resolves the same path: <code>path.dirname(fileURLToPath(import.meta.url))</code> was <code>lib/restart.js:896</code> and is <code>lib/restart-controller.js:850</code>. Both give <code>lib/</code>, so the panel replacement's argv is unchanged.</p>
+
+<h2>3. Every name exported before is still exported</h2>
+<p>The claim is about the module's surface, so it was read from the modules themselves. The pre-cut file was extracted with <code>git show 0ce44e77:lib/restart.js</code> into a probe beside the current one, both were imported in one process, and the key sets were compared:</p>
+<pre>$ node --input-type=module -e "const before = await import('./lib/.probe-restart-before-512.mjs');
+                                 const after  = await import('./lib/restart.js'); ..."
+before exports: 17
+after  exports: 17
+MISSING (exported before, not now): none
+ADDED (new): none
+same name for name: true</pre>
+<p>17 and 17, with an empty difference in both directions and the same order. The 17 names are these, unchanged:</p>
+<div class="names">
+NEVER_CHANGED_REASON<br>PROOF_PROMPT<br>PROVIDER_KEY_NAMES<br>REASON_REQUIRED<br>RESTART_SHAPE<br>RestartController<br>compareVersions<br>gatewayIdentity<br>gatewayLaunchPlan<br>gatewayRestartLogPath<br>proveGatewayTurn<br>providerKeyCheck<br>restartFilePath<br>sameVersion<br>servedVersionFromDisk<br>versionParts<br>versionsNamed
+</div>
+<p><code>lib/restart-controller.js</code> exports exactly one name, <code>RestartController</code>, read the same way. Nothing else in the new file is on a surface: the five private helpers stay exported by <code>lib/restart-checks.js</code> only, and are not re-exported by either file.</p>
+
+<h2>4. The focused tests</h2>
+<p>The focused set is the one the repo's selector builds for each file, not the whole suite. Both runs are at the cut commit <code>74531fd6</code>:</p>
+<pre>$ npm run test:module lib/restart-controller.js
+test:module - 5 file(s), 62.1s, exit 0
+tests 56
+pass  56
+fail  0
+
+$ npm run test:module lib/restart.js
+test:module - 6 file(s), 78.0s, exit 1
+tests 92
+pass  90
+fail  2</pre>
+<p>The base was run before the move, on the clean tree at <code>0ce44e77</code>:</p>
+<pre>$ npm run test:module lib/restart.js      # before the cut, 0ce44e77
+test:module - 6 file(s), 63.0s, exit 1
+tests 92
+pass  90
+fail  2</pre>
+<p><span class="ok">92 / 90 / 2 before, 92 / 90 / 2 after.</span> The two failures are the same two tests in both runs, by name:</p>
+<ul>
+  <li><code>test/paths.test.js:221</code> "every *File / *Dir / *Log config key the panel reads is derived by lib/paths.js, or is source rather than state": it reports <code>pipelineBundleSeedFile</code> read at <code>lib/pipeline-bundle-import.js:321</code> rather than derived by <code>lib/paths.js</code>. A drift in the paths inventory, untouched by this cut.</li>
+  <li><code>test/paths.test.js:728</code> "every spawn prompt states the scratch path, and the card still shows only what the reader wrote": the temp tree it cuts is refused with <code>409 tree_unfit</code> ("1 uncommitted file"), an environment condition of the test's own tree.</li>
+</ul>
+<p>Neither names <code>lib/restart.js</code> or <code>lib/restart-controller.js</code> in the code it asserts about, and both fail at the base with the same words, so neither is this cut's. The <code>restart-controller</code> set is 56 tests against the parent's 92 because two files in the parent's set name <code>lib/restart.js</code> in their text rather than importing it: <code>test/paths.test.js</code> and <code>test/panel-restart.test.js</code> do not reach the controller by import. <code>panel-restart.test.js</code> is in the 56 anyway, because the repair in section 5 makes it read the new file as text.</p>
+
+<h3>The one run that showed a third failure, and why it is load</h3>
+<p>One run of the parent's set, on a loaded machine, reported 89 pass and 3 fail. The third was <code>test/panel-restart.test.js:137</code> "with no graceful shutdown asked for, a bounce takes the port at once instead of waiting", failing on its own timing bound: "the outgoing panel let go of the port at 3215ms, not after a 20 s wait". It is a test that boots a real panel and measures how long the outgoing process holds the port.</p>
+<pre>$ node --test test/panel-restart.test.js     # three runs at 74531fd6
+run 1 exit=0  fail 0
+run 2 exit=0  fail 0
+run 3 exit=0  fail 0
+
+$ npm run test:module lib/restart.js         # the repeat full-set run, same commit
+test:module - 6 file(s), 78.0s, exit 1
+tests 92 / pass 90 / fail 2</pre>
+<p>It passes 3 of 3 alone at the cut and in the second full-set run at the same commit, and the loaded run took 144.5 s against 78.0 s for the clean one. It is a timing bound under contention, not a change in behaviour: the class's bytes are the base's, and this test drives it through a real process. It is named here rather than left out because the row's numbers have to match what the tool printed.</p>
+
+<h2>5. One test had to follow the code</h2>
+<p><code>test/panel-restart.test.js:369</code> read the controller's source as text to pin the helper's argv:</p>
+<pre>- const src = readSource("lib/restart.js");
++ const src = readSource("lib/restart-controller.js");</pre>
+<p>That is the only line of this cut that is not a move, and it is in the cut commit. The three assertions below it are unchanged, byte for byte: the spawn of <code>lib/panel-restart.cjs</code> carrying <code>String(this.config.port</code> within 700 characters, and the <code>"graceful"</code> word in the helper's argv. The test's own comment now says which file it reads and why. Without the repair the assertion fails on a file that no longer holds a spawn; it is the same failure a text-reading test always has the first time code leaves its file. That file is 12 tests and passes 12 of 12.</p>
+
+<h2>6. Line counts</h2>
+<pre>$ git show 0ce44e77:lib/restart.js | wc -l
+1024
+$ wc -l lib/restart.js lib/restart-controller.js
+  61 lib/restart.js
+ 979 lib/restart-controller.js
+1040 total
+$ git diff --numstat 0ce44e77 74531fd6
+979     0       lib/restart-controller.js
+9       973     lib/restart.js
+3       2       test/panel-restart.test.js</pre>
+<p><code>lib/restart.js</code> went from 1025 lines of text to 61 (wc reads 1024 and 61 because the base's last line has no newline; the new file ends with one). <code>lib/restart-controller.js</code> is 979 lines: a 14-line header, ten import statements over 14 lines with four blank separators, the 947 moved lines and the blank line between them.</p>
+<p class="small">The plan's "about 54 lines stay" is not this file's remainder either: after this cut the parent is 61 lines of header and re-exports, and no code at all. The two cuts together account for the whole 1025-line file: 267 lines of checks, 979 of controller, 61 of entry point, and the overlaps are the header and import text each file needs.</p>
+
+<h2>7. Where this lands</h2>
+<p>The branch merges into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, with a merge commit. That base is a turnover branch and has not landed, so nothing is pushed, no branch of this tree is created on the remote, and no pull request is opened; the reader decides when the turnover branch lands. No version is bumped and no changelog entry is added: a pure move inside <code>lib/</code> changes no behaviour.</p>
+<p>Pre-flight, against the head this cut was cut from: <code>git diff --stat 0ce44e77 0ce44e77 -- lib/restart.js lib/restart-controller.js test/panel-restart.test.js</code> is empty, because the cut was cut from that head. The turnover branch moved while this row ran, so the same overlap check is re-run against its tip immediately before the merge, and the merge commit is reported on the row rather than here: a live target can advance again, and a page cannot name a merge that has not happened.</p>
+<p class="small">Report written on 2026-11-28. Every command above was run in the tree named in the subtitle; the pre-cut run was made on the clean tree at <code>0ce44e77</code> before the move, and every comparison used <code>git show</code> against that one base commit, not a second checkout of this branch.</p>
+</main>
+</body>
+</html>
