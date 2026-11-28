@@ -18,14 +18,20 @@
 // Six findings, five of them failures and one a warning:
 //   missing       package.json's history first declared <version> at <sha>, and origin carries no v<version> tag.
 //                 A tag that exists only in this checkout is named in the message: it was never pushed.
-//   wrong-commit  origin's tag resolves to another commit — the anchor points at the wrong history
+//   wrong-commit  origin's tag resolves to another commit - the anchor points at the wrong history
 //   lightweight   origin's tag is at the right commit but carries no message; an annotated tag records the
 //                 version, its date and a line of why, and survives a clone as an object of its own
-//   orphan-tag    a v<major>.<minor>.<patch> tag names a version package.json never held — read at the commit
+//   orphan-tag    a v<major>.<minor>.<patch> tag names a version package.json never held - read at the commit
 //                 the tag names, so the finding is about that commit and not about the ref's history. A tag for
 //                 a version this ref has not carried yet, at a commit whose package.json DOES declare it, is a
 //                 pre-landing anchor held by its branch and is not a finding: the branch carries the tag so this
 //                 gate can read it, and the landing moves it onto the commit main carries.
+//   off-main      a version tag whose commit is NOT AN ANCESTOR OF MAIN, and which a branch still holds. That is a
+//                 claim no reader of main can follow: package.json at the tagged commit may declare the number,
+//                 but the commit never landed, so the number cannot be released from it. The finding names the tag,
+//                 its commit and the branch holding it. A tag no branch holds is a fossil of a rewritten history
+//                 and stays a note (see `held`), because no commit can still be landed from it and a refusal
+//                 nobody can act on is noise in every landing's gate.
 //   stale-local   (warning, exit 0) this checkout's v<version> ref disagrees with origin's. The gate judged
 //                 origin; the next `git fetch --tags --force` refreshes the checkout. Not an anchor defect:
 //                 reporting it as wrong-commit is what hid six correct anchors behind a stale clone.
@@ -34,23 +40,27 @@
 //
 //   node tools/verify-version-tags.mjs                 check HEAD
 //   node tools/verify-version-tags.mjs --ref <ref>     check another ref (a tag, a commit, origin/main)
+//   node tools/verify-version-tags.mjs --main <ref>    the release branch a tag must be an ancestor of (main)
 //   node tools/verify-version-tags.mjs --json          one JSON object on stdout
 //   node tools/verify-version-tags.mjs --limit <n>     how many findings to print (default 40; 0 = all)
 //
 // Exit codes: 0 every bump is tagged and every tag is right; 1 at least one finding; 2 the check could not run
-// (including an origin that is configured but unreadable — a gate that cannot see the remote says so).
+// (including an origin that is configured but unreadable, or a main that cannot be read - a gate that cannot see
+// the remote or the release branch says so).
 
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseVersionTag, readReleaseHistory, readVersionAtCommit, repoRoot } from "./release-history.mjs";
+import { branchesHolding, offMainTags, parseVersionTag, readReleaseHistory, readVersionAtCommit, repoRoot } from "./release-history.mjs";
 
 // The gate's logic, separated from git and from the terminal so a test can drive every kind of finding
 // without building a repository. `versions` is the first appearance of each number, oldest first; `transitions`
 // is every change to the version line, which is where a number that went backwards shows up. `tag` is the anchor
-// the gate judged — origin's, when origin was read — and `localTag` is only set in that mode: it is the checkout's
-// ref, used to explain a finding and to raise `stale-local`, never to decide one.
-export function checkReleaseTags({ versions, transitions = versions, orphanTags = [] }) {
+// the gate judged - origin's, when origin was read - and `localTag` is only set in that mode: it is the checkout's
+// ref, used to explain a finding and to raise `stale-local`, never to decide one. `tag.onMain` and `tag.branches`
+// are the ancestry the caller measured (tools/release-history.mjs); when they are absent the gate does not claim
+// to know, and says nothing about main rather than guessing.
+export function checkReleaseTags({ versions, transitions = versions, orphanTags = [], offMain = [] }) {
   const findings = [];
   let previous = null;
   for (const v of transitions) {
@@ -78,7 +88,7 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
         date: v.date,
         subject: v.subject,
         message:
-          `v${v.version} is not tagged — first declared at ${v.sha.slice(0, 10)} (${v.date}) ${v.subject}` +
+          `v${v.version} is not tagged - first declared at ${v.sha.slice(0, 10)} (${v.date}) ${v.subject}` +
           (v.localTag
             ? ` (this checkout's ${v.localTag.name} at ${String(v.localTag.commit).slice(0, 10)} is not on origin: git push origin ${v.localTag.name})`
             : ""),
@@ -89,10 +99,12 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
         version: v.version,
         sha: v.sha,
         tagCommit: v.tag.commit,
+        branches: v.tag.branches || [],
         message:
           `v${v.version} points at ${String(v.tag.commit).slice(0, 10)} on ${where}, but ${v.version} first appeared at ${v.sha.slice(0, 10)}` +
+          ancestry(v.tag) +
           (v.localTag && v.localTag.commit === v.sha
-            ? ` — this checkout's tag already names that commit and was never pushed: git push --force origin v${v.version}`
+            ? ` - this checkout's tag already names that commit and was never pushed: git push --force origin v${v.version}`
             : ""),
       });
     } else if (!v.tag.annotated) {
@@ -100,13 +112,29 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
         kind: "lightweight",
         version: v.version,
         sha: v.sha,
-        message: `v${v.version} is a lightweight tag on ${where} — recreate it with git tag -a v${v.version} ${v.sha.slice(0, 10)} -m "v${v.version}" and push --force`,
+        message: `v${v.version} is a lightweight tag on ${where} - recreate it with git tag -a v${v.version} ${v.sha.slice(0, 10)} -m "v${v.version}" and push --force`,
       });
     }
   }
+  // The tags the walk cannot join. A tag a branch still holds and main never carried is the refusal this gate
+  // exists for now: it names the tag, its commit and the branch, because either one can be the thing to move.
+  const refused = new Map(offMain.filter((t) => !t.release && t.branches && t.branches.length).map((t) => [t.name, t]));
   for (const t of orphanTags) {
+    const off = refused.get(t.name);
+    if (off) {
+      findings.push({
+        kind: "off-main",
+        version: t.version,
+        sha: t.commit,
+        branches: off.branches,
+        message:
+          `${t.name} points at ${String(t.commit).slice(0, 10)}, which is not an ancestor of main - the tag is held by ` +
+          `${off.branches.join(", ")}; re-point it at the commit main carries, or delete it and name the branch that held it`,
+      });
+      continue;
+    }
     // `declares` is what package.json at the tagged commit says (tools/release-history.mjs). A tag whose own
-    // commit carries the number anchors a version this ref has not landed yet — held on a branch, not a false
+    // commit carries the number anchors a version this ref has not landed yet - held on a branch, not a false
     // claim. It is still a tag, so a message-less one is reported: held does not excuse a lightweight anchor.
     if (t.declares === true) {
       if (t.annotated === false) {
@@ -114,7 +142,7 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
           kind: "lightweight",
           version: t.version,
           sha: t.commit,
-          message: `${t.name} is a lightweight tag at ${String(t.commit).slice(0, 10)} — recreate it with git tag -a ${t.name} ${String(t.commit).slice(0, 10)} -m "${t.name}"`,
+          message: `${t.name} is a lightweight tag at ${String(t.commit).slice(0, 10)} - recreate it with git tag -a ${t.name} ${String(t.commit).slice(0, 10)} -m "${t.name}"`,
         });
       }
       continue;
@@ -127,6 +155,14 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
     });
   }
   return findings;
+}
+
+// The half-sentence a finding carries when the anchor's commit is not on main. Silent when the caller did not
+// measure ancestry: a gate that does not know must not sound as if it does.
+function ancestry(tag) {
+  if (!tag || tag.onMain !== false) return "";
+  const held = tag.branches && tag.branches.length ? `held by ${tag.branches.join(", ")}` : "no branch holds it";
+  return ` - and ${String(tag.commit).slice(0, 10)} is not an ancestor of main (${held})`;
 }
 
 // `git ls-remote --tags` in one parse: a name appears twice when the tag is annotated — the tag object's sha
@@ -234,10 +270,11 @@ function hasCommit(root, sha) {
 }
 
 function parseArgs(argv) {
-  const opt = { ref: "HEAD", json: false, limit: 40 };
+  const opt = { ref: "HEAD", main: "main", json: false, limit: 40 };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--ref") opt.ref = String(argv[(i += 1)] || "HEAD");
+    else if (a === "--main") opt.main = String(argv[(i += 1)] || "main");
     else if (a === "--json") opt.json = true;
     else if (a === "--limit") opt.limit = Math.max(0, Number(argv[(i += 1)]) || 0);
     else if (a === "--help" || a === "-h") opt.help = true;
@@ -262,10 +299,17 @@ function main(argv) {
 
   const root = repoRoot(process.cwd());
   let history;
+  const mainRef = opt.main || "main";
   try {
-    history = readReleaseHistory({ root, ref: opt.ref });
+    history = readReleaseHistory({ root, ref: opt.ref, mainRef });
   } catch (e) {
     console.error(`version-tags: could not read the history of ${opt.ref}: ${String(e.stderr || e.message).trim()}`);
+    return 2;
+  }
+  // Ancestry is the second half of the anchor: a tag is only readable if main carries its commit, and a gate
+  // that cannot see main must say so rather than pass every tag by. Fail closed, like an unreadable origin.
+  if (!history.main) {
+    console.error(`version-tags: could not read ${mainRef}, so a tag's ancestry cannot be judged - nothing was checked`);
     return 2;
   }
 
@@ -273,7 +317,7 @@ function main(argv) {
   // An empty walk is not a pass: it means the pathspec, the ref or the checkout is wrong, and a gate that
   // certifies nothing while printing PASS is worse than one that is red.
   if (!versions.length) {
-    console.error(`version-tags: no version history found at ${opt.ref} — package.json's log came back empty`);
+    console.error(`version-tags: no version history found at ${opt.ref} - package.json's log came back empty`);
     return 2;
   }
 
@@ -284,10 +328,22 @@ function main(argv) {
   }
   const tagSource = remote.kind === "remote" ? "origin" : "checkout";
   const sourceTags = remote.kind === "remote" ? [...remote.tags.values()] : history.tags;
-  const { versions: judged, staleLocal } = judgeAnchors({
+  const { versions: rawJudged, staleLocal } = judgeAnchors({
     versions,
     localTags: history.tags,
     remoteTags: remote.kind === "remote" ? sourceTags : null,
+  });
+
+  // What main carries, and which branch holds each tag main does not. `offMainTags` reads every tag once; the
+  // judged anchors are joined to it by name, and an origin-only tag it did not see is measured here instead.
+  const offMain = offMainTags(history, { root });
+  const offByName = new Map(offMain.map((t) => [t.name, t]));
+  const judged = rawJudged.map((v) => {
+    if (!v.tag) return v;
+    const onMain = history.main.commits.has(v.tag.commit);
+    if (onMain) return { ...v, tag: { ...v.tag, onMain: true } };
+    const known = offByName.get(v.tag.name);
+    return { ...v, tag: { ...v.tag, onMain: false, branches: known ? known.branches : branchesHolding(root, v.tag.commit) } };
   });
 
   // The tags the walk cannot join: a live branch's pre-landing anchor, or a number no commit declares. Judged from
@@ -304,8 +360,9 @@ function main(argv) {
     orphanTags.push({ ...t, declares: readVersionAtCommit(root, t.commit) === t.version });
   }
 
-  const findings = checkReleaseTags({ ...history, versions: judged, orphanTags });
-  const held = orphanTags.filter((t) => t.declares === true);
+  const refusedOffMain = offMain.filter((t) => !t.release && t.branches && t.branches.length && orphanTags.some((o) => o.name === t.name));
+  const findings = checkReleaseTags({ ...history, versions: judged, orphanTags, offMain });
+  const held = orphanTags.filter((t) => t.declares === true && !refusedOffMain.some((o) => o.name === t.name));
   const first = versions[0];
   const last = versions[versions.length - 1];
 
@@ -313,12 +370,14 @@ function main(argv) {
     console.log(JSON.stringify({
       ref: history.ref,
       commit: history.commit,
+      main: { ref: history.main.ref, commit: history.main.commit },
       tagSource,
       versions: versions.length,
       from: first ? first.version : null,
       to: last ? last.version : null,
       findings,
       staleLocal,
+      offMain: offMain.map((t) => ({ name: t.name, commit: t.commit, release: t.release, branches: t.branches })),
       held: held.map((t) => ({ name: t.name, version: t.version, commit: t.commit })),
       unread: unreadTags.map((t) => ({ name: t.name, commit: t.commit })),
       ok: findings.length === 0,
@@ -331,13 +390,23 @@ function main(argv) {
     `version-tags: ${versions.length} version bump${versions.length === 1 ? "" : "s"} in package.json's history` +
       (first ? ` (v${first.version} .. v${last.version})` : "") +
       `, ${tagged} tagged and annotated at the commit that first declared them ` +
-      (tagSource === "origin" ? "as origin publishes them" : "(read from this checkout: no origin remote)"),
+      (tagSource === "origin" ? "as origin publishes them" : "(read from this checkout: no origin remote)") +
+      `, against ${history.main.ref} at ${String(history.main.commit).slice(0, 10)}`,
   );
+  if (refusedOffMain.length) {
+    console.log(
+      `  ${refusedOffMain.length} tag${refusedOffMain.length === 1 ? "" : "s"} name a version ${opt.ref} does not carry ` +
+        "and are held by a branch, on a commit main never carried (a refusable claim, listed below): " +
+        refusedOffMain.slice(0, 6).map((t) => `${t.name}@${String(t.commit).slice(0, 8)}`).join(", ") +
+        (refusedOffMain.length > 6 ? `, and ${refusedOffMain.length - 6} more` : ""),
+    );
+  }
   if (held.length) {
     const shown = held.slice(0, 6).map((t) => `${t.name}@${String(t.commit).slice(0, 8)}`).join(", ");
     console.log(
       `  ${held.length} tag${held.length === 1 ? "" : "s"} name a version ${opt.ref} does not carry yet, ` +
-        `each at a commit whose package.json declares it (held on a branch): ${shown}` +
+        `each at a commit whose package.json declares it and that no branch still holds (a fossil of a rewritten ` +
+        `history, not a claim somebody can land): ${shown}` +
         (held.length > 6 ? `, and ${held.length - 6} more` : ""),
     );
   }
@@ -345,34 +414,40 @@ function main(argv) {
     const shown = unreadTags.slice(0, 6).map((t) => t.name).join(", ");
     console.log(
       `  ${unreadTags.length} tag${unreadTags.length === 1 ? "" : "s"} on ${tagSource === "origin" ? "origin" : "the checkout"} ` +
-        `name a version ${opt.ref} does not carry and their commits are not fetched — not judged: ${shown}` +
+        `name a version ${opt.ref} does not carry and their commits are not fetched - not judged: ${shown}` +
         (unreadTags.length > 6 ? `, and ${unreadTags.length - 6} more` : ""),
     );
   }
   if (staleLocal.length) {
     const shown = opt.limit ? staleLocal.slice(0, opt.limit) : staleLocal;
-    console.log(`  ${staleLocal.length} local tag${staleLocal.length === 1 ? "" : "s"} disagree with origin — a stale checkout, not an anchor defect:`);
+    console.log(`  ${staleLocal.length} local tag${staleLocal.length === 1 ? "" : "s"} disagree with origin - a stale checkout, not an anchor defect:`);
     for (const s of shown) console.log(`  ${s.kind.padEnd(12)} ${s.message}`);
-    if (shown.length < staleLocal.length) console.log(`  … and ${staleLocal.length - shown.length} more (--limit 0 prints all)`);
+    if (shown.length < staleLocal.length) console.log(`  ... and ${staleLocal.length - shown.length} more (--limit 0 prints all)`);
   }
   if (findings.length) {
     const shown = opt.limit ? findings.slice(0, opt.limit) : findings;
     for (const f of shown) console.log(`  ${f.kind.padEnd(12)} ${f.message}`);
-    if (shown.length < findings.length) console.log(`  … and ${findings.length - shown.length} more (--limit 0 prints all)`);
+    if (shown.length < findings.length) console.log(`  ... and ${findings.length - shown.length} more (--limit 0 prints all)`);
     console.log("");
     const missing = findings.filter((f) => f.kind === "missing");
     if (missing.length) {
-      console.log("  Tag the commit that declared each number — annotated, with the version as its message:");
+      console.log("  Tag the commit that declared each number - annotated, with the version as its message:");
       console.log(`    git tag -a v${missing[0].version} ${missing[0].sha.slice(0, 10)} -m "v${missing[0].version}"`);
       console.log("  then re-render the changelog with npm run changelog and push the tags with git push origin --tags.");
       console.log("");
     }
-    console.log(`FAIL — ${findings.length} finding${findings.length === 1 ? "" : "s"} across ${versions.length} version bumps`);
+    if (refusedOffMain.length) {
+      console.log("  A tag main never carried is settled one of two ways, and neither is silence:");
+      console.log("    git tag -f -a <tag> <commit main carries> -m \"<tag>\" && git push --force origin <tag>");
+      console.log("    git push origin :refs/tags/<tag> && git tag -d <tag>   # and name the branch that held it");
+      console.log("");
+    }
+    console.log(`FAIL - ${findings.length} finding${findings.length === 1 ? "" : "s"} across ${versions.length} version bumps`);
     return 1;
   }
   console.log(
     (tagSource === "origin" ? "  every bump carries an annotated tag at its own commit on origin" : "  every bump carries an annotated tag at its own commit") +
-      ", and no v<version> tag points elsewhere",
+      `, every tag names a commit ${history.main.ref} carries, and no v<version> tag points elsewhere`,
   );
   console.log("PASS");
   return 0;
