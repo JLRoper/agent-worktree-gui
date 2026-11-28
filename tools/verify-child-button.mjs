@@ -21,12 +21,13 @@
 //   6. THE INK IS ITS OWN. `.btn-child-tree` exists in the stylesheet, quiet at rest and coloured on hover, and the
 //      actions column is wide enough to hold three controls (74px) rather than clipping the third.
 import { readFileSync } from "node:fs";
+import { readStyleSheets } from "./style-sheets.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 // rowHtml and the actions cell inside it moved to public/render-projects.js in step 7 of
 // docs/reports/module-map-2026-11-07.html; the handler and its delegated listener stayed in app.js.
 const rowSrc = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const css = readStyleSheets();
 
 let checks = 0;
 let failures = 0;

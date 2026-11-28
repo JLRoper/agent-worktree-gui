@@ -39,7 +39,7 @@ import path from "node:path";
 import { loadPlaywright, notRun, openPage, withBrowser } from "./browser.mjs";
 import { git, startPanel } from "./panel-testkit.mjs";
 
-const CAP_ROW = 320; // .agents-block .job-out (public/style.css)
+const CAP_ROW = 320; // .agents-block .job-out (public/board.css)
 const SMALL = 200; // a dragged height BELOW the cap
 const BIG = 420; // above the cap, so the cap has to be lifted with it
 const QUIET_WAIT_MS = 35_000; // one 30 s interval plus slack

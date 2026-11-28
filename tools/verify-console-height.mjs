@@ -5,7 +5,7 @@
 //   node tools/verify-console-height.mjs
 //   node tools/verify-console-height.mjs --keep     # leave the sandbox behind for inspection
 //
-// WHAT THIS GUARDS. `.job-out` is a browser-resized box (`resize: vertical` under a max-height, public/style.css) and the
+// WHAT THIS GUARDS. `.job-out` is a browser-resized box (`resize: vertical` under a max-height, public/console.css) and the
 // size the reader gave it lives in ONE place: that node's inline style. Measured on 0.48.2
 // (C:/CodeReviews/agent-worktree-gui/resize/rebuild.md): four rebuild triggers carried the node and held the dragged
 // height to the pixel (420 -> 420, 490 -> 490, 400 -> 400), and EIGHT threw it away - a status change (490 -> 320), a new
@@ -40,8 +40,8 @@ import path from "node:path";
 import { loadPlaywright, notRun, openPage, withBrowser } from "./browser.mjs";
 import { git, startPanel } from "./panel-testkit.mjs";
 
-const CAP_ROW = 320; // .agents-block .job-out (public/style.css)
-const CAP_HOME = 230; // .job-out (public/style.css)
+const CAP_ROW = 320; // .agents-block .job-out (public/board.css)
+const CAP_HOME = 230; // .job-out (public/console.css)
 const ARM = 420; // the height the reader drags to, px - above both caps, so the cap has to be lifted with it
 const HANDLE = 4; // where inside the console's 16 px corner the pointer is put
 const ROW = "height-row";

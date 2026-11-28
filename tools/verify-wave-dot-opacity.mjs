@@ -688,7 +688,7 @@ async function main() {
               unentered: tokens.lineStrong,
             };
             // The ring's own token is NOT the connector's: the stroke is drawn from the `-line` variants where the
-            // state has one (public/style.css:5542-5547), and those carry an alpha.
+            // state has one (the `--tab-*-line` tokens in public/initiatives.css), and those carry an alpha.
             const stateRing = {
               running: tokens.runLine,
               ready: tokens.lineStrong,
