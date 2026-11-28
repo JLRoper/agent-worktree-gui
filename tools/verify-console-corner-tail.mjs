@@ -193,14 +193,15 @@ const PAGE_HELPERS = () => {
     window.__C.node = out();
     return true;
   };
-  // outGripRelease is the one clamp (public/app.js). It is a top-level function of a classic script, so the global
-  // binding can be wrapped and the count is the page's own call count, not a re-implementation of it.
+  // The one clamp is public/core/console-grip.js's `release`, published on the window object so the count is the
+  // page's own call count: the module's release calls the PUBLISHED function for exactly this gate.
   window.__C.countClamp = () => {
     window.__C.clamp = 0;
-    const orig = globalThis.outGripRelease;
-    // Spread, not one argument: outGripRelease takes (height, floor, room), and a wrapper that passed only the height
+    const api = globalThis.wtConsoleGrip;
+    const orig = api && api.release;
+    // Spread, not one argument: the release takes (height, floor, room), and a wrapper that passed only the height
     // would answer its own question with the floor.
-    globalThis.outGripRelease = (...a) => {
+    if (typeof orig === "function") api.release = (...a) => {
       window.__C.clamp += 1;
       return orig(...a);
     };
@@ -340,13 +341,14 @@ async function main() {
 
         const dragAtRelease = await page.evaluate(() => {
           try {
-            const d = outGripDrag;
+            const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null);
             if (!d) return null;
             const r = d.out.getBoundingClientRect();
             return {
               h: +Number(d.h).toFixed(1), min: d.min, cap: d.cap, from: +Number(d.from).toFixed(1), moved: d.moved,
               top: +r.top.toFixed(1), innerH: window.innerHeight, inline: d.out.style.getPropertyValue("--out-h"),
-              room: Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(window.innerHeight - r.top - 8)),
+              room: Math.max(Number.isFinite(d.cap) ? d.cap : 0, Math.round(Number(d.room))),
+              edge: d.edge || null,
             };
           } catch (e) {
             return { error: String(e) };

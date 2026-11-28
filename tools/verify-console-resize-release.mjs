@@ -138,10 +138,10 @@ const PAGE_HELPERS = (cfg) => {
   const out = () => document.querySelector(`#${cfg.host} pre.job-out[data-out="${cfg.out}"]`);
   const grip = () => out()?.parentElement.querySelector(":scope > .out-grip") || null;
   // The cap the press will read, through the page's own reader when this build has one: a box an earlier gesture left
-  // with `max-height: none` inline has no parseable computed cap, and outGripCap is the function that lifts that inline
-  // value for the read and puts it back.
+  // with `max-height: none` inline has no parseable computed cap, and public/core/console-grip.js capOf is the function
+  // that lifts that inline value for the read and puts it back.
   const capOf = (o, cs) => {
-    if (typeof outGripCap === "function") return outGripCap(o, cs);
+    if (window.wtConsoleGrip && typeof window.wtConsoleGrip.capOf === "function") return window.wtConsoleGrip.capOf(o, cs);
     return parseFloat(cs && cs.maxHeight);
   };
 
@@ -154,7 +154,11 @@ const PAGE_HELPERS = (cfg) => {
     const gr = g.getBoundingClientRect();
     const cs = getComputedStyle(o);
     const cap = capOf(o, cs);
-    const room = Math.max(Number.isFinite(cap) ? cap : 0, Math.round(window.innerHeight - r.top / z - cfg.room));
+    // THE ONE BAND, from the module the page runs. This synthetic console has no scrollport, so the viewport is its
+    // only edge; the sheet's cap is folded in as this gate's own promise (a drag past the cap is the reader asking for
+    // a taller box), never as a second arithmetic.
+    const bounds = window.wtConsoleGrip.band({ top: r.top / z, z, floor: 0, paneBottom: null, viewport: window.innerHeight, gap: cfg.room });
+    const room = Math.max(Number.isFinite(cap) ? cap : 0, Math.round(bounds.room));
     return {
       h: +(r.height / z).toFixed(2),
       top: +(r.top / z).toFixed(2),
@@ -174,11 +178,12 @@ const PAGE_HELPERS = (cfg) => {
       room,
       cap: Number.isFinite(cap) ? cap : null,
       held: typeof outDragging === "function" ? outDragging(o) : null,
-      moved: typeof outGripDrag !== "undefined" && outGripDrag ? Boolean(outGripDrag.moved) : null,
-      // The hand's own request, before the gesture's band was applied (public/app.js outGripDrag.want). The difference
-      // between this and the height on the box is the clamp doing its job, not the drag failing.
-      want: typeof outGripDrag !== "undefined" && outGripDrag && outGripDrag.want != null ? +Number(outGripDrag.want).toFixed(2) : null,
-      held_room: typeof outGripDrag !== "undefined" && outGripDrag && Number.isFinite(Number(outGripDrag.room)) ? +Number(outGripDrag.room).toFixed(2) : null,
+      moved: (() => { const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null); return d ? Boolean(d.moved) : null; })(),
+      // The hand's own request, before the gesture's band was applied (public/core/console-grip.js `want`). The
+      // difference between this and the height on the box is the clamp doing its job, not the drag failing.
+      want: (() => { const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null); return d && d.want != null ? +Number(d.want).toFixed(2) : null; })(),
+      held_room: (() => { const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null); return d && Number.isFinite(Number(d.room)) ? +Number(d.room).toFixed(2) : null; })(),
+      held_edge: (() => { const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null); return d ? d.edge || null : null; })(),
       content: +((o.scrollHeight || 0) / z).toFixed(2),
       stored: (() => {
         try {

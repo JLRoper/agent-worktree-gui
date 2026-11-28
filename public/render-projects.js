@@ -1788,7 +1788,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
   // A live corner gesture holds a console somewhere on the board, and this rebuild replaces the rows it lives in. It
-  // waits for the release, which asks for one full repaint (public/app.js's endOutGrip).
+  // waits for the release, which asks for one full repaint (public/core/console-grip.js end).
   if (typeof outGripLive === "function" && outGripLive()) {
     if (typeof outGripDefer === "function") outGripDefer();
     return;

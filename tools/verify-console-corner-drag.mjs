@@ -70,7 +70,19 @@
 // restarted or reconfigured.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { REPO, loadPlaywright, notRun } from "./browser.mjs";
+
+// THE ONE BAND, from the module the page runs (public/core/console-grip.js), not re-derived here. A gate that read
+// `innerHeight - top - 8` on its own was one of the copies that let the room's unit mix live: the box stopped a tenth
+// of the viewport short at 90% and drew past the screen at 110%, and every gate still said the room was right.
+const requireFromTools = createRequire(import.meta.url);
+requireFromTools("../public/core/console-grip.js");
+const GRIP = globalThis.wtConsoleGrip;
+if (!GRIP) {
+  console.error("public/core/console-grip.js did not publish wtConsoleGrip: the band cannot be read");
+  process.exit(2);
+}
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -134,6 +146,7 @@ const SIZE_TOLERANCE_PX = 2;
 const STEP_MS = 35;
 const SETTLE_MAX_MS = 2000;
 const OPEN_KEY = "wm.assistantOpen";
+// The band's own gap (public/core/console-grip.js GAP_PX); the gate reads the room from the module, never re-derives it.
 const OUT_GRIP_ROOM_PX = 8;
 
 const results = [];
@@ -248,12 +261,18 @@ const PAGE_HELPERS = (gripInset) => {
         bodyH: b.clientHeight,
         paneW: Math.round(pane().getBoundingClientRect().width),
         held: typeof outDragging === "function" ? outDragging(o) : null,
-        dragH: typeof outGripDrag !== "undefined" && outGripDrag ? +Number(outGripDrag.h).toFixed(2) : null,
-        // The pointer's own request BEFORE the gesture's band was applied (public/app.js outGripLimit): past the room
-        // the box is held at the limit and cannot follow, and that is a clamp rather than a corner the gesture lost.
-        dragWant: typeof outGripDrag !== "undefined" && outGripDrag && outGripDrag.want != null ? +Number(outGripDrag.want).toFixed(2) : null,
-        dragTop: typeof outGripDrag !== "undefined" && outGripDrag ? +Number(outGripDrag.top).toFixed(2) : null,
-        moved: typeof outGripDrag !== "undefined" && outGripDrag ? Boolean(outGripDrag.moved) : null,
+        // The pointer's own request BEFORE the gesture's band was applied (public/core/console-grip.js limit): past the
+        // room the box is held at the limit and cannot follow, and that is a clamp rather than a corner the gesture lost.
+        dragWant: (() => { const d = typeof wtConsoleGripDrag !== "undefined" ? wtConsoleGripDrag : typeof outGripDrag !== "undefined" ? outGripDrag : null; return d && d.want != null ? +Number(d.want).toFixed(2) : null; })(),
+        dragTop: (() => { const d = typeof wtConsoleGripDrag !== "undefined" ? wtConsoleGripDrag : typeof outGripDrag !== "undefined" ? outGripDrag : null; return d ? +Number(d.top).toFixed(2) : null; })(),
+        dragH: (() => { const d = typeof wtConsoleGripDrag !== "undefined" ? wtConsoleGripDrag : typeof outGripDrag !== "undefined" ? outGripDrag : null; return d ? +Number(d.h).toFixed(2) : null; })(),
+        moved: (() => { const d = typeof wtConsoleGripDrag !== "undefined" ? wtConsoleGripDrag : typeof outGripDrag !== "undefined" ? outGripDrag : null; return d ? Boolean(d.moved) : null; })(),
+        // The band the press read, and the edge it belongs to: "pane" or "viewport". A stop can then be named instead of
+        // measured as a height that happens to be short.
+        dragRoom: (() => { const d = typeof wtConsoleGripDrag !== "undefined" ? wtConsoleGripDrag : typeof outGripDrag !== "undefined" ? outGripDrag : null; return d && Number.isFinite(Number(d.room)) ? +Number(d.room).toFixed(2) : null; })(),
+        dragEdge: (() => { const d = typeof wtConsoleGripDrag !== "undefined" ? wtConsoleGripDrag : typeof outGripDrag !== "undefined" ? outGripDrag : null; return d ? d.edge || null : null; })(),
+        // The scrollport's own bottom in visual px: the pane edge the band may stop on, read beside the viewport's.
+        bodyBottom: b ? +b.getBoundingClientRect().bottom.toFixed(2) : null,
         same: o === W.node,
         bodySame: b === W.bodyNode,
         sig: b.closest(".job")?.dataset.sig || "",
@@ -751,8 +770,14 @@ function verdictOf(run) {
   const last = rows[rows.length - 1] || down;
   const askedAtEnd = last.dragH == null ? null : last.dragH;
   const minH = Number.isFinite(down.minH) ? down.minH : 0;
-  // The room the release clamps to, measured the way endOutGrip measures it: the viewport under the box's own top.
-  const room = +(innerHpx - last.top - OUT_GRIP_ROOM_PX).toFixed(2);
+  // The room the release clamps to, from the ONE band the page runs (public/core/console-grip.js): the distance from
+  // the press's frozen top edge to the nearer of the pane's bottom and the viewport's, in layout px. This gate used to
+  // derive `innerH - top - 8` itself, which is the same number only at zoom 100 and only when the pane reaches the
+  // viewport; the module now answers it and names the edge, so a stop short of the viewport can be asserted as a stop
+  // on the PANE rather than read as a lost corner.
+  const bounds = GRIP.band({ top: down.top, z: 1, floor: minH, paneBottom: down.bodyBottom, viewport: innerHpx });
+  const room = +bounds.room.toFixed(2);
+  const roomEdge = bounds.edge;
   const wanted = name === "no-move" ? startH : askedAtEnd == null ? startH + TRAVEL[name] : askedAtEnd;
   const expectH = name === "no-move" ? startH : Math.max(minH, Math.min(room, Math.round(wanted)));
 
@@ -762,6 +787,9 @@ function verdictOf(run) {
   numbers.pointerDeltaPx = name === "no-move" ? 0 : TRAVEL[name];
   numbers.expectedDeltaPx = +(expectH - startH).toFixed(2);
   numbers.roomPx = room;
+  numbers.roomEdge = roomEdge;
+  numbers.paneRoomPx = bounds.paneRoom == null ? null : +bounds.paneRoom.toFixed(2);
+  numbers.viewRoomPx = bounds.viewRoom == null ? null : +bounds.viewRoom.toFixed(2);
   numbers.floorPx = minH;
   numbers.storedAfter = after.stored;
   numbers.storedLsAfter = after.storedLs;
