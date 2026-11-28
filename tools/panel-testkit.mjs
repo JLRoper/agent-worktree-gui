@@ -305,6 +305,38 @@ export function sliceRegion(src, name, endName = name) {
   return src.slice(src.indexOf("\n", begin) + 1, end);
 }
 
+// EVERY region with one name, from a source that is more than one file. public/queue-cards.js was cut into three
+// files (public/board/queue-{row,drag,detail}.js) and each keeps the `// ---- the queue sub-tab` pair, so a test that
+// drives the whole pane asks for all of them in one text and evaluates the page's own bodies, moved but unchanged.
+export function sliceRegions(src, name, endName = name) {
+  const lines = src.split("\n");
+  const out = [];
+  let open = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    const at = lines[i].indexOf("// ---- ");
+    if (at < 0 || lines[i].slice(0, at).trim() !== "") continue;
+    const body = lines[i].slice(at + "// ---- ".length);
+    if (open < 0) {
+      if (body.startsWith(name)) open = i + 1;
+    } else if (body.startsWith(`end ${endName}`)) {
+      out.push(lines.slice(open, i).join("\n"));
+      open = -1;
+    }
+  }
+  if (!out.length) throw new Error(`missing region // ---- ${name} in source`);
+  return out.join("\n");
+}
+
+// The queue cards' source AS THE PAGE LOADS IT: the three cuts in load order, then the entry point that builds them.
+// A cut that has not landed yet is an empty string rather than an error, so one call serves every stage of the split.
+const QUEUE_CARD_FILES = ["board/queue-row.js", "board/queue-drag.js", "board/queue-detail.js", "queue-cards.js"];
+export function queueCardsSource() {
+  return QUEUE_CARD_FILES.map((rel) => {
+    const abs = path.join(ROOT, "public", rel);
+    return existsSync(abs) ? readFileSync(abs, "utf8") : "";
+  }).join("\n");
+}
+
 const sourceCache = new Map();
 export function readSource(relPath) {
   const abs = path.resolve(ROOT, relPath);

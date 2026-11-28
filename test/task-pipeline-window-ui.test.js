@@ -22,7 +22,7 @@ import test from "node:test";
 
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { buildTaskPipelineWindow } from "../lib/pipeline-window.js";
-import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { queueCardsSource, sliceRegion, sliceRegions } from "../tools/panel-testkit.mjs";
 import { readStyleSheets } from "./style-sheets.js";
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
@@ -56,9 +56,9 @@ const plain = (html) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+const cards = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
 const windowRegion = sliceRegion(assistant, "the task pipeline window");
-const queueRegion = sliceRegion(cards, "the queue sub-tab");
+const queueRegion = sliceRegions(cards, "the queue sub-tab");
 
 const buildWindow = () =>
   new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowStageOptions, pipeWindowAssignHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowTick, pipeWindowState };`)(esc, fmtDur);

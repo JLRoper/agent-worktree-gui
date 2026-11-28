@@ -10,12 +10,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
+import { queueCardsSource } from "../tools/panel-testkit.mjs";
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const page = read("../public/assistant.js");
 const sheet = readStyleSheets();
 const store = read("../lib/assistant.js");
-const cards = read("../public/queue-cards.js");
+const cards = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
 
 test("no renderer for a thread log survives in the page or the sheet", () => {
   for (const gone of [
