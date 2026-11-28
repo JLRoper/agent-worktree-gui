@@ -26,7 +26,7 @@ const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8"
 const appSrc = page("public/app.js");
 const gripSrc = page("public/core/console-grip.js");
 // Cut 1 of render-jobs.js: turnBody draws the grip in public/board/stream-body.js, loaded before the card.
-const jobsSrc = `${page("public/board/stream-body.js")}\n${page("public/render-jobs.js")}`;
+const jobsSrc = `${page("public/board/stream-body.js")}\n${page("public/board/conversation.js")}\n${page("public/render-jobs.js")}`;
 const consoleSrc = page("public/board/console.js");
 const projectsSrc = page("public/render-projects.js");
 const css = readStyleSheets();

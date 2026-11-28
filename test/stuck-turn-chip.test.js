@@ -10,7 +10,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
 
-const src = readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// The chip is drawn by public/board/conversation.js since the render-jobs.js cut; the page load order is read.
+const src = ["../public/board/stream-body.js", "../public/board/conversation.js", "../public/render-jobs.js"]
+  .map((f) => readFileSync(new URL(f, import.meta.url), "utf8")).join("\n").replace(/\r\n/g, "\n");
 const css = readStyleSheets().replace(/\r\n/g, "\n");
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -19,7 +21,7 @@ const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 function chip() {
   const start = src.indexOf("// ---- the stuck-turn chip");
   const end = src.indexOf("// ---- end the stuck-turn chip");
-  assert.ok(start >= 0 && end > start, "public/render-jobs.js carries the stuck-turn chip region");
+  assert.ok(start >= 0 && end > start, "public/board/conversation.js carries the stuck-turn chip region");
   const body = src.slice(start, end);
   return new Function("esc", `${body}; return stuckChipHtml;`)(esc);
 }

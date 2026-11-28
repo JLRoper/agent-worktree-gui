@@ -25,7 +25,7 @@ import vm from "node:vm";
 // docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
 // Cut 1 of render-jobs.js adds one script to the page: public/board/stream-body.js comes before it.
-const source = `${page("public/board/console.js")}\n${page("public/board/stream-body.js")}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
+const source = `${page("public/board/console.js")}\n${page("public/board/stream-body.js")}\n${page("public/board/conversation.js")}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const part = (a, b) => {
