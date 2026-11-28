@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The console's own sheets - row 445</title>
+<style>
+  :root { --bg: #0d1117; --panel: #151b24; --line: #26303d; --ink: #e6edf3; --dim: #9aa7b4; --dimmer: #6b7684;
+          --green: #3fb950; --red: #f85149; --amber: #d29922; --violet: #a371f7; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 22px 60px; background: var(--bg); color: var(--ink);
+         font: 14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 25px; letter-spacing: -.01em; }
+  h2 { margin: 34px 0 10px; font-size: 17px; padding-top: 10px; border-top: 1px solid var(--line); }
+  h3 { margin: 18px 0 6px; font-size: 14px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { color: #cfd8e3; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: #1c222c; padding: 1px 5px; border-radius: 4px; color: #c9d6e4; }
+  .sub { color: var(--dim); font-size: 13px; }
+  .verdict { margin: 16px 0 6px; padding: 14px 16px; background: var(--panel);
+             border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 8px; }
+  .verdict b { color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .ok { color: var(--green); }
+  .bad { color: var(--red); }
+  .warn { color: var(--amber); }
+  .note { background: #161d27; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  .note h4 { margin: 0 0 4px; font-size: 13px; color: #fff; }
+  figure { margin: 14px 0 8px; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  figcaption { color: var(--dimmer); font-size: 12px; margin-top: 5px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  ul.tight { margin: 6px 0; padding-left: 20px; }
+  ul.tight li { margin: 3px 0; }
+  .kv { display: grid; grid-template-columns: 190px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The console has its own sheets now</h1>
+<p class="sub">Row 445. Tree <code>row-445-is-the-complete-brief-break-the-ffbf80</code>, cut from
+<code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>e873ddb0</code>. Every number below was measured
+in this tree on 2026-11-28; the command that produces each one is in section 11.</p>
+
+<div class="verdict">
+<b>What changed.</b> The console's 102 surface rules were spread over eight sheets. Four sheets hold them now:
+<code>public/console.css</code> (the card's frame, the output body, the reply composer), <code>public/console-head.css</code>
+(the head, the session's cwd line and every head control), <code>public/console-turns.css</code> (the turns and the head's
+model and context readout) and <code>public/model-menu.css</code> (the picker that readout opens). <code>public/jobs.css</code>
+and <code>public/turns.css</code> are gone; <code>public/rowstrips.css</code> is <code>public/utilities.css</code>, which keeps
+the eight type and status utilities that no surface owns.
+<br /><br />
+<b>What moved.</b> 207 rules, verbatim, out of the five sheets that held them: all 86 of <code>jobs.css</code>, all 64
+of <code>turns.css</code> (35 the turns, 29 the picker), 40 of <code>rowstrips.css</code> (its eight utilities stayed),
+11 of <code>overlays.css</code> and 6 of <code>board-table.css</code>.
+<br /><br />
+<b>Where it landed.</b> Merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> by the merge of
+<code>wtgui/row-445-is-the-complete-brief-break-the-ffbf80</code>; that merge is the turnover's tip. The turnover had
+moved since this tree was cut (row 402's landing, <code>lib/branch-kind.js</code> and four test files), and the merge
+carries that work unchanged; the branch is not pushed and no pull request was opened.
+<br /><br />
+<b>What proves it.</b> The rule set is identical, not merely similar: 3,431 rule blocks before and 3,431 after, keyed by
+at-rule context, selector and declarations, with 0 missing and 0 extra. The cascade is identical: the same 4
+(selector, property) pairs across sheets, in the same sheets, with the same winners, and the only console sheet in that
+list did not move. And in a real browser, with one document and the two sheet sets swapped under it, all 2,839 elements
+and 71 pseudo boxes compute the same style at 1160 px and at 420 px, and the captures are byte-identical.
+</div>
+
+<h2>1. The brief, checked against the tree before anything moved</h2>
+
+<p>The brief quotes the review at <code>docs/reports/css-split-review-2026-11-28.html</code>: the console is an
+eight-sheet surface with 102 rules, 46 of them in <code>console.css</code> and 56 outside it - the reply box in
+<code>overlays.css</code> (19), the head in <code>jobs.css</code> (16), the turns in <code>turns.css</code> (8), the thread
+buttons and strips in <code>rowstrips.css</code> (7), the warning line in <code>board.css</code> (4).</p>
+
+<p>Re-running the review tool against this tree's base reproduces the first number and corrects the second. The console
+still draws <b>102 surface rules over eight sheets</b>, but only 42 are outside <code>console.css</code>, because the reply
+composer's 19 rules already landed there: <code>public/console.css:877</code> is the bank of reply rules, and its header
+says where they came from, and <code>public/overlays.css:5</code> says the composer "lives in public/console.css". The
+brief's 56 is that stale count.</p>
+
+<table>
+<tr><th>sheet at the base</th><th class="num">console rules it held</th><th>what they are</th></tr>
+<tr><td><code>jobs.css</code></td><td class="num">16</td><td>the head, the cwd line, the pipeline chip, the status pill, the pin and think buttons</td></tr>
+<tr><td><code>turns.css</code></td><td class="num">8</td><td>the turn, its head, the chevron, the inline prompt</td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">7</td><td>the agent mark, the clear-thread and rename buttons, the console's box insets - and four of the eight utilities (<code>.mono</code>, <code>.dim</code>, <code>.dimmer</code>, <code>.nowrap</code>)</td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">5</td><td><code>button.btn-reply</code>, <code>.job-head</code>, its chevron, <code>button.btn-max</code>, <code>button.btn-star</code></td></tr>
+<tr><td><code>board-table.css</code></td><td class="num">4</td><td><code>.agents-block .job-out</code>, <code>.warnline</code> and the reply row's two empty-warnline rules (they were <code>board.css</code>'s before row 444)</td></tr>
+<tr><td><code>base.css</code>, <code>chrome.css</code></td><td class="num">2</td><td><code>*</code>, the scrollbar, <code>button, select, input, textarea</code> and <code>button</code>: the page's own resets</td></tr>
+</table>
+
+<p class="sub">The review tool's per-sheet counts are taken against a live fixture, so they move with the DOM. The
+console root rendered 67 elements in both runs here, which is why the total is 102 on both sides; section 6 quotes the
+same tool's own and container measures and section 3 is the number to trust for rules.</p>
+
+<h2>2. What moved, and where it came from</h2>
+
+<p>The sheet set went from 20 links to 21. Two sheets were emptied and deleted, one was renamed, three were added, and
+every moved rule kept its text and its order relative to the rules it now sits beside.</p>
+
+<table>
+<tr><th>source</th><th class="num">rules at the base</th><th class="num">rules now</th><th>where the rest went</th></tr>
+<tr><td><code>public/jobs.css</code></td><td class="num">86</td><td class="num ok">0, deleted</td><td>38 to <code>console-head.css</code> (the head, the cwd line, the pill), 48 to <code>console.css</code> (the card frame, the subagent rows, two keyframe blocks)</td></tr>
+<tr><td><code>public/turns.css</code></td><td class="num">64</td><td class="num ok">0, deleted</td><td>35 to <code>console-turns.css</code> (the turns and the readout), 29 to <code>model-menu.css</code> (the picker)</td></tr>
+<tr><td><code>public/rowstrips.css</code></td><td class="num">48</td><td class="num">8, renamed <code>utilities.css</code></td><td>21 to <code>console.css</code>, 18 to <code>console-head.css</code>, 1 (<code>body.modal-open</code>) to <code>chrome.css</code>; the 8 utilities stayed</td></tr>
+<tr><td><code>public/overlays.css</code></td><td class="num">266</td><td class="num">255</td><td>2 to <code>console.css</code> (<code>button.btn-reply</code> and its hover), 9 to <code>console-head.css</code></td></tr>
+<tr><td><code>public/board-table.css</code></td><td class="num">797</td><td class="num">791</td><td>6 to <code>console.css</code></td></tr>
+<tr><td><code>public/console.css</code></td><td class="num">292</td><td class="num ok">369</td><td>+77: 48 from <code>jobs.css</code>, 21 from <code>rowstrips.css</code>, 2 from <code>overlays.css</code>, 6 from <code>board-table.css</code></td></tr>
+<tr><td><code>public/console-head.css</code></td><td class="num">0</td><td class="num ok">65</td><td>new: 38 from <code>jobs.css</code>, 18 from <code>rowstrips.css</code>, 9 from <code>overlays.css</code></td></tr>
+<tr><td><code>public/console-turns.css</code></td><td class="num">0</td><td class="num ok">35</td><td>new: the turn family and the readout, from <code>turns.css</code></td></tr>
+<tr><td><code>public/model-menu.css</code></td><td class="num">0</td><td class="num ok">29</td><td>new: the picker, from <code>turns.css</code></td></tr>
+<tr><td><code>public/utilities.css</code></td><td class="num">0</td><td class="num ok">8</td><td>new: the eight type and status utilities, from <code>rowstrips.css</code></td></tr>
+<tr><td><code>public/chrome.css</code></td><td class="num">70</td><td class="num">71</td><td>+1: <code>body.modal-open</code></td></tr>
+</table>
+
+<p>Those 206 rules are all in the console's four sheets - 77 + 65 + 35 + 29 - and the one more that left a source sheet
+(<code>body.modal-open</code>) is in <code>chrome.css</code>. The eight utilities never left: they stayed in place when
+<code>rowstrips.css</code> became <code>utilities.css</code>. Nothing else moved: <code>base.css</code>,
+<code>settings.css</code>, <code>assistant.css</code>, <code>feedback.css</code>, <code>assistant-panes.css</code>,
+<code>initiatives.css</code>, <code>panes.css</code>, <code>queue.css</code>, <code>pipeline.css</code>,
+<code>late.css</code>, <code>chart.css</code>, <code>core/pipeline-card.css</code> and <code>core/task-card.css</code> are
+rule-identical.</p>
+
+<h3>Method</h3>
+<p>A scratch slicer (not committed) found each rule by a brace-aware scan, so a selector list spread over three lines
+and a whole <code>@keyframes</code> block were each one unit; each moved unit was cut as the range from the end of the
+previous unit in its sheet through its closing brace, so the comments between two rules travelled with the rule they
+explain. Every unit's whitespace-normalized text was hashed before the cut and found again in the target after the
+append: 205 units, 0 missing. Ranges are not written here because the slicer was scratch; section 11 says how the
+numbers are reproduced.</p>
+
+<p>Rules went into their new sheet in the order their old sheets loaded - <code>board-table.css</code> first, then
+<code>jobs.css</code>, then <code>overlays.css</code>, then <code>rowstrips.css</code> - so a rule that beat another rule
+inside the console still beats it. That is why <code>public/console.css:21</code> is the board-table banner and
+<code>:34</code> the jobs one, ahead of console.css's own rules.</p>
+
+<h2>3. The rule set is identical, rule block for block</h2>
+
+<p>Every sheet the page loads was parsed with the same parser <code>tools/verify-css-split.mjs</code> uses, every rule
+keyed by <code>at-rule context | selector | declarations</code>, and the multisets compared. Text, not CSSOM: a browser
+drops and re-adds rules across a sheet swap, and this has to prove the files.</p>
+
+<table>
+<tr><th>measure</th><th class="num">base e873ddb0</th><th class="num">this tree</th><th>verdict</th></tr>
+<tr><td>sheets in <code>index.html</code></td><td class="num">20</td><td class="num">21</td><td class="ok">two deleted, one renamed, three added</td></tr>
+<tr><td>rule blocks</td><td class="num">3,431</td><td class="num">3,431</td><td class="ok">equal</td></tr>
+<tr><td>rules missing from this tree</td><td class="num">-</td><td class="num">0</td><td class="ok">none</td></tr>
+<tr><td>rules this tree adds</td><td class="num">-</td><td class="num">0</td><td class="ok">none</td></tr>
+</table>
+
+<p>Per sheet, rule blocks before and after - the numbers that show where the 215 came from and that nothing else
+moved:</p>
+
+<table>
+<tr><th>sheet</th><th class="num">before</th><th class="num">after</th><th>sheet</th><th class="num">before</th><th class="num">after</th></tr>
+<tr><td><code>base.css</code></td><td class="num">13</td><td class="num">13</td><td><code>console-head.css</code></td><td class="num">-</td><td class="num ok">65</td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">70</td><td class="num">71</td><td><code>console-turns.css</code></td><td class="num">-</td><td class="num ok">35</td></tr>
+<tr><td><code>settings.css</code></td><td class="num">300</td><td class="num">300</td><td><code>model-menu.css</code></td><td class="num">-</td><td class="num ok">29</td></tr>
+<tr><td><code>board-table.css</code></td><td class="num">797</td><td class="num">791</td><td><code>utilities.css</code></td><td class="num">-</td><td class="num ok">8</td></tr>
+<tr><td><code>jobs.css</code></td><td class="num">86</td><td class="num ok">-</td><td><code>assistant.css</code></td><td class="num">98</td><td class="num">98</td></tr>
+<tr><td><code>console.css</code></td><td class="num">292</td><td class="num ok">369</td><td><code>feedback.css</code></td><td class="num">226</td><td class="num">226</td></tr>
+<tr><td><code>turns.css</code></td><td class="num">64</td><td class="num ok">-</td><td><code>assistant-panes.css</code></td><td class="num">126</td><td class="num">126</td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">266</td><td class="num">255</td><td><code>initiatives.css</code></td><td class="num">439</td><td class="num">439</td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">48</td><td class="num ok">-</td><td><code>panes.css</code></td><td class="num">120</td><td class="num">120</td></tr>
+<tr><td><code>queue.css</code></td><td class="num">76</td><td class="num">76</td><td><code>pipeline.css</code></td><td class="num">263</td><td class="num">263</td></tr>
+<tr><td><code>late.css</code></td><td class="num">33</td><td class="num">33</td><td><code>chart.css</code></td><td class="num">47</td><td class="num">47</td></tr>
+<tr><td><code>core/pipeline-card.css</code></td><td class="num">51</td><td class="num">51</td><td><code>core/task-card.css</code></td><td class="num">16</td><td class="num">16</td></tr>
+<tr><td><code>total</code></td><td class="num">3,431</td><td class="num">3,431</td><td></td><td></td><td></td></tr>
+</table>
+
+<h2>4. The cascade: no new tie, and the four that exist are untouched</h2>
+
+<p>Moving a rule between sheets changes what it beats. The review tool lists every (selector, property) pair that two
+or more sheets set, with the sheet that wins by load order, and the list is identical before and after:</p>
+
+<table>
+<tr><th>selector</th><th class="num">props</th><th>sheets</th><th>winner</th><th>context</th></tr>
+<tr><td><code>.topbar</code></td><td class="num">2</td><td><code>chrome.css</code>, <code>late.css</code></td><td><code>late.css</code> (position, padding)</td><td><code>@media (max-height: 300px)</code></td></tr>
+<tr><td><code>.jl-think .think-dot</code></td><td class="num">1</td><td><code>console.css</code>, <code>pipeline.css</code></td><td><code>pipeline.css</code> (animation)</td><td><code>@media (prefers-reduced-motion: reduce)</code></td></tr>
+<tr><td><code>.shell</code></td><td class="num">1</td><td><code>assistant.css</code>, <code>late.css</code></td><td><code>late.css</code> (align-items)</td><td><code>@media (max-height: 300px)</code></td></tr>
+</table>
+
+<p>None of the three selectors is a console element, and the one console sheet in the list, <code>console.css</code>,
+did not move a rule: the <code>.jl-think .think-dot</code> rule it holds is one of its original 292 and still loses to
+<code>pipeline.css</code>. That is not luck. The new sheets were inserted at the index the old ones occupied - see
+section 7 - and the rules inside them kept their old relative order, which is why the pairs that exist still resolve the
+same way. The browser proof in section 5 is the measure that settles the rest: a same-specificity conflict between two
+different selectors would not appear in this table, and it would appear there.</p>
+
+<h2>5. The browser proof: one document, two sheet sets</h2>
+
+<p>Two boots of the fixture do not render the same document: the panel's scan keeps adding and dropping chips while the
+page is open, and a countdown ring redraws every second. A second boot therefore cannot prove anything about a
+stylesheet. The harness (<code>tools/verify-board-table-sheet.mjs</code>, the one row 444 wrote and this row reuses) does
+the opposite of a second boot:</p>
+
+<ol>
+<li>It boots the page <b>once</b> from this tree, seeds the fixture, expands every project and row, then <b>freezes</b>
+the document: it closes the event stream and clears every interval the page armed, and refuses to measure unless four
+samples of the element count agree.</li>
+<li>It exports the base revision with <code>git archive</code>, reads the 20 sheets that page loaded, and inserts them
+into the live <code>&lt;head&gt;</code> as <code>&lt;style&gt;</code> elements - disabled - at the index the old sheets
+occupy. A disabled <code>&lt;link&gt;</code> fetches late, so the text is fetched first and each element's own sheet is
+disabled instead, which is synchronous.</li>
+<li>It measures <b>A, B, A</b>: the base sheets, this tree's sheets, the base sheets again. If A and A do not agree the
+document moved under the harness and the run fails rather than claiming anything.</li>
+<li>For every element it records the border box and a hash of the whole computed style (with animation, transition and
+stroke-dashoffset dropped, since a countdown moves without any style change, and the properties sorted, since Chromium
+enumerates custom properties in an unstable order); for every element under <code>#projects</code> it keeps the full
+style map, so a difference names the property. The console is inside <code>#projects</code>, so every console element is
+one of the elements whose full map is kept. <code>::before</code> and <code>::after</code> are measured where they have
+content.</li>
+</ol>
+
+<table>
+<tr><th>at</th><th class="num">elements</th><th class="num">pseudo boxes</th><th>digest: base sheets</th><th>digest: base again</th><th>digest: this tree</th><th>verdict</th></tr>
+<tr><td>1160 px</td><td class="num">2,839</td><td class="num">71</td><td class="mono">a2094b24468a5552</td><td class="mono">a2094b24468a5552</td><td class="mono">a2094b24468a5552</td><td class="ok">identical</td></tr>
+<tr><td>420 px</td><td class="num">2,839</td><td class="num">71</td><td class="mono">d5ce2abb768da7ea</td><td class="mono">d5ce2abb768da7ea</td><td class="mono">d5ce2abb768da7ea</td><td class="ok">identical</td></tr>
+</table>
+
+<p>Element by element and pseudo box by pseudo box, every border box and every computed property is equal. The captures
+agree with the hashes: the two files in each pair are byte-identical, <code>cmp</code> prints nothing.</p>
+
+<div class="two">
+<figure>
+<img src="console-sub-sheets/before-1160.png" alt="The board and a console at 1160 px with the base sheets" />
+<figcaption>1160 px, the base's 20 sheets: <code>before-1160.png</code>, 94,271 bytes, sha256 <span class="mono">9d1b4112</span>.</figcaption>
+</figure>
+<figure>
+<img src="console-sub-sheets/after-1160.png" alt="The board and a console at 1160 px with the console sub-sheets" />
+<figcaption>1160 px, this tree's 21 sheets: <code>after-1160.png</code>, the same 94,271 bytes.</figcaption>
+</figure>
+</div>
+<div class="two">
+<figure>
+<img src="console-sub-sheets/before-420.png" alt="The board and a console at 420 px with the base sheets" />
+<figcaption>420 px, the base's sheets: 38,316 bytes, sha256 <span class="mono">e11ebf02</span>.</figcaption>
+</figure>
+<figure>
+<img src="console-sub-sheets/after-420.png" alt="The board and a console at 420 px with the console sub-sheets" />
+<figcaption>420 px, this tree's sheets: the same 38,316 bytes.</figcaption>
+</figure>
+</div>
+
+<div class="note">
+<h4>What the proof does not cover, and the names of it</h4>
+<p>The fixture draws one card, expanded, with no approval card open, no held reply and no pager. So the browser proof
+covers the head, the cwd line, the pill, the subagent block, the output box, the reply composer and the turns - every
+console element the fixture draws - and it does not cover the states that are drawn only when a turn asks a question,
+waits for an approval, holds a reply or pages: those rules stayed in <code>overlays.css</code> (section 8). The rule
+multiset still covers them, because it is text, but the computed style of those states is not measured here. That is the
+same line row 444's report drew for the board's dormant rules.</p>
+<p><b>A capture scrolls the page.</b> The harness reads document coordinates and resets the scroll before each
+measurement, and the capture happens after the measurement, never before it - row 444's report records why: a scrolled
+reading carried a 605 px offset into every box.</p>
+</div>
+
+<h2>6. The lane: 6 sheets to 3, or 8 to 6</h2>
+
+<p>The brief asks for the lane measure on both measures the review tool prints, and the two answer different questions.
+Both are below, with the tool's own definition quoted.</p>
+
+<h3>Rules the console owns (the own measure)</h3>
+<p>Rules that match the console and nothing nested inside it - the tool's <code>own</code> list, which is what a reader
+means by "the console's rules":</p>
+
+<table>
+<tr><th>at the base</th><th>this tree</th></tr>
+<tr><td class="num">94 rules over 6 sheets</td><td class="num ok">94 rules over 3 sheets</td></tr>
+<tr><td><code>console.css</code> 57, <code>jobs.css</code> 16, <code>turns.css</code> 8, <code>overlays.css</code> 5, <code>board-table.css</code> 4, <code>rowstrips.css</code> 4</td>
+    <td><code>console.css</code> 65, <code>console-head.css</code> 21, <code>console-turns.css</code> 8</td></tr>
+</table>
+
+<p><b>6 sheets to 3</b>, and the same 94 rules: the count is equal because the rules are the same rules, only their homes
+changed. The 8 the tool sets aside are the page's base layer (<code>*</code>, <code>button</code>, <code>thead th</code>),
+which no move can bring into the console.</p>
+
+<h3>Sheets a console lane must open (the container measure)</h3>
+<p>Every sheet with at least one rule matching an element inside the console, nested panes included:</p>
+
+<table>
+<tr><th>at the base</th><th>this tree</th><th>why the rest are still there</th></tr>
+<tr><td class="num">8 sheets</td><td class="num ok">6 sheets</td><td>two are the page's resets, one is the utilities sheet</td></tr>
+</table>
+
+<table>
+<tr><th>sheet that still matches the console</th><th class="num">rules</th><th>the rules that put it there</th></tr>
+<tr><td><code>console.css</code></td><td class="num">68</td><td>the card, the body, the subagents, the composer</td></tr>
+<tr><td><code>console-head.css</code></td><td class="num">21</td><td>the head, the cwd line, the head controls</td></tr>
+<tr><td><code>console-turns.css</code></td><td class="num">8</td><td>the turns</td></tr>
+<tr><td><code>utilities.css</code></td><td class="num">3</td><td><code>.mono</code>, <code>.dim</code>, <code>.dimmer</code>: type ink, read by every surface</td></tr>
+<tr><td><code>base.css</code></td><td class="num">1</td><td><code>*</code> and the scrollbar: the page's reset</td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">1</td><td><code>button</code>: the page's own reset</td></tr>
+</table>
+
+<p><b>This measure reaches 6 and stops there, honestly.</b> Three of the six are not the console's to take: the base
+layer and the utilities are rules every surface reads, and moving them into a console sheet would make the console the
+owner of the page's resets. What the row can say is that the console's own rules are in three sheets, and that a change
+to the head opens <code>console-head.css</code> rather than six files.</p>
+
+<p class="sub">The board's container measure dropped with it, 10 sheets to 9, because the console rules that used to sit
+in <code>jobs.css</code> and <code>rowstrips.css</code> are no longer in sheets the board's lane opens; the board's own
+measure is unchanged at 198 rules over 2 sheets.</p>
+
+<h2>7. index.html: the link order is explicit, not inherited</h2>
+
+<p>The page loads 21 sheets in an order it states line by line. The console's four stand where <code>jobs.css</code> and
+<code>turns.css</code> stood, in the order the console draws its parts:</p>
+
+<table>
+<tr><th class="num">line</th><th>sheet</th><th>note</th></tr>
+<tr><td class="num">11</td><td><code>base.css</code></td><td>tokens and reset</td></tr>
+<tr><td class="num">12</td><td><code>chrome.css</code></td><td></td></tr>
+<tr><td class="num">13</td><td><code>settings.css</code></td><td></td></tr>
+<tr><td class="num">17</td><td><code>board-table.css</code></td><td></td></tr>
+<tr><td class="num">21</td><td><code>console.css</code></td><td class="ok">where <code>jobs.css</code> stood: the frame, the body, the composer</td></tr>
+<tr><td class="num">22</td><td><code>console-head.css</code></td><td class="ok">new</td></tr>
+<tr><td class="num">23</td><td><code>console-turns.css</code></td><td class="ok">where <code>turns.css</code> stood</td></tr>
+<tr><td class="num">24</td><td><code>model-menu.css</code></td><td class="ok">new: the picker</td></tr>
+<tr><td class="num">25</td><td><code>overlays.css</code></td><td>the popovers and the turn cards</td></tr>
+<tr><td class="num">26-30</td><td><code>assistant.css</code>, <code>feedback.css</code>, <code>assistant-panes.css</code>, <code>initiatives.css</code>, <code>panes.css</code>, <code>queue.css</code>, <code>pipeline.css</code></td><td></td></tr>
+<tr><td class="num">34</td><td><code>late.css</code></td><td>last of the surface sheets, by design</td></tr>
+<tr><td class="num">38</td><td><code>chart.css</code></td><td>after <code>late.css</code>: the age column and the legend</td></tr>
+<tr><td class="num">41, 45</td><td><code>core/pipeline-card.css</code>, <code>core/task-card.css</code></td><td>the two cards shared with the standalone pages</td></tr>
+</table>
+
+<p><code>utilities.css</code> stands where <code>rowstrips.css</code> stood, after <code>overlays.css</code> and before
+<code>assistant.css</code>, which is where the utilities have to sit so that a single-class rule in a later sheet cannot
+beat them. No <code>@import</code> was introduced and no sheet was concatenated: each file is still fetched on its own, so
+a reader can still see which sheet a rule came from in devtools, which was the split's point.</p>
+
+<h2>8. What is still red, and what this row did not do</h2>
+
+<div class="note">
+<h4><code>npm run verify:css-split --stream</code> was already red, and this row did not change its reading</h4>
+<p>That gate proves the 1.191.0 concatenation: every rule of the old <code>public/style.css</code>, once, unedited, in
+the order the sheets load. It reads <b>3,061</b> rules in the pinned file and <b>3,317</b> on the page today, with 21
+lost, 0 edited, 225 borrowed from <code>chart.css</code>'s block and 52 added, and its first order divergence at rule
+76. Run at this tree's base <code>e873ddb0</code> the numbers are <b>identical</b>: 3,317, 21 lost, 0 edited, 225, 52,
+rule 76. The red is pre-existing, it is the same red, and this row neither caused nor cleared it. What this row proves
+instead is section 3 (the multiset against its own base) and section 5 (the browser).</p>
+</div>
+
+<ul class="tight">
+<li><b><code>overlays.css</code> still holds the console's turn cards.</b> Its turn-approval card (~35 rules), its
+  question card (~30), the ghost turns a held reply draws (~25), the held-reply list and the turn pager (~15) are the
+  console's by surface and still live in the popover sheet. They are not in the brief's surface list, and the fixture
+  never draws those states, so a browser proof could not settle them: they are the next row in this initiative, not a
+  claim of this one. The pager and the paste chip are named for the same reason.</li>
+<li><b><code>board-table.css</code> keeps five rules that are about a turn card</b> (<code>#approval-list .turn-approval</code>
+  and its head and note, and the done row). They skin the approvals dock, which is the board's own surface, so they stay.</li>
+<li><b><code>late.css</code> still names <code>#projects</code></b> in 7 rules: the narrow-window root group. They stay
+  because "last" is their job. The review's catch-all section already says that block homes to <code>chrome.css</code>
+  and <code>board-table.css</code>; doing it needs a load-order argument of its own.</li>
+<li><b><code>chart.css</code> keeps 47 rules</b>: the poll ring, the age column and the legend.</li>
+<li><b>The console's own measure is 3 sheets, not 1.</b> The three are the three parts the brief names - the body, the
+  head, the turns - and each is a file a reader can open by name. Merging them would undo the split's point.</li>
+<li><b>Version.</b> <code>package.json</code> reads 1.197.0, unchanged by this row, as the brief asked. No push and no
+  pull request.</li>
+</ul>
+
+<h2>9. The console's sheets, in one paragraph</h2>
+
+<p><code>public/console.css</code> is the console's frame and body: the card and its last-child border, the session
+block, the subagent rows, the running pulse and stuck-turn chip, the output box and its grip, the markdown prose, the
+raw and focus views, the tool-call groups, the thought rows, the diff and code blocks, the command card, the stats
+readout, the warning line, and the reply composer with its action row and its container query. <code>public/console-head.css</code>
+is its head: the title and meta line, the cwd line and the session's name, the pipeline chip, the status pill, and the
+pin, think, collapse, maximize, star, rename, clear-thread and attach controls. <code>public/console-turns.css</code> is
+its turns: the rail, the head and chevron, the inline prompt, the peek and compact forms, the origin chips, the live
+clock and the head's model and context readout. <code>public/model-menu.css</code> is the picker that readout opens. The
+four hold 498 of the page's 3,431 rule blocks between them, and every one of those rules computes exactly what it
+computed in the sheets it came from.</p>
+
+<h2>10. What the suite answered</h2>
+
+<p>The tests that read the page's sheets are the ones this move can break, so all of them were run: 59 test files that
+import <code>test/style-sheets.js</code> or name a <code>.css</code> file, <b>714 tests, 714 pass, 0 fail</b>. The full
+suite was not run for this cut: the brief asked for the move and its proof, and the focused set is what a stylesheet move
+can fail.</p>
+
+<table>
+<tr><th>run</th><th class="num">tests</th><th class="num">pass</th><th class="num">fail</th><th>what it covered</th></tr>
+<tr><td><code>node --test</code> over the 59 sheet-reading files</td><td class="num">714</td><td class="num">714</td><td class="num">0</td><td>every CSS assertion in the project: the legend, the row chips, the command card, the console box, the reply container, the report footer, the settings glossaries, the pipeline cards</td></tr>
+</table>
+
+<p>Two failures that are not this row's, named so they are not read as green: <code>test/absolute-paths.test.js</code>
+allows four files that arrived with the base (three other rows' reports and <code>tools/capture-wave-lane-options.mjs</code>),
+and <code>test/gateway-permissions.test.js</code> reads a <code>config.json</code> this worktree does not have. Neither
+touches a sheet.</p>
+
+<h2>11. Reproduce every number</h2>
+
+<div class="kv">
+<div>the rule multiset</div><div>a scratch probe (not committed, so no path is written here): it parses <code>git show e873ddb0:public/*.css</code> and the working tree with <code>parseRules</code> from <code>tools/verify-css-split.mjs</code>, keys each rule as <code>ctx|selector|declarations</code> and compares the multisets</div>
+<div>the browser proof</div><div><code>node tools/verify-board-table-sheet.mjs --old e873ddb0</code> - exits 0 and prints <code>PASS</code> at both widths</div>
+<div>the lane and the cascade</div><div><code>npm run review:css-split</code> - sections 6 and 4 of its output</div>
+<div>the sequence gate</div><div><code>npm run verify:css-split -- --stream</code> - red at the base too, see section 8</div>
+<div>the suite</div><div><code>node --test</code> over the 59 files that import <code>test/style-sheets.js</code> or name a <code>.css</code> file</div>
+<div>the captures</div><div><code>sha256sum docs/reports/console-sub-sheets/*.png</code> - <code>before-1160.png</code> and <code>after-1160.png</code> hash equal, as do the 420 pair</div>
+</div>
+
+<p class="sub">The four captures in <code>docs/reports/console-sub-sheets/</code> are the ones the harness wrote, copied
+unchanged. The report itself has no script, no fetch and no build step: it opens from disk.</p>
+
+</main>
+</body>
+</html>
