@@ -1,9 +1,10 @@
 // The Settings -> General "Storage & cleanup" prefix: what this panel's own machinery leaves on disk, and one bounded
 // clean per target.
 //
-//   GET  /api/maintenance         no token, like every other Settings read — the three targets, their sizes, and a
+//   GET  /api/maintenance         no token, like every other Settings read — the five targets, their sizes, and a
 //                                 read-only census of sandbox panels and test runners.
-//   POST /api/maintenance/clean   { target, dryRun } — the panel token, like every other Settings write.
+//   POST /api/maintenance/clean   { target, dryRun, olderThanHours? } — the panel token, like every other Settings
+//                                 write. `olderThanHours` applies to `hermes-sessions` only; the lib clamps it.
 //
 // The mount table in server.js matches on `MAINTENANCE_PATH`; `POST` lands on the same prefix (`/api/maintenance/clean`
 // starts with it), and this module owns the exact compares. A path or method it does not answer returns `false`, so
@@ -14,8 +15,10 @@
 // therefore imports nothing that can signal a pid and exposes no verb that could. See lib/process-census.js.
 //
 // The transport helpers (`sendJson`, `readBody`, `authorised`) and the live config travel in from the composition root,
-// so this module owns no HTTP layer and a test can drive it with stubs. The work itself is lib/maintenance.js, and the
-// census is lib/process-census.js.
+// so this module owns no HTTP layer and a test can drive it with stubs. The work itself is lib/maintenance.js, the
+// census is lib/process-census.js, and the two Hermes targets delegate to the `hermes` CLI through
+// lib/hermes-maintenance.js (`runHermes` is injected here exactly like `census`, so a test never prunes a real store).
+import { runHermesCli } from "../lib/hermes-maintenance.js";
 import {
   MAINTENANCE_TARGET_IDS,
   cleanMaintenanceTarget,
@@ -40,8 +43,13 @@ export function createMaintenanceRoutes({
   log = () => {},
   census = processCensus,
   now = Date.now,
+  // The two Hermes targets: where its home is, and the CLI runner. `runHermes` is the same seam `census` is — a
+  // test hands in a canned dry-run table rather than pruning a real 8 GB store. `hermes.bin` may be null to pin
+  // "the binary is missing" without touching this machine's PATH.
+  hermes = {},
+  runHermes = runHermesCli,
 } = {}) {
-  const functions = { getConfig, sendJson, readBody, authorised, census };
+  const functions = { getConfig, sendJson, readBody, authorised, census, runHermes };
   for (const [name, fn] of Object.entries(functions)) {
     if (typeof fn !== "function") throw new Error(`createMaintenanceRoutes needs ${name} from the composition root`);
   }
@@ -74,7 +82,7 @@ export function createMaintenanceRoutes({
       const at = now();
       // Both halves are measured on demand: the targets are a directory read each, the census one process-table read.
       const [targets, processes] = await Promise.all([
-        readMaintenanceTargets({ config, jobs: liveJobs(), keep: keepPaths(config), now: at }),
+        readMaintenanceTargets({ config, jobs: liveJobs(), keep: keepPaths(config), now: at, hermes }),
         census({ ownPid: process.pid, now: at }),
       ]);
       sendJson(res, 200, { ok: true, targets, processes });
@@ -103,6 +111,11 @@ export function createMaintenanceRoutes({
         keep: keepPaths(config),
         dryRun,
         now: now(),
+        hermes,
+        runHermes,
+        // Only the session target reads it, and the lib clamps it (default 24h, 1..8760) — the route does not
+        // second-guess a body field whose meaning belongs to that target.
+        olderThanHours: body.olderThanHours,
       });
       log(
         `maintenance: ${dryRun ? "dry run" : "clean"} ${target} — ${

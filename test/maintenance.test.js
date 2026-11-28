@@ -1,5 +1,6 @@
-// Settings -> General -> Storage & cleanup, the backend half: the three targets, the bounded clean, the refusal
-// rules, and the READ-ONLY process census. Driven with temp directories and stubbed transport helpers; one test then
+// Settings -> General -> Storage & cleanup, the backend half: the five targets, the bounded clean, the refusal
+// rules, the READ-ONLY process census, and the two Hermes targets (whose CLI is stubbed, because a test must never
+// prune a real 8 GB session store). Driven with temp directories and stubbed transport helpers; one test then
 // boots a real sandbox panel to prove the mount and the two verb shapes.
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises";
@@ -7,6 +8,16 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import {
+  DEFAULT_OLDER_THAN_HOURS,
+  MAX_OLDER_THAN_HOURS,
+  clampOlderThanHours,
+  cleanHermesCheckpoints,
+  cleanHermesSessions,
+  describeHermesSessions,
+  parseCheckpointTotal,
+  parsePrunePreview,
+} from "../lib/hermes-maintenance.js";
 import {
   LOG_ARCHIVES_KEEP,
   STATE_TEMP_MIN_AGE_MS,
@@ -43,6 +54,9 @@ const configOf = (dir) => ({
   stateDir: path.join(dir, "data", "state"),
   attachmentsDir: path.join(dir, "data", "attachments"),
 });
+
+// The contract's target list, in paint order: three the panel owns, then the two it prunes through the hermes CLI.
+const ALL_TARGET_IDS = ["scratch", "state-temp", "log-archives", "hermes-sessions", "hermes-checkpoints"];
 
 // ---- the marker gap ------------------------------------------------------------------------------------------------
 test("the panel's DEFAULT scratch folder is recognised without a marker; another unmarked folder is not", () => {
@@ -203,6 +217,347 @@ test("log-archives keeps the newest twenty and removes older archives; the live 
   assert.ok(left.includes("server.err.log.20260101T000000000Z-aaaaaaaa"), "err rotation is out of scope");
 });
 
+// ---- the two Hermes targets: stat-only GET, CLI-delegated clean ---------------------------------------------------
+// Every test here stubs the CLI. The real one deletes real sessions; a test that ran it would be a data-loss bug,
+// so the runner is the seam (exactly like `census`) and the canned output below is the format verified on this
+// machine (hermes_cli/sessions_cmd.py prints the header, the rows, then `Dry run — nothing deleted.`).
+
+async function hermesHomeWithStores(dir, { defaultBytes = [1000, 200], automationBytes = [60, 40] } = {}) {
+  const home = path.join(dir, "hermes");
+  const files = [
+    [path.join(home, "state.db"), defaultBytes[0]],
+    [path.join(home, "state.db-wal"), defaultBytes[1]],
+    [path.join(home, "profiles", "intelligent-automation", "state.db"), automationBytes[0]],
+    [path.join(home, "profiles", "intelligent-automation", "state.db-wal"), automationBytes[1]],
+  ];
+  for (const [file, bytes] of files) {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "x".repeat(bytes), "utf8");
+  }
+  return home;
+}
+
+// One canned `sessions prune` table: the header is the authority (a non-dry-run prints at most 15 rows), so `rows`
+// can be smaller than `header` on purpose.
+function pruneTable({ header = 1, rows = header, note = "" } = {}) {
+  const lines = [];
+  if (note) lines.push(note);
+  lines.push(
+    `${header} session(s) match (last active before 2026-11-28 00:44; oldest activity 2026-10-30 11:54, newest activity 2026-11-26 13:26):`,
+  );
+  for (let i = 0; i < rows; i += 1) {
+    lines.push(`  local-${String(i).padStart(4, "0")}  2026-11-2${i % 10} 01:04  api_server deepseek-v4.1-flash-1017    2 msgs  title ${i}`);
+  }
+  return lines.join("\n");
+}
+
+// A stub runner that records every argv and answers by subcommand. An unhandled call throws, so a test fails loudly
+// rather than silently falling through to something real.
+function cliStub(handlers) {
+  const calls = [];
+  const run = async ({ bin, args = [], timeoutMs } = {}) => {
+    calls.push({ bin, args, timeoutMs });
+    const key = args[0] === "checkpoints" ? `checkpoints ${args[1]}` : args.slice(0, 2).join(" ");
+    const handler = handlers[key];
+    if (!handler) throw new Error(`unexpected hermes call: ${args.join(" ")}`);
+    return typeof handler === "function" ? handler({ bin, args, timeoutMs }) : handler;
+  };
+  run.calls = calls;
+  return run;
+}
+
+const ok = (stdout) => ({ ok: true, code: 0, stdout, stderr: "" });
+
+test("the session threshold defaults to 24h and clamps into 1..8760", () => {
+  assert.equal(clampOlderThanHours(undefined), DEFAULT_OLDER_THAN_HOURS);
+  assert.equal(clampOlderThanHours(""), DEFAULT_OLDER_THAN_HOURS);
+  assert.equal(clampOlderThanHours("not a number"), DEFAULT_OLDER_THAN_HOURS);
+  assert.equal(clampOlderThanHours(0), 1);
+  assert.equal(clampOlderThanHours(-5), 1);
+  assert.equal(clampOlderThanHours(2.6), 3);
+  assert.equal(clampOlderThanHours("48"), 48);
+  assert.equal(clampOlderThanHours(999_999), MAX_OLDER_THAN_HOURS);
+});
+
+test("the dry-run parser counts the header, cross-checks rows, and refuses to invent a number", () => {
+  // Header == rows.
+  assert.deepEqual(parsePrunePreview(pruneTable({ header: 3, rows: 3 })), { ok: true, count: 3 });
+  // A truncated table (non-dry-run prints 15 rows then "... N more"): the header still says what matched.
+  assert.equal(parsePrunePreview(pruneTable({ header: 40, rows: 15 })).count, 40);
+  // Rows only, no header.
+  assert.equal(parsePrunePreview(pruneTable({ header: 0, rows: 2 }).split("\n").slice(1).join("\n")).count, 2);
+  // The zero answer.
+  assert.equal(parsePrunePreview("No sessions match (last active before 2025-11-28 01:44).").count, 0);
+  // Neither header nor rows: unparsable, with the CLI's last line as the sentence.
+  const broken = parsePrunePreview("Traceback (most recent call last):\nboom: the store is unreadable");
+  assert.equal(broken.ok, false);
+  assert.match(broken.sentence, /boom: the store is unreadable/);
+});
+
+test("the checkpoint size parser reads hermes' own `Total size:` line and rejects anything else", () => {
+  assert.equal(parseCheckpointTotal("Checkpoint base: C:\\x\nTotal size:      0 B\n  store/         0 B\n"), 0);
+  assert.equal(parseCheckpointTotal("Total size:      7.9 GB"), Math.round(7.9 * 1024 ** 3));
+  assert.equal(parseCheckpointTotal("Total size:      1.5 MB"), Math.round(1.5 * 1024 ** 2));
+  assert.equal(parseCheckpointTotal("no size here"), null);
+  assert.equal(parseCheckpointTotal(""), null);
+});
+
+test("hermes-sessions GET is a stat of the four store files, and blocked without a CLI", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+
+  const live = describeHermesSessions({ home, bin: "C:/fake/hermes.exe" });
+  assert.equal(live.id, "hermes-sessions");
+  assert.equal(live.bytes, 1000 + 200 + 60 + 40);
+  assert.equal(live.files, 4, "state.db + state.db-wal for BOTH profiles");
+  assert.equal(live.removable, true);
+  assert.equal(live.blockedReason, undefined);
+  assert.match(live.detail, /sessions unused > 24h/);
+  assert.match(live.detail, /pinned and archived sessions are kept/);
+  assert.match(live.detail, /a prune is followed by VACUUM/);
+
+  const blocked = describeHermesSessions({ home, bin: null });
+  assert.equal(blocked.removable, false);
+  assert.match(blocked.blockedReason, /hermes-sessions will not be cleaned: the hermes CLI was not found/);
+  assert.equal(blocked.bytes, 1300, "the size is still measured when the CLI is missing");
+});
+
+test("hermes-sessions preview counts both profiles and never deletes", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+  const runHermes = cliStub({
+    "sessions prune": ({ args }) =>
+      ok(args.includes("--profile") ? pruneTable({ header: 2, rows: 2 }) : pruneTable({ header: 3, rows: 3 })),
+  });
+
+  const out = await cleanHermesSessions({ home, bin: "C:/fake/hermes.exe", dryRun: true, runHermes, olderThanHours: 36 });
+  assert.equal(out.ok, true);
+  assert.equal(out.dryRun, true);
+  assert.equal(out.refused, undefined);
+  assert.equal(out.removedFiles, 5, "3 default + 2 automation");
+  assert.equal(out.removedBytes, 0, "a preview measures nothing, so it claims nothing about bytes");
+  assert.equal(out.remaining, 5);
+  assert.equal(runHermes.calls.length, 2, "one preview per profile");
+  assert.ok(runHermes.calls.every((call) => call.args.includes("--dry-run")));
+  assert.ok(runHermes.calls.every((call) => call.args.includes("--older-than") && call.args.includes("36h")));
+  assert.deepEqual(runHermes.calls[0].args, ["sessions", "prune", "--older-than", "36h", "--dry-run"]);
+  assert.deepEqual(runHermes.calls[1].args, [
+    "sessions",
+    "prune",
+    "--older-than",
+    "36h",
+    "--dry-run",
+    "--profile",
+    "intelligent-automation",
+  ]);
+});
+
+test("hermes-sessions and hermes-checkpoints refuse while a live run exists, before any CLI call", async () => {
+  const runHermes = async () => {
+    throw new Error("the CLI must not be reached while the board is busy");
+  };
+  const sessions = await cleanHermesSessions({
+    dryRun: false,
+    jobs: [{ id: "job-1", status: "running" }],
+    bin: "C:/fake/hermes.exe",
+    runHermes,
+  });
+  assert.equal(sessions.ok, true);
+  assert.equal(
+    sessions.refused,
+    "1 live run is working — prune the session store when the board is idle",
+  );
+  assert.equal(sessions.removedFiles, 0);
+
+  const checkpoints = await cleanHermesCheckpoints({
+    dryRun: false,
+    jobs: [
+      { id: "job-1", status: "running" },
+      { id: "job-2", status: "waiting" },
+    ],
+    bin: "C:/fake/hermes.exe",
+    runHermes,
+  });
+  assert.equal(
+    checkpoints.refused,
+    "2 live runs are working — prune the checkpoint store when the board is idle",
+  );
+});
+
+test("hermes-sessions clean prunes, VACUUMs, and reports the measured delta; pins are never included", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+  const shrink = (file, bytes) => writeFile(file, "x".repeat(bytes), "utf8");
+  const runHermes = cliStub({
+    "sessions prune": async ({ args }) => {
+      if (args.includes("--profile")) {
+        await shrink(path.join(home, "profiles", "intelligent-automation", "state.db"), 20);
+        return ok(pruneTable({ header: 2, rows: 2 }).replace("Dry run — nothing deleted.", "Pruned 2 session(s)."));
+      }
+      await shrink(path.join(home, "state.db"), 400);
+      return ok(pruneTable({ header: 3, rows: 3 }).replace("Dry run — nothing deleted.", "Pruned 3 session(s)."));
+    },
+    "sessions optimize": async ({ args }) => {
+      if (args.includes("--profile")) return ok("Optimized 1 FTS index(es).\nDatabase size: 0.1 MB -> 0.1 MB (-0.0 MB)");
+      await shrink(path.join(home, "state.db"), 300);
+      return ok("Optimized 2 FTS index(es).\nDatabase size: 0.4 MB -> 0.3 MB (-0.1 MB)");
+    },
+  });
+
+  const out = await cleanHermesSessions({ home, bin: "C:/fake/hermes.exe", dryRun: false, runHermes });
+  assert.equal(out.ok, true);
+  assert.equal(out.dryRun, false);
+  assert.equal(out.refused, undefined);
+  assert.equal(out.removedFiles, 5, "the CLI's own `Pruned N session(s).` lines");
+  // default: (1000+200) -> (300+200); automation: (60+40) -> (20+40)
+  assert.equal(out.removedBytes, 1200 - 500 + 100 - 60);
+  assert.equal(out.remaining, 0);
+
+  // Pins and archives are a reader's keep flag: the panel never opts into deleting them.
+  for (const call of runHermes.calls) {
+    assert.ok(!call.args.includes("--include-pinned"), `argv must never carry --include-pinned: ${call.args.join(" ")}`);
+    assert.ok(!call.args.includes("--include-archived"), `argv must never carry --include-archived: ${call.args.join(" ")}`);
+  }
+  const prunes = runHermes.calls.filter((call) => call.args[1] === "prune");
+  assert.equal(prunes.length, 2);
+  assert.ok(prunes.every((call) => call.args.includes("--yes") && call.args.includes("24h")), "the default threshold");
+  assert.ok(runHermes.calls.every((call) => call.timeoutMs > 0), "every CLI call carries a timeout");
+  assert.equal(runHermes.calls.find((call) => call.args[1] === "optimize").args[0], "sessions");
+});
+
+test("hermes-sessions clean refuses with the CLI's sentence on a failed prune or unreadable table", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+
+  const refusedByCli = cliStub({
+    "sessions prune": {
+      ok: false,
+      code: 1,
+      stdout: "Refusing `hermes sessions prune`: PID 4242 (hermes gateway) holds state.db — pass --force to rewrite it.",
+      stderr: "",
+    },
+  });
+  const refused = await cleanHermesSessions({ home, bin: "C:/fake/hermes.exe", dryRun: false, runHermes: refusedByCli });
+  assert.equal(refused.ok, true, "a refusal is an answer, not an exception");
+  assert.match(refused.refused, /PID 4242 \(hermes gateway\) holds state\.db/);
+  assert.equal(refused.removedFiles, 0);
+  assert.equal(refused.removedBytes, 0);
+
+  const garbage = cliStub({ "sessions prune": ok("Traceback (most recent call last):\nboom: the store is unreadable") });
+  const unreadable = await cleanHermesSessions({ home, bin: "C:/fake/hermes.exe", dryRun: true, runHermes: garbage });
+  assert.match(unreadable.refused, /could not read the prune preview for the default store: boom: the store is unreadable/);
+});
+
+test("hermes-checkpoints preview claims nothing, and clean reports the status before/after delta", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+  const base = path.join(home, "checkpoints");
+  await mkdir(base, { recursive: true });
+  await writeFile(path.join(base, "store.bin"), "x".repeat(64), "utf8");
+
+  let statusCalls = 0;
+  const runHermes = cliStub({
+    "checkpoints status": () => {
+      statusCalls += 1;
+      return ok(`Checkpoint base: ${base}\nTotal size:      ${statusCalls === 1 ? "2.0 MB" : "1.5 MB"}\n  store/         2.0 MB\nProjects:        3\n`);
+    },
+    "checkpoints prune": ok(
+      "Pruning checkpoint store…\n  retention_days:    7\n\nScanned:         4\nDeleted orphan:  0\nDeleted stale:   1\nErrors:          0\nBytes reclaimed: 512.0 KB\n",
+    ),
+  });
+
+  const preview = await cleanHermesCheckpoints({ home, bin: "C:/fake/hermes.exe", dryRun: true, runHermes });
+  assert.deepEqual(
+    { dryRun: preview.dryRun, removedFiles: preview.removedFiles, removedBytes: preview.removedBytes, remaining: preview.remaining },
+    { dryRun: true, removedFiles: 0, removedBytes: 0, remaining: 0 },
+  );
+  assert.equal(statusCalls, 0, "a preview does not run the CLI at all");
+
+  const out = await cleanHermesCheckpoints({ home, bin: "C:/fake/hermes.exe", dryRun: false, runHermes });
+  assert.equal(out.refused, undefined);
+  assert.equal(out.removedBytes, Math.round(0.5 * 1024 ** 2), "the parsed status total, before minus after");
+  assert.equal(out.removedFiles, 1, "Deleted stale: 1");
+  const pruneCall = runHermes.calls.find((call) => call.args[1] === "prune");
+  assert.deepEqual(pruneCall.args, ["checkpoints", "prune", "--keep-orphans"], "never prompt, never delete an orphan project");
+});
+
+test("hermes-checkpoints falls back to a directory walk when `checkpoints status` cannot be parsed", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+  const base = path.join(home, "checkpoints");
+  await mkdir(path.join(base, "store"), { recursive: true });
+  await writeFile(path.join(base, "store", "blob"), "x".repeat(500), "utf8");
+  const runHermes = cliStub({
+    "checkpoints status": ok("something unexpected"),
+    "checkpoints prune": ok("Deleted orphan: 0\nDeleted stale: 0\n"),
+  });
+  const before = await cleanHermesCheckpoints({ home, bin: "C:/fake/hermes.exe", dryRun: false, runHermes });
+  assert.equal(before.refused, undefined);
+  assert.equal(before.removedBytes, 0, "the walk measured the same 500 B before and after");
+});
+
+test("the route: the GET paints five targets and the two clean verbs answer the house shape", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+  const config = { ...configOf(dir), token: "secret" };
+  const runHermes = cliStub({
+    "sessions prune": ok(pruneTable({ header: 4, rows: 4 })),
+    "checkpoints prune": ok("Deleted orphan: 0\nDeleted stale: 2\n"),
+    "checkpoints status": ok("Total size:      1.0 MB\n"),
+  });
+  const { call } = harness({ config, runHermes, hermes: { home, bin: "C:/fake/hermes.exe" } });
+
+  const read = await call("GET", MAINTENANCE_PATH);
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.body.targets.map((target) => target.id), ALL_TARGET_IDS);
+  const sessions = read.body.targets.find((target) => target.id === "hermes-sessions");
+  assert.equal(sessions.files, 4);
+  assert.equal(sessions.removable, true);
+  assert.equal(runHermes.calls.length, 0, "the GET never runs the CLI");
+
+  const dry = await call("POST", MAINTENANCE_CLEAN_PATH, {
+    token: "secret",
+    body: { target: "hermes-sessions", dryRun: true, olderThanHours: 12 },
+  });
+  assert.equal(dry.status, 200);
+  assert.deepEqual(Object.keys(dry.body).sort(), ["dryRun", "ms", "ok", "remaining", "removedBytes", "removedFiles", "target"]);
+  assert.equal(dry.body.removedFiles, 8, "4 matched per profile");
+  assert.ok(runHermes.calls.every((call_) => call_.args.includes("12h")), "the body's threshold reaches the CLI");
+
+  const refused = await call("POST", MAINTENANCE_CLEAN_PATH, {
+    token: "secret",
+    body: { target: "hermes-checkpoints", dryRun: false },
+  });
+  assert.equal(refused.status, 200);
+  assert.equal(refused.body.ok, true);
+  assert.equal(refused.body.removedFiles, 2);
+});
+
+test("the route: a Hermes clean refused by a live run answers 200 with the reason in `refused`", async (t) => {
+  const dir = await sandbox(t);
+  const home = await hermesHomeWithStores(dir);
+  const config = { ...configOf(dir), token: "secret" };
+  const runHermes = async () => {
+    throw new Error("the CLI must not be reached while the board is busy");
+  };
+  const { call } = harness({
+    config,
+    jobs: [{ id: "job-9", status: "running" }],
+    runHermes,
+    hermes: { home, bin: "C:/fake/hermes.exe" },
+  });
+
+  const out = await call("POST", MAINTENANCE_CLEAN_PATH, {
+    token: "secret",
+    body: { target: "hermes-sessions", dryRun: false },
+  });
+  assert.equal(out.status, 200, "a refusal is an answer, not an error status");
+  assert.equal(out.body.ok, true);
+  assert.match(String(out.body.refused), /1 live run is working — prune the session store when the board is idle/);
+  assert.equal(out.body.removedFiles, 0);
+  assert.match(out.log.join("\n"), /refused:/);
+});
+
 // ---- the process census: pure classifier --------------------------------------------------------------------------
 test("the census classifies panels and test runners from a snapshot and never returns a pid to kill", () => {
   const now = Date.parse("2026-11-28T12:00:00Z");
@@ -237,7 +592,16 @@ test("the runner detector does not mistake a flag that merely starts with --test
 });
 
 // ---- the route module, driven with stubs --------------------------------------------------------------------------
-function harness({ config, jobs = [], registry = { projects: [] }, census = async () => ({ sandboxPanels: [], testRunners: [], orphanPids: [] }) }) {
+const silentHermes = async () => ({ ok: true, code: 0, stdout: "", stderr: "" });
+
+function harness({
+  config,
+  jobs = [],
+  registry = { projects: [] },
+  census = async () => ({ sandboxPanels: [], testRunners: [], orphanPids: [] }),
+  runHermes = silentHermes,
+  hermes = { bin: null },
+}) {
   const state = { body: {}, token: "secret", log: [] };
   const handles = createMaintenanceRoutes({
     getConfig: () => config,
@@ -254,6 +618,8 @@ function harness({ config, jobs = [], registry = { projects: [] }, census = asyn
     log: (line) => state.log.push(line),
     census,
     now: () => Date.now(),
+    runHermes,
+    hermes,
   });
   const call = async (method, route, { body = {}, token = null } = {}) => {
     state.body = body;
@@ -275,7 +641,7 @@ test("the route: GET answers without a token, POST needs one, and an unknown tar
   assert.equal(read.handled, true);
   assert.equal(read.status, 200);
   assert.equal(read.body.ok, true);
-  assert.deepEqual(read.body.targets.map((target) => target.id), ["scratch", "state-temp", "log-archives"]);
+  assert.deepEqual(read.body.targets.map((target) => target.id), ALL_TARGET_IDS);
   assert.deepEqual(read.body.processes, { sandboxPanels: [], testRunners: [], orphanPids: [] });
 
   const denied = await call("POST", MAINTENANCE_CLEAN_PATH, { body: { target: "scratch", dryRun: true } });
@@ -342,7 +708,7 @@ test("a booted panel serves GET /api/maintenance and the token-protected clean",
   assert.equal(read.status, 200);
   const body = await read.json();
   assert.equal(body.ok, true);
-  assert.deepEqual(body.targets.map((target) => target.id), ["scratch", "state-temp", "log-archives"]);
+  assert.deepEqual(body.targets.map((target) => target.id), ALL_TARGET_IDS);
   assert.ok(body.processes && Array.isArray(body.processes.sandboxPanels));
   assert.ok(Array.isArray(body.processes.testRunners));
   assert.ok(Array.isArray(body.processes.orphanPids));
