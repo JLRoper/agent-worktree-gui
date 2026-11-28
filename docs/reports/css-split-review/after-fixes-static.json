@@ -1,0 +1,3584 @@
+{
+ "generatedAt": "2026-11-28T03:54:06.215Z",
+ "generatedFrom": ".",
+ "inventory": {
+  "totals": {
+   "bytes": 562279,
+   "rules": 3076,
+   "selectors": 3298,
+   "decls": 10763,
+   "sheets": 19
+  },
+  "sheets": [
+   {
+    "sheet": "base.css",
+    "surface": "tokens and resets",
+    "lines": 97,
+    "bytes": 4832,
+    "rules": 13,
+    "keyframeSteps": 0,
+    "selectors": 16,
+    "decls": 52,
+    "bytesShare": 0.008593598551608721,
+    "ruleShare": 0.0042262678803641094,
+    "selectorShare": 0.004851425106124924,
+    "declShare": 0.004831366719316176,
+    "avgDeclsPerRule": 4
+   },
+   {
+    "sheet": "chrome.css",
+    "surface": "header and status strip",
+    "lines": 249,
+    "bytes": 14703,
+    "rules": 63,
+    "keyframeSteps": 5,
+    "selectors": 72,
+    "decls": 251,
+    "bytesShare": 0.026148940294764698,
+    "ruleShare": 0.02048114434330299,
+    "selectorShare": 0.021831412977562158,
+    "declShare": 0.023320635510545386,
+    "avgDeclsPerRule": 3.984126984126984
+   },
+   {
+    "sheet": "settings.css",
+    "surface": "Settings drawer and its tabs",
+    "lines": 428,
+    "bytes": 43669,
+    "rules": 281,
+    "keyframeSteps": 0,
+    "selectors": 293,
+    "decls": 1003,
+    "bytesShare": 0.07766429121485953,
+    "ruleShare": 0.09135240572171652,
+    "selectorShare": 0.08884172225591268,
+    "declShare": 0.09318963114373316,
+    "avgDeclsPerRule": 3.5693950177935942
+   },
+   {
+    "sheet": "board.css",
+    "surface": "project boxes, folders, agent rows, new-agent form",
+    "lines": 627,
+    "bytes": 40695,
+    "rules": 213,
+    "keyframeSteps": 0,
+    "selectors": 221,
+    "decls": 691,
+    "bytesShare": 0.07237510204009041,
+    "ruleShare": 0.06924577373211964,
+    "selectorShare": 0.06701030927835051,
+    "declShare": 0.06420143082783611,
+    "avgDeclsPerRule": 3.244131455399061
+   },
+   {
+    "sheet": "jobs.css",
+    "surface": "job cards",
+    "lines": 195,
+    "bytes": 15887,
+    "rules": 83,
+    "keyframeSteps": 3,
+    "selectors": 93,
+    "decls": 282,
+    "bytesShare": 0.028254656496152265,
+    "ruleShare": 0.026983094928478543,
+    "selectorShare": 0.028198908429351122,
+    "declShare": 0.026200873362445413,
+    "avgDeclsPerRule": 3.397590361445783
+   },
+   {
+    "sheet": "console.css",
+    "surface": "the console: agent pane and thought rows",
+    "lines": 961,
+    "bytes": 65938,
+    "rules": 292,
+    "keyframeSteps": 4,
+    "selectors": 314,
+    "decls": 894,
+    "bytesShare": 0.11726918487085593,
+    "ruleShare": 0.09492847854356307,
+    "selectorShare": 0.09520921770770163,
+    "declShare": 0.08306234321285887,
+    "avgDeclsPerRule": 3.0616438356164384
+   },
+   {
+    "sheet": "turns.css",
+    "surface": "conversation turns",
+    "lines": 132,
+    "bytes": 9527,
+    "rules": 64,
+    "keyframeSteps": 0,
+    "selectors": 65,
+    "decls": 209,
+    "bytesShare": 0.01694354581977986,
+    "ruleShare": 0.02080624187256177,
+    "selectorShare": 0.019708914493632504,
+    "declShare": 0.01941837777571309,
+    "avgDeclsPerRule": 3.265625
+   },
+   {
+    "sheet": "rows.css",
+    "surface": "the jobs table's row controls, marks and artifacts",
+    "lines": 586,
+    "bytes": 31091,
+    "rules": 181,
+    "keyframeSteps": 0,
+    "selectors": 197,
+    "decls": 653,
+    "bytesShare": 0.05529461352815951,
+    "ruleShare": 0.05884265279583875,
+    "selectorShare": 0.05973317161916313,
+    "declShare": 0.060670816686797364,
+    "avgDeclsPerRule": 3.6077348066298343
+   },
+   {
+    "sheet": "overlays.css",
+    "surface": "deliverables, reply box, question cards, ghost turns",
+    "lines": 643,
+    "bytes": 46236,
+    "rules": 275,
+    "keyframeSteps": 0,
+    "selectors": 286,
+    "decls": 1075,
+    "bytesShare": 0.08222964044540167,
+    "ruleShare": 0.08940182054616384,
+    "selectorShare": 0.08671922377198302,
+    "declShare": 0.0998792158320171,
+    "avgDeclsPerRule": 3.909090909090909
+   },
+   {
+    "sheet": "rowstrips.css",
+    "surface": "git, description, release and TODO strips",
+    "lines": 280,
+    "bytes": 21032,
+    "rules": 133,
+    "keyframeSteps": 0,
+    "selectors": 151,
+    "decls": 390,
+    "bytesShare": 0.037404918198972396,
+    "ruleShare": 0.043237971391417426,
+    "selectorShare": 0.04578532443905397,
+    "declShare": 0.03623525039487132,
+    "avgDeclsPerRule": 2.9323308270676693
+   },
+   {
+    "sheet": "boardchips.css",
+    "surface": "host, rules, turnover, board and cleanup chips",
+    "lines": 308,
+    "bytes": 17736,
+    "rules": 109,
+    "keyframeSteps": 0,
+    "selectors": 113,
+    "decls": 356,
+    "bytesShare": 0.0315430595842989,
+    "ruleShare": 0.035435630689206764,
+    "selectorShare": 0.03426318981200728,
+    "declShare": 0.03307627984762613,
+    "avgDeclsPerRule": 3.2660550458715596
+   },
+   {
+    "sheet": "assistant.css",
+    "surface": "the assistant entry, spawn strip and float shell",
+    "lines": 281,
+    "bytes": 20117,
+    "rules": 98,
+    "keyframeSteps": 0,
+    "selectors": 102,
+    "decls": 371,
+    "bytesShare": 0.03577761218185278,
+    "ruleShare": 0.03185955786736021,
+    "selectorShare": 0.030927835051546393,
+    "declShare": 0.034469943324351944,
+    "avgDeclsPerRule": 3.7857142857142856
+   },
+   {
+    "sheet": "feedback.css",
+    "surface": "Clarify, Collisions and Permissions controls",
+    "lines": 670,
+    "bytes": 30977,
+    "rules": 226,
+    "keyframeSteps": 10,
+    "selectors": 235,
+    "decls": 774,
+    "bytesShare": 0.055091867204715095,
+    "ruleShare": 0.07347204161248375,
+    "selectorShare": 0.07125530624620982,
+    "declShare": 0.0719130353990523,
+    "avgDeclsPerRule": 3.424778761061947
+   },
+   {
+    "sheet": "assistant-panes.css",
+    "surface": "the float's tabs, panes, search and settings",
+    "lines": 240,
+    "bytes": 17910,
+    "rules": 126,
+    "keyframeSteps": 0,
+    "selectors": 133,
+    "decls": 415,
+    "bytesShare": 0.031852514499029844,
+    "ruleShare": 0.04096228868660598,
+    "selectorShare": 0.040327471194663435,
+    "declShare": 0.038558022856081016,
+    "avgDeclsPerRule": 3.2936507936507935
+   },
+   {
+    "sheet": "initiatives.css",
+    "surface": "the initiatives tab",
+    "lines": 1461,
+    "bytes": 87535,
+    "rules": 406,
+    "keyframeSteps": 3,
+    "selectors": 441,
+    "decls": 1556,
+    "bytesShare": 0.15567894230444318,
+    "ruleShare": 0.13198959687906373,
+    "selectorShare": 0.13371740448756822,
+    "declShare": 0.14456935798569173,
+    "avgDeclsPerRule": 3.832512315270936
+   },
+   {
+    "sheet": "panes.css",
+    "surface": "the assistant's Worktrees and Bridge sub-tabs",
+    "lines": 184,
+    "bytes": 16615,
+    "rules": 120,
+    "keyframeSteps": 0,
+    "selectors": 126,
+    "decls": 368,
+    "bytesShare": 0.02954938740376219,
+    "ruleShare": 0.03901170351105332,
+    "selectorShare": 0.03820497271073378,
+    "declShare": 0.034191210629006784,
+    "avgDeclsPerRule": 3.066666666666667
+   },
+   {
+    "sheet": "queue.css",
+    "surface": "the queue cards and the assistant queue pane",
+    "lines": 132,
+    "bytes": 12924,
+    "rules": 76,
+    "keyframeSteps": 0,
+    "selectors": 83,
+    "decls": 255,
+    "bytesShare": 0.02298503056311902,
+    "ruleShare": 0.0247074122236671,
+    "selectorShare": 0.025166767738023045,
+    "declShare": 0.02369227910433894,
+    "avgDeclsPerRule": 3.3552631578947367
+   },
+   {
+    "sheet": "pipeline.css",
+    "surface": "pipeline window, messages, flow and modal",
+    "lines": 542,
+    "bytes": 52512,
+    "rules": 263,
+    "keyframeSteps": 4,
+    "selectors": 287,
+    "decls": 964,
+    "bytesShare": 0.09339135909397292,
+    "ruleShare": 0.08550065019505852,
+    "selectorShare": 0.08702243784111582,
+    "declShare": 0.08956610610424603,
+    "avgDeclsPerRule": 3.665399239543726
+   },
+   {
+    "sheet": "late.css",
+    "surface": "late overrides, loaded last",
+    "lines": 234,
+    "bytes": 12343,
+    "rules": 54,
+    "keyframeSteps": 0,
+    "selectors": 70,
+    "decls": 204,
+    "bytesShare": 0.0219517357041611,
+    "ruleShare": 0.017555266579973992,
+    "selectorShare": 0.021224984839296544,
+    "declShare": 0.01895382328347115,
+    "avgDeclsPerRule": 3.7777777777777777
+   }
+  ]
+ },
+ "duplication": {
+  "selectorsAcrossSheets": [
+   {
+    "selector": ".topbar",
+    "sheets": [
+     "chrome.css",
+     "late.css"
+    ],
+    "occurrences": 3
+   },
+   {
+    "selector": "body",
+    "sheets": [
+     "base.css",
+     "late.css"
+    ],
+    "occurrences": 3
+   },
+   {
+    "selector": ":root",
+    "sheets": [
+     "base.css",
+     "overlays.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".agents-block .job:last-child",
+    "sheets": [
+     "board.css",
+     "jobs.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".ap-dock-head",
+    "sheets": [
+     "chrome.css",
+     "board.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".as-subpane[data-subpane=\"chat\"]>.job",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".as-subpane[data-subpane=\"chat\"]>.job>.job-head",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".as-subtabs button",
+    "sheets": [
+     "chrome.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".as-tabs button",
+    "sheets": [
+     "chrome.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".chip",
+    "sheets": [
+     "chrome.css",
+     "board.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".chips",
+    "sheets": [
+     "chrome.css",
+     "board.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".jl-think .think-dot",
+    "sheets": [
+     "console.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".job-cmd",
+    "sheets": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".job-foot",
+    "sheets": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".job-head",
+    "sheets": [
+     "jobs.css",
+     "overlays.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".job-out",
+    "sheets": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".legend",
+    "sheets": [
+     "late.css",
+     "chart.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".settings-tabs",
+    "sheets": [
+     "chrome.css",
+     "settings.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".shell",
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".shell>main",
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": ".spawn-strip-head",
+    "sheets": [
+     "chrome.css",
+     "assistant.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": "button",
+    "sheets": [
+     "base.css",
+     "chrome.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": "html",
+    "sheets": [
+     "base.css",
+     "late.css"
+    ],
+    "occurrences": 2
+   },
+   {
+    "selector": "thead th",
+    "sheets": [
+     "chrome.css",
+     "chart.css"
+    ],
+    "occurrences": 2
+   }
+  ],
+  "selectorPairs": [
+   {
+    "pair": [
+     "board.css",
+     "chrome.css"
+    ],
+    "count": 3
+   },
+   {
+    "pair": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "count": 3
+   },
+   {
+    "pair": [
+     "base.css",
+     "late.css"
+    ],
+    "count": 2
+   },
+   {
+    "pair": [
+     "assistant-panes.css",
+     "chrome.css"
+    ],
+    "count": 2
+   },
+   {
+    "pair": [
+     "assistant.css",
+     "late.css"
+    ],
+    "count": 2
+   },
+   {
+    "pair": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "count": 2
+   }
+  ],
+  "blocksAcrossSheets": [
+   {
+    "body": "flex: none; align-self: center; display: inline-flex; align-items: center; gap: 5px; font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 167,
+    "declCount": 9
+   },
+   {
+    "body": "flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono);",
+    "sheets": [
+     "settings.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 163,
+    "declCount": 8
+   },
+   {
+    "body": "padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer;",
+    "sheets": [
+     "chrome.css",
+     "settings.css"
+    ],
+    "occurrences": 2,
+    "bytes": 157,
+    "declCount": 7
+   },
+   {
+    "body": "font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;",
+    "sheets": [
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 4,
+    "bytes": 115,
+    "declCount": 6
+   },
+   {
+    "body": "font-family: var(--mono); font-size: 10px; color: var(--dimmer); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 133,
+    "declCount": 6
+   },
+   {
+    "body": "color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block;",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 4,
+    "bytes": 90,
+    "declCount": 5
+   },
+   {
+    "body": "color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none;",
+    "sheets": [
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 4,
+    "bytes": 79,
+    "declCount": 5
+   },
+   {
+    "body": "flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+    "sheets": [
+     "board.css",
+     "rowstrips.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 3,
+    "bytes": 93,
+    "declCount": 5
+   },
+   {
+    "body": "display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto;",
+    "sheets": [
+     "rowstrips.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 78,
+    "declCount": 5
+   },
+   {
+    "body": "display: flex; align-items: center; gap: 6px; min-width: 0;",
+    "sheets": [
+     "boardchips.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 59,
+    "declCount": 4
+   },
+   {
+    "body": "font-family: var(--mono); font-size: 10.5px; color: var(--dim); word-break: break-all;",
+    "sheets": [
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 86,
+    "declCount": 4
+   },
+   {
+    "body": "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+    "sheets": [
+     "jobs.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 77,
+    "declCount": 4
+   },
+   {
+    "body": "display: flex; flex-direction: column; flex: 1; min-height: 0;",
+    "sheets": [
+     "rowstrips.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 62,
+    "declCount": 4
+   },
+   {
+    "body": "display: flex; flex-direction: column; gap: 3px; min-width: 0;",
+    "sheets": [
+     "boardchips.css",
+     "initiatives.css"
+    ],
+    "occurrences": 2,
+    "bytes": 62,
+    "declCount": 4
+   },
+   {
+    "body": "color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "boardchips.css",
+     "late.css",
+     "chart.css"
+    ],
+    "occurrences": 8,
+    "bytes": 66,
+    "declCount": 3
+   },
+   {
+    "body": "color: #ff9c94; border-color: #57262a; background: var(--red-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 8,
+    "bytes": 65,
+    "declCount": 3
+   },
+   {
+    "body": "color: #f0c674; border-color: #4d3d12; background: var(--amber-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "rowstrips.css",
+     "chart.css"
+    ],
+    "occurrences": 7,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: #7ee787; border-color: #1f4a2a; background: var(--green-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "rowstrips.css",
+     "chart.css"
+    ],
+    "occurrences": 6,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg);",
+    "sheets": [
+     "board.css",
+     "boardchips.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 68,
+    "declCount": 3
+   },
+   {
+    "body": "overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+    "sheets": [
+     "settings.css",
+     "initiatives.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 63,
+    "declCount": 3
+   },
+   {
+    "body": "display: inline-flex; align-items: center; gap: 6px;",
+    "sheets": [
+     "chrome.css",
+     "assistant.css"
+    ],
+    "occurrences": 4,
+    "bytes": 52,
+    "declCount": 3
+   },
+   {
+    "body": "color: #7ee787; background: var(--green-bg); border-color: #1f4a2a;",
+    "sheets": [
+     "queue.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: var(--dimmer); border-color: var(--line); cursor: default;",
+    "sheets": [
+     "board.css",
+     "console.css"
+    ],
+    "occurrences": 3,
+    "bytes": 65,
+    "declCount": 3
+   },
+   {
+    "body": "font-family: var(--mono); font-size: 10px; color: var(--dimmer);",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 64,
+    "declCount": 3
+   },
+   {
+    "body": "background: #1f4a2a; color: #d6ffe0; border-color: #3fb950;",
+    "sheets": [
+     "board.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 59,
+    "declCount": 3
+   },
+   {
+    "body": "flex: none; font-size: 10.5px; color: var(--dimmer);",
+    "sheets": [
+     "board.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 3,
+    "bytes": 52,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; gap: 6px; flex-wrap: wrap;",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 3,
+    "bytes": 41,
+    "declCount": 3
+   },
+   {
+    "body": "color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10);",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 76,
+    "declCount": 3
+   },
+   {
+    "body": "border-color: #6b4d16; background: var(--amber-bg); color: #ffd479;",
+    "sheets": [
+     "settings.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: var(--dim); border-color: var(--line); background: #20242c;",
+    "sheets": [
+     "console.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 66,
+    "declCount": 3
+   },
+   {
+    "body": "color: #ff9c94; background: var(--red-bg); border-color: #57262a;",
+    "sheets": [
+     "queue.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 65,
+    "declCount": 3
+   },
+   {
+    "body": "color: #f0a878; border-color: #5c3a22; background: #2a1c12;",
+    "sheets": [
+     "board.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 59,
+    "declCount": 3
+   },
+   {
+    "body": "outline: none; border-color: #3b6ea8; background: #0b1017;",
+    "sheets": [
+     "assistant.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 58,
+    "declCount": 3
+   },
+   {
+    "body": "text-transform: none; letter-spacing: 0; font-weight: 400;",
+    "sheets": [
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 58,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; flex-direction: column; overflow: hidden;",
+    "sheets": [
+     "pipeline.css",
+     "late.css"
+    ],
+    "occurrences": 2,
+    "bytes": 56,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; flex-direction: column; gap: 3px;",
+    "sheets": [
+     "boardchips.css",
+     "feedback.css"
+    ],
+    "occurrences": 2,
+    "bytes": 48,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; align-items: baseline; gap: 8px;",
+    "sheets": [
+     "turns.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 47,
+    "declCount": 3
+   },
+   {
+    "body": "margin-top: 0; padding-top: 3px; border-top: 0;",
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "occurrences": 2,
+    "bytes": 47,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; align-items: center; gap: 10px;",
+    "sheets": [
+     "chrome.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 46,
+    "declCount": 3
+   },
+   {
+    "body": "font-size: 12px; line-height: 1; opacity: .8;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 45,
+    "declCount": 3
+   },
+   {
+    "body": "outline: 1px solid #4a90d9; outline-offset: 1px;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 8,
+    "bytes": 48,
+    "declCount": 2
+   },
+   {
+    "body": "flex: 1 1 auto; min-width: 0;",
+    "sheets": [
+     "chrome.css",
+     "console.css",
+     "rows.css",
+     "feedback.css",
+     "initiatives.css"
+    ],
+    "occurrences": 8,
+    "bytes": 29,
+    "declCount": 2
+   },
+   {
+    "body": "color: #ff9c94; border-color: #57262a;",
+    "sheets": [
+     "settings.css",
+     "console.css",
+     "rows.css",
+     "overlays.css"
+    ],
+    "occurrences": 6,
+    "bytes": 38,
+    "declCount": 2
+   },
+   {
+    "body": "flex: none; color: var(--dimmer);",
+    "sheets": [
+     "jobs.css",
+     "console.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 6,
+    "bytes": 33,
+    "declCount": 2
+   },
+   {
+    "body": "outline: 1px solid #3b4757; outline-offset: 1px;",
+    "sheets": [
+     "settings.css",
+     "board.css"
+    ],
+    "occurrences": 5,
+    "bytes": 48,
+    "declCount": 2
+   },
+   {
+    "body": "outline: 2px solid #6b7b8f; outline-offset: 1px;",
+    "sheets": [
+     "jobs.css",
+     "console.css",
+     "pipeline.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 5,
+    "bytes": 48,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); border-color: #3a4353;",
+    "sheets": [
+     "console.css",
+     "chart.css"
+    ],
+    "occurrences": 5,
+    "bytes": 42,
+    "declCount": 2
+   },
+   {
+    "body": "opacity: .55; cursor: progress;",
+    "sheets": [
+     "boardchips.css",
+     "feedback.css",
+     "chart.css"
+    ],
+    "occurrences": 5,
+    "bytes": 31,
+    "declCount": 2
+   },
+   {
+    "body": "outline: 2px solid #7fb3ff; outline-offset: 1px;",
+    "sheets": [
+     "overlays.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 48,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); border-color: var(--line);",
+    "sheets": [
+     "jobs.css",
+     "feedback.css"
+    ],
+    "occurrences": 4,
+    "bytes": 46,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); border-color: #3b4757;",
+    "sheets": [
+     "settings.css",
+     "console.css",
+     "rows.css",
+     "overlays.css"
+    ],
+    "occurrences": 4,
+    "bytes": 42,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--dimmer); font-style: italic;",
+    "sheets": [
+     "console.css",
+     "pipeline.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 4,
+    "bytes": 41,
+    "declCount": 2
+   },
+   {
+    "body": "outline: 2px solid #4a90d9; outline-offset: 2px;",
+    "sheets": [
+     "settings.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 48,
+    "declCount": 2
+   },
+   {
+    "body": "background: var(--panel-2); color: var(--text);",
+    "sheets": [
+     "chrome.css",
+     "settings.css"
+    ],
+    "occurrences": 3,
+    "bytes": 47,
+    "declCount": 2
+   },
+   {
+    "body": "white-space: pre-wrap; overflow-wrap: anywhere;",
+    "sheets": [
+     "settings.css",
+     "console.css"
+    ],
+    "occurrences": 3,
+    "bytes": 47,
+    "declCount": 2
+   },
+   {
+    "body": "outline: none; border-color: var(--blue);",
+    "sheets": [
+     "board.css",
+     "boardchips.css"
+    ],
+    "occurrences": 3,
+    "bytes": 41,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); background: #232936;",
+    "sheets": [
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 3,
+    "bytes": 40,
+    "declCount": 2
+   },
+   {
+    "body": "font-size: 10.5px; color: var(--dimmer);",
+    "sheets": [
+     "rowstrips.css",
+     "assistant.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 3,
+    "bytes": 40,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); font-weight: 600;",
+    "sheets": [
+     "settings.css",
+     "pipeline.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 3,
+    "bytes": 37,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); font-weight: 500;",
+    "sheets": [
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 37,
+    "declCount": 2
+   },
+   {
+    "body": "cursor: pointer; user-select: none;",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 3,
+    "bytes": 35,
+    "declCount": 2
+   },
+   {
+    "body": "opacity: .45; cursor: default;",
+    "sheets": [
+     "console.css",
+     "feedback.css"
+    ],
+    "occurrences": 3,
+    "bytes": 30,
+    "declCount": 2
+   },
+   {
+    "body": "box-shadow: 0 0 0 1px #d9a521, 0 0 0 4px rgba(217, 165, 33, .16); border-radius: 6px;",
+    "sheets": [
+     "assistant.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 85,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--dimmer); text-decoration: line-through;",
+    "sheets": [
+     "rowstrips.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 52,
+    "declCount": 2
+   },
+   {
+    "body": "outline: 2px solid #ffb454; outline-offset: 1px;",
+    "sheets": [
+     "rows.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 48,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); border-color: var(--dim);",
+    "sheets": [
+     "board.css",
+     "jobs.css"
+    ],
+    "occurrences": 2,
+    "bytes": 45,
+    "declCount": 2
+   },
+   {
+    "body": "border-color: var(--red); color: var(--red);",
+    "sheets": [
+     "settings.css",
+     "boardchips.css"
+    ],
+    "occurrences": 2,
+    "bytes": 44,
+    "declCount": 2
+   },
+   {
+    "body": "border-color: #6f5a1e; background: #33290f;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 43,
+    "declCount": 2
+   },
+   {
+    "body": "border-color: #7a3138; background: #341a1c;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 43,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--dimmer); cursor: default;",
+    "sheets": [
+     "chrome.css",
+     "settings.css"
+    ],
+    "occurrences": 2,
+    "bytes": 38,
+    "declCount": 2
+   },
+   {
+    "body": "display: flex; flex-direction: column;",
+    "sheets": [
+     "board.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 38,
+    "declCount": 2
+   },
+   {
+    "body": "min-width: 0; overflow-wrap: anywhere;",
+    "sheets": [
+     "initiatives.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 38,
+    "declCount": 2
+   },
+   {
+    "body": "color: var(--text); font-weight: 400;",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 37,
+    "declCount": 2
+   },
+   {
+    "body": "flex: none; color: var(--dim);",
+    "sheets": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 2,
+    "bytes": 30,
+    "declCount": 2
+   },
+   {
+    "body": "opacity: .55; cursor: default;",
+    "sheets": [
+     "turns.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 30,
+    "declCount": 2
+   },
+   {
+    "body": "opacity: .5; cursor: progress;",
+    "sheets": [
+     "rows.css",
+     "feedback.css"
+    ],
+    "occurrences": 2,
+    "bytes": 30,
+    "declCount": 2
+   },
+   {
+    "body": "min-width: 0; flex: 1 1 auto;",
+    "sheets": [
+     "overlays.css",
+     "boardchips.css"
+    ],
+    "occurrences": 2,
+    "bytes": 29,
+    "declCount": 2
+   },
+   {
+    "body": "opacity: .3; cursor: default;",
+    "sheets": [
+     "overlays.css",
+     "boardchips.css"
+    ],
+    "occurrences": 2,
+    "bytes": 29,
+    "declCount": 2
+   },
+   {
+    "body": "flex: none; color: #c8a6ff;",
+    "sheets": [
+     "console.css",
+     "turns.css"
+    ],
+    "occurrences": 2,
+    "bytes": 27,
+    "declCount": 2
+   },
+   {
+    "body": "flex: 1; min-width: 0;",
+    "sheets": [
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 22,
+    "declCount": 2
+   },
+   {
+    "body": "display: none;",
+    "sheets": [
+     "chrome.css",
+     "settings.css",
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "turns.css",
+     "rows.css",
+     "overlays.css",
+     "rowstrips.css",
+     "assistant.css",
+     "feedback.css",
+     "assistant-panes.css",
+     "initiatives.css",
+     "panes.css",
+     "pipeline.css",
+     "late.css"
+    ],
+    "occurrences": 101,
+    "bytes": 14,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--text);",
+    "sheets": [
+     "settings.css",
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "turns.css",
+     "rows.css",
+     "overlays.css",
+     "rowstrips.css",
+     "assistant.css",
+     "assistant-panes.css",
+     "panes.css",
+     "queue.css",
+     "pipeline.css"
+    ],
+    "occurrences": 43,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--dimmer);",
+    "sheets": [
+     "settings.css",
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "turns.css",
+     "overlays.css",
+     "rowstrips.css",
+     "boardchips.css",
+     "assistant.css",
+     "feedback.css",
+     "assistant-panes.css",
+     "panes.css",
+     "queue.css",
+     "pipeline.css",
+     "late.css",
+     "chart.css"
+    ],
+    "occurrences": 26,
+    "bytes": 21,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--dim);",
+    "sheets": [
+     "chrome.css",
+     "settings.css",
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "turns.css",
+     "rows.css",
+     "rowstrips.css",
+     "panes.css",
+     "queue.css",
+     "pipeline.css",
+     "chart.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 26,
+    "bytes": 18,
+    "declCount": 1
+   },
+   {
+    "body": "border-bottom: 0;",
+    "sheets": [
+     "board.css",
+     "console.css",
+     "rows.css",
+     "initiatives.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 16,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "flex: 0 0 auto;",
+    "sheets": [
+     "board.css",
+     "boardchips.css",
+     "initiatives.css",
+     "panes.css",
+     "pipeline.css",
+     "late.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 14,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "opacity: 1;",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "turns.css",
+     "rows.css",
+     "overlays.css",
+     "feedback.css",
+     "chart.css"
+    ],
+    "occurrences": 14,
+    "bytes": 11,
+    "declCount": 1
+   },
+   {
+    "body": "flex: 1;",
+    "sheets": [
+     "settings.css",
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "assistant.css",
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 14,
+    "bytes": 8,
+    "declCount": 1
+   },
+   {
+    "body": "user-select: none;",
+    "sheets": [
+     "chrome.css",
+     "settings.css",
+     "overlays.css",
+     "assistant.css",
+     "feedback.css",
+     "panes.css",
+     "pipeline.css",
+     "chart.css"
+    ],
+    "occurrences": 13,
+    "bytes": 18,
+    "declCount": 1
+   },
+   {
+    "body": "display: block;",
+    "sheets": [
+     "chrome.css",
+     "settings.css",
+     "board.css",
+     "console.css",
+     "overlays.css",
+     "boardchips.css",
+     "assistant.css",
+     "feedback.css",
+     "initiatives.css"
+    ],
+    "occurrences": 12,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--amber);",
+    "sheets": [
+     "board.css",
+     "rowstrips.css",
+     "assistant.css",
+     "assistant-panes.css",
+     "panes.css",
+     "chart.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 11,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "margin-left: auto;",
+    "sheets": [
+     "chrome.css",
+     "feedback.css",
+     "initiatives.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 11,
+    "bytes": 18,
+    "declCount": 1
+   },
+   {
+    "body": "margin: 0;",
+    "sheets": [
+     "settings.css",
+     "turns.css",
+     "initiatives.css",
+     "queue.css",
+     "pipeline.css",
+     "chart.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 11,
+    "bytes": 10,
+    "declCount": 1
+   },
+   {
+    "body": "cursor: pointer;",
+    "sheets": [
+     "console.css",
+     "rowstrips.css",
+     "assistant.css",
+     "panes.css",
+     "pipeline.css",
+     "chart.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 9,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "color: #7ee787;",
+    "sheets": [
+     "console.css",
+     "rowstrips.css",
+     "panes.css"
+    ],
+    "occurrences": 9,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "position: relative;",
+    "sheets": [
+     "board.css",
+     "console.css",
+     "rows.css",
+     "overlays.css",
+     "initiatives.css",
+     "late.css"
+    ],
+    "occurrences": 8,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "margin-left: 0;",
+    "sheets": [
+     "console.css",
+     "overlays.css",
+     "initiatives.css",
+     "queue.css"
+    ],
+    "occurrences": 8,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "flex: none;",
+    "sheets": [
+     "console.css",
+     "turns.css",
+     "rowstrips.css",
+     "assistant.css",
+     "pipeline.css",
+     "chart.css"
+    ],
+    "occurrences": 8,
+    "bytes": 11,
+    "declCount": 1
+   },
+   {
+    "body": "text-decoration: underline;",
+    "sheets": [
+     "settings.css",
+     "rows.css",
+     "initiatives.css",
+     "pipeline.css",
+     "chart.css"
+    ],
+    "occurrences": 7,
+    "bytes": 27,
+    "declCount": 1
+   },
+   {
+    "body": "cursor: grabbing;",
+    "sheets": [
+     "settings.css",
+     "overlays.css",
+     "assistant.css",
+     "feedback.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 7,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "margin-bottom: 0;",
+    "sheets": [
+     "settings.css",
+     "board.css",
+     "turns.css",
+     "initiatives.css",
+     "panes.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 7,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "margin-top: 0;",
+    "sheets": [
+     "console.css",
+     "initiatives.css",
+     "panes.css"
+    ],
+    "occurrences": 7,
+    "bytes": 14,
+    "declCount": 1
+   },
+   {
+    "body": "transform: translateY(1px);",
+    "sheets": [
+     "board.css",
+     "console.css",
+     "initiatives.css",
+     "chart.css"
+    ],
+    "occurrences": 6,
+    "bytes": 27,
+    "declCount": 1
+   },
+   {
+    "body": "white-space: nowrap;",
+    "sheets": [
+     "settings.css",
+     "console.css",
+     "rowstrips.css",
+     "late.css",
+     "chart.css"
+    ],
+    "occurrences": 6,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "overflow: hidden;",
+    "sheets": [
+     "rows.css",
+     "rowstrips.css",
+     "pipeline.css",
+     "chart.css"
+    ],
+    "occurrences": 6,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "margin-bottom: 6px;",
+    "sheets": [
+     "settings.css",
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 5,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "font-size: 11px;",
+    "sheets": [
+     "board.css",
+     "chart.css"
+    ],
+    "occurrences": 5,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "display: inline;",
+    "sheets": [
+     "console.css",
+     "initiatives.css"
+    ],
+    "occurrences": 5,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "cursor: default;",
+    "sheets": [
+     "console.css",
+     "turns.css",
+     "overlays.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 5,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "color: #f0c674;",
+    "sheets": [
+     "jobs.css",
+     "rowstrips.css",
+     "boardchips.css",
+     "chart.css"
+    ],
+    "occurrences": 5,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "min-width: 0;",
+    "sheets": [
+     "console.css",
+     "rows.css",
+     "initiatives.css",
+     "chart.css"
+    ],
+    "occurrences": 5,
+    "bytes": 13,
+    "declCount": 1
+   },
+   {
+    "body": "animation: pill-again-spin .9s linear infinite;",
+    "sheets": [
+     "jobs.css",
+     "console.css",
+     "rows.css"
+    ],
+    "occurrences": 4,
+    "bytes": 47,
+    "declCount": 1
+   },
+   {
+    "body": "font-variant-numeric: tabular-nums;",
+    "sheets": [
+     "console.css",
+     "initiatives.css",
+     "pipeline.css"
+    ],
+    "occurrences": 4,
+    "bytes": 35,
+    "declCount": 1
+   },
+   {
+    "body": "background: var(--amber);",
+    "sheets": [
+     "settings.css",
+     "assistant-panes.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 4,
+    "bytes": 25,
+    "declCount": 1
+   },
+   {
+    "body": "background: transparent;",
+    "sheets": [
+     "base.css",
+     "console.css",
+     "initiatives.css"
+    ],
+    "occurrences": 4,
+    "bytes": 24,
+    "declCount": 1
+   },
+   {
+    "body": "font: 11px var(--mono);",
+    "sheets": [
+     "boardchips.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 4,
+    "bytes": 23,
+    "declCount": 1
+   },
+   {
+    "body": "white-space: normal;",
+    "sheets": [
+     "jobs.css",
+     "console.css",
+     "boardchips.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--red);",
+    "sheets": [
+     "board.css",
+     "boardchips.css",
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 4,
+    "bytes": 18,
+    "declCount": 1
+   },
+   {
+    "body": "cursor: progress;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 4,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "margin: 0 0 4px;",
+    "sheets": [
+     "settings.css",
+     "overlays.css",
+     "queue.css"
+    ],
+    "occurrences": 4,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "color: #c8a6ff;",
+    "sheets": [
+     "console.css",
+     "turns.css"
+    ],
+    "occurrences": 4,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: #e0b341;",
+    "sheets": [
+     "turns.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 4,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "opacity: .55;",
+    "sheets": [
+     "assistant.css",
+     "assistant-panes.css",
+     "initiatives.css",
+     "panes.css"
+    ],
+    "occurrences": 4,
+    "bytes": 13,
+    "declCount": 1
+   },
+   {
+    "body": "animation: jumpflash var(--flash-ring, 1700ms) ease-out;",
+    "sheets": [
+     "overlays.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 56,
+    "declCount": 1
+   },
+   {
+    "body": "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);",
+    "sheets": [
+     "settings.css",
+     "initiatives.css"
+    ],
+    "occurrences": 3,
+    "bytes": 53,
+    "declCount": 1
+   },
+   {
+    "body": "background: rgba(255, 255, 255, .035);",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 3,
+    "bytes": 38,
+    "declCount": 1
+   },
+   {
+    "body": "border-top: 1px solid var(--line);",
+    "sheets": [
+     "board.css",
+     "console.css"
+    ],
+    "occurrences": 3,
+    "bytes": 34,
+    "declCount": 1
+   },
+   {
+    "body": "border-left-color: var(--amber);",
+    "sheets": [
+     "rowstrips.css",
+     "feedback.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 3,
+    "bytes": 32,
+    "declCount": 1
+   },
+   {
+    "body": "border-left-color: var(--blue);",
+    "sheets": [
+     "rowstrips.css",
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 3,
+    "bytes": 31,
+    "declCount": 1
+   },
+   {
+    "body": "font-family: var(--mono);",
+    "sheets": [
+     "board.css",
+     "panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 25,
+    "declCount": 1
+   },
+   {
+    "body": "overflow-wrap: anywhere;",
+    "sheets": [
+     "settings.css",
+     "initiatives.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 24,
+    "declCount": 1
+   },
+   {
+    "body": "background: var(--band);",
+    "sheets": [
+     "board.css",
+     "rows.css",
+     "overlays.css"
+    ],
+    "occurrences": 3,
+    "bytes": 24,
+    "declCount": 1
+   },
+   {
+    "body": "background: var(--red);",
+    "sheets": [
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 3,
+    "bytes": 23,
+    "declCount": 1
+   },
+   {
+    "body": "border-color: #3b4757;",
+    "sheets": [
+     "chrome.css",
+     "settings.css"
+    ],
+    "occurrences": 3,
+    "bytes": 22,
+    "declCount": 1
+   },
+   {
+    "body": "border-style: dashed;",
+    "sheets": [
+     "settings.css",
+     "console.css",
+     "rows.css"
+    ],
+    "occurrences": 3,
+    "bytes": 21,
+    "declCount": 1
+   },
+   {
+    "body": "background: #232936;",
+    "sheets": [
+     "chrome.css",
+     "board.css"
+    ],
+    "occurrences": 3,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "background: #24466a;",
+    "sheets": [
+     "chrome.css",
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 3,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "font-style: italic;",
+    "sheets": [
+     "console.css",
+     "turns.css"
+    ],
+    "occurrences": 3,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--blue);",
+    "sheets": [
+     "rowstrips.css",
+     "assistant-panes.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "background: none;",
+    "sheets": [
+     "console.css",
+     "panes.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 3,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "margin-top: 4px;",
+    "sheets": [
+     "settings.css",
+     "overlays.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "margin-top: 6px;",
+    "sheets": [
+     "settings.css",
+     "board.css",
+     "queue.css"
+    ],
+    "occurrences": 3,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "animation: none;",
+    "sheets": [
+     "console.css",
+     "pipeline.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "font-size: 10px;",
+    "sheets": [
+     "console.css",
+     "queue.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 3,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "margin: 0 0 2px;",
+    "sheets": [
+     "rowstrips.css",
+     "queue.css",
+     "late.css"
+    ],
+    "occurrences": 3,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "transform: none;",
+    "sheets": [
+     "initiatives.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "color: #ecd9ff;",
+    "sheets": [
+     "console.css",
+     "assistant-panes.css",
+     "initiatives.css"
+    ],
+    "occurrences": 3,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: #ff9c94;",
+    "sheets": [
+     "console.css",
+     "overlays.css"
+    ],
+    "occurrences": 3,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: #ffd479;",
+    "sheets": [
+     "overlays.css",
+     "assistant.css"
+    ],
+    "occurrences": 3,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "flex: 1 0 100%;",
+    "sheets": [
+     "assistant.css",
+     "initiatives.css",
+     "queue.css"
+    ],
+    "occurrences": 3,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "flex: 1 1 100%;",
+    "sheets": [
+     "assistant-panes.css",
+     "initiatives.css"
+    ],
+    "occurrences": 3,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "content: none;",
+    "sheets": [
+     "board.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 14,
+    "declCount": 1
+   },
+   {
+    "body": "border-radius: 9px 9px 0 0;",
+    "sheets": [
+     "board.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 27,
+    "declCount": 1
+   },
+   {
+    "body": "filter: brightness(1.25);",
+    "sheets": [
+     "initiatives.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 25,
+    "declCount": 1
+   },
+   {
+    "body": "color: var(--violet);",
+    "sheets": [
+     "feedback.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 21,
+    "declCount": 1
+   },
+   {
+    "body": "border-bottom: none;",
+    "sheets": [
+     "jobs.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "cursor: nwse-resize;",
+    "sheets": [
+     "console.css",
+     "late.css"
+    ],
+    "occurrences": 2,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "background: #463c24;",
+    "sheets": [
+     "console.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "background: #3d6ea8;",
+    "sheets": [
+     "assistant.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 20,
+    "declCount": 1
+   },
+   {
+    "body": "margin-bottom: 3px;",
+    "sheets": [
+     "jobs.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "margin-bottom: 4px;",
+    "sheets": [
+     "assistant.css",
+     "queue.css"
+    ],
+    "occurrences": 2,
+    "bytes": 19,
+    "declCount": 1
+   },
+   {
+    "body": "font-size: 11.5px;",
+    "sheets": [
+     "settings.css",
+     "board.css"
+    ],
+    "occurrences": 2,
+    "bytes": 18,
+    "declCount": 1
+   },
+   {
+    "body": "margin-left: 18px;",
+    "sheets": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 2,
+    "bytes": 18,
+    "declCount": 1
+   },
+   {
+    "body": "border-radius: 0;",
+    "sheets": [
+     "board.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "min-height: 79px;",
+    "sheets": [
+     "rowstrips.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "font-weight: 600;",
+    "sheets": [
+     "rowstrips.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 17,
+    "declCount": 1
+   },
+   {
+    "body": "margin: 2px 0 0;",
+    "sheets": [
+     "settings.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 2,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "margin-top: 3px;",
+    "sheets": [
+     "settings.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "padding-left: 0;",
+    "sheets": [
+     "turns.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 16,
+    "declCount": 1
+   },
+   {
+    "body": "grid-column: 2;",
+    "sheets": [
+     "settings.css",
+     "assistant.css"
+    ],
+    "occurrences": 2,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: #e6e9ef;",
+    "sheets": [
+     "settings.css",
+     "turns.css"
+    ],
+    "occurrences": 2,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "line-height: 1;",
+    "sheets": [
+     "overlays.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: #e3b341;",
+    "sheets": [
+     "assistant.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "color: #ffd7d2;",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 15,
+    "declCount": 1
+   },
+   {
+    "body": "margin: 3px 0;",
+    "sheets": [
+     "settings.css",
+     "core/pipeline-card.css"
+    ],
+    "occurrences": 2,
+    "bytes": 14,
+    "declCount": 1
+   },
+   {
+    "body": "cursor: move;",
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "occurrences": 2,
+    "bytes": 13,
+    "declCount": 1
+   },
+   {
+    "body": "padding: 0;",
+    "sheets": [
+     "console.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 11,
+    "declCount": 1
+   },
+   {
+    "body": "gap: 6px;",
+    "sheets": [
+     "pipeline.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 2,
+    "bytes": 9,
+    "declCount": 1
+   }
+  ],
+  "substantialBlocks": [
+   {
+    "body": "flex: none; align-self: center; display: inline-flex; align-items: center; gap: 5px; font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 167,
+    "declCount": 9
+   },
+   {
+    "body": "flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono);",
+    "sheets": [
+     "settings.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 163,
+    "declCount": 8
+   },
+   {
+    "body": "padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer;",
+    "sheets": [
+     "chrome.css",
+     "settings.css"
+    ],
+    "occurrences": 2,
+    "bytes": 157,
+    "declCount": 7
+   },
+   {
+    "body": "font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;",
+    "sheets": [
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 4,
+    "bytes": 115,
+    "declCount": 6
+   },
+   {
+    "body": "font-family: var(--mono); font-size: 10px; color: var(--dimmer); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 133,
+    "declCount": 6
+   },
+   {
+    "body": "color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block;",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 4,
+    "bytes": 90,
+    "declCount": 5
+   },
+   {
+    "body": "color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none;",
+    "sheets": [
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 4,
+    "bytes": 79,
+    "declCount": 5
+   },
+   {
+    "body": "flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+    "sheets": [
+     "board.css",
+     "rowstrips.css",
+     "core/task-card.css"
+    ],
+    "occurrences": 3,
+    "bytes": 93,
+    "declCount": 5
+   },
+   {
+    "body": "display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto;",
+    "sheets": [
+     "rowstrips.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 78,
+    "declCount": 5
+   },
+   {
+    "body": "display: flex; align-items: center; gap: 6px; min-width: 0;",
+    "sheets": [
+     "boardchips.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 59,
+    "declCount": 4
+   },
+   {
+    "body": "font-family: var(--mono); font-size: 10.5px; color: var(--dim); word-break: break-all;",
+    "sheets": [
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 86,
+    "declCount": 4
+   },
+   {
+    "body": "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+    "sheets": [
+     "jobs.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 77,
+    "declCount": 4
+   },
+   {
+    "body": "display: flex; flex-direction: column; flex: 1; min-height: 0;",
+    "sheets": [
+     "rowstrips.css",
+     "pipeline.css"
+    ],
+    "occurrences": 2,
+    "bytes": 62,
+    "declCount": 4
+   },
+   {
+    "body": "display: flex; flex-direction: column; gap: 3px; min-width: 0;",
+    "sheets": [
+     "boardchips.css",
+     "initiatives.css"
+    ],
+    "occurrences": 2,
+    "bytes": 62,
+    "declCount": 4
+   },
+   {
+    "body": "color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "boardchips.css",
+     "late.css",
+     "chart.css"
+    ],
+    "occurrences": 8,
+    "bytes": 66,
+    "declCount": 3
+   },
+   {
+    "body": "color: #ff9c94; border-color: #57262a; background: var(--red-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "overlays.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 8,
+    "bytes": 65,
+    "declCount": 3
+   },
+   {
+    "body": "color: #f0c674; border-color: #4d3d12; background: var(--amber-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "rowstrips.css",
+     "chart.css"
+    ],
+    "occurrences": 7,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: #7ee787; border-color: #1f4a2a; background: var(--green-bg);",
+    "sheets": [
+     "board.css",
+     "jobs.css",
+     "console.css",
+     "rowstrips.css",
+     "chart.css"
+    ],
+    "occurrences": 6,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg);",
+    "sheets": [
+     "board.css",
+     "boardchips.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 68,
+    "declCount": 3
+   },
+   {
+    "body": "overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+    "sheets": [
+     "settings.css",
+     "initiatives.css",
+     "chart.css"
+    ],
+    "occurrences": 4,
+    "bytes": 63,
+    "declCount": 3
+   },
+   {
+    "body": "display: inline-flex; align-items: center; gap: 6px;",
+    "sheets": [
+     "chrome.css",
+     "assistant.css"
+    ],
+    "occurrences": 4,
+    "bytes": 52,
+    "declCount": 3
+   },
+   {
+    "body": "color: #7ee787; background: var(--green-bg); border-color: #1f4a2a;",
+    "sheets": [
+     "queue.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: var(--dimmer); border-color: var(--line); cursor: default;",
+    "sheets": [
+     "board.css",
+     "console.css"
+    ],
+    "occurrences": 3,
+    "bytes": 65,
+    "declCount": 3
+   },
+   {
+    "body": "font-family: var(--mono); font-size: 10px; color: var(--dimmer);",
+    "sheets": [
+     "assistant-panes.css",
+     "pipeline.css"
+    ],
+    "occurrences": 3,
+    "bytes": 64,
+    "declCount": 3
+   },
+   {
+    "body": "background: #1f4a2a; color: #d6ffe0; border-color: #3fb950;",
+    "sheets": [
+     "board.css",
+     "chart.css"
+    ],
+    "occurrences": 3,
+    "bytes": 59,
+    "declCount": 3
+   },
+   {
+    "body": "flex: none; font-size: 10.5px; color: var(--dimmer);",
+    "sheets": [
+     "board.css",
+     "rowstrips.css"
+    ],
+    "occurrences": 3,
+    "bytes": 52,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; gap: 6px; flex-wrap: wrap;",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 3,
+    "bytes": 41,
+    "declCount": 3
+   },
+   {
+    "body": "color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10);",
+    "sheets": [
+     "board.css",
+     "overlays.css"
+    ],
+    "occurrences": 2,
+    "bytes": 76,
+    "declCount": 3
+   },
+   {
+    "body": "border-color: #6b4d16; background: var(--amber-bg); color: #ffd479;",
+    "sheets": [
+     "settings.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 67,
+    "declCount": 3
+   },
+   {
+    "body": "color: var(--dim); border-color: var(--line); background: #20242c;",
+    "sheets": [
+     "console.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 66,
+    "declCount": 3
+   },
+   {
+    "body": "color: #ff9c94; background: var(--red-bg); border-color: #57262a;",
+    "sheets": [
+     "queue.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 65,
+    "declCount": 3
+   },
+   {
+    "body": "color: #f0a878; border-color: #5c3a22; background: #2a1c12;",
+    "sheets": [
+     "board.css",
+     "chart.css"
+    ],
+    "occurrences": 2,
+    "bytes": 59,
+    "declCount": 3
+   },
+   {
+    "body": "outline: none; border-color: #3b6ea8; background: #0b1017;",
+    "sheets": [
+     "assistant.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 58,
+    "declCount": 3
+   },
+   {
+    "body": "text-transform: none; letter-spacing: 0; font-weight: 400;",
+    "sheets": [
+     "assistant-panes.css",
+     "panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 58,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; flex-direction: column; overflow: hidden;",
+    "sheets": [
+     "pipeline.css",
+     "late.css"
+    ],
+    "occurrences": 2,
+    "bytes": 56,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; flex-direction: column; gap: 3px;",
+    "sheets": [
+     "boardchips.css",
+     "feedback.css"
+    ],
+    "occurrences": 2,
+    "bytes": 48,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; align-items: baseline; gap: 8px;",
+    "sheets": [
+     "turns.css",
+     "assistant-panes.css"
+    ],
+    "occurrences": 2,
+    "bytes": 47,
+    "declCount": 3
+   },
+   {
+    "body": "margin-top: 0; padding-top: 3px; border-top: 0;",
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "occurrences": 2,
+    "bytes": 47,
+    "declCount": 3
+   },
+   {
+    "body": "display: flex; align-items: center; gap: 10px;",
+    "sheets": [
+     "chrome.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 46,
+    "declCount": 3
+   },
+   {
+    "body": "font-size: 12px; line-height: 1; opacity: .8;",
+    "sheets": [
+     "jobs.css",
+     "console.css"
+    ],
+    "occurrences": 2,
+    "bytes": 45,
+    "declCount": 3
+   }
+  ],
+  "blockPairs": [
+   {
+    "pair": [
+     "board.css",
+     "chart.css"
+    ],
+    "count": 6
+   },
+   {
+    "pair": [
+     "board.css",
+     "rowstrips.css"
+    ],
+    "count": 5
+   },
+   {
+    "pair": [
+     "console.css",
+     "jobs.css"
+    ],
+    "count": 5
+   },
+   {
+    "pair": [
+     "board.css",
+     "overlays.css"
+    ],
+    "count": 4
+   },
+   {
+    "pair": [
+     "board.css",
+     "console.css"
+    ],
+    "count": 4
+   },
+   {
+    "pair": [
+     "board.css",
+     "jobs.css"
+    ],
+    "count": 4
+   }
+  ],
+  "blockPairsAll": [
+   {
+    "pair": [
+     "console.css",
+     "jobs.css"
+    ],
+    "count": 20
+   },
+   {
+    "pair": [
+     "board.css",
+     "console.css"
+    ],
+    "count": 15
+   },
+   {
+    "pair": [
+     "panes.css",
+     "pipeline.css"
+    ],
+    "count": 15
+   },
+   {
+    "pair": [
+     "pipeline.css",
+     "settings.css"
+    ],
+    "count": 14
+   },
+   {
+    "pair": [
+     "console.css",
+     "rowstrips.css"
+    ],
+    "count": 14
+   },
+   {
+    "pair": [
+     "chart.css",
+     "console.css"
+    ],
+    "count": 14
+   }
+  ],
+  "exactDuplicates": [],
+  "counts": {
+   "distinctSelectors": 3474,
+   "repeatedSelectors": 24,
+   "repeatedSelectorOccurrences": 50,
+   "distinctBlocks": 2445,
+   "repeatedBlocks": 178,
+   "substantialRepeatedBlocks": 40,
+   "oneDeclarationBlocks": 98,
+   "exactDuplicateRules": 0
+  }
+ },
+ "catchAll": {
+  "base.css": {
+   "sheet": "base.css",
+   "surface": "tokens and resets",
+   "lines": 97,
+   "bytes": 4832,
+   "rules": 13,
+   "blocks": [],
+   "examples": [],
+   "surfaceRules": 0,
+   "kinds": {
+    "token": 1,
+    "reset": 12,
+    "surface": 0
+   },
+   "verdict": "holds nothing but the token layer and page resets"
+  },
+  "late.css": {
+   "sheet": "late.css",
+   "surface": "late overrides, loaded last",
+   "lines": 234,
+   "bytes": 12343,
+   "rules": 54,
+   "blocks": [
+    {
+     "id": "sliver",
+     "soleDefinitions": 17,
+     "soleExamples": [
+      "#spawn-strip",
+      "#newagent",
+      "#agents",
+      "#newagent, #agents"
+     ],
+     "label": "the sliver-window layout: header, shell, agent cards and folders",
+     "home": [
+      "chrome.css",
+      "board.css"
+     ],
+     "rules": 22,
+     "decls": 59,
+     "bytes": 1882,
+     "selectors": [
+      "html, body",
+      "body",
+      ".topbar",
+      ".shell",
+      ".shell > main",
+      "#spawn-strip"
+     ],
+     "tokens": [
+      "#agents",
+      "#newagent",
+      "#projects",
+      "#spawn-strip",
+      ".chips",
+      ".collapsed",
+      ".fixed-collapsed",
+      ".path",
+      ".project-head",
+      ".root-body",
+      ".root-filter",
+      ".root-group",
+      ".root-head",
+      ".shell",
+      ".topbar"
+     ],
+     "absentFromHome": [
+      "#agents",
+      "#newagent",
+      "#spawn-strip",
+      ".shell"
+     ],
+     "note": ""
+    },
+    {
+     "id": "legend",
+     "soleDefinitions": 20,
+     "soleExamples": [
+      ".legend-line",
+      ".legend-keys",
+      ".legend .legend-line .sig",
+      ".legend .legend-line .age-slot"
+     ],
+     "label": "the chart legend and its popover",
+     "home": [
+      "chart.css"
+     ],
+     "rules": 21,
+     "decls": 86,
+     "bytes": 2246,
+     "selectors": [
+      ".legend",
+      ".legend-line",
+      ".legend-keys",
+      ".legend .legend-line .sig",
+      ".legend .legend-line .age-slot",
+      ".legend .legend-line .kind-mark"
+     ],
+     "tokens": [
+      ".age-slot",
+      ".kind-mark",
+      ".legend",
+      ".legend-fold",
+      ".legend-fold-glyph",
+      ".legend-group",
+      ".legend-keys",
+      ".legend-line",
+      ".legend-note",
+      ".legend-pop",
+      ".legend-q",
+      ".legend-toggle",
+      ".sig"
+     ],
+     "absentFromHome": [
+      ".age-slot",
+      ".legend-fold",
+      ".legend-fold-glyph",
+      ".legend-group",
+      ".legend-keys",
+      ".legend-line",
+      ".legend-note",
+      ".legend-pop",
+      ".legend-q",
+      ".legend-toggle"
+     ],
+     "note": ""
+    },
+    {
+     "id": "search",
+     "soleDefinitions": 11,
+     "soleExamples": [
+      ".as-search-pop > .as-search-drag, .ha-search-pop > .as-search-drag",
+      ".as-search-pop > .as-search-drag::before, .ha-search-pop > .as-search-drag::before",
+      ".as-search-pop > .as-search-drag:hover::before, .ha-search-pop > .as-search-drag:hover::before",
+      ".as-search-pop > .as-search-drag > .as-search-x, .ha-search-pop > .as-search-drag > .as-search-x"
+     ],
+     "label": "the assistant and hot-agent search popovers",
+     "home": [
+      "assistant.css"
+     ],
+     "rules": 11,
+     "decls": 59,
+     "bytes": 2058,
+     "selectors": [
+      ".as-search-pop > .as-search-drag, .ha-search-pop > .as-search-drag",
+      ".as-search-pop > .as-search-drag::before, .ha-search-pop > .as-search-drag::before",
+      ".as-search-pop > .as-search-drag:hover::before, .ha-search-pop > .as-search-drag:hover::before",
+      ".as-search-pop > .as-search-drag > .as-search-x, .ha-search-pop > .as-search-drag > .as-search-x",
+      ".as-search-pop > .as-search-drag > .as-search-x:hover, .ha-search-pop > .as-search-drag > .as-search-x:hover",
+      ".as-search-pop > .as-search-grip, .ha-search-pop > .as-search-grip"
+     ],
+     "tokens": [
+      ".as-search-drag",
+      ".as-search-grip",
+      ".as-search-item",
+      ".as-search-pop",
+      ".as-search-x",
+      ".ha-search-pop",
+      ".is-moving",
+      ".is-resizing"
+     ],
+     "absentFromHome": [
+      ".as-search-drag",
+      ".as-search-grip",
+      ".as-search-x",
+      ".ha-search-pop",
+      ".is-resizing"
+     ],
+     "note": ""
+    }
+   ],
+   "examples": [
+    {
+     "selector": "html, body",
+     "block": "sliver",
+     "ctx": [
+      "@media (max-height: 300px)"
+     ]
+    },
+    {
+     "selector": "body",
+     "block": "sliver",
+     "ctx": [
+      "@media (max-height: 300px)"
+     ]
+    },
+    {
+     "selector": ".legend",
+     "block": "legend",
+     "ctx": []
+    },
+    {
+     "selector": ".legend-line",
+     "block": "legend",
+     "ctx": []
+    },
+    {
+     "selector": ".as-search-pop > .as-search-drag, .ha-search-pop > .as-search-drag",
+     "block": "search",
+     "ctx": []
+    },
+    {
+     "selector": ".as-search-pop > .as-search-drag::before, .ha-search-pop > .as-search-drag::before",
+     "block": "search",
+     "ctx": []
+    }
+   ],
+   "surfaceRules": 54,
+   "unresolved": 0,
+   "verdict": "3 blocks across 4 surface sheets; 3 block(s) name tokens their own sheet never defines"
+  }
+ },
+ "cascade": {
+  "totalConflicts": 4,
+  "selectorsInConflict": 3,
+  "top": [
+   {
+    "selector": ".topbar",
+    "properties": 2,
+    "sheets": [
+     "chrome.css",
+     "late.css"
+    ],
+    "winner": {
+     "sheet": "late.css",
+     "props": 2,
+     "examples": [
+      "position",
+      "padding"
+     ]
+    },
+    "contexts": [
+     "@media (max-height: 300px)"
+    ]
+   },
+   {
+    "selector": ".jl-think .think-dot",
+    "properties": 1,
+    "sheets": [
+     "console.css",
+     "pipeline.css"
+    ],
+    "winner": {
+     "sheet": "pipeline.css",
+     "props": 1,
+     "examples": [
+      "animation"
+     ]
+    },
+    "contexts": [
+     "@media (prefers-reduced-motion: reduce)"
+    ]
+   },
+   {
+    "selector": ".shell",
+    "properties": 1,
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "winner": {
+     "sheet": "late.css",
+     "props": 1,
+     "examples": [
+      "align-items"
+     ]
+    },
+    "contexts": [
+     "@media (max-height: 300px)"
+    ]
+   }
+  ],
+  "all": [
+   {
+    "selector": ".topbar",
+    "properties": 2,
+    "sheets": [
+     "chrome.css",
+     "late.css"
+    ],
+    "winner": {
+     "sheet": "late.css",
+     "props": 2,
+     "examples": [
+      "position",
+      "padding"
+     ]
+    },
+    "contexts": [
+     "@media (max-height: 300px)"
+    ]
+   },
+   {
+    "selector": ".jl-think .think-dot",
+    "properties": 1,
+    "sheets": [
+     "console.css",
+     "pipeline.css"
+    ],
+    "winner": {
+     "sheet": "pipeline.css",
+     "props": 1,
+     "examples": [
+      "animation"
+     ]
+    },
+    "contexts": [
+     "@media (prefers-reduced-motion: reduce)"
+    ]
+   },
+   {
+    "selector": ".shell",
+    "properties": 1,
+    "sheets": [
+     "assistant.css",
+     "late.css"
+    ],
+    "winner": {
+     "sheet": "late.css",
+     "props": 1,
+     "examples": [
+      "align-items"
+     ]
+    },
+    "contexts": [
+     "@media (max-height: 300px)"
+    ]
+   }
+  ],
+  "sheetPairs": [
+   {
+    "pair": [
+     "chrome.css",
+     "late.css"
+    ],
+    "properties": 2
+   },
+   {
+    "pair": [
+     "console.css",
+     "pipeline.css"
+    ],
+    "properties": 1
+   },
+   {
+    "pair": [
+     "assistant.css",
+     "late.css"
+    ],
+    "properties": 1
+   }
+  ]
+ },
+ "dead": null,
+ "cost": null,
+ "cited": {
+  "file": "docs/reports/css-split.html",
+  "rows": [
+   {
+    "pane": "board table",
+    "root": "#projects",
+    "elements": 778,
+    "boxesDiffer": 0,
+    "maxDelta": 0,
+    "textRuns": 438,
+    "textDiffer": 0
+   },
+   {
+    "pane": "console",
+    "root": ".job[data-thread]",
+    "elements": 68,
+    "boxesDiffer": 0,
+    "maxDelta": 0,
+    "textRuns": 33,
+    "textDiffer": 0
+   },
+   {
+    "pane": "queue cards",
+    "root": "#as-queue",
+    "elements": 174,
+    "boxesDiffer": 0,
+    "maxDelta": 0,
+    "textRuns": 109,
+    "textDiffer": 0
+   },
+   {
+    "pane": "assistant float",
+    "root": "#assistant",
+    "elements": 295,
+    "boxesDiffer": 0,
+    "maxDelta": 0,
+    "textRuns": 165,
+    "textDiffer": 0
+   },
+   {
+    "pane": "initiatives",
+    "root": "#as-initiatives",
+    "elements": 49,
+    "boxesDiffer": 0,
+    "maxDelta": 0,
+    "textRuns": 33,
+    "textDiffer": 0
+   },
+   {
+    "pane": "settings",
+    "root": "#settings",
+    "elements": 1652,
+    "boxesDiffer": 0,
+    "maxDelta": 0,
+    "textRuns": 1030,
+    "textDiffer": 0
+   }
+  ],
+  "cssom": null
+ },
+ "sheets": [
+  {
+   "href": "base.css",
+   "bytes": 4832,
+   "lines": 97,
+   "rules": 13
+  },
+  {
+   "href": "chrome.css",
+   "bytes": 14703,
+   "lines": 249,
+   "rules": 63
+  },
+  {
+   "href": "settings.css",
+   "bytes": 43669,
+   "lines": 428,
+   "rules": 281
+  },
+  {
+   "href": "board.css",
+   "bytes": 40695,
+   "lines": 627,
+   "rules": 213
+  },
+  {
+   "href": "jobs.css",
+   "bytes": 15887,
+   "lines": 195,
+   "rules": 83
+  },
+  {
+   "href": "console.css",
+   "bytes": 65938,
+   "lines": 961,
+   "rules": 292
+  },
+  {
+   "href": "turns.css",
+   "bytes": 9527,
+   "lines": 132,
+   "rules": 64
+  },
+  {
+   "href": "rows.css",
+   "bytes": 31091,
+   "lines": 586,
+   "rules": 181
+  },
+  {
+   "href": "overlays.css",
+   "bytes": 46236,
+   "lines": 643,
+   "rules": 275
+  },
+  {
+   "href": "rowstrips.css",
+   "bytes": 21032,
+   "lines": 280,
+   "rules": 133
+  },
+  {
+   "href": "boardchips.css",
+   "bytes": 17736,
+   "lines": 308,
+   "rules": 109
+  },
+  {
+   "href": "assistant.css",
+   "bytes": 20117,
+   "lines": 281,
+   "rules": 98
+  },
+  {
+   "href": "feedback.css",
+   "bytes": 30977,
+   "lines": 670,
+   "rules": 226
+  },
+  {
+   "href": "assistant-panes.css",
+   "bytes": 17910,
+   "lines": 240,
+   "rules": 126
+  },
+  {
+   "href": "initiatives.css",
+   "bytes": 87535,
+   "lines": 1461,
+   "rules": 406
+  },
+  {
+   "href": "panes.css",
+   "bytes": 16615,
+   "lines": 184,
+   "rules": 120
+  },
+  {
+   "href": "queue.css",
+   "bytes": 12924,
+   "lines": 132,
+   "rules": 76
+  },
+  {
+   "href": "pipeline.css",
+   "bytes": 52512,
+   "lines": 542,
+   "rules": 263
+  },
+  {
+   "href": "late.css",
+   "bytes": 12343,
+   "lines": 234,
+   "rules": 54
+  },
+  {
+   "href": "chart.css",
+   "bytes": 49971,
+   "lines": 743,
+   "rules": 237
+  },
+  {
+   "href": "core/pipeline-card.css",
+   "bytes": 5583,
+   "lines": 72,
+   "rules": 51
+  },
+  {
+   "href": "core/task-card.css",
+   "bytes": 4287,
+   "lines": 51,
+   "rules": 16
+  }
+ ]
+}
