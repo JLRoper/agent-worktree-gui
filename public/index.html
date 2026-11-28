@@ -192,6 +192,18 @@
             <dd>Who claims the repo right now: the claims in its .agentboard folder whose PID is alive, with the stale count in its tooltip. Explained in Settings &gt; Board, under The board chip.</dd>
           </dl>
         </div>
+
+        <div class="settings-row settings-gap" id="maintenance-targets-row" title="The three places this panel writes disposable files, each with the size it holds now and how many files that is. Preview counts what a clean would remove and removes nothing; Clean removes and answers with what went and how many entries a bounded run left behind. The sizes are a real walk of each folder on the server, so Refresh sizes asks again rather than showing a cached number.">
+          <span>Storage &amp; cleanup <span class="settings-info">ⓘ</span></span>
+          <button type="button" id="btn-maintenance-refresh" title="walk every target again and repaint its size and file count">Refresh sizes</button>
+        </div>
+        <div class="maintenance" id="maintenance-targets"></div>
+
+        <div class="settings-row settings-gap" id="maintenance-processes-row" title="A read-only census of the processes this panel started: sandbox panels (with the age of the oldest), test runners, and panels whose parent process is gone. Nothing here is ended from this tab.">
+          <span>Processes <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="maintenance-processes-summary">not read</span>
+        </div>
+        <div class="maintenance-processes" id="maintenance-processes">process census not read yet</div>
       </div>
 
       <div class="settings-group" id="settings-panel-prompt" data-settings-group="prompt" role="tabpanel" aria-labelledby="settings-tab-prompt" hidden>
