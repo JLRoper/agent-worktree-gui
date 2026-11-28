@@ -46,6 +46,14 @@
 // Published on globalThis as `wtSearchPopover`, loaded as a classic script by public/index.html before
 // assistant.js, and imported by test/search-popover.test.js - the same load contract public/core/search-scroll.js
 // has.
+//
+// UNITS. A rect from `getBoundingClientRect` and a pointer's `clientX/Y` arrive in VISUAL px, while a length written
+// to `style.left`/`style.width` is LAYOUT px: Settings > Display's zoom scales the page (`applyZoom` in
+// public/settings.js writes `documentElement.style.zoom`), so at 110% a box at layout 1200 measures 1320 and a style
+// length of 1320 lands at 1452. EVERY number this module writes is a layout number, so a rect and a pointer are
+// divided by the zoom on the way in and nothing else changes. Without that divide the popover opened 147px right of
+// the 55px search box at 110%, hung 133px past the window's right edge, and every drag step carried it a tenth of its
+// own position further than the pointer - the "snaps out from underneath your mouse pointer" the reader reported.
 (function (root) {
   "use strict";
 
@@ -54,6 +62,46 @@
     return Number.isFinite(n) ? n : fallback;
   };
   const clamp = (value, lo, hi) => Math.min(Math.max(value, lo), Math.max(lo, hi));
+
+  // The page's layout scale. `documentElement.style.zoom` is what applyZoom writes; a page nobody has zoomed
+  // reports "1" (or an empty string, which parses to NaN and falls back to 1). Guarded for the unit test's DOM,
+  // which has no documentElement and no getComputedStyle.
+  function zoomScale() {
+    const doc = root.document;
+    const el = doc && doc.documentElement;
+    const read = root.getComputedStyle;
+    if (!el || typeof read !== "function") return 1;
+    const z = parseFloat(read(el).zoom);
+    return Number.isFinite(z) && z > 0 ? z : 1;
+  }
+
+  // The visible page in LAYOUT px: `innerWidth` is the viewport in CSS px, and a length written to style is
+  // multiplied by the zoom, so only `innerWidth / zoom` of the page, in layout px, is on screen. A zoomed page
+  // therefore clamps the popover to the part of the layout the reader can actually see.
+  function viewportBox() {
+    const z = zoomScale();
+    const win = root.window || {};
+    const doc = root.document;
+    const de = doc && doc.documentElement;
+    return {
+      vw: num(win.innerWidth) / z || num(de && de.clientWidth),
+      vh: num(win.innerHeight) / z || num(de && de.clientHeight),
+    };
+  }
+
+  // A node's rectangle in LAYOUT px: the one conversion every read passes through.
+  function layoutRect(el) {
+    const z = zoomScale();
+    const r = el.getBoundingClientRect();
+    return {
+      left: num(r.left) / z,
+      top: num(r.top) / z,
+      right: num(r.right) / z,
+      bottom: num(r.bottom) / z,
+      width: num(r.width) / z,
+      height: num(r.height) / z,
+    };
+  }
 
   // The default geometry: the assistant's popover's old numbers, now applied from the box's LEFT edge. A second bar
   // may narrow or widen it, but it does not get a different RULE - only different numbers. `squeeze` is the narrowest
@@ -227,8 +275,7 @@
     function applyMoved() {
       if (!moved) return null;
       const o = options();
-      const vw = root.window?.innerWidth || 0;
-      const vh = root.window?.innerHeight || 0;
+      const { vw, vh } = viewportBox();
       const width = Math.min(Math.max(o.minWidth, num(moved.width)), Math.max(o.minWidth, vw - o.pad * 2));
       const height =
         moved.height == null ? null : Math.min(Math.max(o.minHeight, num(moved.height)), Math.max(o.minHeight, vh - o.pad * 2));
@@ -257,8 +304,14 @@
       if (pop.hidden) return null;
       ensureChrome();
       if (moved) return applyMoved();
-      const box = (anchor || input).getBoundingClientRect();
-      const g = placeGeometry({ box, viewportWidth: root.window?.innerWidth || 0, viewportHeight: root.window?.innerHeight || 0, options: placeOptions });
+      // A redraw that lands between the press and the first move (an answer for a keystroke still in flight) must not
+      // draw the anchored default under a pointer that is holding the strip: while a drag is in progress the box is
+      // already where the reader grabbed it, so there is nothing to place. `moved` stays null until a move, so a
+      // press that never moves leaves the anchored default following its box as it always did.
+      if (drag) return null;
+      const box = layoutRect(anchor || input);
+      const { vw, vh } = viewportBox();
+      const g = placeGeometry({ box, viewportWidth: vw, viewportHeight: vh, options: placeOptions });
       pop.style.width = `${g.width}px`;
       pop.style.left = `${g.left}px`;
       pop.style.top = `${g.top}px`;
@@ -269,12 +322,17 @@
 
     function beginDrag(kind, e) {
       if (pop.hidden || drag) return;
-      const r = pop.getBoundingClientRect();
+      const z = zoomScale();
+      const r = layoutRect(pop);
+      const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+      // The PRESS itself takes the pointer's position and the rectangle it grabbed. `moved` is not written here: a
+      // press that never moves must not become a moved popover (it would stop following its box), and `place` already
+      // leaves a dragging box alone.
       drag = {
         kind,
-        x: num(e.clientX),
-        y: num(e.clientY),
-        rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+        x: num(e.clientX) / z,
+        y: num(e.clientY) / z,
+        rect,
       };
       e.preventDefault?.();
       e.stopPropagation?.();
@@ -286,13 +344,15 @@
 
     function dragMove(e) {
       if (!drag) return;
+      const z = zoomScale();
+      const { vw, vh } = viewportBox();
       const g = dragGeometry({
         kind: drag.kind,
         start: drag.rect,
-        dx: num(e.clientX) - drag.x,
-        dy: num(e.clientY) - drag.y,
-        viewportWidth: root.window?.innerWidth || 0,
-        viewportHeight: root.window?.innerHeight || 0,
+        dx: num(e.clientX) / z - drag.x,
+        dy: num(e.clientY) / z - drag.y,
+        viewportWidth: vw,
+        viewportHeight: vh,
         options: placeOptions,
       });
       moved = { left: g.left, top: g.top, width: g.width, height: g.height };

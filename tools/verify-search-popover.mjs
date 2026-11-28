@@ -8,12 +8,22 @@
 //      span's, not the pane's. The pre-fix rule aligned right edges, so a 250px popover hung 140px left of a 55px
 //      box; the gate prints both rectangles and the old right-aligned rectangle beside them.
 //   2. MOVED. A drag on the strip across the popover's top moves it by the pointer's travel, the caret stays in the
-//      box, and the arrow walk + the scroller follow still put the current row inside the list's own band.
+//      box, and the arrow walk + the scroller follow still put the current row inside the list's own band. The drag
+//      is then walked in EIGHT steps with the box read after each one: every reading must be within 2px of the
+//      pointer's grab offset, and no step may move the box more than 2px beyond the pointer's own step. A QUERY
+//      typed mid-drag (its answer is the redraw) must move the box 0px, and a redraw between the press and the
+//      first move must not re-anchor it under the held strip.
 //   3. RESIZED. A drag on the bottom-right grip grows it by the pointer's travel; dragging past the floor stops at
-//      the minimum width and height, and the walk's current row is still visible afterwards.
+//      the minimum width and height, and the walk's current row is still visible afterwards. The resize is walked in
+//      eight steps too, and the list is checked to stay inside the resized box. After the drop the rectangle
+//      survives a keystroke and a re-render and is only forgotten by a close.
 //   4. RESET ON CLOSE. Each of Escape, the popover's own x and an outside press closes it; every reopen draws the
 //      anchored default again (the same four numbers). A SCOPE change resets the rectangle while the list stays open.
-//   5. THE HOT AGENT BAR does the same. Its popover hangs under its opener button: left edge at the button's left,
+//   5. ZOOMED. Settings > Display's zoom is a layout scale, so a rect and a pointer are VISUAL px while a style length
+//      is LAYOUT px. At 110% the popover must still open within 2px of the input and track the pointer within 2px;
+//      before the unit conversion it opened 147.1px right and 13.5px low of the input and jumped up to 26.2px per
+//      drag step, sliding out from under the pointer.
+//   6. THE HOT AGENT BAR does the same. Its popover hangs under its opener button: left edge at the button's left,
 //      top edge 6px under its bottom, its own head box just inside - the old rule put it 296px to the LEFT of the
 //      button. The drag, the grip, the walk and the three closes are repeated on that bar.
 //
@@ -239,6 +249,20 @@ const waitHotOpen = async (page) => {
   await page.waitForFunction(() => document.querySelectorAll("#ha-search-list [data-search-hit]").length > 0, null, { timeout: 15000 });
   await page.waitForTimeout(150);
 };
+// Two animation frames: a style write is synchronous, but a redraw the page schedules lands in the next frame, so a
+// step read after this is the frame the reader saw rather than the one before it.
+const settled = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+const r1 = (n) => Math.round(Number(n) * 10) / 10;
+// Wait until an answer for `query` has been drawn: the count names the query only after the bar rendered it.
+const waitAnswer = (page, query) =>
+  page.waitForFunction(
+    (q) => {
+      const n = document.getElementById("as-search-n");
+      return Boolean(n && !n.hidden && n.dataset.searchQuery === q && Number(n.dataset.searchDisplayed) > 0);
+    },
+    query,
+    { timeout: 10000 },
+  );
 // Are the four numbers of the anchored default? `input`/`opener` is the box the bar anchored to.
 const anchored = (m, boxEl, popEl) => boxEl && popEl && near(popEl.left, boxEl.left, 1) && near(popEl.top, boxEl.bottom + GAP, 1);
 
@@ -266,6 +290,10 @@ try {
       console.log(`      the old right-aligned rectangle would have been ${defaultM.span.right - defaultM.pop.width}px (${Math.round((defaultM.input.left - (defaultM.span.right - defaultM.pop.width)) * 10) / 10}px left of the input)`);
       v.ok("the popover's top edge sits at the input's bottom edge", near(defaultM.pop.top, defaultM.input.bottom + GAP, 1.5), `${defaultM.pop.top} vs ${defaultM.input.bottom} + ${GAP}`);
       v.ok("the popover's left edge is the INPUT's own left edge", near(defaultM.pop.left, defaultM.input.left, 1), `${defaultM.pop.left} vs ${defaultM.input.left}`);
+      // The brief's clause (a): the two deltas, printed, and both inside 2px.
+      const anchorDelta = { left: r1(defaultM.pop.left - defaultM.input.left), top: r1(defaultM.pop.top - (defaultM.input.bottom + GAP)) };
+      console.log(`      anchor deltas: left ${anchorDelta.left}px from the input's left, top ${anchorDelta.top}px from input.bottom + ${GAP}`);
+      v.ok("the open position is within 2px of the input's left and bottom plus the gap", Math.abs(anchorDelta.left) <= 2 && Math.abs(anchorDelta.top) <= 2, JSON.stringify(anchorDelta));
       v.ok("the popover is not drawn at the pane's left edge", defaultM.pop.left - defaultM.pane.left > 40, `${Math.round((defaultM.pop.left - defaultM.pane.left) * 10) / 10}px inside the pane's left edge`);
       v.ok("the popover stays inside the window", defaultM.pop.right <= defaultM.viewport.width - 7, `right ${defaultM.pop.right} of ${defaultM.viewport.width}`);
       v.ok("the popover is wider than the box and grows to the RIGHT of it", defaultM.pop.width > defaultM.input.width && defaultM.pop.left >= defaultM.input.left - 1, `pop ${defaultM.pop.width}px, box ${defaultM.input.width}px`);
@@ -298,6 +326,257 @@ try {
       await waitOpen(page);
       record.steps.push({ step: "assistant-dragged", before: beforeDrag, after: dragM, walk: walked, afterAnswer: afterType });
       await shot(page, "02-assistant-dragged-1760x1000");
+
+      // ---- 2b. EIGHT INTERMEDIATE MOVES: the popover tracks the pointer's grab offset, with a redraw mid-drag ------
+      // The reader's own complaint: the box "snaps out from underneath your mouse pointer regularly" while dragging
+      // or resizing. This walks the drag in eight steps and reads the box after each one; a move that recomputed from
+      // a stale rectangle (or a redraw that cleared the moved placement) shows as a jump between two consecutive
+      // readings, and the distance is printed rather than described.
+      const grab = await page.evaluate(() => {
+        const strip = document.querySelector("#as-search-pop [data-search-drag]");
+        const pop = document.getElementById("as-search-pop");
+        const s = strip.getBoundingClientRect();
+        const p = pop.getBoundingClientRect();
+        return { x: s.left + s.width / 2, y: s.top + s.height / 2, pop: { left: p.left, top: p.top, width: p.width, height: p.height } };
+      });
+      const grabX = grab.x - grab.pop.left;
+      const grabY = grab.y - grab.pop.top;
+      const MOVE_DX = -200;
+      const MOVE_DY = 120;
+      const MOVE_STEPS = 8;
+      await page.mouse.move(grab.x, grab.y);
+      await page.mouse.down();
+      const moves = [];
+      let midDrag = null;
+      for (let i = 1; i <= MOVE_STEPS; i += 1) {
+        if (i === 5) {
+          // A query typed at the fourth move: the answer lands as a redraw while the button is still down. The caret
+          // is still in the box (the strip's mousedown is preventative), so the keys go where a reader's would.
+          const beforeRedraw = await page.evaluate(MEASURE);
+          await page.keyboard.type(" assistant");
+          await waitAnswer(page, "saffron assistant");
+          await settled(page);
+          const afterRedraw = await page.evaluate(MEASURE);
+          midDrag = {
+            before: { left: beforeRedraw.pop.left, top: beforeRedraw.pop.top, right: beforeRedraw.pop.right, bottom: beforeRedraw.pop.bottom },
+            after: { left: afterRedraw.pop.left, top: afterRedraw.pop.top, right: afterRedraw.pop.right, bottom: afterRedraw.pop.bottom },
+            reset: { left: r1(afterRedraw.pop.left - beforeRedraw.pop.left), top: r1(afterRedraw.pop.top - beforeRedraw.pop.top) },
+            anchoredLeft: r1(afterRedraw.pop.left - afterRedraw.input.left),
+            anchoredTop: r1(afterRedraw.pop.top - (afterRedraw.input.bottom + GAP)),
+            query: await page.inputValue("#as-search-q"),
+          };
+          console.log(`      mid-drag redraw: pop moved ${JSON.stringify(midDrag.reset)} (the anchored default would be ${midDrag.anchoredLeft}, ${midDrag.anchoredTop} off the input)`);
+        }
+        const tx = grab.x + (MOVE_DX * i) / MOVE_STEPS;
+        const ty = grab.y + (MOVE_DY * i) / MOVE_STEPS;
+        await page.mouse.move(tx, ty);
+        await settled(page);
+        const m = await page.evaluate(MEASURE);
+        moves.push({ i, pointer: { x: r1(tx), y: r1(ty) }, left: m.pop.left, top: m.pop.top, wantLeft: r1(tx - grabX), wantTop: r1(ty - grabY) });
+      }
+      const moveErr = moves.map((s) => Math.max(Math.abs(s.left - s.wantLeft), Math.abs(s.top - s.wantTop)));
+      const maxMoveErr = Math.max(...moveErr);
+      const jumps = moves.map((s, i) => {
+        const prevL = i ? moves[i - 1].left : grab.pop.left;
+        const prevT = i ? moves[i - 1].top : grab.pop.top;
+        return Math.max(Math.abs(s.left - (prevL + MOVE_DX / MOVE_STEPS)), Math.abs(s.top - (prevT + MOVE_DY / MOVE_STEPS)));
+      });
+      const maxJump = r1(Math.max(...jumps));
+      console.log(`      eight moves: worst pointer offset ${r1(maxMoveErr)}px, largest jump between moves ${maxJump}px`);
+      for (const s of moves) console.log(`        move ${s.i}: pointer ${s.pointer.x},${s.pointer.y} -> pop ${s.left},${s.top} (wanted ${s.wantLeft},${s.wantTop}, off ${r1(Math.max(Math.abs(s.left - s.wantLeft), Math.abs(s.top - s.wantTop)))})`);
+      v.ok("eight intermediate moves keep the popover within 2px of the grab offset", maxMoveErr <= 2, `worst ${r1(maxMoveErr)}px`);
+      v.ok("no move jumps the popover more than 2px beyond the pointer's own step", maxJump <= 2, `largest jump ${maxJump}px`);
+      v.ok("a query typed mid-drag does not reset the position", Math.abs(midDrag.reset.left) <= 2 && Math.abs(midDrag.reset.top) <= 2, `moved ${JSON.stringify(midDrag.reset)} on the redraw`);
+      v.ok("the mid-drag redraw draws the new answer", midDrag.query === "saffron assistant" && (await page.evaluate(WALK)).ass.total > 0, midDrag.query);
+      const afterMoves = await page.evaluate(MEASURE);
+      v.ok("the drag still holds the caret in the box after eight moves and a redraw", afterMoves.active === "as-search-q", `active ${afterMoves.active}`);
+      record.steps.push({ step: "assistant-eight-moves", grab: grab.pop, moves, maxMoveErr: r1(maxMoveErr), maxJump, midDrag });
+      await shot(page, "02b-assistant-mid-drag-1760x1000");
+      await page.mouse.up();
+      await settled(page);
+      const dropped = await page.evaluate(MEASURE);
+      v.ok("the dropped position is the last move's position", near(dropped.pop.left, moves[MOVE_STEPS - 1].left, 1) && near(dropped.pop.top, moves[MOVE_STEPS - 1].top, 1), `dropped ${dropped.pop.left},${dropped.pop.top} vs ${moves[MOVE_STEPS - 1].left},${moves[MOVE_STEPS - 1].top}`);
+
+      // ---- 2c. the corner resize tracks the pointer by the same rule ----------------------------------------------
+      const grip = await page.evaluate(() => {
+        const g = document.querySelector("#as-search-pop [data-search-grip]");
+        const pop = document.getElementById("as-search-pop");
+        const r = g.getBoundingClientRect();
+        const p = pop.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2, pop: { left: p.left, top: p.top, width: p.width, height: p.height } };
+      });
+      const RESIZE_DX = 160;
+      const RESIZE_DY = 120;
+      const RESIZE_STEPS = 8;
+      await page.mouse.move(grip.x, grip.y);
+      await page.mouse.down();
+      const sizes = [];
+      for (let i = 1; i <= RESIZE_STEPS; i += 1) {
+        await page.mouse.move(grip.x + (RESIZE_DX * i) / RESIZE_STEPS, grip.y + (RESIZE_DY * i) / RESIZE_STEPS);
+        await settled(page);
+        const m = await page.evaluate(MEASURE);
+        sizes.push({ i, left: m.pop.left, top: m.pop.top, width: m.pop.width, height: m.pop.height, wantWidth: r1(grip.pop.width + (RESIZE_DX * i) / RESIZE_STEPS), wantHeight: r1(grip.pop.height + (RESIZE_DY * i) / RESIZE_STEPS) });
+      }
+      await page.mouse.up();
+      await settled(page);
+      const resizeErr = sizes.map((s) => Math.max(Math.abs(s.width - s.wantWidth), Math.abs(s.height - s.wantHeight)));
+      const maxResizeErr = Math.max(...resizeErr);
+      const sizeJumps = sizes.map((s, i) => {
+        const prevW = i ? sizes[i - 1].width : grip.pop.width;
+        const prevH = i ? sizes[i - 1].height : grip.pop.height;
+        return Math.max(Math.abs(s.width - (prevW + RESIZE_DX / RESIZE_STEPS)), Math.abs(s.height - (prevH + RESIZE_DY / RESIZE_STEPS)));
+      });
+      const maxSizeJump = r1(Math.max(...sizeJumps));
+      const resizeEnd = await page.evaluate(MEASURE);
+      const resizeInside = await page.evaluate(() => {
+        const pop = document.getElementById("as-search-pop");
+        const p = pop.getBoundingClientRect();
+        const rows = [...pop.querySelectorAll("[data-search-hit]")];
+        const wide = rows.filter((row) => {
+          const r = row.getBoundingClientRect();
+          return r.right > p.right + 1 || r.left < p.left - 1;
+        });
+        const gripEl = pop.querySelector("[data-search-grip]");
+        const g = gripEl.getBoundingClientRect();
+        return {
+          rows: rows.length,
+          outside: wide.length,
+          scrolls: getComputedStyle(pop).overflowY === "auto",
+          gripBottom: Math.round((p.bottom - g.bottom) * 10) / 10,
+          scrollHeight: pop.scrollHeight,
+          clientHeight: pop.clientHeight,
+        };
+      });
+      console.log(`      resize: worst size offset ${r1(maxResizeErr)}px, largest jump between steps ${maxSizeJump}px, rows outside the box ${resizeInside.outside}/${resizeInside.rows}`);
+      for (const s of sizes) console.log(`        step ${s.i}: pop ${s.width}x${s.height} (wanted ${s.wantWidth}x${s.wantHeight}) at ${s.left},${s.top}`);
+      v.ok("eight resize moves keep the box within 2px of the pointer's travel", maxResizeErr <= 2, `worst ${r1(maxResizeErr)}px`);
+      v.ok("no resize step jumps the box more than 2px beyond the pointer's own step", maxSizeJump <= 2, `largest jump ${maxSizeJump}px`);
+      v.ok("the resize keeps the box's top-left where it was", near(resizeEnd.pop.left, grip.pop.left, 1) && near(resizeEnd.pop.top, grip.pop.top, 1), `${resizeEnd.pop.left},${resizeEnd.pop.top} vs ${grip.pop.left},${grip.pop.top}`);
+      v.ok("the list stays inside the resized box", resizeInside.outside === 0 && resizeInside.scrolls && resizeInside.gripBottom <= 6, `${resizeInside.outside} of ${resizeInside.rows} rows wide of the box, scrolls ${resizeInside.scrolls}, grip ${resizeInside.gripBottom}px above the foot`);
+      record.steps.push({ step: "assistant-resize-steps", grip: grip.pop, sizes, maxResizeErr: r1(maxResizeErr), maxSizeJump, inside: resizeInside });
+      await shot(page, "02c-assistant-resized-steps-1760x1000");
+
+      // ---- 2d. the drop survives a keystroke and a re-render; a close forgets it ----------------------------------
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(220);
+      const afterKeystroke = await page.evaluate(MEASURE);
+      v.ok("a keystroke after the drop leaves the rectangle alone", near(afterKeystroke.pop.left, resizeEnd.pop.left, 1) && near(afterKeystroke.pop.top, resizeEnd.pop.top, 1) && near(afterKeystroke.pop.width, resizeEnd.pop.width, 1), `pop ${JSON.stringify(afterKeystroke.pop)} vs ${JSON.stringify(resizeEnd.pop)}`);
+      await typeQuery(page, "saffron");
+      const afterReRender = await page.evaluate(MEASURE);
+      v.ok("a re-render after the drop leaves the rectangle alone", near(afterReRender.pop.left, resizeEnd.pop.left, 1) && near(afterReRender.pop.top, resizeEnd.pop.top, 1) && near(afterReRender.pop.height, resizeEnd.pop.height, 1), `pop ${JSON.stringify(afterReRender.pop)} vs ${JSON.stringify(resizeEnd.pop)}`);
+      record.steps.push({ step: "assistant-drop-survives", dropped: resizeEnd, afterKeystroke, afterReRender });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+      await typeQuery(page, FILTER);
+      await waitOpen(page);
+      const reopenedAfterDrop = await page.evaluate(MEASURE);
+      const reopenDelta = { left: r1(reopenedAfterDrop.pop.left - reopenedAfterDrop.input.left), top: r1(reopenedAfterDrop.pop.top - (reopenedAfterDrop.input.bottom + GAP)) };
+      console.log(`      reopen after the drop: deltas ${JSON.stringify(reopenDelta)}, ${reopenedAfterDrop.pop.width}x${reopenedAfterDrop.pop.height}`);
+      v.ok("a close and reopen puts the box back under the input, within 2px", Math.abs(reopenDelta.left) <= 2 && Math.abs(reopenDelta.top) <= 2, JSON.stringify(reopenDelta));
+      v.ok("a close and reopen forgets the reader's size", near(reopenedAfterDrop.pop.width, defaultM.pop.width, 1) && near(reopenedAfterDrop.pop.height, defaultM.pop.height, 1), `${reopenedAfterDrop.pop.width}x${reopenedAfterDrop.pop.height} vs ${defaultM.pop.width}x${defaultM.pop.height}`);
+      record.steps.push({ step: "assistant-reopen-after-drop", reopened: reopenedAfterDrop, delta: reopenDelta });
+      await shot(page, "02d-assistant-reopened-after-drop-1760x1000");
+
+      // ---- 2e. THE SAME TWO RULES ON A ZOOMED PAGE -----------------------------------------------------------------
+      // Settings > Display's zoom is a LAYOUT scale on documentElement (applyZoom in public/settings.js): a rect and a
+      // pointer arrive in VISUAL px, a length written to style is LAYOUT px. A placement that writes the visual
+      // rectangle straight back opens the popover zoom-times too far from the input; a drag whose start rect and
+      // deltas are visual while the writes are layout moves the box zoom-times too far on every step, so it slides
+      // out from under the pointer a little more each move. At 110% that is the reader's report, measured.
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = "1.1";
+      });
+      await settled(page);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+      await typeQuery(page, FILTER);
+      await waitOpen(page);
+      const zoomAnchored = await page.evaluate(MEASURE);
+      const zoomDelta = { left: r1(zoomAnchored.pop.left - zoomAnchored.input.left), top: r1(zoomAnchored.pop.top - (zoomAnchored.input.bottom + GAP)) };
+      console.log(`      zoom 110%: input ${JSON.stringify(zoomAnchored.input)} pop ${JSON.stringify(zoomAnchored.pop)} deltas ${JSON.stringify(zoomDelta)} (visual px)`);
+      v.ok("at 110% zoom the open position is still within 2px of the input", Math.abs(zoomDelta.left) <= 2 && Math.abs(zoomDelta.top) <= 2, JSON.stringify(zoomDelta));
+      const zgrab = await page.evaluate(() => {
+        const strip = document.querySelector("#as-search-pop [data-search-drag]");
+        const pop = document.getElementById("as-search-pop");
+        const s = strip.getBoundingClientRect();
+        const p = pop.getBoundingClientRect();
+        return { x: s.left + s.width / 2, y: s.top + s.height / 2, pop: { left: p.left, top: p.top } };
+      });
+      const zgx = zgrab.x - zgrab.pop.left;
+      const zgy = zgrab.y - zgrab.pop.top;
+      const ZDX = -160;
+      const ZDY = 100;
+      await page.mouse.move(zgrab.x, zgrab.y);
+      await page.mouse.down();
+      const zmoves = [];
+      for (let i = 1; i <= 8; i += 1) {
+        const tx = zgrab.x + (ZDX * i) / 8;
+        const ty = zgrab.y + (ZDY * i) / 8;
+        await page.mouse.move(tx, ty);
+        await settled(page);
+        const m = await page.evaluate(MEASURE);
+        zmoves.push({ i, left: m.pop.left, top: m.pop.top, wantLeft: r1(tx - zgx), wantTop: r1(ty - zgy) });
+      }
+      await page.mouse.up();
+      await settled(page);
+      const zErr = zmoves.map((s) => Math.max(Math.abs(s.left - s.wantLeft), Math.abs(s.top - s.wantTop)));
+      const zJumps = zmoves.map((s, i) => {
+        const prevL = i ? zmoves[i - 1].left : zgrab.pop.left;
+        const prevT = i ? zmoves[i - 1].top : zgrab.pop.top;
+        return Math.max(Math.abs(s.left - (prevL + ZDX / 8)), Math.abs(s.top - (prevT + ZDY / 8)));
+      });
+      const zMaxErr = r1(Math.max(...zErr));
+      const zMaxJump = r1(Math.max(...zJumps));
+      console.log(`      zoom 110%: eight moves worst offset ${zMaxErr}px, largest jump ${zMaxJump}px`);
+      for (const s of zmoves) console.log(`        move ${s.i}: pop ${s.left},${s.top} wanted ${s.wantLeft},${s.wantTop}`);
+      v.ok("at 110% zoom eight moves keep the popover within 2px of the grab offset", zMaxErr <= 2, `worst ${zMaxErr}px`);
+      v.ok("at 110% zoom no move jumps the popover more than 2px", zMaxJump <= 2, `largest jump ${zMaxJump}px`);
+      record.steps.push({ step: "assistant-zoom-110", anchored: zoomAnchored, delta: zoomDelta, moves: zmoves, maxErr: zMaxErr, maxJump: zMaxJump });
+      await shot(page, "02e-assistant-zoom-110-1760x1000");
+      // Back to the page the rest of the gate documents.
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = "";
+      });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(250);
+      await typeQuery(page, FILTER);
+      await waitOpen(page);
+
+      // ---- 2f. a redraw between the PRESS and the first MOVE does not re-anchor under the pointer -----------------
+      // The sharpest form of the mid-drag redraw: the button is down on the strip and the pointer has not moved yet.
+      // A placement that still reads the anchor while a drag is in progress draws the default under the held strip,
+      // and the first move snaps it back. The press owns the rectangle, so the answer changes the rows and nothing
+      // else. The box is moved OFF its anchor first, so a reset would be a visible distance rather than 0.
+      await dragBy(page, "#as-search-pop [data-search-drag]", -200, 60);
+      const pgrab = await page.evaluate(() => {
+        const strip = document.querySelector("#as-search-pop [data-search-drag]");
+        const pop = document.getElementById("as-search-pop");
+        const s = strip.getBoundingClientRect();
+        const p = pop.getBoundingClientRect();
+        return { x: s.left + s.width / 2, y: s.top + s.height / 2, pop: { left: p.left, top: p.top } };
+      });
+      await page.mouse.move(pgrab.x, pgrab.y);
+      await page.mouse.down();
+      await settled(page);
+      const pressHeld = await page.evaluate(MEASURE);
+      await page.keyboard.type(" assistant");
+      await waitAnswer(page, "saffron assistant");
+      await settled(page);
+      const pressAfterRedraw = await page.evaluate(MEASURE);
+      const pressReset = { left: r1(pressAfterRedraw.pop.left - pressHeld.pop.left), top: r1(pressAfterRedraw.pop.top - pressHeld.pop.top) };
+      console.log(`      redraw before the first move: pop moved ${JSON.stringify(pressReset)} (a reset to the anchor would be ${r1(pressAfterRedraw.input.left - pressHeld.pop.left)}px)`);
+      v.ok("a redraw between the press and the first move leaves the box under the pointer", Math.abs(pressReset.left) <= 2 && Math.abs(pressReset.top) <= 2, `moved ${JSON.stringify(pressReset)}`);
+      await page.mouse.move(pgrab.x - 60, pgrab.y - 40);
+      await settled(page);
+      const pressMoved = await page.evaluate(MEASURE);
+      v.ok("the first move after that redraw tracks the pointer", near(pressMoved.pop.left, pressAfterRedraw.pop.left - 60, 2) && near(pressMoved.pop.top, pressAfterRedraw.pop.top - 40, 2), `pop ${pressMoved.pop.left},${pressMoved.pop.top} from ${pressAfterRedraw.pop.left},${pressAfterRedraw.pop.top}`);
+      await page.mouse.up();
+      await settled(page);
+      record.steps.push({ step: "assistant-press-redraw", held: pressHeld, after: pressAfterRedraw, reset: pressReset, moved: pressMoved });
+      await shot(page, "02f-assistant-press-redraw-1760x1000");
+
+
+
 
       // ---- 3. the grip resizes it, with a floor -------------------------------------------------------------------
       const beforeResize = await page.evaluate(MEASURE);
