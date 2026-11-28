@@ -1429,9 +1429,14 @@
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->
   <script src="/core/type-stream.js"></script>
   <script src="/board/attachments.js"></script>
+  <!-- The chip itself: its construction and every way the reader edits one (build, insert, fold, remove, the
+       Ctrl+Backspace / Ctrl+Delete word delete), cut out of paste-chips.js at row 517. Loaded BEFORE
+       paste-chips.js, because that file's export object is built at load and re-exports nine of these names. -->
+  <script src="/board/chip-edit.js"></script>
   <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
        attachments.js on purpose: a paste of a FILE belongs to that module (it registers its listener first
-       and prevents the default), and this one steps aside for it. -->
+       and prevents the default), and this one steps aside for it. Still the entry point: its surface is the one
+       every caller and probe reads. -->
   <script src="/board/paste-chips.js"></script>
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>

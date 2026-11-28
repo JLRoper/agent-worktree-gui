@@ -49,6 +49,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
+import { readStyleSheets } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -857,7 +858,12 @@ async function browserPhase(pw) {
 // ---- what can only be read off the source ---------------------------------------------------------
 function sourceChecks() {
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
-  const mod = readFileSync(path.join(ROOT, "public", "board", "paste-chips.js"), "utf8");
+  // The chip module is two classic scripts since row 517: board/chip-edit.js carries the atom's construction
+  // and its editing, board/paste-chips.js the paste policy and the surface. Read as the page loads them.
+  const mod = [
+    readFileSync(path.join(ROOT, "public", "board", "chip-edit.js"), "utf8"),
+    readFileSync(path.join(ROOT, "public", "board", "paste-chips.js"), "utf8"),
+  ].join("\n");
   const appLines = app.split(/\r?\n/);
   const modLines = mod.split(/\r?\n/);
   // One reader for every box: no prompt box may be read through `.value` any more.
@@ -874,7 +880,8 @@ function sourceChecks() {
   check("inspected: and it is defined exactly once", modLines.filter((l) => l.startsWith("function readBox(")).length, 1);
   ok("inspected: it serializes a chip back to its text in place", /s\.t === "chip" \? chipText\(s\.id\) : s\.v/.test(mod), "the serializer's chip branch");
   ok("inspected: the chip's text is keyed by id in the panel's state", /state\.pasteChips\.set\(id, \{ text/.test(mod) && /pasteChips: boxChips\.chips/.test(app), "state.pasteChips");
-  const css = readFileSync(path.join(ROOT, "public", "style.css"), "utf8");
+  // The panel's one sheet was split into per-surface sheets in 1.191.0; read them as the page links them.
+  const css = readStyleSheets({ root: ROOT });
   ok(
     "inspected: the chip is a non-editable inline atom",
     /contenteditable", "false"/.test(mod) && /\.paste-chip \{[\s\S]{0,120}?display: inline-block/.test(css),
@@ -884,7 +891,13 @@ function sourceChecks() {
   ok("inspected: a chip-bearing draft is mirrored for a reload", /sessionStorage\.setItem\(CHIP_DRAFT_KEY/.test(mod), "CHIP_DRAFT_KEY");
   ok("inspected: the 300-character / 5-line threshold is the module's own", /PASTE_CHIP_MIN_CHARS = 300/.test(mod) && /PASTE_CHIP_MIN_LINES = 5/.test(mod), "300 chars, 5 lines");
   const html = readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
-  ok("inspected: the chip module is loaded before app.js", html.indexOf("/board/paste-chips.js") > 0 && html.indexOf("/board/paste-chips.js") < html.indexOf("/app.js"), "script order");
+  ok(
+    "inspected: the chip module is loaded before app.js",
+    html.indexOf("/board/chip-edit.js") > 0 &&
+      html.indexOf("/board/chip-edit.js") < html.indexOf("/board/paste-chips.js") &&
+      html.indexOf("/board/paste-chips.js") < html.indexOf("/app.js"),
+    "script order: chip-edit.js, paste-chips.js, app.js",
+  );
 }
 
 // ---- run -----------------------------------------------------------------------------------------
