@@ -1603,6 +1603,14 @@
        window.WMApp.replies; it declares only, so that order costs nothing and nothing here waits on boot. The two
        delegated listeners the editor owns stay in app.js, with the page's other load-time wiring. -->
   <script src="/board/replies.js"></script>
+  <!-- The add-agent bar, the model picker and the spawn recovery, cut out of app.js (cut 3 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the name a tree is called on the board,
+       the shell-style history both composers recall, a settled card's Continue and re-attach controls, the inline
+       add-agent bar, the one model list every model field reads, and the recovery that lands the reader on a card a
+       spawn has just made. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.spawn; it declares only, so that order costs nothing and nothing here waits on boot. The inline
+       field's own delegated events stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/spawn.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

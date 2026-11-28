@@ -32,7 +32,12 @@ const app = readFileSync(APP_SRC, "utf8").replace(/\r\n/g, "\n");
 // is read when it is there and skipped when it is not.
 const repliesSrc = (() => {
   try {
-    return readFileSync(new URL("../public/board/replies.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    return [
+      readFileSync(new URL("../public/board/replies.js", import.meta.url), "utf8"),
+      readFileSync(new URL("../public/board/spawn.js", import.meta.url), "utf8"),
+    ]
+      .join("\n")
+      .replace(/\r\n/g, "\n");
   } catch {
     return "";
   }
