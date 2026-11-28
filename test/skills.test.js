@@ -20,7 +20,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { parseSkillText, readSkillsConfig, readSkillsIndex, skillSources } from "../lib/skills.js";
+import { parseSkillText, readSkillsConfig, readSkillsIndex, readSkillsIndexCached, skillSources } from "../lib/skills.js";
 
 const LINK_TYPE = process.platform === "win32" ? "junction" : "dir";
 
@@ -288,4 +288,29 @@ test("a gateway that cannot answer leaves every row unverified, with the reason"
   assert.equal(refused.gateway.ok, false);
   assert.match(refused.gateway.reason, /cannot reach the gateway|did not answer/, "an unreachable gateway is a reason too");
   assert.equal(refused.counts.unknown, refused.skills.length);
+});
+
+// readSkillsIndexCached is the route's memo: one walk serves every load inside its ten-second window. The
+// window is real time, so this pins the two things that do not need a clock — the same inputs share the
+// SAME promise (one walk, one gateway ask), and different inputs are their own key.
+test("readSkillsIndexCached serves the same inputs from one walk, and keys per inputs", async (t) => {
+  const dir = sandbox(t);
+  const home = path.join(dir, "hermes");
+  skill(path.join(home, "skills"), "alpha", "name: alpha\ndescription: x\n");
+  const url = await stubGateway(t, { body: { object: "list", data: [{ name: "alpha", description: "Served.", category: null }] } });
+
+  const a = readSkillsIndexCached({ home, configText: "", projects: [], gateway: { url, key: "k" } });
+  const b = readSkillsIndexCached({ home, configText: "", projects: [], gateway: { url, key: "k" } });
+  assert.equal(a, b, "a second load inside the window is the same read, not a second walk");
+  const [ia, ib] = await Promise.all([a, b]);
+  assert.equal(ia, ib, "and both loads see the one answer");
+  assert.equal(ia.gateway.ok, true, "the shared read is the real index, gateway and all");
+
+  const c = readSkillsIndexCached({ home, configText: "", projects: [], gateway: { url, key: "k" } });
+  assert.equal(c, a, "and still the same promise while the window holds");
+
+  const other = path.join(dir, "other-home");
+  const d = readSkillsIndexCached({ home: other, configText: "", projects: [], gateway: { url, key: "k" } });
+  assert.notEqual(d, a, "different inputs are their own key");
+  await d.catch(() => {});
 });

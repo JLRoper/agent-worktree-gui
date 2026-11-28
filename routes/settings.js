@@ -63,7 +63,7 @@ import {
 } from "../lib/hermes-config.js";
 import { listProfiles, saveProfile, deleteProfile, profileWithKey } from "../lib/provider-profiles.js";
 import { matrixBlock, matrixPatchFrom } from "../lib/matrix-bridge.js";
-import { readSkillsIndex } from "../lib/skills.js";
+import { readSkillsIndexCached } from "../lib/skills.js";
 import { readPermissions } from "../lib/gateway-permissions.js";
 import { chartColumnsFrom } from "../lib/chart-columns.js";
 // The initiative permission tier: the four levels, the value a save may write, and the row the Settings select draws.
@@ -148,14 +148,16 @@ export function createSettingsRoutes({
     // root Hermes reads skills from (the profile's own `skills/`, a junctioned directory as its own
     // source, `skills.create_dir`, `skills.external_dirs`, a trusted project's `.hermes/skills`), the
     // name and description out of each SKILL.md, and the gateway's `GET /v1/skills` for what a run is
-    // actually SERVED. Read on demand — the tab is the only caller — so a skill added a minute ago is
-    // there the next time it is opened, and a gateway that cannot answer is a reason in the payload
-    // rather than a failed request.
+    // actually SERVED. The tab is the only caller and the page asks on every load, so this goes through
+    // lib/skills.js's ten-second memo (readSkillsIndexCached): one walk serves every load inside the
+    // window — and a cached answer is served without awaits, which keeps it out of the slow-request ring
+    // while a page-load burst holds the loop. A skill added a minute ago is still there next load, and a
+    // gateway that cannot answer is a reason in the payload rather than a failed request.
     if (route === "/api/settings/skills" && req.method === "GET") {
       sendJson(
         res,
         200,
-        await readSkillsIndex({
+        await readSkillsIndexCached({
           home: hermesHome(),
           projects: registry.projects.map((p) => ({ name: p.name, path: p.path })),
           gateway: { url: jobs.api.url, key: jobs.api.key },
