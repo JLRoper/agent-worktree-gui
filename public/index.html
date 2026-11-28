@@ -1596,6 +1596,13 @@
        before app.js, which calls them by bare name and re-exports them on window.WMApp.approvals; it declares only,
        so that order costs nothing and nothing here waits on boot. -->
   <script src="/board/approvals.js"></script>
+  <!-- The reply box's queue, cut out of app.js (cut 2 of the eight in docs/reports/module-separation-2026-11-28.html's
+       card for public/app.js): the draft a send consumed, the session's own prompts, the held reply and its
+       write-through, the queue's offers and waits, the ghost editor that can only revert on a click-away, and the
+       send and steer paths. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.replies; it declares only, so that order costs nothing and nothing here waits on boot. The two
+       delegated listeners the editor owns stay in app.js, with the page's other load-time wiring. -->
+  <script src="/board/replies.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

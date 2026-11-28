@@ -201,14 +201,19 @@ test("a 404 from the gateway is the gone refusal, and the row settles in the sam
 });
 
 // ── the press on screen: the box and the button grey before the gateway answers ───────────────────────
-// The shipped functions run here — sliced out of public/app.js, not rewritten — over a page reduced to the one
-// `.reply` a card draws: a contenteditable `.reply-box` and the `[data-steer]` button beside it. `apiFetch` is a
-// gate this file holds open by hand, which is what makes "before the response" a state a test can stand in.
-const pageSource = () => readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// The shipped functions run here — sliced out of the page's own classic scripts, not rewritten — over a page reduced
+// to the one `.reply` a card draws: a contenteditable `.reply-box` and the `[data-steer]` button beside it.
+// `apiFetch` is a gate this file holds open by hand, which is what makes "before the response" a state a test can
+// stand in. The steer paths were cut out of app.js into public/board/replies.js (cut 2 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so both files are read and the page order is preserved.
+const pageSource = () =>
+  ["../public/app.js", "../public/board/replies.js"]
+    .map((rel) => readFileSync(new URL(rel, import.meta.url), "utf8").replace(/\r\n/g, "\n"))
+    .join("\n");
 
 function pageRegion(src, name) {
   const at = src.indexOf(`function ${name}(`);
-  assert.ok(at > 0, `public/app.js carries ${name}()`);
+  assert.ok(at > 0, `the page's scripts carry ${name}()`);
   // `async` is part of some of these functions and carries the await this page is built on.
   const start = src.slice(Math.max(0, at - 6), at) === "async " ? at - 6 : at;
   const end = src.indexOf("\n}\n", start);
