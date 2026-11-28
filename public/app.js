@@ -19368,10 +19368,13 @@ async function runMaintenance(target, dryRun) {
     const windowEl = target === "hermes-sessions" ? document.getElementById(MAINTENANCE_WINDOW_ID(target)) : null;
     const olderThanHours = windowEl ? Number(windowEl.value) || 24 : null;
     const payload = olderThanHours ? { target, dryRun, olderThanHours } : { target, dryRun };
+    // A Hermes store prune is followed by a VACUUM and can outlive a minute on a multi-GB state.db; the server keeps
+    // going after a client abort, so the client waits longer than its own patience rather than reporting a failure.
+    const slow = target === "hermes-sessions" || target === "hermes-checkpoints";
     const r = await apiFetch(
       "/api/maintenance/clean",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
-      { timeoutMs: 60000 },
+      { timeoutMs: slow ? 600000 : 60000 },
     );
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error || `HTTP ${r.status}`);
