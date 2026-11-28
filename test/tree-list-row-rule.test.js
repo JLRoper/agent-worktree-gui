@@ -11,7 +11,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The rule moved out of app.js into public/board/worktrees.js (cut 4 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
+const src = readFileSync(new URL("../public/board/worktrees.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "tree list row rule");
 const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
 

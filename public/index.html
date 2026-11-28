@@ -1611,6 +1611,14 @@
        window.WMApp.spawn; it declares only, so that order costs nothing and nothing here waits on boot. The inline
        field's own delegated events stay in app.js with the page's other load-time wiring. -->
   <script src="/board/spawn.js"></script>
+  <!-- The tree list, its delete and rename, and the child tree's cut, out of app.js (cut 4 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): what the server says about the list,
+       the row's lookups and the two homeless-card kinds, the delete and the reader's lock, the rename by hand, the +
+       that cuts a child from the ROW's branch with its kind-and-parent dialog, and the R or I that lifts a local-only
+       kind. Loaded before app.js, which calls them by bare name and re-exports them on window.WMApp.worktrees; it
+       declares only, so that order costs nothing and nothing here waits on boot. The delegated presses that open the
+       dialog and the lift stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/worktrees.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
