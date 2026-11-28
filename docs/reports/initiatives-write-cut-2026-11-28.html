@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 515: the initiative writes leave routes/initiatives.js, and the prefix's five exports stay put</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 200px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  .names { columns:2; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 515: the initiative writes leave routes/initiatives.js</h1>
+<p class="sub">agent-worktree-gui 1.197.1, branch <code>wtgui/row-515-is-one-cut-of-the-module-5a9f60</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>0ce44e77</code>. The tag registry, every write on the prefix and the GET that sits between them move to a new <code>routes/initiatives-write.js</code>, and <code>routes/initiatives.js</code> composes that dispatcher with the read it answers with. All line numbers are on this branch unless a base blob is named.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#515 - the module-separation plan's entry 18</dd>
+  <dt>the plan's card</dt><dd>docs/reports/module-separation-2026-11-28.html at 2ffacfef, the report's own 1.191.3 revision (the page at HEAD is a rewrite that keeps entry 1 only)</dd>
+  <dt>the base</dt><dd>0ce44e77, the turnover branch's tip at the cut (row 578's memo is in it)</dd>
+  <dt>the cut</dt><dd>74c0af87 - <code>routes/initiatives.js</code> (1,284 lines) -&gt; <code>routes/initiatives.js</code> (732) + <code>routes/initiatives-write.js</code> (630)</dd>
+  <dt>the moved block</dt><dd>base blob 698-1,282, 585 lines, byte-identical (sha256 <code>fbd93691aa8e6a1900ff1e624d3e0542030d3bd88f535fc7048d2b68f082fbf2</code> on both sides)</dd>
+  <dt>the exports</dt><dd>5 before, 5 after, 0 missing, 0 added; the new module publishes 1 name</dd>
+  <dt>the focused set</dt><dd>14 files, 179 tests, 176 pass, 3 fail at the base, after the cut and at the merged tree - the same 3</dd>
+  <dt>the wave tests</dt><dd>test/waves-write.test.js 22/22, test/waves-route.test.js 8/8, as at the turnover head</dd>
+  <dt>the live request</dt><dd>one write, two refusals and the prefix's 404, before and after: the same bodies</dd>
+  <dt>the merge</dt><dd>edd9873c - parents 0ce44e77 and 74c0af87, local only</dd>
+  <dt>push / PR</dt><dd>none - the work rolls up into the turnover branch locally, and the reader decides when it lands</dd>
+</dl>
+
+<h2>1. What moved, and what stayed</h2>
+<p>The row is one cut of the module-separation plan: the initiative writes leave <code>routes/initiatives.js</code> for <code>routes/initiatives-write.js</code>, a pure move, with the parent still answering the same five exports. The plan's card for this file (entry 18 of <code>docs/reports/module-separation-2026-11-28.html</code>, read from <code>2ffacfef</code>) names two files for two rows and gives the write half as lines 626-1,212 of a 1,212-line file: "the tag registry, create, the note log, the one write that asks, and archive". That range is the whole request dispatcher from the tag registry's own banner to the prefix's 404, and it is what this row moved.</p>
+<p>The row's sentence about the dependencies is the seam: "the handler already receives every dependency through its options object". <code>createInitiativesRoutes</code> is that options object, so the new module is a factory that takes the same names and returns the same dispatcher, and not one line of the moved code had to be rewritten.</p>
+<p>What stayed in <code>routes/initiatives.js</code>:</p>
+<ul>
+  <li><code>routes/initiatives.js:90</code> <code>INITIATIVES_PATH</code> and <code>:92</code> <code>TAGS_PATH</code>, the two constants the prefix and the mount table match on;</li>
+  <li><code>routes/initiatives.js:147</code> <code>initiativesView</code>, the fold the tab draws, and <code>:402</code> <code>archiveBlockers</code>, the liveness the archive refusal names;</li>
+  <li><code>routes/initiatives.js:438</code> <code>createInitiativesRoutes</code>, its option guards, and the read's memo - <code>cachedView</code>, <code>rebuildView</code>, <code>dropView</code> (<code>:695</code>) and <code>viewStoreKey</code>;</li>
+  <li><code>routes/initiatives.js:701</code> the composition, and <code>:724</code>-<code>:731</code> the prefix guard and the one-line delegation.</li>
+</ul>
+<p>What went to <code>routes/initiatives-write.js</code>: the tag registry's four verbs, the GET with its <code>?profile=1</code> branch and the method guards, the body parse, create, the words, the note log's add/edit/delete, the reader's order, the move that asks, archive and restore. <code>routes/initiatives-write.js:21</code> is the factory, <code>:43</code> the dispatcher, <code>:44</code> the tag banner - the first of the 585 moved lines.</p>
+<div class="note">The GET travels with the dispatcher because the card's range takes it: it sits between the tag registry (whose four verbs are the reason the guard is not a plain GET guard) and the writes, and separating it would have meant reordering the handler, which is a rewrite rather than a move. The read's own half - the fold and the blockers - stays in the parent for row 516, which is the plan's other new file.</div>
+
+<h2>2. The ranges: the card's numbers, re-measured on this base</h2>
+<p>The card's 626-1,212 is a read of the 1,212-line file at <code>2ffacfef</code>. On <code>0ce44e77</code> the file is 1,284 lines and the same block is 698-1,282. The 72-line shift is row 578's own work, above the block: two commits between <code>2ffacfef</code> and the base touch this file, <code>309816a3</code> "the tab's wave read checks its memo against the wave store" (74 insertions, 7 deletions) and <code>4f1dd3e7</code> "the wave key reads the queue file, not the decorated queue view" (7 insertions, 2 deletions), and every hunk they add sits above line 626 in the prelude. The block itself is unchanged by them, which is why the moved text is the card's block and not a rewrite of it.</p>
+<pre>git diff --stat 2ffacfef 0ce44e77 -- routes/initiatives.js
+#  routes/initiatives.js | 80 ++++++++++++++++++++++-----
+#  1 file changed, 80 insertions(+), 8 deletions(-)
+#  every hunk: @@ -56,0 +57,9 @@ ... @@ -615 +680,8 @@ , i.e. all above the dispatcher
+
+git show 0ce44e77:routes/initiatives.js | sed -n '698p;1282p'
+# 698  // ---- the board's tag registry (lib/initiative-tags.js) -----
+# 1282     return true;        (the prefix's 404, the dispatcher's last line)</pre>
+<table>
+  <tr><th>line (base)</th><th>what is there</th><th>why it decides the boundary</th></tr>
+  <tr><td class="n">697</td><td>blank, after the parent's <code>params</code> line</td><td>The start: 698 is the tag registry's banner comment, and the section's own words belong with its code.</td></tr>
+  <tr><td class="n">698-1,282</td><td>the tag registry, the GET, the body parse, and every write to the prefix's 404</td><td>Moved. 585 lines, the card's block with row 578's shift applied.</td></tr>
+  <tr><td class="n">1,283-1,284</td><td><code>  };</code> and <code>}</code></td><td>Stay in the parent as the delegation's own closing: the dispatcher's wrapper is the parent's now.</td></tr>
+</table>
+
+<h2>3. The delegation, and the five exports</h2>
+<p><code>routes/initiatives.js</code> hands the new module the names the moved code used to read from its own closure: the store, the tag registry, the remote-write queue, <code>projectForPath</code>, the transport (<code>sendJson</code>, <code>readBody</code>, <code>authorised</code>), <code>onChange</code>, <code>log</code>, the tier and actor readers, <code>unreadable</code>, the memo (<code>view</code>, <code>cachedView</code>, <code>rebuildView</code>, <code>dropView</code>), <code>nameOf</code> and <code>archiveBlockers</code> - 20 names, destructured in the factory header at <code>routes/initiatives-write.js:21</code>, so every moved line still reads a bare name.</p>
+<p>The dispatcher's signature adds <code>config</code> and <code>params</code>: the parent computes both (the config read and the URL's search params) and passes them in, so the moved block gains no line. That is the whole of the difference between the base block and the block in its new home.</p>
+<pre>node surface.mjs routes/initiatives.js         # before and after
+{"count":5,"names":["INITIATIVES_PATH","TAGS_PATH","archiveBlockers","createInitiativesRoutes","initiativesView"]}
+{"count":5,"names":["INITIATIVES_PATH","TAGS_PATH","archiveBlockers","createInitiativesRoutes","initiativesView"]}
+# REMOVED (none)   ADDED (none)   same set true
+
+node surface.mjs routes/initiatives-write.js   # the new module publishes one name
+{"count":1,"names":["createInitiativeWrites"]}</pre>
+<p>The five, sorted and unchanged:</p>
+<div class="names">INITIATIVES_PATH<br>TAGS_PATH<br>archiveBlockers<br>createInitiativesRoutes<br>initiativesView</div>
+<p>The parent's own top-level declarations are the same, and the partition holds: the base declared eight names at top level (<code>INITIATIVES_PATH</code>, <code>TAGS_PATH</code>, <code>archiveBlockers</code>, <code>createInitiativesRoutes</code>, <code>initiativesView</code>, <code>lastTouched</code>, <code>nameOf</code>, <code>taskRowOf</code>), and the two files now declare those eight plus <code>createInitiativeWrites</code>, none missing and none twice.</p>
+
+<h2>4. The moved block reappears verbatim, and is gone from the parent</h2>
+<p>The new file was assembled from the base blob (<code>git show 0ce44e77:routes/initiatives.js</code>), never from the part-edited parent, and the block that follows the dispatcher's opening line was compared back to it: 585 of 585 lines equal, no inserted, removed or reworded line.</p>
+<pre>moved lines: 585        (base 698-1,282)
+block in the new file: 585 lines          diffs: 0
+sha256(base 698-1,282, LF): fbd93691aa8e6a1900ff1e624d3e0542030d3bd88f535fc7048d2b68f082fbf2
+sha256(new block, LF):      fbd93691aa8e6a1900ff1e624d3e0542030d3bd88f535fc7048d2b68f082fbf2
+distinctive moved lines (40+ chars, not a comment): 133
+of those, still in the parent: 0
+moved top-level declarations still declared in the parent: 0
+  (the six names a name scan reports in both files - list, out, project, rec, tree, view - are per-route locals
+   the read fold declares for itself; none is a moved declaration)</pre>
+<p>Absence was proven by declaration name and by distinctive line, never by raw line membership: <code>}</code>, <code>return true;</code> and the parent's own identical loops match trivially and would read as leftovers that are not there.</p>
+
+<h2>5. The parent's diff adds only what the cut requires</h2>
+<pre>git show --numstat --format='' 74c0af87
+# 630  0  routes/initiatives-write.js
+#  36 588 routes/initiatives.js
+#   6  1  test/initiative-tags-fold.test.js
+
+git diff 0ce44e77 74c0af87 -U0 -- routes/initiatives.js | grep '^+'
+# four header lines naming the new file
+# import { initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } ...   (initiativeAsks leaves)
+# import { timeAsync, timeSync } ...                                            (profileReport, withProfile leave)
+# import { createInitiativeWrites } from "./initiatives-write.js";
+# const writes = createInitiativeWrites({ ...20 names... });
+# return writes(req, res, route, url, config, params);</pre>
+<p>The parent's 588 deleted lines are the 585 moved lines, the two narrowed import lines and the one header line the note replaced. The arithmetic reconciles: 1,284 - 588 + 36 = 732.</p>
+
+<h2>6. node --check</h2>
+<pre>node --check routes/initiatives.js && node --check routes/initiatives-write.js
+# clean - both files, no syntax error
+wc -l routes/initiatives.js routes/initiatives-write.js
+#  732 routes/initiatives.js
+#  630 routes/initiatives-write.js</pre>
+
+<h2>7. The focused tests, at the base, after the cut, and at the merged tree</h2>
+<p>The set is <code>npm run test:module routes/initiatives.js</code> (13 files that name or import the file) plus <code>test/waves-route.test.js</code>, which does not name it but drives the wave route the same panel boots. Run with <code>node --test --test-concurrency=4</code> in this tree, at the base, after the cut, and in the turnover worktree over the merge.</p>
+<table>
+  <tr><th>run</th><th>tests</th><th>pass</th><th>fail</th><th>the failures</th></tr>
+  <tr><td>base 0ce44e77</td><td class="n">179</td><td class="n">176</td><td class="n no">3</td><td>the three below, all in test/initiative-tier-route.test.js</td></tr>
+  <tr><td>after the cut 74c0af87</td><td class="n">179</td><td class="n">176</td><td class="n no">3</td><td>the same three, the same assertions and the same actual/expected</td></tr>
+  <tr><td>merged tree edd9873c</td><td class="n">179</td><td class="n">176</td><td class="n no">3</td><td>the same three</td></tr>
+  <tr><td class="n">test/waves-write.test.js</td><td class="n">22</td><td class="n ok">22</td><td class="n">0</td><td>as at the turnover head</td></tr>
+  <tr><td class="n">test/waves-route.test.js</td><td class="n">8</td><td class="n ok">8</td><td class="n">0</td><td>as at the turnover head</td></tr>
+</table>
+<h3>The three failures, named, red at the base before this cut</h3>
+<table>
+  <tr><th>test</th><th>assertion</th><th>actual / expected</th></tr>
+  <tr><td>test/initiative-tier-route.test.js:91 "the settings route stores a level, refuses one it does not know, and the next request obeys"</td><td class="n">:102 <code>(await view()).tier.id</code></td><td class="n">'all' / 'own'</td></tr>
+  <tr><td>test/initiative-tier-route.test.js:134 "at ask-me-only-to-remove, the same attach is free and the detach asks - and the answer is recorded"</td><td class="n">:152 <code>after.treeCount</code></td><td class="n">1 / 0</td></tr>
+  <tr><td>test/initiative-tier-route.test.js:183 "at ask-me-for-everything, a create asks and its answer creates - and an edit asks too"</td><td class="n">:194 <code>after.initiatives.length</code></td><td class="n">3 / 4</td></tr>
+</table>
+<p>All three are the answered-question path: a write that was parked and then answered "once" is not on the store when the next read arrives. They fail identically on the untouched turnover tip (<code>0ce44e77</code>, this row's base) with the same assertions, so they are the turnover's own red, not this cut's. No other file in the set fails on either side, and no test that names the write half was left reading the parent as text.</p>
+<h3>The one test that read the parent for the writes</h3>
+<p><code>test/initiative-tags-fold.test.js:29</code> read <code>routes/initiatives.js</code> as a string and asserted the tag registry's PATCH/DELETE guards and the create/update <code>tagIds</code> payload were in it. It reads both files now, in one concatenation, and every assertion is unchanged - the prefix is answered by two files, so its source is two files.</p>
+
+<h2>8. One live request against a write route, before and after</h2>
+<p>A probe outside the tree (<code>%TEMP%/wag/19a18895/live-write.mjs</code>) boots the panel with <code>tools/panel-testkit.mjs</code> on a spare port over a seeded initiatives store, then makes four real HTTP requests through the prefix. It ran once with the base blobs in place and once with the cut, in the same tree, and the two answers were compared field by field: identical, 0 diff lines.</p>
+<pre>POST /api/initiatives/notes/add  {"id":"init_seed","text":"row 515 live request","label":"the cut","by":"scout"}
+  201  ok true, asked false, changed true, duplicate false
+       note by=scout kind=note text="row 515 live request" host=null
+       initiative init_seed "Seeded initiative", noteCount 1, initiativeCount 1
+       body keys: archived asked at caps changed counts duplicate error file found initiatives
+                  note ok readable tags tier tiers waveStatus
+
+POST /api/initiatives/notes/delete  {"id":"init_seed","note":"nope","by":"scout"}
+  404  {"ok":false,"notFound":true,"error":"no such note on \"Seeded initiative\": nope"}
+
+POST /api/initiatives  {"description":"no title here","by":"scout"}
+  400  {"ok":false,"error":"an initiative needs a title - one line saying what the work is"}
+
+POST /api/initiatives/nope  {}
+  404  {"error":"no such initiatives route: /api/initiatives/nope"}
+
+before vs after: identical true, diff lines 0</pre>
+<p class="small">The note's id and clock are generated on every write, so the comparison names them rather than comparing them: the id's prefix and length (<code>note_</code>, 20 chars) and the ISO shape of its timestamp; the document's store status (path, mtimeMs, size) is volatile for the same reason.</p>
+
+<h2>9. The landing</h2>
+<p>The cut is <code>74c0af87</code> on <code>wtgui/row-515-is-one-cut-of-the-module-5a9f60</code>. It merged into the turnover branch locally with <code>--no-ff</code> as <code>edd9873c</code>, whose parents are <code>0ce44e77</code> (the turnover's tip) and <code>74c0af87</code>. No push, no pull request, no version bump: the turnover is where the work rolls up and the reader decides when it lands. This page lands as a docs-only second merge on top of it.</p>
+<pre>git rev-list --parents -n 1 edd9873c
+# edd9873c... 0ce44e77... 74c0af87...     (the merge has two parents)
+
+git diff --stat 0ce44e77 edd9873c -- routes/initiatives.js routes/initiatives-write.js test/initiative-tags-fold.test.js
+# (empty: the turnover had not touched these paths since the base, so the merge could not drop another row's work)
+
+git -C &lt;turnover worktree&gt; diff --stat 74c0af87 edd9873c -- routes/ test/initiative-tags-fold.test.js
+# (empty: the landed files are the cut's files byte for byte)
+</pre>
+<p>The turnover worktree held another run's staged work (nine paths under <code>lib/</code>, <code>routes/</code>, <code>test/</code> and <code>docs/</code>). It was parked with <code>git stash push</code> before the merge and restored with <code>git stash pop --index</code> after it; <code>git status --porcelain</code> before and after diffs clean, so nothing of theirs was lost, and nothing of theirs was resolved in favour of these files.</p>
+<p class="small">Base <code>0ce44e77</code>; the cut <code>74c0af87</code>; the merge <code>edd9873c</code>; measured 2026-11-28 in the row tree and the turnover worktree. Every line number is a 1-based line in the file named beside it, and a <code>base blob</code> number is a line of <code>git show 0ce44e77:routes/initiatives.js</code>.</p>
+</main>
+</body>
+</html>
