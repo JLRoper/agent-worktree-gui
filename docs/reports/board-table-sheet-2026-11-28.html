@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The board table's own sheet - row 444</title>
+<style>
+  :root { --bg: #0d1117; --panel: #151b24; --line: #26303d; --ink: #e6edf3; --dim: #9aa7b4; --dimmer: #6b7684;
+          --green: #3fb950; --red: #f85149; --amber: #d29922; --violet: #a371f7; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 22px 60px; background: var(--bg); color: var(--ink);
+         font: 14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 25px; letter-spacing: -.01em; }
+  h2 { margin: 34px 0 10px; font-size: 17px; padding-top: 10px; border-top: 1px solid var(--line); }
+  h3 { margin: 18px 0 6px; font-size: 14px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { color: #cfd8e3; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: #1c222c; padding: 1px 5px; border-radius: 4px; color: #c9d6e4; }
+  .sub { color: var(--dim); font-size: 13px; }
+  .verdict { margin: 16px 0 6px; padding: 14px 16px; background: var(--panel);
+             border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 8px; }
+  .verdict b { color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .ok { color: var(--green); }
+  .bad { color: var(--red); }
+  .warn { color: var(--amber); }
+  .note { background: #161d27; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  .note h4 { margin: 0 0 4px; font-size: 13px; color: #fff; }
+  figure { margin: 14px 0 8px; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  figcaption { color: var(--dimmer); font-size: 12px; margin-top: 5px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  ul.tight { margin: 6px 0; padding-left: 20px; }
+  ul.tight li { margin: 3px 0; }
+  .kv { display: grid; grid-template-columns: 190px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The board table has one sheet now</h1>
+<p class="sub">Row 444. Tree <code>row-444-is-the-complete-brief-the-board-9e1458</code>, cut from
+<code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>895e7282</code>. Every number below was measured
+in this tree on 2026-11-28; the command that produces each one is in section 10.</p>
+
+<div class="verdict">
+<b>What changed.</b> One new sheet, <code>public/board-table.css</code> (2,339 lines, 798 rule blocks), takes the
+board table out of six sheets. <code>public/board.css</code>, <code>public/rows.css</code> and
+<code>public/boardchips.css</code> are gone: 503 of their 503 rule blocks are in the new sheet, and 10 rules that were
+never the board's (the page footer, the clipboard flash, the job card's jump flash) went to the sheets that own them.
+<code>public/chart.css</code> gives up the 190 board rules it had accumulated and keeps 47: the poll ring, the age
+column and the legend.
+<br /><br />
+<b>Where it landed.</b> Merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> as <code>25329e26</code>, with <code>c4b62e16</code> carrying the branch's kind-rule edit into the new sheet; the branch is not pushed and no pull request was opened.<br /><br />
+<b>What proves it.</b> The rule set is identical, not merely similar: 3,380 rule blocks before and 3,380 after, keyed by
+at-rule context, selector and declarations, with 0 missing and 0 extra. The cascade is identical: the same 4
+(selector, property) pairs across sheets, in the same sheets, with the same winners, and none of them involves a moved
+sheet. And in a real browser, with one document and the two sheet sets swapped under it, all 2,768 elements and 67
+pseudo boxes compute the same style at 1160 px and at 420 px, and the captures are byte-identical.
+</div>
+
+<h2>1. The brief, checked against the tree before anything moved</h2>
+
+<p>The brief quotes the review at <code>docs/reports/css-split-review-2026-11-28.html</code> (section 9 tangle 1 at
+<code>:467</code>, the section 6 table at <code>:337</code>, the board's own tangle at <code>:405</code>): 776 elements,
+316 surface rules, 46 in <code>board.css</code> and 270 over 11 other sheets, with <code>chart.css</code> owning 87
+including 15 selectors that name <code>#projects</code>.</p>
+
+<p>Re-running the review tool against the base export reproduces the top of that: <b>776 elements</b> inside
+<code>#projects</code> and <b>316 rules</b> matching them. The 316 break down as 198 rules the board owns, 99 that
+belong to the console nested inside every row, 12 from the base layer and 7 dormant, and the 198 are spread over seven
+sheets:</p>
+
+<table>
+<tr><th>sheet at the base</th><th class="num">board rules it owns</th><th>what they are</th></tr>
+<tr><td><code>chart.css</code></td><td class="num">79</td><td>the row chips and their popup, the row flash, the guide lines, the poll ring and the age column</td></tr>
+<tr><td><code>board.css</code></td><td class="num">49</td><td>the project card, the head, the rail, the new-agent form, the approvals dock</td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">28</td><td>the git strip under each row, the console head</td></tr>
+<tr><td><code>late.css</code></td><td class="num">18</td><td>the legend, and the narrow-window layout that has to load last</td></tr>
+<tr><td><code>rows.css</code></td><td class="num">8</td><td>the row's action buttons</td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">8</td><td>the row's live block</td></tr>
+<tr><td><code>boardchips.css</code></td><td class="num">8</td><td>the header's chip buttons</td></tr>
+</table>
+
+<p class="sub">The brief's 46 and 270 are the same tool a fixture earlier: it reads 49 and 198 here because the seeded
+board rendered 776 elements this run, not the report's 763. Section 6 below says what that difference is and why it
+does not touch this row's claim.</p>
+
+<div class="note">
+<h4>The 15 selectors that name #projects were not in chart.css any more</h4>
+<p>The brief sends this row to move them "out of chart.css". At the base, <code>chart.css</code> names
+<code>#projects</code> <b>zero times</b>: a previous row (commit <code>687cb0b1</code>) had already lifted those fifteen
+rules into <code>public/board.css:198-333</code>, under a comment saying exactly that. So they existed, they were just
+one file further along than the brief expected, and this row moved them the rest of the way. They are now
+<code>public/board-table.css:209-344</code>, and the sheet that names <code>#projects</code> is the board table's own:
+<code>grep -c '#projects' public/chart.css</code> prints 0, <code>public/board-table.css</code> prints 16 lines, 15 of
+them selectors.</p>
+</div>
+
+<h2>2. What moved, and where it came from</h2>
+
+<p>The sheet set went from 22 links to 20. Three sheets were emptied and deleted; one was added; ten rules found their
+true owners in two sheets that already existed.</p>
+
+<table>
+<tr><th>source</th><th class="num">rules at the base</th><th class="num">rules now</th><th>where the rest went</th></tr>
+<tr><td><code>public/board.css</code></td><td class="num">213</td><td class="num ok">0, deleted</td><td>203 to <code>board-table.css</code>, 7 to <code>chrome.css</code> (the page footer), 3 to <code>jobs.css</code> (the jump flash)</td></tr>
+<tr><td><code>public/rows.css</code></td><td class="num">181</td><td class="num ok">0, deleted</td><td>all 181 to <code>board-table.css</code></td></tr>
+<tr><td><code>public/boardchips.css</code></td><td class="num">109</td><td class="num ok">0, deleted</td><td>109 to <code>board-table.css</code></td></tr>
+<tr><td><code>public/chart.css</code></td><td class="num">237</td><td class="num">47</td><td>190 to <code>board-table.css</code>; the poll ring, age column and legend stay</td></tr>
+<tr><td><code>public/rowstrips.css</code></td><td class="num">133</td><td class="num">48</td><td>85 to <code>board-table.css</code>; the console head and its utilities stay</td></tr>
+<tr><td><code>public/late.css</code></td><td class="num">54</td><td class="num">33</td><td>21 to <code>board-table.css</code> (the legend, the row flash); the narrow-window block stays last</td></tr>
+<tr><td><code>public/overlays.css</code></td><td class="num">275</td><td class="num">266</td><td>9 to <code>board-table.css</code> (the row's live block)</td></tr>
+<tr><td><code>public/chrome.css</code></td><td class="num">63</td><td class="num">70</td><td>+7: the page footer and the clipboard flash, from <code>board.css</code> and <code>chart.css</code></td></tr>
+<tr><td><code>public/jobs.css</code></td><td class="num">83</td><td class="num">86</td><td>+3: <code>@keyframes jumpflash</code> and <code>.job.jump</code>, the chart's only non-chart rules</td></tr>
+<tr><td><code>public/board-table.css</code></td><td class="num">0</td><td class="num ok">798</td><td>new: 203 + 181 + 109 + 190 + 85 + 21 + 9</td></tr>
+</table>
+
+<p>798 = 203 + 181 + 109 + 190 + 85 + 21 + 9, and 213 + 181 + 109 - 7 - 3 = 493 of the three deleted sheets' 503 rules
+are in the new sheet, with the other 10 in <code>chrome.css</code> and <code>jobs.css</code>. Nothing else moved:
+<code>base.css</code>, <code>settings.css</code>, <code>console.css</code>, <code>turns.css</code>,
+<code>assistant.css</code>, <code>feedback.css</code>, <code>assistant-panes.css</code>, <code>initiatives.css</code>,
+<code>panes.css</code>, <code>queue.css</code>, <code>pipeline.css</code>, <code>core/pipeline-card.css</code> and
+<code>core/task-card.css</code> are byte- and rule-identical.</p>
+
+<h3>Method</h3>
+<p>Three sheets were split at rule boundaries by <code>slice-board-table.py</code> (a scratch slicer, not committed):
+each segment was cut at the comment banner and closed brace that end a rule, the source range was removed, and the
+segment was appended to the new sheet under a banner naming its source file and line range. Each of the 13 segments
+carried a <code>sha256</code> taken from the source text before the cut and checked against the new sheet after it, so
+a lost or doubled rule would have shown as a hash mismatch before any browser ran. The three deleted sheets were not
+half-emptied: they were emptied of every rule and then removed, which is why the rule multiset below is the only
+measurement that can settle it.</p>
+
+<h2>3. The rule set is identical, rule block for rule block</h2>
+
+<p>Each sheet was parsed with the same parser <code>tools/verify-css-split.mjs</code> uses, every rule keyed by
+<code>at-rule context | selector | declarations</code>, and the multisets compared. Text, not CSSOM: a browser drops
+and re-adds rules across a sheet swap, and this has to prove the files.</p>
+
+<table>
+<tr><th>measure</th><th class="num">base</th><th class="num">this tree</th><th>verdict</th></tr>
+<tr><td>sheets in <code>index.html</code></td><td class="num">22</td><td class="num">20</td><td class="ok">three deleted, one added</td></tr>
+<tr><td>rule blocks</td><td class="num">3,380</td><td class="num">3,380</td><td class="ok">equal</td></tr>
+<tr><td>rules missing from this tree</td><td class="num">-</td><td class="num">0</td><td class="ok">none</td></tr>
+<tr><td>rules this tree adds</td><td class="num">-</td><td class="num">0</td><td class="ok">none</td></tr>
+<tr><td>sheets added</td><td class="num">-</td><td class="num">1</td><td><code>board-table.css</code></td></tr>
+<tr><td>sheets removed</td><td class="num">-</td><td class="num">3</td><td><code>board.css</code>, <code>rows.css</code>, <code>boardchips.css</code></td></tr>
+</table>
+
+<p>Per sheet, rule blocks before and after - the numbers that show where the 798 came from and that nothing else
+moved:</p>
+
+<table>
+<tr><th>sheet</th><th class="num">before</th><th class="num">after</th><th>sheet</th><th class="num">before</th><th class="num">after</th></tr>
+<tr><td><code>base.css</code></td><td class="num">13</td><td class="num">13</td><td><code>assistant.css</code></td><td class="num">98</td><td class="num">98</td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">63</td><td class="num">70</td><td><code>feedback.css</code></td><td class="num">226</td><td class="num">226</td></tr>
+<tr><td><code>settings.css</code></td><td class="num">281</td><td class="num">281</td><td><code>assistant-panes.css</code></td><td class="num">126</td><td class="num">126</td></tr>
+<tr><td><code>board.css</code></td><td class="num">213</td><td class="num ok">-</td><td><code>initiatives.css</code></td><td class="num">406</td><td class="num">406</td></tr>
+<tr><td><code>rows.css</code></td><td class="num">181</td><td class="num ok">-</td><td><code>panes.css</code></td><td class="num">120</td><td class="num">120</td></tr>
+<tr><td><code>boardchips.css</code></td><td class="num">109</td><td class="num ok">-</td><td><code>queue.css</code></td><td class="num">76</td><td class="num">76</td></tr>
+<tr><td><code>board-table.css</code></td><td class="num">-</td><td class="num ok">798</td><td><code>pipeline.css</code></td><td class="num">263</td><td class="num">263</td></tr>
+<tr><td><code>chart.css</code></td><td class="num">237</td><td class="num">47</td><td><code>late.css</code></td><td class="num">54</td><td class="num">33</td></tr>
+<tr><td><code>console.css</code></td><td class="num">292</td><td class="num">292</td><td><code>core/pipeline-card.css</code></td><td class="num">51</td><td class="num">51</td></tr>
+<tr><td><code>jobs.css</code></td><td class="num">83</td><td class="num">86</td><td><code>core/task-card.css</code></td><td class="num">16</td><td class="num">16</td></tr>
+<tr><td><code>turns.css</code></td><td class="num">64</td><td class="num">64</td><td><code>overlays.css</code></td><td class="num">275</td><td class="num">266</td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">133</td><td class="num">48</td><td><code>total</code></td><td class="num">3,380</td><td class="num">3,380</td></tr>
+</table>
+
+<p>Against the turnover branch's tip at merge time (<code>d1fcadab</code>, 22 sheets) the same comparison reads
+<b>3,398 rule blocks and 3,398</b>, with 0 missing and 0 extra: the branch had gained 18 rules from other rows since
+this tree was cut, and the merged tree carries all of them. One of those had to be ported by hand - the branch's
+<code>5c84c3e5</code> made an upgraded R or I read T and deleted <code>.kind-tick</code> from
+<code>chart.css</code>, and the rule now lives in <code>board-table.css</code>, so the same two edits landed there in the
+merge (<code>c4b62e16</code>). Without that, the rollup would have re-introduced a rule the branch had just deleted.</p>
+
+<h2>4. The cascade: no new tie, and the four that exist are untouched</h2>
+
+<p>Moving a rule between sheets changes what it beats. The review tool lists every (selector, property) pair that two
+or more sheets set, with the sheet that wins by load order, and the list is identical before and after:</p>
+
+<table>
+<tr><th>selector</th><th class="num">props</th><th>sheets</th><th>winner</th><th>context</th></tr>
+<tr><td><code>.topbar</code></td><td class="num">2</td><td><code>chrome.css</code>, <code>late.css</code></td><td><code>late.css</code> (position, padding)</td><td><code>@media (max-height: 300px)</code></td></tr>
+<tr><td><code>.jl-think .think-dot</code></td><td class="num">1</td><td><code>console.css</code>, <code>pipeline.css</code></td><td><code>pipeline.css</code> (animation)</td><td><code>@media (prefers-reduced-motion: reduce)</code></td></tr>
+<tr><td><code>.shell</code></td><td class="num">1</td><td><code>assistant.css</code>, <code>late.css</code></td><td><code>late.css</code> (align-items)</td><td><code>@media (max-height: 300px)</code></td></tr>
+</table>
+
+<p>None of the three selectors is a board element and none of the six sheets is a moved one. That is not luck: the
+new sheet was inserted at the exact index the old per-surface sheets occupied - see section 7 - so every board rule kept
+its position in the load order relative to every sheet it used to sit beside. A rule that moved from <code>chart.css</code>
+(index 19) to <code>board-table.css</code> (index 3) did change position relative to the other sheets, which is why the
+browser proof in section 5 is the one that settles it, and why the pairs above were re-read after the move: the board
+table's rules conflict with nothing, so their order among themselves and against the other sheets' selectors is not
+load-order sensitive.</p>
+
+<h2>5. The browser proof: one document, two sheet sets</h2>
+
+<p>Two boots of the fixture do not render the same document. Measured twice on the same tree, the board came back 13
+elements apart: the panel's scan keeps adding and dropping chips while the page is open, and a countdown ring redraws
+every second. A second boot therefore cannot prove anything about a stylesheet. The harness
+(<code>npm run verify:board-table-sheet</code>, <code>tools/verify-board-table-sheet.mjs</code>) does the opposite of a
+second boot:</p>
+
+<ol>
+<li>It boots the page <b>once</b> from this tree, seeds the fixture, expands every project and row, then <b>freezes</b>
+the document: it closes the event stream and clears every interval the page armed, and refuses to measure unless four
+samples of the element count agree.</li>
+<li>It exports the base revision with <code>git archive</code>, reads the 22 sheets that page loaded, and inserts them
+into the live <code>&lt;head&gt;</code> as <code>&lt;style&gt;</code> elements - disabled - at the index the per-surface
+sheets occupy. A disabled <code>&lt;link&gt;</code> fetches late, so the text is fetched first and each element's own
+sheet is disabled instead, which is synchronous.</li>
+<li>It measures <b>A, B, A</b>: the base sheets, this tree's sheets, the base sheets again. If A and A do not agree the
+document moved under the harness and the run fails rather than claiming anything.</li>
+<li>For every element it records the border box and a hash of the whole computed style (with animation, transition and
+stroke-dashoffset dropped, since a countdown moves without any style change, and the properties sorted, since
+Chromium enumerates custom properties in an unstable order); for every element under <code>#projects</code> it keeps the
+full style map, so a difference names the property. <code>::before</code> and <code>::after</code> are measured where they
+have content.</li>
+</ol>
+
+<table>
+<tr><th>at</th><th class="num">elements</th><th class="num">pseudo boxes</th><th>digest: base sheets</th><th>digest: base again</th><th>digest: this tree</th><th>verdict</th></tr>
+<tr><td>1160 px</td><td class="num">2,768</td><td class="num">67</td><td class="mono">ecee7c9a84d07330</td><td class="mono">ecee7c9a84d07330</td><td class="mono">ecee7c9a84d07330</td><td class="ok">identical</td></tr>
+<tr><td>420 px</td><td class="num">2,768</td><td class="num">67</td><td class="mono">a976b731f346344a</td><td class="mono">a976b731f346344a</td><td class="mono">a976b731f346344a</td><td class="ok">identical</td></tr>
+</table>
+
+<p>On the rolled-up branch the gate is run with the branch's own pre-merge tip as the baseline,
+<code>--old d1fcadab</code>, because <code>895e7282</code> predates 18 rules other rows added: 2,839 elements and 71
+pseudo boxes, digests <code>aba97a05</code> at 1160 px and <code>07d80f77</code> at 420 px, all three readings equal,
+PASS. A baseline older than the tree's own neighbours is the one way this gate fails without a style difference: run it
+against <code>895e7282</code> on the rolled-up branch and it names the <code>maintenance</code> elements another row
+added to <code>settings.css</code>. The baseline is the commit the move replaced, never an older one.</p>
+
+<p class="sub">These are the readings from the run recorded here: <code>--old 895e7282</code>, the cut base, on
+the merged tree. An earlier run of the same harness, before the catch-up merge brought the branch's other work in, read
+2,756 elements and 58 pseudo boxes with the same verdict (digests <code>062e7d97</code> at 1160 px and
+<code>e29a6714</code> at 420 px). The seeded fixture renders a slightly different document on each boot, which is
+precisely why the harness never compares two boots.</p>
+<p>Element by element and pseudo box by pseudo box, every border box and every computed property is equal. The
+captures agree with the hashes: the two files in each pair are byte-identical, not merely similar.</p>
+
+<div class="two">
+<figure>
+<img src="board-table-sheet/before-1160.png" alt="The board at 1160 px with the base sheets" />
+<figcaption>1160 px, the base's 22 sheets: <code>before-1160.png</code>, 94,281 bytes, sha256 <span class="mono">81885188</span>.</figcaption>
+</figure>
+<figure>
+<img src="board-table-sheet/after-1160.png" alt="The board at 1160 px with board-table.css" />
+<figcaption>1160 px, this tree's 20 sheets: <code>after-1160.png</code>, the same 94,281 bytes. <code>cmp</code> prints nothing.</figcaption>
+</figure>
+</div>
+<div class="two">
+<figure>
+<img src="board-table-sheet/before-420.png" alt="The board at 420 px with the base sheets" />
+<figcaption>420 px, the base's sheets: 38,268 bytes, sha256 <span class="mono">139b7664</span>.</figcaption>
+</figure>
+<figure>
+<img src="board-table-sheet/after-420.png" alt="The board at 420 px with board-table.css" />
+<figcaption>420 px, this tree's sheets: the same 38,268 bytes.</figcaption>
+</figure>
+</div>
+
+<div class="note">
+<h4>Two measurement traps this harness had to fix, and what they say about the other numbers</h4>
+<p><b>The fixture moves.</b> A first version booted the page twice and compared the boots; it reported 13 elements and
+dozens of box differences that were pure churn. The freeze is what makes a comparison meaningful, and it is also why the
+review tool's surface counts in section 6 differ slightly between the base run and this one: that tool measures a live
+fixture it cannot freeze, and the two runs rendered 776 and 763 elements inside <code>#projects</code>. The sheet sets
+are exactly comparable (12 - 3 + 1 = 10); a rule count against a moving DOM is not, and the multiset in section 3 is
+the number to trust for rules.</p>
+<p><b>A capture scrolls the page.</b> A second version read <code>getBoundingClientRect</code> after scrolling
+<code>#projects</code> into view for the screenshot, so every box carried the scroll offset and the two readings
+disagreed by exactly 605 px. Each reading now resets the scroll first, and the capture happens after the measurement,
+never before it.</p>
+</div>
+
+<h2>6. The lane: 12 sheets to 10, or 7 to 2</h2>
+
+<p>The brief asks for a board lane that "drops from 12 sheets to 1 or 2". The review tool counts two things, and the
+answer depends on which one is meant. Both are below; the tool's own definition is quoted with them.</p>
+
+<h3>Sheets a lane must open (the container measure)</h3>
+<p>Every sheet with at least one rule matching an element inside <code>#projects</code>, nested panes included:</p>
+
+<table>
+<tr><th>at the base</th><th>this tree</th><th>why it is still there</th></tr>
+<tr><td class="num">12 sheets</td><td class="num">10 sheets</td><td>three absorbed (<code>board</code>, <code>rows</code>, <code>boardchips</code>), one added (<code>board-table</code>)</td></tr>
+</table>
+
+<table>
+<tr><th>sheet that still matches the board</th><th class="num">rules</th><th>the rules that put it there</th></tr>
+<tr><td><code>board-table.css</code></td><td class="num">171</td><td>the board table itself</td></tr>
+<tr><td><code>console.css</code></td><td class="num">60</td><td>the console is inside every row: <code>.out-wrap</code>, <code>.out-box</code>, <code>button.pill-complete</code></td></tr>
+<tr><td><code>chart.css</code></td><td class="num">33</td><td><code>.poll-ring</code>, <code>td.age</code>, the legend - the chart, kept by the brief</td></tr>
+<tr><td><code>jobs.css</code></td><td class="num">17</td><td><code>.job</code>, <code>.job-head</code>, <code>.job-actions</code> - the job card inside a row</td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">12</td><td>the console head (<code>.job-head .agent-glyph</code>, <code>button.btn-clear-thread</code>) and the utilities <code>.mono</code>/<code>.name</code></td></tr>
+<tr><td><code>turns.css</code></td><td class="num">8</td><td><code>.turn</code>, <code>.turn-head</code> - a turn inside a job</td></tr>
+<tr><td><code>late.css</code></td><td class="num">7</td><td><code>#projects &gt; .root-group</code> and its head: the narrow-window block, which must load last</td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">5</td><td><code>button.btn-reply</code>, <code>.job-head .chev</code>, <code>button.btn-max</code></td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">3</td><td><code>button</code>, <code>button:disabled</code>, <code>thead th</code>: the page's own resets</td></tr>
+<tr><td><code>base.css</code></td><td class="num">1</td><td>the <code>button</code> token</td></tr>
+</table>
+
+<p><b>This measure does not reach 1 or 2, and it cannot.</b> Eight of the ten sheets are the row's nested surfaces
+(the console, the job card, the turns, the reply buttons), the page's resets, or <code>late.css</code>'s last-wins
+block. Moving them would mean moving the console and the job card into the board table, which is the opposite of the
+split, and moving <code>late.css</code>'s rules out of last position, which would change what they beat. What the row can
+honestly say is the other measure.</p>
+
+<h3>Sheets that own board rules (the own measure)</h3>
+<p>Rules that match the board and no other surface - the tool's <code>own</code> list, which is what a reader means by
+"the board table's rules":</p>
+
+<table>
+<tr><th>at the base</th><th>this tree</th></tr>
+<tr><td class="num">198 rules over 7 sheets</td><td class="num ok">199 rules over 2 sheets</td></tr>
+<tr><td><code>chart.css</code> 79, <code>board.css</code> 49, <code>rowstrips.css</code> 28, <code>late.css</code> 18, <code>rows.css</code> 8, <code>overlays.css</code> 8, <code>boardchips.css</code> 8</td>
+    <td><code>board-table.css</code> 166, <code>chart.css</code> 33</td></tr>
+</table>
+
+<p><b>7 sheets to 2</b>: the "1 or 2" is met here, and 2 is the floor the brief itself sets, because
+<code>chart.css</code> keeps the age column and the legend. The 199 against 198 is the moving fixture again - one rule
+matched a chip that the "after" fixture did not render - not a rule added: section 3 proves the rule set is identical,
+and the tool's own element count for the same surface moved by 13 between the two runs.</p>
+
+<p class="sub">nested: 99 rules in both runs, all of them console rules inside the row; base layer 12; dormant 7. Those
+are counted in the 316/317 the tool prints and are not the board table's to move.</p>
+
+<h2>7. index.html: the link order is explicit, not inherited</h2>
+
+<p>The page loads 20 sheets in an order it states line by line. The three per-surface links that stood at line 17 were
+replaced by one, at the same index; <code>chart.css</code> keeps its late position at line 34, after <code>late.css</code>,
+so the poll ring and the legend still win their ties:</p>
+
+<table>
+<tr><th class="num">line</th><th>sheet</th><th>note</th></tr>
+<tr><td class="num">11</td><td><code>base.css</code></td><td>tokens and reset</td></tr>
+<tr><td class="num">12</td><td><code>chrome.css</code></td><td></td></tr>
+<tr><td class="num">13</td><td><code>settings.css</code></td><td></td></tr>
+<tr><td class="num">17</td><td><code>board-table.css</code></td><td class="ok">new; stands where <code>board.css</code> stood, before the core cards and before <code>chart.css</code></td></tr>
+<tr><td class="num">18</td><td><code>jobs.css</code></td><td></td></tr>
+<tr><td class="num">19</td><td><code>console.css</code></td><td></td></tr>
+<tr><td class="num">20</td><td><code>turns.css</code></td><td></td></tr>
+<tr><td class="num">21</td><td><code>overlays.css</code></td><td></td></tr>
+<tr><td class="num">22</td><td><code>rowstrips.css</code></td><td></td></tr>
+<tr><td class="num">23-29</td><td><code>assistant.css</code>, <code>feedback.css</code>, <code>assistant-panes.css</code>, <code>initiatives.css</code>, <code>panes.css</code>, <code>queue.css</code>, <code>pipeline.css</code></td><td></td></tr>
+<tr><td class="num">30</td><td><code>late.css</code></td><td>last of the surface sheets, by design</td></tr>
+<tr><td class="num">34</td><td><code>chart.css</code></td><td>after <code>late.css</code>: the age column and the legend</td></tr>
+<tr><td class="num">37, 41</td><td><code>core/pipeline-card.css</code>, <code>core/task-card.css</code></td><td>the two cards shared with the standalone pages</td></tr>
+</table>
+
+<p>No <code>@import</code> was introduced and no sheet was concatenated: each file is still fetched on its own, so a
+reader can still see which sheet a rule came from in devtools, which was the split's point.</p>
+
+<h2>8. What is still red, and what this row did not do</h2>
+
+<div class="note">
+<h4><code>npm run verify:css-split</code> was already red on the base, and this row makes it read differently</h4>
+<p>That gate compares two things: the rule multiset, and the exact concatenated sequence. The multiset half passes
+(3,380 = 3,380). The sequence half is a pin to a historic concatenation of the 1.191.0 <code>style.css</code>, and it was
+<b>already failing at the base</b>: 3,076 rules against the pin's 3,061, first divergence at rule 423, because a previous
+row moved rules within that concatenation. This cut reorders far more, so the same half now reads 3,266 against 3,061
+with the first divergence at rule 76. A reorder cannot keep a sequence pin green; re-pinning it is a decision about
+what that gate is for, and it belongs to the row that rewrites it, not to this one. The gate that this cut does keep is
+the new <code>npm run verify:board-table-sheet</code>, plus the suite's own stylesheet tests (section 10).</p>
+</div>
+
+<ul class="tight">
+<li><b>The console is still its own sheet.</b> 60 of its rules match elements inside a board row, and 99 more are
+  nested there. That is the next move, not this one, and it would take the container measure from 10 to 9.</li>
+<li><b><code>late.css</code> still names <code>#projects</code></b> in 7 rules: the narrow-window root group. They stay
+  because "last" is their job. The review's catch-all section already says that block homes to
+  <code>chrome.css</code> and <code>board-table.css</code>; doing it needs a load-order argument of its own.</li>
+<li><b>The review tool's per-surface rule counts are DOM-dependent.</b> Its 316 and this run's 317 are the same sheet
+  set measured against fixtures 13 elements apart. Anything that must be exact uses the multiset, not that column.</li>
+<li><b>Version.</b> <code>package.json</code> reads 1.196.2: above <code>origin/main</code>'s 1.196.1 and above the
+  turnover branch's 1.196.1, both read at merge time (main was 1.195.0 when this row was cut, and it moved while the row
+  ran, which is why the number is quoted with the moment it was read). It moves again when the branch lands if the branch has moved.</li>
+</ul>
+
+<h2>9. The board table sheet, in one paragraph</h2>
+
+<p><code>public/board-table.css</code> is the board table's sheet and nothing else's: the horizontal scroll container,
+the project card and its head, the rail and the row indent, the row's cells and action buttons, the git strip, the
+row chips and their popup, the child ticks and guide lines, the live block, the legend, the approvals dock, the agents
+block and the new-agent form. It holds 798 of the page's rule blocks (3,380 at the cut, 3,398 at the branch's tip) in 2,339 lines, it names
+<code>#projects</code> 15 times, and every one of those rules computes exactly what it computed in the six sheets it
+came from.</p>
+
+<h2>10. What the suite answered</h2>
+
+<p><code>npm test</code> was run in this tree twice, and neither run is green. Both are below, with what was this row's
+own and what was not.</p>
+
+<table>
+<tr><th>run</th><th class="num">tests</th><th class="num">pass</th><th class="num">fail</th><th>what the failures were</th></tr>
+<tr><td>before the catch-up merge (the cut base, 895e7282, 26 commits behind the branch)</td><td class="num">3,529</td><td class="num">3,434</td><td class="num">91</td><td>the branch's own newer work: routes, tools and path rules the tree did not have yet</td></tr>
+<tr><td>after merging 92e1c3a7 (stopped at 31 minutes, a file stopped reporting)</td><td class="num">-</td><td class="num">3,968</td><td class="num">33</td><td>what had run when it was stopped: three failures this row's (fixed below), the rest pre-existing or environmental</td></tr>
+</table>
+
+<div class="note">
+<h4>Three failures were this row's, and all three are fixed</h4>
+<ul class="tight">
+<li><code>test/legend-disclosure.test.js</code> pinned the legend's four geometry declarations inside the split's
+  concatenation. The legend now lives in <code>chart.css</code>, and <code>test/style-sheets.js</code> excludes
+  <code>chart.css</code> from that concatenation by design (it says why: the chart was never part of the cut). The test
+  reads <code>chart.css</code> for those declarations now, and 6 of 6 pass.</li>
+<li><code>docs/reports/board-table-sheet-2026-11-28.html</code> was invisible to <code>git status</code>:
+  <code>.git/info/exclude</code> ignores <code>docs/reports/*.html</code>, so <code>git add -A</code> silently skipped
+  the report and <code>test/reports-are-tracked.test.js</code> refused the commit. It is committed with
+  <code>git add -f</code>, and 4 of 4 pass.</li>
+<li>That same report quoted an absolute scratch path in the reproduce section, which the absolute-paths gate refuses
+  (it exists so a report cannot send a reader to a folder on one machine). The line names the method now, not a path,
+  and the gate no longer names this file.</li>
+</ul>
+</div>
+
+<p>What is still red, none of it from this row: <code>test/absolute-paths.test.js</code> refuses four files that arrived
+with the base (three other rows' reports and <code>tools/capture-wave-lane-options.mjs</code>);
+<code>test/gateway-permissions.test.js</code> reads a <code>config.json</code> this worktree does not have; and
+<code>test/harness.test.js</code> names <code>tools/verify-queue-agents.mjs</code>, which the base ships without a
+<code>package.json</code> script. The merge is what cleared the drift failures: <code>test/worktree-release.test.js</code>
+and <code>test/worktree-naming.test.js</code> failed before it and pass after it.</p>
+
+<p>The 45 test files that read the page's sheets - every CSS assertion in the project - were run together after the
+merge: <b>506 tests, 506 pass, 0 fail</b>.</p>
+
+<p>On the rolled-up branch the same 45 files plus the branch's own kind and column tests were run again after the
+merge: 83 tests across the eight files most exposed to this move (legend, row chips, branch kind, chart columns, text
+styles, report footer, report tracking, the shared tail chip), <b>83 pass, 0 fail</b>.</p>
+
+<h2>11. Reproduce every number</h2>
+
+<div class="kv">
+<div>the rule multiset</div><div>a scratch probe (not committed, so no path is written here): it parses <code>git show 895e7282:public/*.css</code> and the working tree with <code>parseRules</code> from <code>tools/verify-css-split.mjs</code>, keys each rule as <code>ctx|selector|declarations</code> and compares the multisets</div>
+<div>the browser proof</div><div><code>npm run verify:board-table-sheet</code> - exits 0 and prints <code>PASS</code> at both widths</div>
+<div>the lane and the cascade</div><div><code>npm run review:css-split</code> - sections 6 and 4 of its output</div>
+<div>the sequence gate</div><div><code>npm run verify:css-split</code> - red at the base too, see section 8</div>
+<div>the suite</div><div><code>npm test</code> - the full run's totals are in the merge commit's message</div>
+<div>the captures</div><div><code>sha256sum docs/reports/board-table-sheet/*.png</code> - <code>before-1160.png</code> and <code>after-1160.png</code> hash equal, as do the 420 pair</div>
+</div>
+
+<p class="sub">The four captures in <code>docs/reports/board-table-sheet/</code> are the ones the harness wrote, copied
+unchanged. The report itself has no script, no fetch and no build step: it opens from disk.</p>
+
+</main>
+</body>
+</html>

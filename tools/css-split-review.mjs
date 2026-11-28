@@ -73,14 +73,12 @@ export const SURFACES = {
   "base.css": "tokens and resets",
   "chrome.css": "header and status strip",
   "settings.css": "Settings drawer and its tabs",
-  "board.css": "project boxes, folders, agent rows, new-agent form",
+  "board-table.css": "the board table, its rows, controls, chips and strips",
   "jobs.css": "job cards",
   "console.css": "the console: agent pane and thought rows",
   "turns.css": "conversation turns",
-  "rows.css": "the jobs table's row controls, marks and artifacts",
   "overlays.css": "deliverables, reply box, question cards, ghost turns",
-  "rowstrips.css": "git, description, release and TODO strips",
-  "boardchips.css": "host, rules, turnover, board and cleanup chips",
+  "rowstrips.css": "the console head's buttons and the panel's type/status utilities",
   "assistant.css": "the assistant entry, spawn strip and float shell",
   "feedback.css": "Clarify, Collisions and Permissions controls",
   "assistant-panes.css": "the float's tabs, panes, search and settings",
@@ -88,7 +86,8 @@ export const SURFACES = {
   "panes.css": "the assistant's Worktrees and Bridge sub-tabs",
   "queue.css": "the queue cards and the assistant queue pane",
   "pipeline.css": "pipeline window, messages, flow and modal",
-  "late.css": "late overrides, loaded last",
+  "late.css": "late overrides: the sliver window and the search popovers",
+  "chart.css": "the age column and the legend",
 };
 
 // The two catch-all sheets the review asks about by name.
@@ -378,7 +377,7 @@ const LATE_BLOCKS = [
   {
     id: "sliver",
     label: "the sliver-window layout: header, shell, agent cards and folders",
-    home: ["chrome.css", "board.css"],
+    home: ["chrome.css", "board-table.css"],
     test: (r) => r.ctx.some((c) => /@media\s*\(max-height:\s*300px\)/i.test(c)),
   },
   {
@@ -393,6 +392,7 @@ const LATE_BLOCKS = [
     label: "the chart legend and its popover",
     home: ["chart.css"],
     test: (r) => r.selectors.some((s) => /^\.legend/.test(s)),
+    note: "moved to chart.css with the board table's cut; late.css holds none",
   },
   {
     id: "search",
@@ -724,10 +724,25 @@ export function sourceTokens() {
   return tokens;
 }
 
-const COST_JS = (sel) => {
+const COST_JS = ({ sel, nested }) => {
   const roots = document.querySelectorAll(sel);
   const root = roots[0];
   if (!root) return null;
+  const nestedEls = [];
+  for (const n of nested || []) for (const el of document.querySelectorAll(n)) nestedEls.push(el);
+  const inNested = (el) => nestedEls.some((n) => n === el || n.contains(el));
+  // A rule inside a media block that does not apply at this viewport cannot cost a lane anything:
+  // the dead measurement already calls it dormant, and the cost counts it the same way.
+  const mediaApplies = (ctx) =>
+    ctx.every((c) => {
+      if (!/^@media\b/i.test(c)) return true;
+      const q = c.replace(/^@media\s*/i, "").trim();
+      try {
+        return matchMedia(q).matches;
+      } catch {
+        return true;
+      }
+    });
   const out = [];
   for (const sheet of document.styleSheets) {
     let list = [];
@@ -739,16 +754,19 @@ const COST_JS = (sel) => {
     const walk = (rules, ctx) => {
       for (const rule of rules) {
         if (rule.cssRules && !rule.selectorText) {
-          walk([...rule.cssRules], [...ctx, rule.conditionText || rule.name || "?"]);
+          const kind = rule.constructor && rule.constructor.name === "CSSMediaRule" ? "@media" : rule.constructor && rule.constructor.name === "CSSKeyframesRule" ? "@keyframes" : `@${rule.name || "?"}`;
+          walk([...rule.cssRules], [...ctx, `${kind} ${rule.conditionText || rule.name || ""}`.trim()]);
           continue;
         }
         if (!rule.selectorText) continue;
-        if (ctx.some((c) => /^keyframes/i.test(c))) continue;
+        if (ctx.some((c) => /@keyframes/i.test(c))) continue;
         for (const part of rule.selectorText.split(",")) {
           const s = part.trim().replace(/::?(before|after|placeholder|marker|selection|-webkit-[\w-]+|-moz-[\w-]+)(?![\w-])/g, "").trim();
           if (!s) continue;
+          let found = null;
           try {
-            if (!root.querySelectorAll(s).length) continue;
+            found = [...root.querySelectorAll(s)];
+            if (!found.length) continue;
           } catch {
             continue;
           }
@@ -757,6 +775,16 @@ const COST_JS = (sel) => {
             selector: part.trim(),
             declarations: rule.style ? rule.style.length : 0,
             props: rule.style ? [...rule.style] : [],
+            mediaApplies: mediaApplies(ctx),
+            // The surface's OWN rule: it styles an element this surface draws, not one a surface
+            // nested inside it draws. `own` is what a lane must open to change THIS surface.
+            own: found.some((el) => !inNested(el)),
+            // A type-only selector whose rule also matches elements OUTSIDE this root is the
+            // page's element base (`button`, the header typography list); `thead th` alone matches
+            // only here and is the table's own rule. The WHOLE selector list is counted, because a
+            // shared list (`thead th` among `.topbar`, `.settings-tabs`) is page furniture even when
+            // the part this surface matches is a table element.
+            pageWide: document.querySelectorAll(rule.selectorText).length > found.length,
           });
           break;
         }
@@ -769,13 +797,20 @@ const COST_JS = (sel) => {
 
 // Six surfaces, the same six the split proved. The queue is reached through the assistant float,
 // which is the pane the split's own numbers name.
+//
+// `nested` names the roots of the surfaces drawn INSIDE this one. #projects is a container: every
+// board row's detail row holds an agent console (`.job`), so 95 of the rules that match inside
+// #projects are the console's, jobs', turns' and overlays' own rules, and the 300 px sliver layout
+// is a media block that cannot apply at the measured viewport. Counting those as the board's is how
+// the report's 12 sheets became an upper bound instead of the surface's own cost, which is what the
+// `own` figure below measures.
 const COST_ROOTS = [
-  { name: "board", sel: "#projects", what: "the board table" },
-  { name: "console", sel: ".job[data-thread='wtgui-board-table-cut']", what: "one agent's console" },
-  { name: "queue", sel: "#as-queue", what: "the assistant's queue pane" },
-  { name: "assistant", sel: "#assistant", what: "the assistant float" },
-  { name: "initiatives", sel: "#as-initiatives", what: "the initiatives tab" },
-  { name: "settings", sel: "#settings", what: "the Settings drawer" },
+  { name: "board", sel: "#projects", nested: [".job"], what: "the board table" },
+  { name: "console", sel: ".job[data-thread='wtgui-board-table-cut']", nested: [], what: "one agent's console" },
+  { name: "queue", sel: "#as-queue", nested: [], what: "the assistant's queue pane" },
+  { name: "assistant", sel: "#assistant", nested: ["#as-queue", "#as-initiatives"], what: "the assistant float" },
+  { name: "initiatives", sel: "#as-initiatives", nested: [], what: "the initiatives tab" },
+  { name: "settings", sel: "#settings", nested: [], what: "the Settings drawer" },
 ];
 
 const SHOTS = [
@@ -959,7 +994,7 @@ async function browserHalf({ shots }) {
             // The board and the console live on the page; nothing to open.
             await page.waitForTimeout(250);
           }
-          const got = await page.evaluate(COST_JS, surface.sel);
+          const got = await page.evaluate(COST_JS, { sel: surface.sel, nested: surface.nested });
           if (!got) throw new Error(`cost: no element for ${surface.name} (${surface.sel})`);
           cost.push({ ...surface, ...got });
         }
@@ -1021,11 +1056,41 @@ export function deadFindings(rows, tokens, prefixes) {
 // count, never folded into it.
 const SHARED_LAYER = /^(\*|\*::.*|:root|html|body|html,\s*body|button,\s*select,\s*input,\s*textarea)$/i;
 
+// The page's element base: a selector made only of type selectors and pseudo-classes (`button`,
+// `thead th`, `button:disabled`) styles every element of that type on the page. It is the base
+// layer, exactly like the reset above: a lane changing the board does not open chrome.css for its
+// `button` rule.
+export function isElementBase(selector) {
+  const stripped = String(selector)
+    .replace(/::?[\w-]+(\([^)]*\))?/g, "")
+    .replace(/[>+~]/g, " ")
+    .trim();
+  const tokens = stripped.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  return tokens.every((t) => /^[a-zA-Z][\w-]*$/.test(t));
+}
+
+// The panel's type and status vocabulary: ONE class whose whole effect is type or ink (`.mono`,
+// `.dim`, `.clean`, `.dirty`). `public/rowstrips.css` keeps those eight rules together because the
+// console, Settings and the assistant rail read them too; they are not one surface's rule even when
+// that surface is the only one printing the class today.
+export function isTypeInk(selector, props) {
+  if (!/^\.[\w-]+$/.test(String(selector).trim())) return false;
+  if (!props || !props.length) return false;
+  return props.every((p) => /^(font(-.*)?|color|letter-spacing|text-transform|white-space(-collapse)?|text-wrap-mode|font-variant.*)$/.test(p));
+}
+
 export function costFindings(cost) {
   const out = [];
   for (const surface of cost) {
     const bySheet = new Map();
+    const ownBySheet = new Map();
     let sharedRules = 0;
+    let ownRules = 0;
+    let nestedRules = 0;
+    let baseRules = 0;
+    let dormantRules = 0;
+    const baseSeen = new Set();
     for (const r of surface.rules) {
       if (SHARED_LAYER.test(r.selector.trim())) {
         sharedRules += 1;
@@ -1041,17 +1106,48 @@ export function costFindings(cost) {
       s.rules += 1;
       s.decls += r.declarations;
       if (s.examples.length < 6) s.examples.push(r.selector);
+      // The own figure: the surface's own elements, at this viewport, minus the page's base layer.
+      if (!r.mediaApplies) {
+        dormantRules += 1;
+        continue;
+      }
+      if (!r.own) {
+        nestedRules += 1;
+        continue;
+      }
+      if ((isElementBase(r.selector) && r.pageWide) || isTypeInk(r.selector, r.props)) {
+        baseRules += 1;
+        if (baseSeen.size < 20) baseSeen.add(r.selector);
+        continue;
+      }
+      ownRules += 1;
+      if (!ownBySheet.has(name)) ownBySheet.set(name, { sheet: name, rules: 0, decls: 0, examples: [] });
+      const o = ownBySheet.get(name);
+      o.rules += 1;
+      o.decls += r.declarations;
+      if (o.examples.length < 6) o.examples.push(r.selector);
     }
     const sheets = [...bySheet.values()].sort((a, b) => b.rules - a.rules);
+    const ownSheets = [...ownBySheet.values()].sort((a, b) => b.rules - a.rules);
     out.push({
       name: surface.name,
       what: surface.what,
       selector: surface.sel,
+      nested: surface.nested || [],
       elements: surface.elements,
       rules: surface.rules.length - sharedRules,
       sharedRules,
       sheets,
       sheetsTouched: sheets.length,
+      own: {
+        rules: ownRules,
+        sheets: ownSheets,
+        sheetsTouched: ownSheets.length,
+        nestedRules,
+        baseRules,
+        dormantRules,
+        baseSetAside: [...baseSeen],
+      },
     });
   }
   return out;
@@ -1116,6 +1212,11 @@ async function main() {
     for (const c of cost) {
       line(`  ${c.name}: ${num(c.elements)} elements, ${num(c.rules)} surface rules from ${c.sheetsTouched} sheets (+${c.sharedRules} shared-layer rules)`);
       for (const s of c.sheets) line(`    ${String(s.rules).padStart(4)} rules  ${s.sheet}`);
+      line(
+        `    own: ${num(c.own.rules)} rules from ${c.own.sheetsTouched} sheets` +
+          ` (set aside: ${num(c.own.nestedRules)} nested-surface, ${num(c.own.baseRules)} base-layer, ${num(c.own.dormantRules)} dormant)`,
+      );
+      for (const s of c.own.sheets) line(`      ${String(s.rules).padStart(4)} rules  ${s.sheet}`);
     }
     line("");
     line("CITED (from docs/reports/css-split.html, not measured here)");

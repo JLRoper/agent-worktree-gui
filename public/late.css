@@ -1,14 +1,15 @@
 /* public/late.css
    Late overrides, loaded last.
 
-   Rules that must beat earlier sheets: the sliver-window layout, the chart legend and its popover, and the
-   search popovers' drag and resize affordances. This sheet is loaded after every other one,
-   exactly as these rules sat at the end of style.css.
+   Rules that must beat earlier sheets: the sliver-window layout (a window squashed to 300 px tall
+   lays the board out in one row) and the search popovers' drag and resize affordances. The chart
+   legend was here too until the board table got its own sheet: it now loads with the chart, in
+   public/chart.css, beside the legend's own rules.
 
-   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
-   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
-   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
-   pane.
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments
+   and order below are that file's own text. public/index.html loads the sheets in the order the
+   rules had in style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by
+   rule and pane by pane.
    ------------------------------------------------------------------------------------------------ */
 
 /* ---- a window squashed to a sliver: the folder heads ARE the board ------------------------------------------
@@ -79,106 +80,6 @@
   #projects > .root-group > .root-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 }
 
-/* ---- the chart legend: one line at rest, the words behind a popover --------------------------------
-   Every chart used to carry one 700-character paragraph under it: the five liveness chips, the meaning of the
-   age number and its ring, the kind column's three letters and the fold, all at once. The reader called it too
-   busy to display as a block, so it is a DISCLOSURE now. The strip keeps every symbol and its short word - the
-   chips spell hermes, claude, board, port and files, the kind marks keep T, R and I, and the parent's chevron
-   keeps "fold" - and one control whose visible label says what it is. The words are unchanged; they live in the
-   popover as short lines under three headings, so nothing is lost, only deferred.
-
-   The popover is absolutely positioned, so opening it never reflows the chart, and it hangs BELOW the strip -
-   which is the bottom edge of the card - so it cannot cover a tree row; .legend is its containing block. The
-   strip is nowrap and its keys clip rather than wrap, so the control stays on the one line at the live width
-   instead of dropping to a second row, which is the busy block this replaced. `.legend` keeps its padding and
-   its colour in public/chart.css; only what the disclosure adds lives here, so a rebase meets one block. */
-.legend { position: relative; }
-.legend-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  min-width: 0;
-  white-space: nowrap;
-}
-.legend-keys {
-  display: inline-flex;
-  align-items: center;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.legend .legend-line .sig { flex: 0 0 auto; margin-top: 0; }
-.legend .legend-line .age-slot { flex: 0 0 auto; }
-.legend .legend-line .kind-mark { flex: 0 0 auto; vertical-align: 0; }
-.legend-fold { flex: 0 0 auto; margin-left: 2px; color: var(--dim); font: 10.5px var(--mono); }
-.legend-fold-glyph { margin-right: 1px; color: var(--dimmer); }
-.legend-toggle {
-  flex: 0 0 auto;
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 9px;
-  border: 1px solid #333b47;
-  border-radius: 9px;
-  background: #20242c;
-  color: var(--dim);
-  font: 10.5px/1.7 var(--mono);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.legend-toggle:hover { color: var(--text); border-color: #4a5568; background: #262b34; }
-.legend-toggle:focus-visible { outline: 2px solid #7fb2e8; outline-offset: 1px; }
-.legend-toggle[aria-expanded="true"] { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
-.legend-q {
-  display: inline-grid;
-  place-items: center;
-  width: 13px;
-  height: 13px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: 9.5px;
-  line-height: 1;
-  opacity: .85;
-}
-.legend-pop {
-  position: absolute;
-  left: 14px;
-  top: calc(100% - 4px);
-  z-index: 60;
-  width: min(860px, calc(100% - 28px));
-  max-height: 62vh;
-  overflow: auto;
-  padding: 10px 12px 11px;
-  border: 1px solid #2c3542;
-  border-radius: 8px;
-  background: #151a21;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
-  color: var(--dim);
-  font-size: 11px;
-  line-height: 1.5;
-  white-space: normal;
-  text-align: left;
-}
-.legend-pop[hidden] { display: none; }
-.legend-pop .legend-group + .legend-group {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #232b36;
-}
-.legend-pop h4 {
-  margin: 0 0 3px;
-  color: var(--dimmer);
-  font: 600 10px/1.5 var(--mono);
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-.legend-pop p { margin: 0 0 2px; }
-.legend .legend-pop .sig { margin: 0 4px 0 0; vertical-align: 0; }
-.legend .legend-pop .kind-mark { margin: 0 4px 0 0; vertical-align: 0; }
-.legend-pop .legend-note { color: var(--dimmer); }
 
 /* THE SEARCH POPOVER'S OWN CHROME: a drag strip with a close x across its top, and a resize grip in its bottom-right
    corner. Both header searches mount the one popover (public/core/search-popover.js), so the controls are drawn once
@@ -232,3 +133,4 @@
 /* The drag strip is the popover's first child, so the item header under it is the first ITEM even though it is no
    longer `:first-child`; the rule that removes its top border has to be repeated for this neighbour. */
 .as-search-pop > .as-search-drag + .as-search-item { margin-top: 0; padding-top: 3px; border-top: 0; }
+
