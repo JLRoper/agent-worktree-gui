@@ -30,7 +30,9 @@ await import("../public/core/cleanup-drop-all.js");
 const wtCleanupDropAll = globalThis.wtCleanupDropAll;
 
 const scaffold = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
-const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+// The project section and its chip strip moved to public/board/project-order.js in row 530's cut 1, so the two
+// assertions below read the script that now carries them.
+const projects = readFileSync(new URL("../public/board/project-order.js", import.meta.url), "utf8");
 const css = readStyleSheets();
 const code = sliceRegion(scaffold, "the cleanup chip");
 

@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 // The two sheets in PAGE ORDER (public/index.html): the chart's arrow moved into chart.css, and the cascade
 // question below is about where these rules sit relative to each other as the browser loads them, so the pin reads
@@ -27,7 +28,8 @@ const css = [readStyleSheets(), readFileSync(new URL("../public/chart.css", impo
 // Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
 // script's names are page-wide, so a rule is read from the script that now carries it.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const app = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+// public/board/console.js and its four cuts, in page order (public/index.html).
+const app = `${consoleSource()}\n${page("public/app.js")}`;
 
 const CHIP = ".tail-chip";
 const CONSOLE_CHIP = ".out-wrap > .to-bottom";

@@ -19,7 +19,8 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 import { readStyleSheets } from "./style-sheets.js";
 
 const lf = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const projects = lf("../public/render-projects.js");
+// The legend is cut 1 of row 530, so it lives in public/board/project-order.js now.
+const projects = lf("../public/board/project-order.js");
 const css = readStyleSheets();
 // The legend's own rules live with the chart now: chart.css draws the age column, the poll ring and the legend, and
 // test/style-sheets.js excludes chart.css from the split's concatenation (it was always its own file). While the legend

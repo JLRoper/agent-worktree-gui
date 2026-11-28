@@ -82,6 +82,7 @@
     "verify:wake-ladder": "node tools/verify-wake-ladder.mjs",
     "verify:settings-window": "node tools/verify-settings-window.mjs",
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
+    "verify:chart-turnover-cut": "node tools/verify-chart-turnover-cut.mjs",
     "verify:chart-edges": "node tools/verify-chart-edges.mjs",
     "verify:initiatives-tab": "node tools/verify-initiatives-tab.mjs",
     "verify:initiatives-order": "node tools/verify-initiatives-order-archive.mjs",

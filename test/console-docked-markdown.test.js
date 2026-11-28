@@ -16,6 +16,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { readStyleSheets } from "./style-sheets.js";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(path.join(root, file), "utf8");
@@ -98,7 +99,7 @@ const boxBody = (html) =>
   html.replace(/^[\s\S]*?<div class="sub-console mono"[^>]*>/, "").replace(/<\/div><\/div>$/, "");
 
 function dockFor(store = new Map()) {
-  const consoleJs = read("public/board/console.js");
+  const consoleJs = consoleSource(); // public/board/console.js and its four cuts, in page order
   const at = consoleJs.indexOf("// ---- the docked console");
   assert.ok(at >= 0, "public/board/console.js has a 'the docked console' region to test");
   const end = consoleJs.indexOf("// ---- end the docked console", at);

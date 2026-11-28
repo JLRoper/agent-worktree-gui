@@ -132,7 +132,7 @@ function withSelection(sel, fn) {
 // ---- (0) the cells carry the whole value ------------------------------------------------------------
 test("the row's name and branch cells carry the whole value, not only the text they draw", () => {
   engine();
-  const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+  const projects = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8");
   const source = readFileSync(new URL("../public/core/copy-full-value.js", import.meta.url), "utf8");
   const cellName = /name:\s*`<td class="name"[^`]*`/.exec(projects);
   const cellBranch = /branch:\s*`<td class="mono branch"[^`]*`/.exec(projects);

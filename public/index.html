@@ -1445,10 +1445,16 @@
        wires the Pipeline tab's dropdown and its `open the flow` press at load. -->
   <script src="/pipeline-flow.js"></script>
   <script src="/pipeline-modal.js"></script>
-  <!-- The client console, cut out of app.js: its burst bookkeeping, tool-call rows, row text and markdown,
-       writers, copy/motion and scroll. Loaded BEFORE app.js (app.js's boot IIFE calls its renderers, and
-       app.js reads its top-level consts by bare name); it declares only, so that order costs nothing. -->
+  <!-- The client console, cut out of app.js and then cut four ways (docs/reports/module-separation-2026-11-28.html,
+       card 9). console.js is the entry point and the line vocabulary every cut reads; the cut files beside it hold
+       the stream, the tool groups, the rows and the job lines. They load BEFORE app.js (app.js's boot IIFE calls
+       their renderers, and app.js reads their top-level consts by bare name); they declare only, so the order costs
+       nothing. -->
   <script src="/board/console.js"></script>
+  <script src="/board/console-stream.js"></script>
+  <script src="/board/console-tools.js"></script>
+  <script src="/board/console-rows.js"></script>
+  <script src="/board/job-line.js"></script>
   <!-- The console's bottom-right corner: the press, the move, the release, the step and the ONE limit, plus the one
        band that answers the floor and the room in layout px from the pane's own bottom and the viewport's. Cut out of
        app.js so the arithmetic is one module a gate can import; app.js keeps only the wiring. Published on globalThis
@@ -1586,12 +1592,28 @@
        re-exports them on window.WMApp.settings; it declares only, so that order costs nothing and nothing here
        waits on boot. -->
   <script src="/settings.js"></script>
+  <!-- Cut 1 of public/render-projects.js's three (row 530, entry 6 of the order of work in
+       docs/reports/module-separation-2026-11-28.html): a project's ordering, a folder's card, the legend
+       and the project section. Loaded before render-projects.js and app.js, which call them by bare name;
+       it declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/project-order.js"></script>
+  <!-- Cut 2 of public/render-projects.js's three (row 530): every turnover branch a project names is a
+       row of its own, the children under their parent with the one fold that hides them, the row template,
+       its kind column and its reviewed chip. Loaded before render-projects.js and app.js, which call them
+       by bare name; it declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/project-row.js"></script>
+  <!-- Cut 3 of public/render-projects.js's three (row 530): the age column and its ring, the stabilise
+       hold, the re-rank with its two move flashes, the SSE batch and the drawing path - placeRow, removeRow
+       and renderProjectRows. Loaded before render-projects.js and app.js, which call them by bare name; it
+       declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/row-order.js"></script>
   <!-- The board's projects, sections and rows, cut out of app.js (step 7 of the same order of work): a folder's
        card and its counts, the project section and its head, the worktree row and the age column under it, the
        children under their parent with the one fold that hides them, the ordering that puts a folder, a project
        and a row's cards where they belong, and placeRow / queueRow / renderProjectRows that draw them. Loaded
        before app.js, which calls them by bare name and re-exports them on window.WMApp.projects; it declares
-       only, so that order costs nothing and nothing here waits on boot. -->
+       only, so that order costs nothing and nothing here waits on boot. Since row 530 this file is the header
+       and the record of the surface: its code lives in the three board/ modules above and beside it. -->
   <script src="/render-projects.js"></script>
   <!-- The body a turn draws, cut out of render-jobs.js (cut 1 of the two in
        docs/reports/module-separation-2026-11-28.html, section 15): one stream of the panel's console lines,
