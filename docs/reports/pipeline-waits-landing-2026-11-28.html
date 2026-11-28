@@ -35,7 +35,9 @@
   <div class="box">
     <b>Landed.</b> <code>c274c85f</code> (the cut) and <code>d3fa24b9</code> (its page) are merged into
     <code>wtgui/row-514-is-the-second-cut-of-lib-61ae03</code> as <b>4aff28ab</b>, a real merge with parents
-    <code>b4f88ad9</code> (this tree) and <code>d3fa24b9</code> (the cut's tip). Nothing was rebuilt: the two commits
+    <code>b4f88ad9</code> (this tree) and <code>d3fa24b9</code> (the cut's tip); the branch is then merged into the
+    turnover <code>20261127_2134_TASK-405_row-405-is-the-complete</code> as <b>b80fea1f</b>, a real merge with parents
+    <code>b15161e7</code> (the turnover tip) and <code>49e010b1</code> (this branch). Nothing was rebuilt: the two commits
     were read, then merged. The version and the changelog are the turnover's, because the two sides never diverged on
     them - <code>package.json</code> is <code>1.197.1</code> on both, and <code>git diff HEAD c274c85f</code> names
     neither <code>package.json</code> nor a changelog, so there was no conflict to resolve and no bump was made.
@@ -177,8 +179,9 @@ CHAIN-WAIT PASSED: the chain holds on a stage that waits</pre>
   </p>
 
   <p class="foot">
-    Row 514, the second cut of <code>lib/pipelines.js</code>. Merge commit <code>4aff28ab</code>. Verified against the
-    turnover head <code>4cbe6540</code> on 2026-11-28.
+    Row 514, the second cut of <code>lib/pipelines.js</code>. Merge commits <code>4aff28ab</code> (the cut into this
+    branch) and <code>b80fea1f</code> (this branch into the turnover). Verified against the turnover head
+    <code>4cbe6540</code> on 2026-11-28.
   </p>
 </main>
 </body>
