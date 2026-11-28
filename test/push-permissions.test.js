@@ -27,12 +27,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { BRANCH_NAME_GATE_PATTERN, branchNamePassesGate, branchesInPushRefs, permissionForPush, projectPushRow, pushChoiceFrom, repoKeyForProject, repoKeyForRemoteUrl, resolvePushPermissions, treeKindAsk } from "../lib/push-permissions.js";
 import { RemoteWrites } from "../lib/remote-writes.js";
 import { commonDirOf, guardPaths, guardState, installGuard } from "../lib/push-guard.js";
-import { configureRepo, git as runGit, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git as runGit, post, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
@@ -377,7 +380,7 @@ const configFor = (board) => ({
 });
 
 async function withPanel(board, config, fn) {
-  const panel = await startPanel({ dir: board.dir, keep: true, config });
+  const panel = await boot({ dir: board.dir, keep: true, config });
   try {
     return await fn(panel);
   } finally {
@@ -541,7 +544,7 @@ test("allow-push resolves a worktree of a project to that project's controls", a
 test("a NAME-only row still resolves after the panel boots the config the route wrote", async (t) => {
   const board = await makeBoard({ late: true });
   try {
-    const first = await startPanel({ dir: board.dir, keep: true, config: configFor(board) });
+    const first = await boot({ dir: board.dir, keep: true, config: configFor(board) });
     try {
       await waitForProject(first.base, LATE);
       const saved = await post(first.base, "/api/settings/push-project", { body: { project: LATE, kind: "existing", value: "allow-name-gate" } });
@@ -552,7 +555,7 @@ test("a NAME-only row still resolves after the panel boots the config the route 
     const written = JSON.parse(readFileSync(path.join(board.dir, "config.json"), "utf8"));
     assert.deepEqual(written.projects.find((p) => p.name === LATE), { name: LATE, pushExistingBranches: "allow-name-gate" });
 
-    const second = await startPanel({ dir: board.dir, keep: true, reuseConfig: true });
+    const second = await boot({ dir: board.dir, keep: true, reuseConfig: true });
     try {
       // The board answers from its discovery CACHE first and merges the config rows in on the first sweep, which lands
       // well after a boot — half a minute on a quiet box, closer to two on a loaded one. The timeout is that clock, not

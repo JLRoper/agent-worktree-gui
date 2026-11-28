@@ -21,7 +21,10 @@ import test, { after, before } from "node:test";
 
 import { TreeNames, autoNameRefusal, describeNaming, namingState, tagOf, treeKey } from "../lib/tree-names.js";
 import { WorktreeNaming, settleRefusal, titlePromise } from "../lib/worktree-naming.js";
-import { git, post, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, git, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
@@ -581,7 +584,7 @@ before(async () => {
     JSON.stringify({ savedAt: new Date().toISOString(), projects: [{ name: "demo-repo", path: repoDir }] }),
     "utf8",
   );
-  panel = await startPanel({
+  panel = await boot({
     config: {
       scanRoots: [],
       jobsFile: path.join(logs, "jobs.json"),

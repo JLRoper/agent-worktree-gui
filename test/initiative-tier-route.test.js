@@ -16,7 +16,10 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-initiatives-tier-"));
 const repos = path.join(sandbox, "repos");
@@ -36,7 +39,7 @@ const treeA = path.join(projectDir, ".worktrees", "sso-one");
 const treeB = path.join(projectDir, ".worktrees", "sso-two");
 const initiativesFile = path.join(sandbox, "logs", "initiatives.json");
 
-const panel = await startPanel({ dir: sandbox, config: { initiativesFile } });
+const panel = await boot({ dir: sandbox, config: { initiativesFile } });
 after(() => panel.stop());
 const base = panel.base;
 const get = async (p) => {

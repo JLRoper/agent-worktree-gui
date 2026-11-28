@@ -23,8 +23,11 @@ import path from "node:path";
 import test, { after } from "node:test";
 
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
-import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
 import { REPORTS_CSP } from "../routes/reports.js";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-reports-route-"));
 const repos = path.join(sandbox, "repos");
@@ -107,7 +110,7 @@ writeFileSync(
   "utf8",
 );
 
-const panel = await startPanel({ dir: sandbox, config: { deliverablesFile } });
+const panel = await boot({ dir: sandbox, config: { deliverablesFile } });
 after(() => panel.stop());
 const base = panel.base;
 const get = async (p) => {

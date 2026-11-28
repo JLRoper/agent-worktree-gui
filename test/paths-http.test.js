@@ -11,8 +11,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
-import { post, ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import test, { after } from "node:test";
+import { boot, post, ROOT, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sha = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 const getState = async (panel) => (await fetch(`${panel.base}/api/state`)).json();
@@ -58,7 +61,7 @@ test.before(async () => {
   flatDecoy = mkdtempSync(path.join(os.tmpdir(), "wtgui-decoy-"));
   const decoyHome = path.join(flatDecoy, "readers-board");
   const decoyScratch = path.join(flatDecoy, "readers-scratch");
-  flatPanel = await startPanel({ env: { WAG_HOME: decoyHome, WAG_SCRATCH: decoyScratch } });
+  flatPanel = await boot({ env: { WAG_HOME: decoyHome, WAG_SCRATCH: decoyScratch } });
 });
 
 test.after(async () => {
@@ -102,7 +105,7 @@ test("naming dataDir opts a second instance into the split layout; the first boo
   // JSON, so the data directory is what answers.
   const config = { dataDir, jobsFile: undefined, assistantFile: undefined, projectsCacheFile: undefined };
 
-  const first = await startPanel({ dir, config, keep: true });
+  const first = await boot({ dir, config, keep: true });
   let second = null;
   t.after(async () => {
     await first.stop();
@@ -136,7 +139,7 @@ test("naming dataDir opts a second instance into the split layout; the first boo
   // A restart on the same folders. The old checkout's file has since changed; the data directory already holds a store,
   // so the migration must not run again and must not put the old file back over a store the panel has been writing.
   writeFileSync(path.join(legacy, "jobs.json"), `${JSON.stringify({ version: 1, savedAt: "2026-02-02T00:00:00.000Z", jobs: [] })}\n`);
-  second = await startPanel({ dir, config, keep: true });
+  second = await boot({ dir, config, keep: true });
   const s2 = await stateWhen(second, (s) => s.paths?.dataMeasuredAt);
   splitRecord = { dir, paths: s2.paths };
   assert.equal(s2.paths.migrated?.thisBoot, false, "the journal still answers where the board came from, but nothing was copied this time");
@@ -181,7 +184,7 @@ test("Clean scratch over HTTP: it empties the folder the panel made, and refuses
   // 3. a scratchDir that is the home folder is refused outright. The panel sees a FAKE home (USERPROFILE / HOME), so a
   // regression in this guard deletes a temp folder and not the person running the tests.
   writeFileSync(path.join(fakeHome, "important.txt"), "do not delete");
-  const homey = await startPanel({ config: { scratchDir: fakeHome }, env: { USERPROFILE: fakeHome, HOME: fakeHome } });
+  const homey = await boot({ config: { scratchDir: fakeHome }, env: { USERPROFILE: fakeHome, HOME: fakeHome } });
   t.after(() => homey.stop());
   const refused = await post(homey.base, "/api/scratch/clean");
   assert.equal(refused.status, 409, refused.text);

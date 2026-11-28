@@ -20,10 +20,13 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
-import { configureRepo, git, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -253,7 +256,7 @@ function fixture(t) {
 
 test("the container's start puts a worktree on a turnover branch that has none, reuses it, and refuses a branch the project does not name", async (t) => {
   const fx = fixture(t);
-  const panel = await startPanel({
+  const panel = await boot({
     config: {
       scanRoots: [path.dirname(fx.repo).replace(/\\/g, "/")],
       projects: [

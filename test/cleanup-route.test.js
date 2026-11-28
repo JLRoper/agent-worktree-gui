@@ -27,9 +27,12 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
-import { configureRepo, git, post, ran, slash, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, ran, slash, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const TURNOVER = "20260710_1338_DMR-1-turnover";
 
@@ -104,7 +107,7 @@ const fixture = makeFixture();
 
 // One panel for the read shapes and one apply; `token` is set so the 403 case is real rather than theoretical.
 async function panelFor(extra = {}) {
-  return startPanel({
+  return boot({
     token: "cleanup-token",
     config: { projects: [{ name: "fixture", path: fixture.repo, mainBranch: "main", turnoverBranch: TURNOVER }] },
     // The remover's platform seam: on Windows a real apply also recycles each tree, and a test must not fill the

@@ -17,10 +17,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { AGENT_CLEANUP_DEFAULT, agentCleanupFrom, releasesEnabled } from "../lib/worktrees.js";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 // The row's two readers and its painter were cut out of app.js into public/settings-window.js (cut 8 of the
@@ -47,7 +50,7 @@ test("the switch is a veto above the project's grant, never a grant of its own",
 
 // ---- 2. the route ---------------------------------------------------------------------------------------------------
 test("POST /api/settings/cleanup stores the switch in config.json, and it survives a restart", async (t) => {
-  const panel = await startPanel({ keep: true });
+  const panel = await boot({ keep: true });
   const first = await post(panel.base, "/api/settings/cleanup", { body: { agentCleanup: false } });
   assert.equal(first.status, 200, first.text);
   assert.equal(first.json.agentCleanup, false);
@@ -61,7 +64,7 @@ test("POST /api/settings/cleanup stores the switch in config.json, and it surviv
   assert.ok(Array.isArray(live.releaseProjects), "the row is told which projects would actually clean up");
   await panel.stop();
 
-  const again = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  const again = await boot({ dir: panel.dir, keep: false, reuseConfig: true });
   t.after(() => again.stop());
   const after = await (await fetch(`${again.base}/api/config`)).json();
   assert.equal(after.agentCleanup, false, "the switch is the panel's, not the tab's");

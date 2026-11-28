@@ -204,6 +204,13 @@ export async function startPanel({ token = null, config = {}, env = {}, dir: giv
     home: path.join(dir, "hermes"),
     log: () => out.join(""),
     pid: child.pid,
+    // Let this child stop holding the process open: the process handle and its three pipes are what keep a test
+    // worker's event loop non-empty after its tests answer. `boot()` calls this, because a test file must never be
+    // parked by a panel it forgot; a harness calls stop() itself and never needs it.
+    unref() {
+      child.unref();
+      for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.unref?.();
+    },
     async stop() {
       if (!exited) {
         await new Promise((resolve) => {
@@ -224,6 +231,79 @@ export async function startPanel({ token = null, config = {}, env = {}, dir: giv
     },
   };
 }
+
+// ---- the registry: a booted panel cannot outlive the file that booted it --------------------------------
+//
+// A panel is a child process plus three pipes, and Node's runner only lets a test FILE exit once its event loop is
+// empty. A test that throws between `startPanel()` and its own `panel.stop()` line therefore strands that child: the
+// worker never exits, `node --test` waits on it forever, and the file's summary is the last thing anyone sees. That
+// is the stall docs/reports/npm-test-stall-2026-11-28.html measured - every test answered, nine workers parked on a
+// server.js child they were never told to stop - and row 569 fixed it in ONE file with a local copy of this net.
+//
+// Two things, and the first is the one that cannot fail:
+//
+//   1. `boot()` starts the panel, keeps it in this file's registry, and UNREFS it: the child process handle and its
+//      three pipes stop holding the worker's event loop, so a panel nobody stopped can no longer park the file. The
+//      worker reaches its end whatever the hooks do, and the stranded child sees its stdin close and shuts itself
+//      down (PANEL_PARENT_WATCH_STDIN, the same net row 569 relied on).
+//   2. `stopBootedPanels()` stops everything this file booted and has not stopped itself. The file registers it once,
+//      at module scope, as `after(stopBootedPanels);`. That is the graceful stop: it frees the port and removes a
+//      `keep: false` sandbox at the moment the file ends.
+//
+// Why the registry sweep is not the guarantee: a hook's timing follows where the module being loaded first suspends,
+// not where the hook is written. Measured on test/waves-write.test.js, whose preamble awaits a panel before it
+// declares a single test: a hook registered while the kit was imported ran 2.3 s before that file's first boot, with
+// the registry empty, and swept nothing - and the same line written in the file's own body ran at the same wrong
+// moment. A sweep on `beforeExit` is no better: it fires wherever the loop happens to drain, which with an unref'd
+// child can be between two awaits inside one test, and it stopped a panel a later assertion still used. So the sweep
+// is the graceful path and the unref is the cure.
+//
+// The per-test `t.after(() => panel.stop())` line stays the fast path: it frees the child and the port the moment
+// the test is done, and `stop()` removes the panel from the registry. The file-level sweep is the net for every path
+// that never reaches that line. Prove it with tools/panel-boot-proof.mjs: a copy of a converted file with every
+// per-test hook stripped - and a boot that throws before any stop - still exits on its own.
+const bootedPanels = new Set();
+
+// Stop the panel, then forget it. A stop that throws leaves it registered, so the file-level sweep still tries it.
+function registered(panel) {
+  const stop = panel.stop.bind(panel);
+  panel.stop = async () => {
+    const answer = await stop();
+    bootedPanels.delete(panel);
+    return answer;
+  };
+  return panel;
+}
+
+// Start a panel, and keep it until it is stopped. The one call a test file needs on top of startPanel().
+export async function boot(options = {}) {
+  const panel = registered(await startPanel(options));
+  bootedPanels.add(panel);
+  // The belt under the net: a panel that outlives its sweep must still not be able to hold the worker open.
+  panel.unref();
+  return panel;
+}
+
+// Stop everything this file booted and has not stopped itself, newest first (the newest boot is usually the one a
+// failed test left behind). Failures are collected, never thrown: a throwing hook hides the runner's own summary,
+// which is the one line a stalled file never printed.
+export async function stopBootedPanels() {
+  const live = [...bootedPanels].reverse();
+  bootedPanels.clear();
+  const results = [];
+  for (const panel of live) {
+    try {
+      await panel.stop();
+      results.push({ pid: panel.pid, port: panel.port, dir: panel.dir, stopped: true });
+    } catch (error) {
+      results.push({ pid: panel.pid, port: panel.port, dir: panel.dir, stopped: false, error: String(error?.message || error) });
+    }
+  }
+  return results;
+}
+
+// What this file has booted and not yet stopped, for a test or a tool that wants to say so.
+export const panelsBooted = () => [...bootedPanels].map((panel) => ({ pid: panel.pid, port: panel.port, dir: panel.dir, base: panel.base }));
 
 // Poll `fn()` until it returns a truthy value or `timeoutMs` expires. Used across the verification harnesses
 // so each script does not carry its own copy of the polling loop.

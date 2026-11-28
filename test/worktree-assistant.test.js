@@ -23,8 +23,8 @@
 // worker never exits, and `node --test` waits on it forever - the whole suite stalls on this file with every test in
 // it already answered. That is not theory: two assertions in this file fail on main (a write lands on the board's
 // next /api/state rebuild, not on the read that follows it), and the two tests that own those panels are exactly the
-// two that used to leave a child behind. `boot` plus the file-level `after` below are the net for the next such
-// throw; the per-test hook is still the fast path.
+// two that used to leave a child behind. That net began here as a local `boot` and a `panels` array; it now lives in
+// tools/panel-testkit.mjs for every panel-booting file, so this file imports it rather than keeping a second copy.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -33,22 +33,12 @@ import path from "node:path";
 import test, { after } from "node:test";
 
 import { ownerKey } from "../lib/locks.js";
-import { configureRepo, git, post, slash, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, slash, stopBootedPanels, waitForRow } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
-
-// The one way this file boots a panel: the kit's call plus a record of the child, so the file-level `after` can stop
-// whatever a failed test left running. A test's own `t.after(() => panel.stop())` is still the fast path; this is what
-// makes a throw between `boot` and that hook (or a future edit that forgets it) harmless instead of fatal to the run.
-const panels = [];
-const boot = async (options) => {
-  const panel = await startPanel(options);
-  panels.push(panel);
-  return panel;
-};
-after(async () => {
-  for (const panel of panels) await panel.stop();
-});
 
 // A project with one commit on main and N tagged worktrees under it. The tag is what a rename keeps, so every name
 // here carries one — a tree without a tag is refused by the rename path (lib/tree-names.js `renameRefusal`).
