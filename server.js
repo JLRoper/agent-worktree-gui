@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { mkdir, open, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -3001,6 +3001,31 @@ function seedTreeName(project, tree) {
   }
 }
 
+// Does this project have any worktree at all beyond its own checkout? `git worktree list` answers with the main
+// checkout plus the entries registered under the repository's `worktrees` admin directory, and `seedTreeName`
+// refuses the tree that IS the project's own checkout — so a project whose admin directory holds no directory
+// entry has nothing this sweep could write down, and its `git worktree list` can only answer with the checkout
+// the panel already has. Measured 2026-11-27 on the live fleet: 160 of 190 projects are in exactly that state,
+// and the boot sweep spent a spawn on each of them for zero records. `null` means the question cannot be
+// answered from the filesystem (no `.git`, an unreadable admin directory, a linked checkout whose `.git` is a
+// file): those keep their read, because only git can say what a repository that is not a plain checkout holds.
+function hasLinkedWorktrees(projectPath) {
+  const dotGit = path.join(projectPath, ".git");
+  try {
+    if (!statSync(dotGit).isDirectory()) return null; // not a plain checkout: let git answer
+  } catch {
+    return null; // no `.git` to look into: let git answer (or fail, as it always did)
+  }
+  try {
+    // A plain FILE in the admin directory is not a worktree to git, and an entry that is not a file (a
+    // directory, a link, anything unusual) might be one: only an all-files answer is safely "no worktrees".
+    return readdirSync(path.join(dotGit, "worktrees"), { withFileTypes: true }).some((e) => !e.isFile());
+  } catch (e) {
+    // An absent admin directory is git's own answer for "nothing registered"; any other failure keeps the read.
+    return e && e.code === "ENOENT" ? false : null;
+  }
+}
+
 // One `git worktree list` per project at boot, so the fleet that predates the ledger is written down before the
 // first job event is considered for naming. Bounded in time and width, and it never rejects: a project whose git
 // cannot answer is seeded by its own discovery pass instead, which calls the same hook on every listing.
@@ -3009,10 +3034,18 @@ async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
   const projects = (registry.projects || []).slice();
   let next = 0;
   let seeded = 0;
+  let skipped = 0;
   const lane = async () => {
     while (next < projects.length && Date.now() - started < timeoutMs) {
       const project = projects[next++];
       if (!project?.path) continue;
+      // The spawn this project does not need (see hasLinkedWorktrees): its listing would name its own checkout,
+      // which seedTreeName refuses, and nothing else. Measured 2026-11-27: the 160-project skip took the sweep
+      // from 190 `git worktree list` children to 30, and the sweep seeds the identical record set.
+      if (hasLinkedWorktrees(project.path) === false) {
+        skipped += 1;
+        continue;
+      }
       try {
         const trees = await worktreeList(project.path);
         for (const t of trees) if (seedTreeName(project, t)) seeded += 1;
@@ -3026,7 +3059,7 @@ async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
   };
   await Promise.all(Array.from({ length: Math.max(1, Math.min(width, projects.length)) }, lane));
   if (seeded) log(`tree-names: ${seeded} tree(s) had no record and now do — their names are fixed from here`);
-  else log(`tree-names: ${treeNames.size} tree(s) on record, nothing to seed at boot`);
+  else log(`tree-names: ${treeNames.size} tree(s) on record, nothing to seed at boot (${skipped} project(s) hold no worktree)`);
   return seeded;
 }
 
