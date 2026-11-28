@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The landing cut - row 402, third attempt</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f1216; color: #d8dee6; font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 18px; margin: 36px 0 10px; color: #eaf0f7; border-bottom: 1px solid #232a33; padding-bottom: 6px; }
+  h3 { font-size: 15px; margin: 22px 0 6px; color: #cfd8e3; }
+  p, li { color: #c3ccd8; }
+  .sub { color: #8b97a5; margin: 0 0 22px; font-size: 13.5px; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; background: #171c22; border: 1px solid #232a33; border-radius: 4px; padding: 1px 5px; color: #e6c07b; }
+  pre { background: #12171d; border: 1px solid #232a33; border-radius: 6px; padding: 14px 16px; overflow: auto; font: 12.5px/1.5 Consolas, "Cascadia Mono", monospace; color: #c8d2dd; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid #212831; }
+  th { color: #93a0ae; font-weight: 600; }
+  .ok { color: #7fd18b; font-weight: 600; }
+  .no { color: #e08b8b; font-weight: 600; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 10px; border: 1px solid #2a323d; color: #9aa7b5; }
+  .card { border: 1px solid #232a33; border-radius: 8px; padding: 14px 16px; background: #12171d; margin: 12px 0; }
+  .card p:last-child { margin-bottom: 0; }
+  ul { padding-left: 20px; }
+  a { color: #82b8ff; }
+</style>
+</head>
+<body>
+<main>
+<h1>The landing cut: its own turnover branch, keyed to the task id</h1>
+<p class="sub">Row 402, third attempt. Tree <code>row-402-is-the-complete-brief-a-landing-af33fa</code>, branch <code>wtgui/row-402-is-the-complete-brief-a-landing-af33fa</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. Base measured at <code>2370dab6</code>; main at <code>1.196.1</code>. 2026-11-28.</p>
+
+<div class="card">
+<p><strong>The reader's decision this page implements.</strong> "When a small landing task has no turnover branch, the panel CREATES one automatically, keyed to the task id, and cuts the worker on it - no ask, so a small task never stalls." And: "root trees are research or turnover, never implementation." The row that named TASK-405's branch while its own key had none, and the trees cut at the repo root with no recorded kind, are the defect this change removes.</p>
+</div>
+
+<h2>What the cut does now</h2>
+<ul>
+  <li><strong>The brief decides the kind, and a landing verb always wins.</strong> A brief containing land, push, PR, merge, ship, release or a version bump is a landing brief whatever its first sentence says. A landing verb used as a description of the panel's own machinery ("the push guard", "the merge status", "a landing tree") is not an order and does not flip a research brief.</li>
+  <li><strong>A landing cut makes its own turnover branch, keyed to its task id, with no card.</strong> From a plain cut with a code or landing brief, the panel derives <code>YYYYMMDD_HHMM_TASK-&lt;id&gt;_&lt;slug&gt;</code>, cuts the container, files it under <code>task &lt;id&gt;</code> in the project's registry, and cuts the child from it. The turnover policy governs a manual add; it no longer parks the cut.</li>
+  <li><strong>One entry per key, accumulated.</strong> A key resolves only its own entry. A key with none resolves nothing, so a cut never borrows another feature's branch (the TASK-405 leak). A second cut for one key reuses the first branch.</li>
+  <li><strong>A landed branch is not a container.</strong> A registered turnover branch whose tip main has moved past refuses the landing cut by name, with the two remedies (remove it from the project, or file under a new task id).</li>
+  <li><strong>Implementation at the root is refused by the cut.</strong> A landing cut that names no key, and any implementation cut that would still start at the project's base, is refused with the sentence that says why and the line to write instead. A pipeline stage that declares its own artifact (a PR, a local commit, nothing) is not a landing task and is exempt.</li>
+  <li><strong>The job record stamps the queue row.</strong> A SPAWN carrying a task id writes <code>queueRow</code> on the job, so the run can be matched to its row from the store rather than from the prompt.</li>
+</ul>
+
+<h2>Where the change lives</h2>
+<table>
+  <tr><th>File</th><th>What it owns</th></tr>
+  <tr><td><code>lib/branch-kind.js:93-127</code></td><td>The landing verbs, the machinery-noun exclusion, <code>landingSignal</code>.</td></tr>
+  <tr><td><code>lib/branch-kind.js:144</code></td><td><code>inferKindFromBrief</code>: a landing verb answers implementation before any code word.</td></tr>
+  <tr><td><code>lib/branch-kind.js:248</code></td><td><code>planCut</code> records which verb decided the kind.</td></tr>
+  <tr><td><code>lib/project-turnover.js:240</code></td><td><code>planTurnoverCut</code>: <code>landing</code> makes the branch with no ask; a landing cut with no key is <code>ok: false</code> with the remedy.</td></tr>
+  <tr><td><code>lib/project-turnover.js:436</code></td><td><code>turnoverLookup</code>: a key resolves only its own entry; no primary fallback.</td></tr>
+  <tr><td><code>lib/jobs.js:3348</code></td><td>A registered branch that has already landed refuses the cut, naming it.</td></tr>
+  <tr><td><code>lib/jobs.js:3361-3419</code></td><td>The landing cut: no-key refusal, the container cut, the registry write, the child cut from it.</td></tr>
+  <tr><td><code>lib/jobs.js:3428</code></td><td>The root guard: implementation cannot stand at the repository root.</td></tr>
+  <tr><td><code>lib/jobs.js:4394</code></td><td>The job record stamps <code>queueRow</code>.</td></tr>
+  <tr><td><code>server.js:1469-1476</code></td><td>The cut's planner is told it is a landing cut; <code>rememberTurnoverFor</code> is the registry writer the cut calls.</td></tr>
+</table>
+
+<h2>Proof</h2>
+<p>Every command below was run in this worktree after the final edit. The output quoted is the runner's own summary block, not a retelling.</p>
+
+<h3>The new file, both paths</h3>
+<pre>node --test test/landing-cut.test.js
+-&gt; tests 5 / pass 5 / fail 0
+
+  1. a landing verb makes the brief a landing cut, whatever its first sentence says
+  2. a landing cut makes its own turnover branch keyed to its task id, and two keys both read back
+  3. a landing cut that names no key is refused by the cut, in the sentence that says why
+  4. a registered turnover branch that has already landed is refused by name
+  5. the job record stamps the queue row a SPAWN named</pre>
+<p>Test 2 is a real git fixture: two keys are cut in a row, each gets <code>20261126_1800_TASK-402_*</code> and <code>20261126_1800_TASK-403_*</code>, both read back from the registry, and a third cut for <code>task 402</code> reuses the first branch with <code>reused: true</code>. Test 3 asserts the exact refusal sentence and that <code>.worktrees</code> never appears. Test 4 merges a turnover branch, moves main past it, and asserts the refusal names the branch and says "a landed branch is not a container".</p>
+
+<h3>The spawn-check and queue paths</h3>
+<pre>node --test test/spawn-check.test.js test/spawn-queue-link.test.js test/spawn-row-prelift.test.js test/project-turnover.test.js
+-&gt; tests 39 / pass 39 / fail 0</pre>
+<p>These are the pre-flight route (the same refusals the cut throws), the queue link a SPAWN writes, the pre-lift record a row makes, and the turnover policy's own saves. All 39 pass unchanged, which is the proof that the new cut path did not move the checks it shares with them.</p>
+
+<h3>The kind and the brief</h3>
+<pre>node --test test/branch-kind.test.js
+-&gt; tests 8 / pass 8 / fail 0
+
+node --test test/branch-kind-inference.test.js test/landing-cut.test.js test/brief-follows-the-policy.test.js
+-&gt; tests 15 / pass 15 / fail 0
+
+node --test test/branch-policy.test.js test/git-brief.test.js
+-&gt; tests 9 / pass 9 / fail 0</pre>
+<p>Three existing tests were rewritten because their premise is the shape this decision removes, not because they were passing by accident: <code>test/branch-kind.test.js</code> case 3 now pins "a landing cut makes its own branch under ask, with no card"; <code>test/branch-policy.test.js</code> case 2 now pins the root refusal; and the implementation-brief test in <code>test/brief-follows-the-policy.test.js</code> now cuts from a turnover parent, where an implementation tree actually lives. <code>test/git-brief.test.js</code> now uses a research brief, because its subject is the GIT REMOTES paragraph, not the landing shape.</p>
+
+<h2>Failures that were already there</h2>
+<p>The full suite has failures on this base that this change does not touch. They were measured by extracting the base with <code>git archive 20261127_2134_TASK-405_row-405-is-the-complete</code> into a scratch directory and running the same files there: 8 failures in <code>absolute-paths</code> (2), <code>gateway-permissions</code>, <code>harness</code>, <code>initiative-tier-route</code> (3) and <code>junctioned-node-modules</code>; plus 3 in <code>worktree-assistant</code> and 1 in <code>assistant-queue-reattach</code>. The scratch extraction is at <code>C:/Users/roper/AppData/Local/Temp/wag/43e85894/base</code> for as long as the temp dir lives.</p>
+
+<h2>Still open from the row's full brief</h2>
+<table>
+  <tr><th>Item</th><th>Where it stands</th></tr>
+  <tr><td>(3) Delete the singular <code>turnoverBranch</code> from the settings shape</td><td><span class="tag">pending</span> The CUT no longer reads it for a keyed cut (<code>turnoverLookup</code> resolves only by key), but <code>routes/project-turnover.js:165-171,205-210</code> still accepts and writes the single-name save, and <code>turnoverBranchesOf</code> still reads it as a legacy entry. Removing it needs the settings bar in <code>public/board-scaffold.js</code> plus its verify scripts in the same change.</td></tr>
+  <tr><td>(7) An unclassified tree draws an explicit mark, never a blank cell</td><td><span class="tag">pending</span> <code>public/render-projects.js:1039-1042</code> still returns <code>""</code> when <code>row.branchKind</code> is absent. The cut now records a kind on every landing path it takes, but a tree cut by an older build still draws nothing.</td></tr>
+  <tr><td>(8) Repair a running row with no thread and no run</td><td><span class="tag">pending</span> <code>lib/assistant/queue.js</code> guesses liveness from the tree and the thread, and says "no run" when nothing matches; it does not write the match back onto the row. This is the row's STALE half, untouched here.</td></tr>
+  <tr><td>(6) UI vocabulary: <code>baseRefKind</code> vs kind</td><td><span class="tag">partial</span> The prose on this page and the new comments keep the two apart. The settings field labels are unchanged.</td></tr>
+</table>
+
+<h2>Re-run it</h2>
+<pre>cd "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-402-is-the-complete-brief-a-landing-af33fa"
+node --test test/landing-cut.test.js
+node --test test/spawn-check.test.js test/spawn-queue-link.test.js test/spawn-row-prelift.test.js test/project-turnover.test.js
+npm run test:changed -- --list</pre>
+</main>
+</body>
+</html>

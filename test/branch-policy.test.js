@@ -14,7 +14,7 @@
 // reads" is the claim, not "what the formatter returns".
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -199,19 +199,16 @@ test("a worker's run body names the parent its tree was really cut from", async 
   await jobsA2.create({ prompt: "follow-up in the same tree", cwd: treeA, existing: true, project: "Menu" });
   assert.match(stub.last(), new RegExp(`cut from \`${TURNOVER_BRANCH}\``), `a second run in the tree reads the recorded parent:\n${stub.last()}`);
 
-  // 2. Cut from main with a code brief: an implementation tree. It merges into main LOCALLY only on the reader's
-  // explicit grant, and it is never told to push or open a PR.
+  // 2. Cut from main with a code brief and no task id: the reader's rule REFUSES it. Implementation is landing work,
+  // so it must be cut from its feature's turnover branch; a landing cut that names no key cannot make one.
   git(turnover, ["checkout", "-q", "main"]);
   const jobsB = makeJobs(dirA, stub.url);
   t.after(() => jobsB.dispose());
-  await jobsB.create({ prompt: "fix the landing guard", cwd: turnover, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github" });
-  const bodyB = stub.last();
-  assert.match(bodyB, /cut from `main`/, `a tree cut from main names main as its parent:\n${bodyB}`);
-  assert.match(bodyB, /This is an implementation tree/, "the brief's code words make it implementation");
-  assert.match(bodyB, /Merge it into `main` LOCALLY only if the reader grants that explicitly/, "main is written only on a grant");
-  assert.match(bodyB, /do not merge into it on your own, and do not push/, "the worker does not push or merge on its own");
-  assert.doesNotMatch(bodyB, /push it and open a pull request/, "an implementation tree never opens a PR");
-  assert.doesNotMatch(bodyB, /gh pr create/, "and is not handed the PR command");
+  const refused = await jobsB.create({ prompt: "fix the landing guard", cwd: turnover, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github" });
+  assert.equal(refused.status, "failed", "the cut refuses rather than putting an implementation at the root");
+  assert.match(String(refused.error || ""), /an implementation tree cannot stand at the repository root/, "the refusal says why");
+  assert.match(String(refused.error || ""), /SPAWN #<id> agent-worktree-gui/, "and names the line to write instead");
+  assert.equal(existsSync(path.join(turnover, ".worktrees", String(refused.branch || "never-cut"))), false, "no tree was cut for it");
 
   // 3. A tree nobody can name (cut by hand, no record, no upstream) gets the blanket rule and NO invented parent.
   const handTree = path.join(turnover, ".worktrees", "by-hand");
