@@ -10,9 +10,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { portAnswers, portHolder, probeHosts, refusalLine } from "../lib/port-guard.js";
-import { boot, freePort } from "../tools/panel-testkit.mjs";
+import { boot, freePort, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 // A bare TCP listener: answers the connect, says nothing (as a second panel, or any other program, would to a probe).
 function listen(port, host = "127.0.0.1") {

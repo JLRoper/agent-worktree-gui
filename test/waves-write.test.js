@@ -36,7 +36,10 @@ import path from "node:path";
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
 import { Waves, WAVES_MAX, WAVE_HISTORY_MAX, WAVE_TITLE_MAX, waveIdFrom } from "../lib/waves.js";
 import { initiativeAsks } from "../lib/initiative-permissions.js";
-import { boot, git, post, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-waves-write-"));
 const repos = path.join(sandbox, "repos");

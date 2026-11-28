@@ -1,9 +1,12 @@
 // What a failed request answers. Internal faults used to answer 400 ("your mistake") with no log,
 // which is why a blank board had no explanation anywhere.
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 import { HttpError, errorStatus } from "../lib/errors.js";
-import { boot, post } from "../tools/panel-testkit.mjs";
+import { boot, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 test("a bug is a 500, a refusal the handler chose keeps its status", () => {
   assert.equal(errorStatus(new TypeError("cannot read properties of undefined")), 500);

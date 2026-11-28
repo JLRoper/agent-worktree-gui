@@ -11,8 +11,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
-import { boot, post, ROOT } from "../tools/panel-testkit.mjs";
+import test, { after } from "node:test";
+import { boot, post, ROOT, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sha = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 const getState = async (panel) => (await fetch(`${panel.base}/api/state`)).json();

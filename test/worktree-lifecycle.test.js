@@ -14,9 +14,12 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { Locks } from "../lib/locks.js";
-import { boot, configureRepo, git, post, slash, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, slash, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const projectOf = (snap, name) => (snap.projects || []).find((p) => p.name === name) || null;
 const rowOf = (snap, name, wtPath) => {

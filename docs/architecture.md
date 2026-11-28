@@ -664,9 +664,11 @@ Three tiers, each shaped for a different question:
 
 `panel-testkit.mjs` boots the **real** `server.js` against a throwaway config on a free port, with
 its own `HERMES_HOME` and no gateway key — so a test asserts behaviour, not source text. A test file
-starts one with `boot()`, never `startPanel()` directly: `boot()` is the same call plus one line in a
-per-file registry that a single file-level `after()` sweeps, so a test that throws before its own
-`panel.stop()` cannot leave the child holding the runner's pipes and stall the whole suite (the
+starts one with `boot()`, never `startPanel()` directly. `boot()` keeps the child in a per-file
+registry, unrefs it so a panel nobody stopped cannot hold the worker's event loop open, and the file
+registers `after(stopBootedPanels)` once - the graceful stop at the end, with the kit sweeping on
+`beforeExit` as the path that always fires. That is what stops a test that throws before its own
+`panel.stop()` from leaving the child holding the runner's pipes and stalling the whole suite (the
 failure `docs/reports/npm-test-stall-2026-11-28.html` measured, and the cure
 `docs/reports/panel-boot-net-2026-11-28.html` puts in the kit). `startPanel()` stays exported for the
 `tools/verify-*.mjs` harnesses, which are one-shot programs with no test file to outlive.

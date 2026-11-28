@@ -19,7 +19,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { boot } from "../tools/panel-testkit.mjs";
+import { boot, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-initiative-tags-route-"));
 after(() => rmSync(sandbox, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));

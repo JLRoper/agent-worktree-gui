@@ -10,14 +10,17 @@
 // The fix moves the grouping onto the same record as the name and the same read. This test boots the real panel twice
 // over one sandbox that has a queue task naming a round and NO parents.json at all: both boots must paint the name AND
 // the grouping, or the grouping is still living on the scan.
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { boot, git, configureRepo } from "../tools/panel-testkit.mjs";
+import { boot, git, configureRepo, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const ROUND_PARENT = "wtgui/round-a-052254";
 const ROUND_STAGE = "wtgui/round-a-stage-1-probe-6632b6";

@@ -4,9 +4,12 @@
 // shown end to end by tools/panel-boot-proof.mjs: a converted file with every per-test hook stripped, plus a boot
 // that throws before it can stop, still exits on its own.
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { boot, panelsBooted, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const answers = async (base) => {
   try {

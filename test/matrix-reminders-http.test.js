@@ -4,8 +4,11 @@
 // directory, so this asserts what the routes answer rather than what their source says. The store's own unit
 // tests are test/matrix-reminders.test.js; the bridge's turn contract is test/matrix-bridge-turn.test.js.
 import assert from "node:assert/strict";
-import test from "node:test";
-import { boot, post } from "../tools/panel-testkit.mjs";
+import test, { after } from "node:test";
+import { boot, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const TOKEN = "matrix-reminders-test-token";
 let panel = null;

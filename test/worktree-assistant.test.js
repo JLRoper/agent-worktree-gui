@@ -30,10 +30,13 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { ownerKey } from "../lib/locks.js";
-import { boot, configureRepo, git, post, slash, waitForRow } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, slash, stopBootedPanels, waitForRow } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 

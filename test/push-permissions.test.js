@@ -27,12 +27,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { BRANCH_NAME_GATE_PATTERN, branchNamePassesGate, branchesInPushRefs, permissionForPush, projectPushRow, pushChoiceFrom, repoKeyForProject, repoKeyForRemoteUrl, resolvePushPermissions, treeKindAsk } from "../lib/push-permissions.js";
 import { RemoteWrites } from "../lib/remote-writes.js";
 import { commonDirOf, guardPaths, guardState, installGuard } from "../lib/push-guard.js";
-import { boot, configureRepo, git as runGit, post, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git as runGit, post, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");

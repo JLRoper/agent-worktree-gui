@@ -7,8 +7,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import test from "node:test";
-import { boot, freePort } from "../tools/panel-testkit.mjs";
+import test, { after } from "node:test";
+import { boot, freePort, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const DOC = '[{"id":"poc-breaking-suite","title":"POC-breaking suite — six layer questions, two answered","stageCount":9}]';
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");

@@ -19,7 +19,7 @@ import { readFile } from "node:fs/promises";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import {
   DEFAULT_TURNOVER_POLICY,
@@ -42,7 +42,10 @@ import {
 } from "../lib/project-turnover.js";
 import { isTurnoverBranchName } from "../lib/turnover-base.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes, turnoverOut } from "../routes/project-turnover.js";
-import { boot, configureRepo, git } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 // ---- 1: the read side ------------------------------------------------------------------------------------------
 test("an absent or unreadable turnover field reads as no branch, and a name is trimmed to one line", () => {

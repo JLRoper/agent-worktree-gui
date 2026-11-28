@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -31,7 +31,10 @@ import {
   stopPid,
   waitForPidGone,
 } from "../lib/port-holder.js";
-import { boot, readSource, waitFor } from "../tools/panel-testkit.mjs";
+import { boot, readSource, stopBootedPanels, waitFor } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // The one switch a failing-first proof needs: point this at an older lib/panel-restart.cjs (extracted with

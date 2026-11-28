@@ -65,24 +65,32 @@ function countCalls(masked, name) {
   return n;
 }
 
-// Hooks whose callback stops a panel, by the call's own receiver: `t.after` is a per-test hook, `after` or
-// `test.after` is a file-level one.
+// Hooks whose callback stops a panel, by the call's own receiver: `t.after` is a per-test hook; `after(...)` and
+// `test.after(...)` are the file-level ones. Only the per-test count enters the ranking - a file-level hook is what
+// the kit brings, and a file that already has one is a different (earlier) cure.
 function countStopHooks(masked, receiver) {
-  const pattern = receiver === "t" ? /(?<![\w.])t\.after\s*\(/g : /(?<![\w.])after\s*\(/g;
+  const pattern = receiver === "t" ? /(?<![\w.])t\.after\s*\(/g : /(?<![.\w])(?:test\.)?after\s*\(/g;
   let n = 0;
   for (let m = pattern.exec(masked); m; m = pattern.exec(masked)) {
-    if (receiver !== "t") {
-      const before = masked.slice(Math.max(0, m.index - 6), m.index);
-      if (/test\.$/.test(before)) {
-        // `test.after(` is caught by the same pattern; the receiver test is the file's own hook either way.
-      }
-    }
     const open = masked.indexOf("(", m.index);
     const close = matchingParen(masked, open);
     if (close < 0) continue;
     if (/\.stop\s*\(/.test(masked.slice(open, close))) n += 1;
   }
   return n;
+}
+
+// A file registers the file-level sweep when an `after(...)` hook's body calls stopBootedPanels(): that is the
+// graceful stop at the end of the file. It is not what makes a file safe (boot() unrefs the child, and the kit
+// sweeps on beforeExit), so it does not decide the ranking - it is reported so a converted file can be seen whole.
+function registersSweep(masked) {
+  for (const m of masked.matchAll(/(?<![.\w])(?:test\.)?after\s*\(/g)) {
+    const open = masked.indexOf("(", m.index);
+    const close = matchingParen(masked, open);
+    if (close < 0) continue;
+    if (/stopBootedPanels/.test(masked.slice(open, close))) return true;
+  }
+  return false;
 }
 
 const importsBoot = (source) => {
@@ -116,6 +124,7 @@ export function auditFile(file) {
     fileHooks,
     gap: starts + boots - hooks,
     kit,
+    sweep: kit && registersSweep(masked),
   };
 }
 

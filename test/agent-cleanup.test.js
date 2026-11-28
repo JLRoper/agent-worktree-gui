@@ -17,10 +17,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { AGENT_CLEANUP_DEFAULT, agentCleanupFrom, releasesEnabled } from "../lib/worktrees.js";
-import { boot, post } from "../tools/panel-testkit.mjs";
+import { boot, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 // The row's two readers and its painter were cut out of app.js into public/settings-window.js (cut 8 of the

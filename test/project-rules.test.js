@@ -20,11 +20,14 @@ import { readFile } from "node:fs/promises";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { RULES_MAX, RULE_MAX_CHARS, projectRulesRow, rulesCount, rulesFrom, validateRules } from "../lib/project-rules.js";
 import { RULES_PATH, createProjectRulesRoutes, rulesOut } from "../routes/project-rules.js";
-import { boot, configureRepo, git } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 // ---- 1-2: the read side ----------------------------------------------------------------------------------------
 test("an absent or unreadable rules field reads as an empty list, and a rule is one line", () => {

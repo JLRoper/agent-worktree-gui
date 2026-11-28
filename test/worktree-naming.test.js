@@ -21,7 +21,10 @@ import test, { after, before } from "node:test";
 
 import { TreeNames, autoNameRefusal, describeNaming, namingState, tagOf, treeKey } from "../lib/tree-names.js";
 import { WorktreeNaming, settleRefusal, titlePromise } from "../lib/worktree-naming.js";
-import { boot, git, post } from "../tools/panel-testkit.mjs";
+import { boot, git, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();

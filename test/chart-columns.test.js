@@ -20,10 +20,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { CHART_CHIP_IDS, CHART_COLUMN_IDS, CHART_TOGGLE_IDS, DEFAULT_HIDDEN_COLUMNS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
-import { boot, post, sliceRegion } from "../tools/panel-testkit.mjs";
+import { boot, post, sliceRegion, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 // The chart's own code moved out of public/app.js into public/charts.js in step 3 of

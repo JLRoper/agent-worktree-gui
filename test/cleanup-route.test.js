@@ -27,9 +27,12 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
-import { boot, configureRepo, git, post, ran, slash } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, ran, slash, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const TURNOVER = "20260710_1338_DMR-1-turnover";
 
