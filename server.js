@@ -935,6 +935,44 @@ function invalidateSnapshot() {
   boardCache.invalidate();
 }
 
+// ONE PATH FOR A JOB CARD THAT MOVED, AND ITS SNAPSHOT WITH IT.
+//
+// The board snapshot carries the jobs pane (`snapshotBody` -> `jobs: jobs.list()`), so a job whose status moved
+// without the cached board being dropped is a /api/state that contradicts /api/jobs: on job 2c104a9b (queue row 400)
+// the jobs read answered `done` with an endedAt while the board read the SAME run as `running` with endedAt null, and
+// the transcript head - which draws its turns from `state.jobs` - read "running 182m3s" over a body that already said
+// the result was ready. Invalidation alone does not close that window, because /api/state answers the last built text
+// while a rebuild runs behind it (`snapshotText`'s stale-while-revalidate) and a busy fleet bumps the generation
+// during every build, so the pre-change text can be the only one ever served. A status change therefore drops the
+// text as well as the generation, and the next /api/state read builds the board the jobs read already agreed with.
+//
+// EVERY emitter of a job frame comes through here: the store's own events below and the reconcile, spawn, answer and
+// merge routes, so a new emitter cannot broadcast a change and leave the cached board behind. `jobStatusMoved` keeps
+// the text drop to a genuine STATUS move - a `job` frame also carries stats, queue notes and approval opens/closes,
+// and dropping the text for news the jobs pane does not draw would rebuild the board on every stat tick.
+const jobStatusSeen = new Map(); // thread -> the status the board was built with
+function jobStatusMoved(job) {
+  if (!job) return false;
+  const key = String(job.thread || job.id || "");
+  if (!key) return false;
+  const status = String(job.status || "");
+  const prev = jobStatusSeen.get(key);
+  jobStatusSeen.set(key, status);
+  return prev !== undefined && prev !== status;
+}
+function broadcastJobs(evt = null) {
+  invalidateSnapshot();
+  snapshotCache.dropText();
+  broadcast(evt || { type: "jobs", jobs: jobs.list() });
+}
+// What a job store event means for the board: a `jobs` frame is a whole-list change (a card added, removed or settled
+// through the list), a `job` frame is decided by whether IT moved the status, and everything else (a console line, a
+// title, a queued note) is an ordinary frame.
+function broadcastJobEvent(evt) {
+  if (evt?.type === "jobs" || (evt?.type === "job" && jobStatusMoved(evt.job))) return broadcastJobs(evt);
+  return broadcast(evt);
+}
+
 // The snapshot as TEXT, memoised by the cache's generation: /api/state and the stream's full frame read this instead
 // of stringifying the board themselves. A 3.6 MB `JSON.stringify` is 0.6-1.3s of this one event loop, and the object
 // cache never spared it - every poll and every connect paid it again.
@@ -1321,7 +1359,7 @@ async function reconcileJobTrees({ force = false } = {}) {
       changed = true;
       log(`job ${j.id}: attached to ${cleanPath(res.path)} — the board had no row for its tree, so git worktree list answered`);
     }
-    if (changed) broadcast({ type: "jobs", jobs: jobs.list() });
+    if (changed) broadcastJobs();
   })().finally(() => {
     jobTreeReconciling = null;
   });
@@ -1375,7 +1413,9 @@ const jobs = new Jobs({
   // walks one list. A Jobs built by a test passes its own or none.
   children: panelChildren,
   onEvent: (evt) => {
-    guard("event broadcast", () => broadcast(evt));
+    // A job frame that moved a status goes through `broadcastJobEvent`: the jobs pane and the cached board change in
+    // ONE breath. Everything else (console lines, titles, stats) is an ordinary frame and only invalidates.
+    guard("event broadcast", () => broadcastJobEvent(evt));
     guard("worktree adopt", () => adoptFromJob(evt));
     // Every event that carries a session title is a chance to give a tree the name its run chose for it — the
     // sweep that emits on the first title, the run's own events, and the settle that follows. The policy (which
@@ -1411,6 +1451,9 @@ const jobs = new Jobs({
     void tickPipelineWaits();
   },
 });
+// The statuses the board is BUILT with, so the first frame after a restart can still say whether it moved one: the
+// store has loaded its persisted cards by this point, and that is the list a snapshot built now would carry.
+for (const j of jobs.list()) jobStatusSeen.set(String(j.thread || j.id || ""), String(j.status || ""));
 // Which branch a cut for a project starts from, when the reader has named one. Read per cut rather than copied at
 // boot: the settings save updates the registry's record, and the very next SPAWN must cut from the new branch without
 // a restart. `registry` is built above this point; a project absent from it is answered "" (the checkout's own ref).
@@ -2454,7 +2497,7 @@ const PREFIX_MOUNTS = [
   // ten writes that settle, steer, answer and file a card. The store, the token and the assistant are this file's,
   // and the tree and PR a reattach has to name come from the board's own rows, so all of them travel in beside the
   // transport helpers.
-  { prefix: JOBS_PATH, handles: createJobsRoutes({ jobs, config, assistant, broadcast, gonePointers, sendJson, readBody, authorised, resolveAttach: resolveAttachTarget }) },
+  { prefix: JOBS_PATH, handles: createJobsRoutes({ jobs, config, assistant, broadcast, jobsChanged: broadcastJobs, gonePointers, sendJson, readBody, authorised, resolveAttach: resolveAttachTarget }) },
   // The pipelines prefix (routes/pipelines.js), the third row lifted out of this file's own chain: the catalogue read
   // and the one save that replaces it. The store owns the live file and the logger records the save, so both travel in
   // beside the transport helpers; the version, the vocabularies and the loader's functions come with the module.
@@ -5678,7 +5721,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       try {
         const result = await assistant.answerParked(String(body.id || ""), body.answer);
-        broadcast({ type: "jobs", jobs: jobs.list() });
+        broadcastJobs();
         return sendJson(res, 200, { result, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, 400, { error: String((e && e.message) || e) });
@@ -5698,7 +5741,7 @@ const server = createServer(async (req, res) => {
         const spec = body.id ? assistant.pendingSpawn(String(body.id)) : body;
         if (!spec) throw new Error(`no pending spawn with id ${body.id}`);
         const job = await assistant.startSpawn(spec, { alertId: body.id ? String(body.id) : null });
-        broadcast({ type: "jobs", jobs: jobs.list() });
+        broadcastJobs();
         return sendJson(res, 202, { job, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, 400, { error: String((e && e.message) || e) });
@@ -8169,7 +8212,7 @@ const server = createServer(async (req, res) => {
           const out = await startMerge();
           if (out.status >= 400) log(`remote-write ${parked.id}: the granted merge could not start — ${out.body?.error || out.status}`);
           // The page finds the new card through the ordinary job events this emits.
-          broadcast({ type: "jobs", jobs: jobs.list() });
+          broadcastJobs();
           return out;
         },
       });

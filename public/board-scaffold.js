@@ -133,8 +133,16 @@ function knownThreads() {
 // not read as a finished turn (the reply queue and the "is this thread busy" checks both ask this).
 const LIVE_STATUS = new Set(["running", "starting", "waiting", "waiting_for_approval", "queued"]);
 
+// The statuses the panel RECORDED as the end of a turn. A terminal status outvotes every lingering record: a settled
+// run whose question or approval was left behind (closed, or cleared by the settle) still read "running 182m3s" over a
+// body that already said the result was ready, because a question record alone was enough to keep it live. The one
+// deliberate exception is `interrupted`: the gateway can still be inside a turn whose stream died, so an interrupted
+// turn parked on an open question stays live - that is the comment below, and it still holds.
+const TERMINAL_STATUS = new Set(["done", "failed", "cancelled"]);
+
 function turnLive(t) {
   if (!t) return false;
+  if (t.status && TERMINAL_STATUS.has(String(t.status))) return false;
   if (t.status && LIVE_STATUS.has(String(t.status))) return true;
   // A run parked on a question is live for the same reason a parked approval is: the agent is inside the turn,
   // waiting on the reader, not finished with it. It matters twice over here - the card's question block is drawn
