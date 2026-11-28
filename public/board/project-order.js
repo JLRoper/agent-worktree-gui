@@ -13,9 +13,11 @@
 //
 // THE LOAD CONTRACT. public/index.html loads CLASSIC scripts, so the page is one global scope: every
 // top-level `function` here is a window property, every `let` a binding another script reads by bare
-// name. This file DECLARES ONLY - reorderFrame and legendOpenFor are literal initialisers - so being
-// loaded before render-projects.js and app.js costs nothing. public/render-projects.js keeps the
-// header and the record of this surface, and app.js re-exports the names on window.WMApp.projects.
+// name. This file declares and registers only: reorderFrame and legendOpenFor are literal initialisers,
+// and the legend's outside-press and Escape listeners are registered at load, exactly where they were
+// registered in the parent, so being loaded before render-projects.js and app.js costs nothing.
+// public/render-projects.js keeps the header and the record of this surface, and app.js re-exports the
+// names on window.WMApp.projects.
 
 // ---- project ordering + the green "+" ------------------------------------------
 // Projects are listed most-recently-worked-on first: the newest of the repo's own activity
