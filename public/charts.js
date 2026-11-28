@@ -85,11 +85,21 @@ function chartTopOrder(rows) {
 // One project's rows, split the way its chart draws them: `top` is the first N of chartTopOrder, `held` the rest in
 // that same order, and `all` the whole list. The sort comes BEFORE the slice on purpose — a slice of the array the
 // server happened to send is the bug this shape exists to prevent.
+//
+// A TURNOVER CONTAINER AND ITS SUBTREE ARE NEVER HELD BACK, and they do not spend one of the N slots: the container is
+// the shape of its group (its children hang under it, so a held container would leave them floating at the top level),
+// and the N is the reader's count of worktrees to look at, not a cap on the chart's structure. `turnoverKeepsRow`
+// (public/render-projects.js) is the one answer, asked through `typeof` so a page whose grouping module has not
+// parsed yet draws the plain top N instead of throwing.
 function chartTopSplit(rows) {
   const all = chartTopOrder(rows);
   const limit = chartTopLimit();
   if (!limit) return { all, top: all, held: [] };
-  return { all, top: all.slice(0, limit), held: all.slice(limit) };
+  const keptKeys = typeof turnoverKeptKeys === "function" && all.length ? turnoverKeptKeys(all[0].project) : new Set();
+  const kept = keptKeys.size ? all.filter((r) => keptKeys.has(keyOf(r.project, r.path))) : [];
+  const rest = kept.length ? all.filter((r) => !kept.includes(r)) : all;
+  const head = rest.slice(0, limit);
+  return { all, top: [...kept, ...head], held: rest.slice(limit) };
 }
 
 // A row this project's chart is holding back, unless the reader asked that chart for everything. Measured from

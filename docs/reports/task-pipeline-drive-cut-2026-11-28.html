@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The task-pipeline-drive cut: lib/task-pipeline-drive.js into lib/task-pipeline-document.js and lib/task-pipeline-tree.js</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 220px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap:anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The task-pipeline-drive cut: one file into two, plus the driver that stayed</h1>
+<p class="sub">agent-worktree-gui 1.197.0. Row #534, one cut of the module-separation work: <code>lib/task-pipeline-drive.js</code>, 2,782 lines, split into the two cuts the row names. A pure move, one commit per cut, every name still published by the old path.</p>
+
+<dl class="facts">
+  <dt>base commit</dt><dd>b0ce9aa6, this tree's branch point on the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code></dd>
+  <dt>turnover tip read for this page</dt><dd>835db929; no commit between b0ce9aa6 and it touches lib/task-pipeline-drive.js, so the merge needs no resolution on these files</dd>
+  <dt>branch</dt><dd>wtgui/row-538-is-one-cut-of-the-module-13f5d5</dd>
+  <dt>cut 1</dt><dd>f6772ab3, lib/task-pipeline-document.js</dd>
+  <dt>cut 2</dt><dd>9c5eb7a5, lib/task-pipeline-tree.js</dd>
+  <dt>lib/task-pipeline-drive.js before</dt><dd>2,782 lines</dd>
+  <dt>lib/task-pipeline-drive.js after</dt><dd>1,148 lines (1,727 after cut 1)</dd>
+  <dt>new files</dt><dd>lib/task-pipeline-document.js (1,113 lines), lib/task-pipeline-tree.js (631 lines)</dd>
+  <dt>moved</dt><dd>1,674 lines in five blocks: 1,085 in cut 1 (1,038 non-blank), 589 in cut 2 (570 non-blank)</dd>
+  <dt>export surface</dt><dd>46 module names before, the same 46 after: 33 from the document module, 9 from the tree module, 4 still declared here</dd>
+  <dt>focused suite</dt><dd>17 files, 192 tests, 192 pass, 0 fail, at the base, after cut 1 and after cut 2</dd>
+</dl>
+
+<h2>1. The two cuts</h2>
+<p>This file carries no cut card of its own: the plan page at commit 2ffacfef lists every module and its spans, and the row detail names the two cuts without naming files or ranges. The seam is therefore the file's own section markers, re-measured on b0ce9aa6 before a line moved. The rule that decided the boundary: <code>reviewEdgeOutOf</code> (base line 227) calls <code>nextStageOf</code> (base line 1009), and <code>decisionPathOf</code> (base line 311) calls <code>isDirectory</code> (base line 1,222), so neither would compile in a module that does not hold those callees. The graph, the manifest, the fingerprint, the decision record and the verdict are one layer; the tree and the stage brief are the next; the verdict section ends at 1,187, which is where cut 1 stops.</p>
+<table>
+  <tr><th>commit</th><th>cut</th><th>new file</th><th>base ranges</th><th class="n">lines</th><th class="n">non-blank</th><th>what moves</th></tr>
+  <tr><td class="tool">f6772ab3</td><td class="n">1</td><td class="tool">lib/task-pipeline-document.js</td><td class="tool">109-158, 162-1187, 1220-1228</td><td class="n">1,085</td><td class="n">1,038</td><td>the named faults and record keys, the graph edges, the input manifest, the routing fingerprint, the decision record, the gate and the verdict, and the two path predicates</td></tr>
+  <tr><td class="tool">9c5eb7a5</td><td class="n">2</td><td class="tool">lib/task-pipeline-tree.js</td><td class="tool">1217-1218, 1230-1816</td><td class="n">589</td><td class="n">570</td><td>treeKey, filedTreeOf, treeLookup, roundOf, assemblyPlanOf, stageTreeLookup, the fan-out state, treeClaims and stagePrompt with the blocks it prints</td></tr>
+</table>
+<p>Two lines inside the cut-1 range did not move. Line 160, <code>const FAILED_STATUS</code>, is read by the driver's own pass and by nothing the document module holds, so it stayed where the driver reads it. Lines 1,220-1,228, <code>isDirectory</code>, did move, and they are named as a separate block because they sit inside the tree section: <code>decisionPathOf</code> resolves a declared path with that predicate, so leaving it in the parent would have made the document module import the parent that imports it. It is the one helper that moved DOWN a layer, which is the rule a shared helper follows.</p>
+
+<h2>2. What the line counts say</h2>
+<pre>before
+  2782 lib/task-pipeline-drive.js
+after cut 1 (f6772ab3)
+  1727 lib/task-pipeline-drive.js
+  1113 lib/task-pipeline-document.js
+after cut 2 (9c5eb7a5)
+  1148 lib/task-pipeline-drive.js
+  1113 lib/task-pipeline-document.js
+   631 lib/task-pipeline-tree.js
+after both cuts, 2892 lines (the base's 2,782 plus 110 lines of new headers,
+imports, the two internal-export statements and the parent's note)</pre>
+<p>The base loses 1,085 lines at cut 1 exactly: 2,782 - 1,085 = 1,697, and the parent reads 1,727 because it gains 30 lines (its narrowed import block, the re-export of the 33 names it lost, and a five-line note on the split). Cut 2 takes 589 more: 1,727 - 589 = 1,138, and the parent reads 1,148 because it gains 10 net (its narrowed document import, the tree import block, the tree re-export and two extra note lines).</p>
+<p>What stayed in <code>lib/task-pipeline-drive.js</code>: the file's header, <code>FAILED_STATUS</code>, <code>moveTo</code> and <code>msOf</code>, the run reading (<code>lastRunFor</code>, <code>unreadSettle</code>, <code>heldByBook</code>, <code>parkRow</code>, <code>artifactCheck</code>), <code>releaseCapPark</code>, <code>restampRoutePark</code>, <code>loadedBundle</code>, <code>driveTaskPipelines</code> and <code>driveTaskPipelinesPass</code>. It declares four names of its own now (<code>releaseCapPark</code>, <code>restampRoutePark</code>, <code>loadedBundle</code>, <code>driveTaskPipelines</code>) and re-exports the other 42.</p>
+
+<h2>3. The export surface, before and after</h2>
+<p>Read from the module, not from the text: <code>Object.keys(import("./lib/task-pipeline-drive.js"))</code>. It was read at b0ce9aa6, after cut 1 and after cut 2. The three sorted lists are identical, name for name, and 46 long each.</p>
+<pre>ARTIFACT_HASH_MAX, DECISION_TRIGGERS, DRIVE_FAULTS, EDGE_ORDER, INPUTS_MAX,
+PR_ARTIFACT_KIND, STAGE_TOOLS_LINE, STARTING_AT, START_GRACE_MS, WAITING_FOR,
+artifactOf, artifactPathOf, artifactValues, assemblyPlanOf, capOf, capWakeLine,
+decisionOf, decisionPathOf, declaredArtifactOf, driveTaskPipelines, edgeOutOf,
+fanOutStateOf, filedTreeOf, fillHoles, gateAfter, handedOnPinOf, inputManifest,
+loadedBundle, nextStageOf, recordedStageTree, releaseCapPark, renderDecision,
+restampRoutePark, reviewEdgeOutOf, reviewReadAt, roundOf, routeFor,
+routingFingerprint, stageInputsOf, stagePrompt, stageTreeLookup, treeClaims,
+treeLookup, treeRecordOf, verdictOf, writerArtifactOf</pre>
+<p>The split of that list is 33 names from the document module, 9 from the tree module and 4 declared in the parent. Neither new module adds a public name of its own: the names their sibling cuts read and the parent never published are exported in one statement at the foot of each file, and none of them is re-exported. Those are <code>text, isObject, isoOf, landsAsPr, isDirectory, settledArtifactOf, artifactTreeOf, treeFactsRecord</code> in <code>lib/task-pipeline-document.js:1113</code> and <code>treeKey, roundLandingOf, claimAgainst</code> in <code>lib/task-pipeline-tree.js:631</code>.</p>
+
+<h2>4. The removed lines reappear verbatim</h2>
+<p>Every block was taken from the base blob, not from the edit in progress, and compared line for line to the block in its new file. The check is a search for the exact consecutive lines, so a changed space or a renamed identifier fails it. The two new files are built from the base blob; the only text they add is their own header, their imports and one internal-export statement each.</p>
+<pre>base[109:158]   == document[23 : 23+50]    -> 50 lines, 47 non-blank   True
+base[162:1187]  == document[74 : 74+1026]  -> 1,026 lines, 982 non-blank True
+base[1220:1228] == document[1101 : +9]     -> 9 lines, 9 non-blank     True
+base[1217:1218] == tree[39 : 39+2]         -> 2 lines, 2 non-blank     True
+base[1230:1816] == tree[42 : 42+587]       -> 587 lines, 568 non-blank True
+base[1189:1215] == drive[156 : +27]        -> 27 lines, 26 non-blank   True (kept)
+base[1818:2782] == drive[184 : +965]       -> 965 lines, 944 non-blank True (kept)
+base[109:158], base[162:1187], base[1220:1228] in lib/task-pipeline-drive.js after cut 1 -> False
+base[1217:1218], base[1230:1816]              in lib/task-pipeline-drive.js after cut 2 -> False</pre>
+<p>The declaration partition is exact as well: the base's 77 top-level declarations are 45 in the document module, 19 in the tree module and 13 in the parent, with none shared and none missing. The layers are one-way: neither new module imports <code>lib/task-pipeline-drive.js</code>, and the document module does not import the tree module.</p>
+
+<h3>The parent's diff adds only what the cut requires</h3>
+<p><code>git diff b0ce9aa6..9c5eb7a5 -- lib/task-pipeline-drive.js | grep '^+'</code> shows the note on the split, the narrowed import block, the two module imports and the two re-export statements. Not one moved body appears in it. No class chain crosses either cut, so there is no <code>super()</code> and no other statement added to a body: the one addition to any moved text is the internal-export statement at the foot of each new file, which names text the module already declared.</p>
+
+<h2>5. The focused tests</h2>
+<p>The set is the tests that name <code>task-pipeline-drive</code> in their own text: 17 files. <code>npm run test:module lib/task-pipeline-drive.js</code> answers 150 files because <code>lib/jobs.js</code> imports this module and half the suite imports <code>lib/jobs.js</code>; that set is a landing gate, not this cut's, and it is not the set quoted here.</p>
+<p class="small">pipeline-artifacts, pipeline-assembly, pipeline-bundle-seed, pipeline-github-gate, pipeline-git-workers, pipeline-review-loop, pipeline-stage-trees, pipeline-truth, pipeline-wait, spawn-stage-landing, task-pipeline-drive, task-pipeline-fanout, task-pipeline-inputs, task-pipeline-pins, task-pipeline-sweep, task-pipeline-verdict, word-budget</p>
+<table>
+  <tr><th>tree</th><th class="n">files</th><th class="n">tests</th><th class="n">pass</th><th class="n">fail</th><th>note</th></tr>
+  <tr><td>base b0ce9aa6, before any edit</td><td class="n">17</td><td class="n">192</td><td class="n">192</td><td class="n">0</td><td>the baseline the other two are read against</td></tr>
+  <tr><td>after cut 1 (f6772ab3)</td><td class="n">17</td><td class="n">192</td><td class="n">192</td><td class="n">0</td><td>the intermediate state, committed on its own</td></tr>
+  <tr><td>after cut 2 (9c5eb7a5)</td><td class="n">17</td><td class="n">192</td><td class="n">192</td><td class="n">0</td><td>the tree this page is written on</td></tr>
+</table>
+<p>There is no failing test in any of the three states, so there is no failure to compare against the turnover head: the base, cut 1 and cut 2 all read 192 pass and 0 fail. The one thing a class chain would have added (a <code>super()</code> repair) does not arise, because nothing here extends anything.</p>
+<p>The two new modules are reached through the old path: no test file and no import site was edited. <code>lib/assistant.js:263</code> and <code>lib/jobs.js:107</code> still import from <code>./task-pipeline-drive.js</code>, as do <code>tools/verify-pipeline-fanout.mjs:33</code>, <code>tools/verify-pipeline-fork.mjs:32</code> and <code>tools/verify-pipeline-walk.mjs:45</code>.</p>
+
+<h2>6. What this page did not do</h2>
+<ul>
+  <li>No version bump. The package stays at 1.197.0.</li>
+  <li>No push and no pull request. The branch merges into the turnover locally; the turnover branch is where the work rolls up and the reader decides when it lands.</li>
+  <li>No full suite run. The row's proof is the 17-file set above; the full suite is a landing gate, not this cut's.</li>
+  <li>No behaviour change is claimed. The two new modules hold the same bodies the base held; the tests are the evidence that the driver still walks a pipeline and the stage brief is unchanged.</li>
+</ul>
+
+<h2>7. Commands</h2>
+<pre>wc -l lib/task-pipeline-drive.js lib/task-pipeline-document.js lib/task-pipeline-tree.js
+git show b0ce9aa6:lib/task-pipeline-drive.js | sed -n '109,158p;162,1187p;1220,1228p'
+git show b0ce9aa6:lib/task-pipeline-drive.js | sed -n '1217,1218p;1230,1816p'
+node -e 'import("./lib/task-pipeline-drive.js").then(m => console.log(Object.keys(m).sort(), Object.keys(m).length))'
+node --test --test-concurrency=4 test/task-pipeline-drive.test.js test/task-pipeline-inputs.test.js \
+  test/task-pipeline-pins.test.js test/task-pipeline-sweep.test.js test/task-pipeline-verdict.test.js \
+  test/task-pipeline-fanout.test.js test/pipeline-artifacts.test.js test/pipeline-assembly.test.js \
+  test/pipeline-bundle-seed.test.js test/pipeline-github-gate.test.js test/pipeline-git-workers.test.js \
+  test/pipeline-review-loop.test.js test/pipeline-stage-trees.test.js test/pipeline-truth.test.js \
+  test/pipeline-wait.test.js test/spawn-stage-landing.test.js test/word-budget.test.js</pre>
+
+<p class="small">Every number on this page was read on the branch named in the facts list, at the commit named beside it. The base ranges were re-measured on b0ce9aa6 with <code>sed -n</code> and both boundaries of every block were spot-checked before a line moved.</p>
+
+</main>
+</body>
+</html>

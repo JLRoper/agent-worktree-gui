@@ -471,15 +471,20 @@ function applySnapshot(data) {
     // A project's own activityAt seeds its window once, so the folder order is smoothed from the first paint.
     seedProjectRank(p);
     const wts = Array.isArray(p.worktrees) ? p.worktrees : [];
-    if (!wts.length) continue;
-    for (const [k, r] of [...state.rows]) if (r.project === p.name) state.rows.delete(k);
-    for (const w of wts) {
-      const row = { ...w, project: p.name };
-      state.rows.set(keyOf(p.name, w.path), row);
-      noteScan(row);
-      // Seed the ranking windows from the life the row already carries, so the first paint is smoothed.
-      seedRankWindows(row);
+    if (wts.length) {
+      for (const [k, r] of [...state.rows]) if (r.project === p.name) state.rows.delete(k);
+      for (const w of wts) {
+        const row = { ...w, project: p.name };
+        state.rows.set(keyOf(p.name, w.path), row);
+        noteScan(row);
+        // Seed the ranking windows from the life the row already carries, so the first paint is smoothed.
+        seedRankWindows(row);
+      }
     }
+    // The project's turnover branches that no worktree stands on are chart rows of their own, so their children have
+    // a container to hang under. AFTER the snapshot's rows (a real row on the branch wins) and for every project, so
+    // one with no worktrees at all still draws its containers.
+    if (typeof applyTurnoverRows === "function") applyTurnoverRows(p.name);
   }
   // A snapshot is authoritative about WHICH projects exist: the server drops a project when it
   // disappears from the roots (or was only ever a config fallback before discovery ran), and the

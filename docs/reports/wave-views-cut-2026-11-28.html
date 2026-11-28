@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 510: the wave views cut out of lib/waves.js, and the proof that no export moved</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  .names { columns:3; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 510: one cut of lib/waves.js, and the proof that no export moved</h1>
+<p class="sub">agent-worktree-gui 1.197.0, branch <code>wtgui/row-510-is-one-cut-of-the-module-944684</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>e2a79719</code>. The view half of <code>lib/waves.js</code> moves to a new <code>lib/wave-views.js</code>; <code>lib/waves.js</code> keeps the re-export of every name its importers read. All line numbers are on this branch.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#510</dd>
+  <dt>the commit</dt><dd>c9671883 - the cut, committed before any verification</dd>
+  <dt>the cut</dt><dd>lib/waves.js (1486 lines) -&gt; lib/waves.js (1294) + lib/wave-views.js (230)</dd>
+  <dt>the moved half</dt><dd>one member and one wave as the lane draws them</dd>
+  <dt>the re-export</dt><dd>lib/waves.js:79 imports two helpers, :85 re-exports six names</dd>
+  <dt>exports</dt><dd>41 before, 41 after, 0 missing, 0 added</dd>
+  <dt>the proof</dt><dd>npm run test:module lib/wave-views.js - 14 files, 187 tests, 187 pass, 0 fail</dd>
+  <dt>the same cut</dt><dd>npm run test:module lib/waves.js - 15 files, 195 tests, 195 pass, 0 fail</dd>
+  <dt>the base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at e2a79719, the cut point; 195 of 195 pass there too</dd>
+  <dt>push / PR</dt><dd>none - the merge is local, origin keeps its ref</dd>
+</dl>
+
+<h2>1. What moved, and what stayed</h2>
+<p>The brief was one cut: take the view half out of <code>lib/waves.js</code> into <code>lib/wave-views.js</code>, a pure move, with <code>lib/waves.js</code> keeping the re-export of every name its importers read. Nothing schedules, advances or switches anything in either file; the cut is a file boundary, not a behaviour change.</p>
+<p>What went to the new file, with the ballast it needs:</p>
+<ul>
+  <li><code>lib/wave-views.js:46</code> <code>waveMemberKey</code>, the key an evidence map finds a member by;</li>
+  <li><code>lib/wave-views.js:52</code> <code>abandonedOf</code>, the member's named abandonment as the lane draws it (module-private before and after the cut);</li>
+  <li><code>lib/wave-views.js:72</code> <code>taskWithOwner</code>, the assistant a queue row came from stamped onto the row;</li>
+  <li><code>lib/wave-views.js:84</code> <code>waveMember</code>, one task row as a member;</li>
+  <li><code>lib/wave-views.js:129</code> <code>waveView</code>, one wave with its members, its derived state, its two gate answers and its lanes;</li>
+  <li><code>lib/wave-views.js:180</code> <code>currentWaveId</code>, the lowest-position running, ready, else unentered wave;</li>
+  <li><code>lib/wave-views.js:201</code> <code>waveLane</code>, one initiative's whole lane, with the auto switch's answer riding on each view.</li>
+</ul>
+<p>Two helpers travelled because the moved code asks them and the store asks them too: <code>lib/wave-views.js:30</code> <code>isObject</code> and <code>:35</code> <code>noneGate</code>. They were module-private in <code>lib/waves.js</code>, so they are exported by the new file and imported back at <code>lib/waves.js:79</code>; they are not re-exported and were not on the module's surface before the cut. This is the direction row 509 used for <code>clip</code>, <code>namedAbandon</code> and <code>text</code>.</p>
+<p>What stayed: the record and its write door (<code>pickWaveGate</code> at <code>lib/waves.js:171</code>, <code>pickWave</code> at <code>:235</code>, <code>waveIdFrom</code> at <code>:300</code>), the store (<code>Waves</code> at <code>:315</code>), the gate read (<code>readWaveGate</code> at <code>:948</code>), the state fold (<code>deriveWaveState</code> at <code>:1087</code>) and the auto switch (<code>waveAutoOpens</code> at <code>:1231</code>). Those are the state and storage half, and the point of the cut is that a change to what a lane draws and a change to what the store keeps now land in different files.</p>
+
+<h2>2. The move is pure</h2>
+<p>A move that carries a quiet edit is not a move, so both directions were checked against the base. Removed lines from <code>git diff HEAD~1 HEAD -- lib/waves.js</code> were matched against <code>lib/wave-views.js</code>, and every line in the new file was matched back against the base <code>lib/waves.js</code>. The comparison normalises CRLF, because this checkout gives the working tree CRLF and the blob is LF.</p>
+<table>
+  <tr><th>direction</th><th class="n">lines checked</th><th>result</th></tr>
+  <tr><td>the moved block, base <code>lib/waves.js:1293-1486</code> against <code>lib/wave-views.js:37-230</code></td><td class="n">194</td><td><span class="ok">194 identical, 0 changed</span></td></tr>
+  <tr><td>removed from lib/waves.js, found verbatim in lib/wave-views.js</td><td class="n">205</td><td><span class="ok">199 verbatim</span>, the other 6 are the scaffolding edits below</td></tr>
+  <tr><td>every non-blank line in lib/wave-views.js, found in the base lib/waves.js</td><td class="n">221</td><td><span class="ok">195 found</span>, 26 are the new module's own scaffolding</td></tr>
+</table>
+<p>The six removed lines that do not reappear character for character are the cut's whole edit set, and none of them is a rule:</p>
+<pre>lib/waves.js:65   import { TASK_CAP, TASK_FILES_MAX, TASK_STATES } ...  -> :68  import { TASK_CAP } ...
+lib/waves.js:73   // The read's phase clock ...                         -> the clock import is unchanged in the new file, its comment is not
+lib/waves.js:75   // The lane names this module published ...           -> :83  // The lane and view names this module published ...
+lib/waves.js:76   // reading lib/waves.js.                             -> :84  // importer keeps reading lib/waves.js.
+lib/waves.js:138  const isObject = ...                              -> lib/wave-views.js:30  export const isObject = ...
+lib/waves.js:835  const noneGate = ...                              -> lib/wave-views.js:35  export const noneGate = ...</pre>
+<p>The 26 new lines in <code>lib/wave-views.js</code> are 19 lines of header, three import lines, two comment lines explaining the helpers, and the two helper lines that gained <code>export</code>. Nothing else was added: every other non-blank line in the new file is the base's own.</p>
+
+<h2>3. Every name exported before is still exported</h2>
+<p>The claim is about the module's surface, so it was read from the module rather than from the source text. The pre-cut file was extracted with <code>git show HEAD~1:lib/waves.js</code>, imported beside the current one, and the two key sets compared:</p>
+<pre>$ node --input-type=module -e "const before = await import('./lib/.probe-waves-before.mjs');
+                               const after  = await import('./lib/waves.js'); ..."
+before exports: 41
+after  exports: 41
+MISSING (exported before, not now): none
+ADDED (new): none</pre>
+<p>41 and 41, with an empty difference in both directions. The 41 names are these, unchanged:</p>
+<div class="names">
+WAVES_MAX<br>WAVES_VERSION<br>WAVE_ACTOR_MAX<br>WAVE_ARTEFACT_PATHS_MAX<br>WAVE_AUTO_BY<br>WAVE_EVIDENCE_READS<br>WAVE_FIELDS<br>WAVE_GATE_CHOICES<br>WAVE_HISTORY_ACTIONS<br>WAVE_HISTORY_MAX<br>WAVE_ID_MAX<br>WAVE_LANE_STATES<br>WAVE_LANE_UNLANED<br>WAVE_MEMBERS_MAX<br>WAVE_STATES<br>WAVE_STATE_WORDS<br>WAVE_TEMPLATE_MAX<br>WAVE_TITLE_MAX<br>WAVE_WRITE_FIELDS<br>Waves<br>currentWaveId<br>deriveWaveState<br>joinWaveLanes<br>pickWave<br>pickWaveGate<br>readWaveGate<br>readWaveLane<br>taskWithOwner<br>waveAutoOpens<br>waveEvidenceNeeds<br>waveFileExistsPaths<br>waveIdFrom<br>waveIsOpen<br>waveLane<br>waveLaneNamed<br>waveLanes<br>waveMember<br>waveMemberClosed<br>waveMemberKey<br>waveMemberOpen<br>waveView
+</div>
+<p><code>lib/wave-views.js</code> itself exports 8 names. Six of them are re-exported by <code>lib/waves.js:85</code>: <code>currentWaveId</code>, <code>taskWithOwner</code>, <code>waveLane</code>, <code>waveMember</code>, <code>waveMemberKey</code> and <code>waveView</code>. The other two, <code>isObject</code> and <code>noneGate</code>, are exported so <code>lib/waves.js</code> can import them back at <code>:79</code>; they were module-private before the cut and are not on the public surface now, which is why the added set is empty rather than two names long.</p>
+
+<h2>4. The two modules import each other, and both orders were run</h2>
+<p>This cut cannot be one-way the way row 509's was. The views need the state fold, the gate read and the caps, which stay in <code>lib/waves.js</code>; the store needs the two helpers, which moved here. So <code>lib/waves.js</code> imports <code>./wave-views.js</code> and <code>lib/wave-views.js</code> imports <code>./waves.js</code>.</p>
+<p>The cycle is inert because neither module reads the other's bindings while a module is being evaluated: the only cross-module reads are inside function bodies, after a caller has loaded both. That was run, not assumed. A probe folded the same two-wave lane through the public module twice, once with <code>lib/waves.js</code> imported first and once with <code>lib/wave-views.js</code> first:</p>
+<pre>$ node import-order-probe.mjs waves   # lib/waves.js first
+$ node import-order-probe.mjs views   # lib/wave-views.js first
+{"waves":[{"id":"w1","state":"done","autoOpen":false},{"id":"w2","state":"ready","autoOpen":true}],
+ "currentId":"w2","memberKey":"1@c:/t/a","sameView":true}</pre>
+<p>Both orders answered the same lane, the same states, the same auto switch, the same current wave and the same member key. The only differences in the two runs were the probe's own <code>first</code> label and that module's export list.</p>
+
+<h2>5. The focused tests, for both files</h2>
+<p>The focused set is the one the repo's own selector builds for each file, not the whole suite:</p>
+<pre>$ npm run test:module lib/wave-views.js
+test:module - 14 file(s), 160.5s, exit 0
+tests 187
+pass  187
+fail  0
+
+$ npm run test:module lib/waves.js
+test:module - 15 file(s), 148.6s, exit 0
+tests 195
+pass  195
+fail  0</pre>
+<p>The base was run before the cut, on the clean tree at <code>e2a79719</code>:</p>
+<pre>$ npm run test:module lib/waves.js      # before the cut
+test:module - 15 file(s), 116.1s, exit 0
+tests 195
+pass  195
+fail  0</pre>
+<p><span class="ok">No test fails, before or after.</span> There is therefore no failure to compare against the base: the four failures row 509 reported in <code>test/waves-write.test.js</code> and <code>test/waves-route.test.js</code> are green at this base, and this cut neither caused nor fixed a red. The <code>lib/wave-views.js</code> set is 14 files against the <code>lib/waves.js</code> set's 15: the extra file is <code>test/waves-route.test.js</code> (8 tests), which the selector does not route to the new module, so 195 - 8 = 187 and the 187 are the same tests on the same files.</p>
+
+<h2>6. Line counts</h2>
+<pre>$ git show HEAD~1:lib/waves.js | wc -l
+1486
+$ wc -l lib/waves.js lib/wave-views.js
+  1294 lib/waves.js
+   230 lib/wave-views.js
+  1524 total
+
+$ git diff --numstat HEAD~1 HEAD
+13      205     lib/waves.js
+230     0       lib/wave-views.js</pre>
+<p><code>lib/waves.js</code> went from 1486 lines to 1294: <span class="ok">205 removed, 13 added</span>, a net -192. The 13 added lines are the four-line header note at <code>:46-49</code>, the one-line queue import at <code>:69</code>, the three-line view note and its import at <code>:76-79</code>, the two-line re-export comment at <code>:81-82</code>, the re-export at <code>:85</code>, and the one-line pointer where <code>noneGate</code> used to be at <code>:838</code>. <code>lib/wave-views.js</code> is <span class="ok">230 lines</span>. 1486 - 205 + 13 = 1294.</p>
+
+<h2>7. Where this lands</h2>
+<p>The branch merges into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, with a merge commit. That base is a turnover branch and has not landed, so nothing is pushed, no branch of this tree is created on the remote, and no pull request is opened; the reader decides when the turnover branch lands. No version is bumped: a pure move inside <code>lib/</code> adds no changelog entry of its own.</p>
+<p class="small">Report written on 2026-11-28. Every command above was run in the tree named in the subtitle; the pre-cut test run was made on the clean tree at the base commit before the move, and the two base/after comparisons used <code>git show</code>, not a second checkout.</p>
+</main>
+</body>
+</html>

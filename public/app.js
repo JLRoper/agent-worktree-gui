@@ -296,7 +296,7 @@ window.WMApp.spawn = {
 window.WMApp.worktrees = {
   TREE_LIST_ORDER_HOLD_MS, TREE_LIST_ORDER_SETTLE_MS, rowOrderHold, paintTreeListChips,
   applyTreeList, treeListComplete, rowForOwner, isPendingScanConv, isHomelessConv, homelessConversations,
-  pendingScanConversations, worktreeOptionsHtml, deletableWithoutAsking, showWorktreeConfirm, scanTick, waitForScanPass,
+  pendingScanConversations, worktreeOptionsHtml, startTurnoverContainer, deletableWithoutAsking, showWorktreeConfirm, scanTick, waitForScanPass,
   confirmDeleteWorktree, toggleWorktreeLock, rowConfirmSent, answerRowConfirm, renameWorktreePrompt, childPresses,
   cutDialog, closeCutDialog, cutDialogHtml, openCutDialog, cutSubmit, cutChildTree, kindConfirmEls, kindConfirmOf,
   closeKindConfirm, showKindConfirm, confirmKindLift,
@@ -670,6 +670,10 @@ const state = {
   refreshOffers: new Map(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
+  // The fixed cards the reader has folded or unfolded themselves (localStorage, `wm.fixedChosen`). A card that
+  // is not in this set has no choice recorded, so it keeps its shipped default (see FIXED_DEFAULT_COLLAPSED)
+  // rather than whatever class the last paint left in the DOM.
+  fixedChosen: loadFixedChosen(),
   collapsedRoots: loadCollapsedRoots(),
   recentRoots: loadRecentRoots(),
   // Which projects' charts are showing every tree, count or not (see the top-N collapse below). Per project,
@@ -1053,11 +1057,70 @@ function saveCollapsedFixed() {
   }
 }
 
+// ---- the fixed cards' default fold -------------------------------------------------------------
+// The Unattached agents card starts MINIMIZED (row 416). A fresh tab that opened it threw the reader off the
+// board every time, because the store records only COLLAPSED ids: an absent "agents" entry meant expanded, and
+// the page therefore painted it open for everyone who had never folded it. The default now comes from the
+// page's state, not from the class the previous paint (or the parsed markup) left behind: an untouched card
+// takes FIXED_DEFAULT_COLLAPSED, and a card the reader has folded or unfolded takes their choice.
+//
+// `wm.fixedChosen` is that choice. It is written on a click of the card's own head (toggleFixed) only - the
+// global Expand all is a moment's gesture, not a fold decision, so it leaves the shipped default in place. The
+// New agent card is absent from FIXED_DEFAULT_COLLAPSED on purpose: its default stays expanded.
+const FIXED_DEFAULT_COLLAPSED = ["agents"];
+
+function loadFixedChosen() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.fixedChosen") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFixedChosen() {
+  try {
+    localStorage.setItem("wm.fixedChosen", JSON.stringify([...state.fixedChosen]));
+  } catch {
+    /* no storage: the choice simply will not persist */
+  }
+}
+
+// Pure: the reader's bookkeeping is the whole input, so the same store always starts a card the same way.
+// A stored collapse is honored first - the store only ever records COLLAPSED ids, so a card that is in it has been
+// folded by the reader (or by an older build) and must stay folded. A card the reader has chosen and left out of
+// the set is open. Only a card with nothing recorded takes the shipped default, which is what makes the Unattached
+// agents card start minimized without reopening a card somebody had already folded.
+function fixedCardStartsCollapsed(id, collapsedFixed, fixedChosen) {
+  if (collapsedFixed.has(id)) return true;
+  if (fixedChosen.has(id)) return false;
+  return FIXED_DEFAULT_COLLAPSED.includes(id);
+}
+
+// Write each untouched fixed card's default into the fold state the painter reads, before the first paint of
+// the two cards. A card the reader has chosen is never overridden: minimized stays minimized, expanded stays
+// expanded. Returns whether the state changed.
+function defaultFixedCollapse() {
+  let changed = false;
+  for (const id of FIXED_CARDS) {
+    const collapse = fixedCardStartsCollapsed(id, state.collapsedFixed, state.fixedChosen);
+    if (state.collapsedFixed.has(id) === collapse) continue;
+    if (collapse) state.collapsedFixed.add(id);
+    else state.collapsedFixed.delete(id);
+    changed = true;
+  }
+  if (changed) saveCollapsedFixed();
+  return changed;
+}
+// ---- end the fixed cards' default fold
+
 function toggleFixed(name) {
   if (!name) return;
   if (state.collapsedFixed.has(name)) state.collapsedFixed.delete(name);
   else state.collapsedFixed.add(name);
+  // A click on the card's own head IS the reader's fold decision, either direction.
+  state.fixedChosen.add(name);
   saveCollapsedFixed();
+  saveFixedChosen();
   scheduleCollapseCascade("fixed", name, state.collapsedFixed.has(name));
   applyFixedCollapse(name);
   // Collapsing the Agents card and expanding it again must not lose the reply drafts or the
@@ -6320,6 +6383,15 @@ document.addEventListener("click", async (e) => {
     void probeWorktreeAgents(rowAgent.dataset.agentPath || "", rowAgent);
     return;
   }
+  // The container row's START press: put a worktree on a turnover branch that has none, so its children can be rolled
+  // into it and the row reconciled. Nothing is pushed, landed or opened as a PR; the route says which gate refused.
+  const startTurnover = e.target.closest(".btn-start-turnover");
+  if (startTurnover) {
+    e.stopPropagation();
+    e.preventDefault();
+    void startTurnoverContainer(startTurnover);
+    return;
+  }
   // The + bar under a row's agents: start a new agent in this worktree. This is what the ▶ used to do.
   // The green + bar: it becomes a text field in place. The field itself carries the same data attributes, so this
   // matches the button only - a click inside the input must not re-open it.
@@ -8117,6 +8189,12 @@ $("projects").addEventListener("click", (e) => {
   const key = tr.dataset.key;
   const row = state.rows.get(key);
   if (!row) return;
+  // A container row is a BRANCH, not a worktree: its detail would be a Merge state and an agents block for a directory
+  // that does not exist. Say what the row is for instead of opening an empty one.
+  if (row.placeholder) {
+    showBanner(`${row.branch} is a turnover branch with no worktree yet - press start to make the container tree; there is nothing to read until then`);
+    return;
+  }
   keepInPlace(
     () => document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`),
     () => {
@@ -11073,8 +11151,11 @@ paintHotAgentListSetting();
 startReorderClock();
 paintReorderSetting();
 
-// Reflect the remembered collapse state of the two fixed cards before the first paint of them.
-for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
+// Reflect the remembered collapse state of the two fixed cards before the first paint of them. The fold a card
+// nobody has chosen comes from the page's state (FIXED_DEFAULT_COLLAPSED, row 416), never from the class the
+// shipped markup or a previous paint left behind; a card the reader has folded or unfolded keeps their choice.
+defaultFixedCollapse();
+for (const id of FIXED_CARDS) applyFixedCollapse(id);
 
 // ---- what the page can see ---------------------------------------------------------------------------------
 // In "on screen" mode the scheduler re-reads only the projects in view. Half a screen above and below counts too,

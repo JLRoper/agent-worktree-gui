@@ -38,7 +38,9 @@ test("the loop runs for the ring's own window, then stops", () => {
 });
 
 test("a repaint re-aims the landing instead of waiting for the next sample", () => {
-  const renderer = readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8");
+  // The card and its update path are two scripts since the render-jobs.js cut; both are read.
+  const renderer = ["../public/board/stream-body.js", "../public/board/conversation.js", "../public/render-jobs.js"]
+    .map((f) => readFileSync(new URL(f, import.meta.url), "utf8")).join("\n");
   assert.ok(renderer.includes("function reaimHotHit"), "the renderer knows the landing's anchor");
   assert.ok(renderer.includes("globalThis.wtHotAim"), "and calls into it while the ring is live");
   assert.ok(renderer.includes("!(Date.now() < hit.until)"), "with the ring's own deadline, so a stale hook cannot outlive it");

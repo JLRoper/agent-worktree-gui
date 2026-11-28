@@ -264,21 +264,26 @@ test("the page's template is the renderer's, byte for byte", () => {
 });
 
 test("the server stamps the line on every row from one read of the cut book, and leaves the checkout alone", () => {
-  // The row carries the sentence (server.js `withParentLines`), so the page never reads a file and the line cannot
-  // disagree with the scan. One `loadParents()` per snapshot, the same cost `withTreeKinds` already pays per row.
-  const server = read("server.js").replace(/\r\n/g, "\n");
-  const start = server.indexOf("function withParentLines(snap)");
-  assert.ok(start > 0, "withParentLines is in server.js");
-  const body = server.slice(start, server.indexOf("\n// The reader's lock travels", start));
-  assert.match(body, /jobs\.loadParents\(\)/, "the cut book is read once, through the store's own loader");
+  // The row carries the sentence (server.js `parentLineForRow`, called by `withParentLines` for a snapshot and by
+  // `rowExtras` for a one-row frame), so the page never reads a file and the line cannot disagree with the scan. One
+  // `loadParents()` per snapshot, the same cost `withTreeKinds` already pays per row.
+  const server = read("server.js").split(String.fromCharCode(13)).join("");
+  const start = server.indexOf("function parentLineForRow(project, row, book)");
+  assert.ok(start > 0, "parentLineForRow is in server.js");
+  const body = server.slice(start, server.indexOf("function withParentLines(snap)", start));
   assert.match(body, /parentLineFor\(\{/, "the row's line is the module's answer, not a second sentence");
   assert.match(body, /book,/, "the cut book is what recordedParentFor reads");
   assert.match(body, /parents\.get\(project\.name, branch\)/, "the reconstruction comes from the parent book");
   assert.match(body, /refused: \(rec && rec\.refused\) \|\| ""/, "a refused main ref travels with the record");
   assert.match(body, /turnoverBranchesOf\(project\)/, "the container is read from the project's own turnover list");
-  assert.match(body, /delete row\.parentLine;/, "the project's own checkout has no parent to name");
+  const snapshot = server.slice(server.indexOf("function withParentLines(snap)"), server.indexOf("// The reader's lock travels", start));
+  assert.match(snapshot, /jobs\.loadParents\(\)/, "the cut book is read once, through the store's own loader");
+  assert.match(snapshot, /parentLineForRow\(project, row, book\)/, "the snapshot stamps every row from that one read");
+  assert.match(snapshot, /delete row\.parentLine;/, "the project's own checkout has no parent to name");
   // It is applied to every snapshot, beside the kind overlay it shares its book with.
   assert.match(server, /withInitiatives\(withParentLines\(withTreeKinds\(snap\)\)\)/, "the overlay is in the snapshot chain");
-  // And the only place the field is dropped is this overlay: no later one strips it.
-  assert.equal((server.match(/delete row\.parentLine;/g) || []).length, 1, "the line is dropped in one place, the checkout branch above");
+  // Two places drop the field, and both are the same helper's answer: the snapshot's overlay and a row frame, because a
+  // frame REPLACES the page's row and a line stamped only into the snapshot would blink off on the next scan.
+  assert.equal((server.match(/delete (?:row|out)\.parentLine;/g) || []).length, 2, "the line is dropped where the helper answers null");
+  assert.match(server, /parentLineForRow\(project, out, jobs\.treeParents instanceof Map/, "a row frame carries the line too");
 });

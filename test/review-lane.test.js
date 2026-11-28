@@ -141,11 +141,14 @@ test("the row carries an amber mark and a Reviewed press, distinct from the lock
   // It is drawn after both of them in the name line, so the three never overwrite one another: turnover, the row's one
   // collision diamond, then the amber mark.
   const name = sliceBetween(rowsSrc, 'name: `<td class="name"', "// Same rule for the branch");
-  assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{collisionDiamondHtml\(row, delKey\)\}\$\{reviewRowMarkHtml\(row\)\}/);
+  const at = (needle) => name.indexOf(needle);
+  assert.ok(at("turnoverRowMarkHtml(row)") > 0, "the turnover mark is in the name line");
+  assert.ok(at("collisionDiamondHtml(row, delKey)") > at("turnoverRowMarkHtml(row)"), "the collision diamond follows the turnover mark");
+  assert.ok(at("reviewRowMarkHtml(row)") > at("collisionDiamondHtml(row, delKey)"), "and the amber mark follows the diamond");
   // The row's own <tr> says it too, at rest, without a tooltip being opened - and only while the chip's own switch
   // is on (Settings > Board > Chart columns, "Reviewed"): a switched-off chip leaves no amber edge behind.
   assert.match(rowsSrc, /const reviewOn = reviewChipShown\(\);/);
-  assert.match(rowsSrc, /reviewOn && typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
+  assert.match(rowsSrc, /reviewOn && !container && typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
   assert.match(css, /tr\.row\.has-review \{/);
 });
 

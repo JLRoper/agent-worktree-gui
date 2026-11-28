@@ -561,16 +561,21 @@ function refreshChips(name) {
 }
 
 // ---- children under their parent ---------------------------------------------------------------
-// Every tree the panel has a record for says which branch it was cut from — `row.parent` — and `row.parentSource`
-// says how sure that record is: "cut" (the panel watched the cut), "backfilled" (a guess from a shared ticket id in
-// the branch name) or "unknown". The board draws that record: a row whose parent is another row of the SAME project
-// hangs under it, one indent in, with its own chips and its own actions, and the parent carries the fold that puts
-// the group out of sight.
+// Every turnover branch a project NAMES is a container, and the chart draws it as a row of its own: the worktree
+// standing on that branch when there is one, and a row of its own when nothing stands there yet. Its children are the
+// trees cut from it, and the chart hangs them under it, one indent in, with the fold that puts the group out of sight.
 //
-// Four rules keep the picture honest:
-//   • a GUESS still groups. Grouping is a picture, not a write — the UNMERGED chip already refuses to roll into a
-//     backfilled parent — and a reader looking for the tree cut from this one wants it here whether the record was
-//     watched or guessed. Only the tooltip says which it was.
+// FIVE RULES KEEP THE PICTURE HONEST, and the first two are the container's:
+//   • THE ATTACHMENT IS READ FROM THE CUT BOOK, through the server's `row.parentLine` (lib/parent-line.js, whose
+//     RECORDED case goes through lib/worktrees.js `recordedParentFor` and nothing else). Only `kind: "recorded"`
+//     attaches. A RECONSTRUCTED parent (a reflog, a shared ticket) and an UNKNOWN one attach NOWHERE - a guess drawn
+//     as a group is a picture the reader cannot tell from a record - and the row says so with the ∅ mark
+//     (`parentGapHtml`), whose tooltip carries the parent line's own reason. A row with no parent line at all (an
+//     older snapshot, a fixture) falls back to `row.parent` ONLY when `row.parentSource` is "cut", which is the same
+//     "the panel watched this cut" fact the book carries; a backfilled guess never attaches.
+//   • A CONTAINER ROW HAS NOTHING ABOVE IT, and a container is never held back by the chart's top N: its children hang
+//     under it, so a held container would leave its own children floating at the top level. `turnoverKeepsRow` is
+//     the answer the chart's split asks (public/charts.js).
 //   • a child hangs under its parent only while the PARENT IS ON THE CHART. The chart's top-N can hold a parent back
 //     while its child ranks higher; the child then keeps its own row at the top level rather than hanging under a
 //     row that is not drawn or disappearing with it.
@@ -582,10 +587,237 @@ function refreshChips(name) {
 //     it, and refusing the edge here is what draws the sibling picture for that board without a migration - the same
 //     rule lib/parents.js has always applied to a roll-up target.
 //   • A ROUND'S OWN RECORD NAMES ITS CHILDREN. `row.round.parentPath` is read from the queue task that cut the tree
-//     (lib/round-tree-names.js), the same record the row's NAME comes from. The branch edge above arrives only with a
+//     (lib/round-tree-names.js), the same record the row's NAME comes from. The branch edge arrives only with a
 //     scanned row, so a board that has just booted drew every name and no group until each row's scan landed - and a
 //     stage tree the parent book never recorded had no group at all. The record is exact (the panel cut the tree), so
 //     it wins over a scanned branch edge; the same "parent must be a drawn row of this project" rule still applies.
+
+// A synthetic container row's path. It starts with a prefix no directory can, so nothing that takes a row's path to
+// the filesystem can mistake it for a tree; the branch half is the row's identity, because the row IS the branch.
+const TURNOVER_ROW_PREFIX = "turnover:";
+const turnoverRowPath = (branch) => `${TURNOVER_ROW_PREFIX}${String(branch || "").trim()}`;
+const isTurnoverRowPath = (p) => String(p || "").startsWith(TURNOVER_ROW_PREFIX);
+
+// Every turnover branch the project names, lowercased -> its own spelling. The list is `project.turnoverBranches`
+// (lib/project-turnover.js `turnoverBranchesOf`, merged onto the record by lib/projects.js), and the old single key
+// `turnoverBranch` is read as one entry, so a record written before the list existed still draws its container.
+function turnoverBranchNames(project) {
+  const p = state.projects?.get?.(project);
+  const out = new Map();
+  const add = (entry) => {
+    const name = String(entry && typeof entry === "object" ? entry.branch || "" : entry || "").trim();
+    if (name && !out.has(name.toLowerCase())) out.set(name.toLowerCase(), name);
+  };
+  for (const entry of Array.isArray(p?.turnoverBranches) ? p.turnoverBranches : []) add(entry);
+  add(p?.turnoverBranch);
+  return out;
+}
+
+// The feature key a named turnover branch carries, when the project's list records one. Used by the start press, so
+// the container it makes is filed under the same key the branch already has.
+function turnoverKeyOf(project, branch) {
+  const p = state.projects?.get?.(project);
+  const want = String(branch || "").trim().toLowerCase();
+  for (const entry of Array.isArray(p?.turnoverBranches) ? p.turnoverBranches : []) {
+    const name = String(entry && typeof entry === "object" ? entry.branch || "" : entry || "").trim();
+    if (name.toLowerCase() === want) return String((entry && typeof entry === "object" && entry.key) || "");
+  }
+  return "";
+}
+
+// Is this row the container of a turnover branch? The project's own record is the first answer; the row's kind is the
+// second, because a tree whose branch was renamed after its cut keeps its turnover record and is still the container.
+function isTurnoverBranchRow(row) {
+  const branch = String(row?.branch || "").trim();
+  if (!branch) return false;
+  if (turnoverBranchNames(row.project).has(branch.toLowerCase())) return true;
+  return String(row?.branchKind || "").trim() === "turnover";
+}
+
+// A turnover branch with no worktree gets a row of its own so the chart can hang its children under it. It is NOT a
+// worktree: `placeholder` says nothing may be read, renamed, locked, deleted or started IN it, and the one control it
+// carries is the press that makes it one (`btn-start-turnover`, POST /api/worktree/turnover-start).
+function turnoverPlaceholderRow(project, branch) {
+  const key = turnoverKeyOf(project, branch);
+  return {
+    project,
+    path: turnoverRowPath(branch),
+    name: branch,
+    branch,
+    branchKind: "turnover",
+    branchKindLabel: "turnover tree",
+    branchKindParent: null,
+    placeholder: true,
+    turnoverBranch: branch,
+    turnoverKey: key || null,
+    parent: null,
+    parentSource: "unknown",
+  };
+}
+
+// Put the project's turnover containers on the board as rows. A branch a worktree already stands on is that row -
+// nothing is synthesized for it - and a branch the project has stopped naming loses its placeholder.
+function applyTurnoverRows(project) {
+  const name = String(project || "").trim();
+  if (!name) return [];
+  const branches = turnoverBranchNames(name);
+  const standing = new Set();
+  for (const r of state.rows.values()) {
+    if (r.project !== name || r.placeholder) continue;
+    const b = String(r.branch || "").trim().toLowerCase();
+    if (b) standing.add(b);
+  }
+  const out = [];
+  for (const [lower, branch] of branches) {
+    if (standing.has(lower)) continue;
+    const key = keyOf(name, turnoverRowPath(branch));
+    const row = state.rows.get(key) || turnoverPlaceholderRow(name, branch);
+    state.rows.set(key, row);
+    out.push(row);
+  }
+  // Two removals, in one pass: a placeholder whose branch now has a real row, and one the project no longer names.
+  for (const [k, r] of [...state.rows]) {
+    if (r.project !== name || !r.placeholder) continue;
+    const lower = String(r.branch || "").toLowerCase();
+    if (standing.has(lower) || !branches.has(lower)) {
+      state.rowEls?.get(k)?.remove();
+      state.rowEls?.delete(k);
+      state.detailEls?.get(k)?.remove();
+      state.detailEls?.delete(k);
+      state.rows.delete(k);
+      state.foldedParents?.delete(k);
+    }
+  }
+  return out;
+}
+
+// The same answer for ONE arriving row: if it now stands on a branch the chart was drawing as a placeholder, the
+// placeholder is gone before the row is painted. Called by placeRow, so a scan tick and a snapshot cannot disagree.
+function dropTurnoverPlaceholder(project, branch) {
+  const spelling = String(branch || "").trim();
+  if (!spelling || !turnoverBranchNames(project).has(spelling.toLowerCase())) return false;
+  const key = keyOf(project, turnoverRowPath(spelling));
+  if (!state.rows.get(key)?.placeholder) return false;
+  state.rows.delete(key);
+  state.rowEls?.get(key)?.remove();
+  state.rowEls?.delete(key);
+  state.detailEls?.get(key)?.remove();
+  state.detailEls?.delete(key);
+  state.foldedParents?.delete(key);
+  return true;
+}
+
+// Is a ref name one of the project's bases? main/master/trunk/develop and the project's own mainBranch; a
+// remote-tracking `origin/<base>` counts too, because a round is cut from origin/main and that is still the base.
+function isBaseRefName(ref, mainBranch) {
+  const name = String(ref || "").trim().toLowerCase();
+  if (!name) return false;
+  const names = new Set(["main", "master", "trunk", "develop"]);
+  if (mainBranch) names.add(String(mainBranch).trim().toLowerCase());
+  return names.has(name) || names.has(name.replace(/^origin\//, ""));
+}
+
+// The key of the row this one hangs under, or null. THE ONE RULE, in the order the facts are trusted:
+//   1. a container row is the top of its own group;
+//   2. a round child's edge is the record's own (the panel cut it for this round);
+//   3. the cut book, through the row's `parentLine` - only `recorded` attaches;
+//   4. no parent line at all: only a `parentSource: "cut"` edge attaches, never a backfilled guess.
+function chartParentKeyOf(row, { byBranch, byPath, mainBranch }) {
+  if (!row) return null;
+  if (row.placeholder || isTurnoverBranchRow(row)) return null;
+  const key = keyOf(row.project, row.path);
+  const roundParent = row.round && typeof row.round === "object" ? normPath(row.round.parentPath || "").toLowerCase() : "";
+  if (roundParent) {
+    const pk = byPath.get(roundParent);
+    return pk && pk !== key ? pk : null;
+  }
+  const line = row.parentLine && typeof row.parentLine === "object" ? row.parentLine : null;
+  if (line) {
+    if (line.kind !== "recorded") return null;
+    const par = String(line.parent || "").trim();
+    if (!par || par === String(row.branch || "").trim() || isBaseRefName(par, mainBranch)) return null;
+    return byBranch.get(par) || null;
+  }
+  const par = String(row.parent || "").trim();
+  if (!par || par === String(row.branch || "").trim() || isBaseRefName(par, mainBranch)) return null;
+  if (String(row.parentSource || "").trim().toLowerCase() !== "cut") return null;
+  return byBranch.get(par) || null;
+}
+
+// WHY A ROW ATTACHES NOWHERE. The chart draws the ∅ mark beside the name of a child whose parent the book cannot
+// name, and this is the one sentence that mark carries. It answers only for a row the chart did NOT attach: a
+// recorded parent that is drawn, a base, a container and a row with no record at all carry no gap.
+function parentGapOf(row, tree = null) {
+  if (!row || row.placeholder) return null;
+  const key = keyOf(row.project, row.path);
+  const groups = tree || childTreeOf(row.project);
+  if (groups.parentOf.get(key)) return null;
+  const line = row.parentLine && typeof row.parentLine === "object" ? row.parentLine : null;
+  if (line) {
+    if (line.kind === "reconstructed") {
+      return {
+        why: "attaches nowhere - its parent was reconstructed, not recorded",
+        title: `${line.text} - a reconstruction is not a record, so the chart does not hang this tree under a guess`,
+      };
+    }
+    if (line.kind === "unknown") {
+      return {
+        why: "attaches nowhere - the cut book cannot name its parent",
+        title: `${line.text} - with no recorded parent there is nothing this tree can hang under`,
+      };
+    }
+    if (line.kind === "recorded") {
+      const par = String(line.parent || "").trim();
+      if (!par) return null;
+      return {
+        why: `attaches nowhere - cut from ${par}, which has no row on this chart`,
+        title: `the cut book records ${par} as its parent, and no row of this project stands on ${par} - the tree is drawn at the top level rather than under a row that is not there`,
+      };
+    }
+    return null;
+  }
+  const par = String(row.parent || "").trim();
+  if (par && String(row.parentSource || "").trim().toLowerCase() === "backfilled") {
+    return {
+      why: `attaches nowhere - ${par} was reconstructed, not recorded`,
+      title: "the parent book guessed this parent; a guess is not a record, so the chart does not hang the tree under it",
+    };
+  }
+  return null;
+}
+
+// A container, and every row under it, is drawn whatever the chart's top N says: the container is the shape of the
+// group, and a held container would leave its own children floating at the top level. Built from ONE childTreeOf per
+// call, so a caller that needs the whole set (the chart's split) does not build the tree once per row.
+function turnoverKeptKeys(project) {
+  const containers = new Set();
+  for (const [k, r] of state.rows) {
+    if (r.project !== project) continue;
+    if (r.placeholder || isTurnoverBranchRow(r)) containers.add(k);
+  }
+  if (!containers.size) return containers;
+  const kept = new Set(containers);
+  const tree = childTreeOf(project);
+  for (const k of tree.parentOf.keys()) {
+    const seen = new Set([k]);
+    for (let cur = tree.parentOf.get(k); cur; cur = tree.parentOf.get(cur)) {
+      if (seen.has(cur)) break;
+      seen.add(cur);
+      if (containers.has(cur)) {
+        kept.add(k);
+        break;
+      }
+    }
+  }
+  return kept;
+}
+
+// The same answer for one row, for a caller that already holds the row.
+function turnoverKeepsRow(row) {
+  if (!row) return false;
+  return turnoverKeptKeys(row.project).has(keyOf(row.project, row.path));
+}
+
 function childTreeOf(project) {
   const byBranch = new Map();
   const byPath = new Map();
@@ -593,7 +825,7 @@ function childTreeOf(project) {
     if (r.project !== project) continue;
     const k = keyOf(project, r.path);
     const p = normPath(r.path).toLowerCase();
-    if (p && !byPath.has(p)) byPath.set(p, k);
+    if (p && !isTurnoverRowPath(r.path) && !byPath.has(p)) byPath.set(p, k);
     const b = String(r.branch || "").trim();
     if (!b) continue;
     if (!byBranch.has(b)) byBranch.set(b, k);
@@ -602,22 +834,11 @@ function childTreeOf(project) {
   // the scan (a repo whose main is `dev` says so); the four literal names are the floor under a project the page has
   // not seen yet.
   const mainBranch = String(state.projects?.get?.(project)?.mainBranch || "").trim();
-  const turnover = (b) => b === mainBranch || /^(master|main|trunk|develop)$/i.test(b);
   const parentOf = new Map();
   for (const r of state.rows.values()) {
     if (r.project !== project) continue;
     const k = keyOf(project, r.path);
-    // A round child's edge is the record's own: the tree was cut for this round, from the parent tree's branch.
-    const roundParent = r.round && typeof r.round === "object" ? normPath(r.round.parentPath || "").toLowerCase() : "";
-    if (roundParent) {
-      const pk = byPath.get(roundParent);
-      if (pk && pk !== k) parentOf.set(k, pk);
-      continue;
-    }
-    const par = String(r.parent || "").trim();
-    if (!par) continue;
-    if (turnover(par)) continue;
-    const pk = byBranch.get(par);
+    const pk = chartParentKeyOf(r, { byBranch, byPath, mainBranch });
     if (pk && pk !== k) parentOf.set(k, pk);
   }
   for (const k of [...parentOf.keys()]) {
@@ -893,18 +1114,33 @@ function initiativeCellHtml(row) {
 
 function rowHtml(row, forceOwner = false) {
   const isOpen = rowDrawsOpen(keyOf(row.project, row.path));
+  // A CONTAINER WITH NO WORKTREE. It is a chart row for a turnover BRANCH, not a tree: every control that acts on a
+  // path is suppressed, the counts say nothing rather than "clean", and the one control it carries is the press that
+  // makes it a worktree (`btn-start-turnover`, POST /api/worktree/turnover-start). The server's `placeholder` flag is
+  // the only source for this - a real row standing on a turnover branch is an ordinary row with an ordinary ✕.
+  const container = row.placeholder === true;
   // A row whose path is no longer a tree of its own (lib/scan.js's RELEASED row) has no counts to show: "clean" would
   // be a claim about a worktree that is not there, so the cell says — with the reason in its tooltip.
   const releasedWhy = row.released ? String(row.released.why || "this path is not a worktree any more") : "";
-  const dirty = releasedWhy
-    ? `<span class="dim" title="${esc(releasedWhy)}">—</span>`
-    : row.dirty || row.untracked
-      ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
-      : `<span class="clean">clean</span>`;
-  const pr = prCellHtml(row);
-  const badge = verdictHtml(row);
+  const dirty = container
+    ? `<span class="dim" title="this row is the turnover BRANCH, not a worktree: there is nothing to read here until it is started">—</span>`
+    : releasedWhy
+      ? `<span class="dim" title="${esc(releasedWhy)}">—</span>`
+      : row.dirty || row.untracked
+        ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
+        : `<span class="clean">clean</span>`;
+  const pr = container ? "" : prCellHtml(row);
+  const badge = container
+    ? `<span class="dim" title="a turnover branch drawn as its own row: children are cut from it and merge back into it, and no worktree stands on it yet">container</span>`
+    : verdictHtml(row);
   // The project's own checkout is not a worktree anyone may delete or rename from here: it keeps the folder's name.
   const isProjectRoot = isProjectRootRow(row);
+  // The start press, in the row's own words: what it starts and what it refuses are both in the tooltip, because a
+  // control that silently refuses is the same as one that does nothing.
+  const startTurnoverBtn = container
+    ? `<button class="btn-start-turnover" type="button" data-start-turnover="${esc(row.branch)}" data-start-project="${esc(row.project)}" data-start-key="${esc(row.turnoverKey || "")}" title="start this turnover container: put a worktree on ${esc(row.branch)} so its children can be rolled into it and reconciled. It cuts no commit and no branch, starts no agent, pushes nothing, opens no pull request and lands nothing. It refuses a branch this project does not name as a turnover branch, and it refuses when git cannot put a worktree on this one - the error says which.">start</button>`
+    : "";
+
   // A tree is named from the prompt, cut at 24 characters; the agent names itself better a moment later. The button
   // offers that name first and takes anything the reader types. The branch column already carries the real name, so
   // the row does not repeat it here.
@@ -917,7 +1153,7 @@ function rowHtml(row, forceOwner = false) {
   // A title the panel's own naming looked at and DECLINED (it promised a PR, a commit, a merge). The tree keeps
   // the name it was cut with, and the row says why rather than looking like a naming that never arrived.
   const offerLine = String(row.nameOffer?.line || "").trim();
-  const renameBtn = isProjectRoot
+  const renameBtn = isProjectRoot || container
     ? ""
     : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree by hand — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}${namedLine ? ` · ${esc(namedLine)}` : ""}${offerLine ? ` · ${esc(offerLine)}` : ""}">\u270e</button>`;
   // ＋ cuts a CHILD worktree off this row's own branch (POST /api/worktree/child). It sits to the left of the ⟳
@@ -925,7 +1161,7 @@ function rowHtml(row, forceOwner = false) {
   // this one, remove this one. A row with no branch (a detached HEAD) has nothing to cut from, and the project's own
   // checkout is not a worktree, so neither draws it. The glyph is the ASCII plus on purpose: the mono stack this cell
   // is set in has no ⑂/⤷ on Windows, and a control that renders as nothing is worse than a plain one.
-  const childBtn = isProjectRoot || !row.branch
+  const childBtn = isProjectRoot || container || !row.branch
     ? ""
     : `<button class="btn-child-tree" data-child-tree="${esc(keyOf(row.project, row.path))}" data-child-project="${esc(row.project)}" data-child-path="${esc(row.path)}" data-child-branch="${esc(row.branch)}" type="button" title="cut a child worktree off ${esc(row.branch)} — a new tree on a new branch cut from this one, on its own row below; nothing is started in it and nothing is pushed, and it is what the child's UNMERGED chip rolls back into ${esc(row.branch)}">+</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
@@ -948,12 +1184,14 @@ function rowHtml(row, forceOwner = false) {
     : branchLockedByBranch
       ? `this worktree is not locked itself, but ${lock.branch ? `branch ${lock.branch}` : "its branch"} is (see the 🔒 in the branch cell) — click to lock this worktree as well`
       : "lock this worktree — a locked worktree can never be deleted: not by this row's ✕, not by a merge agent, not by any route";
-  const treeLockBtn = `<button class="btn-row-lock${treeLocked ? " is-locked" : ""}" type="button" data-lock-scope="tree" data-lock-tree="${lockKeyAttr}"
+  const treeLockBtn = container
+    ? ""
+    : `<button class="btn-row-lock${treeLocked ? " is-locked" : ""}" type="button" data-lock-scope="tree" data-lock-tree="${lockKeyAttr}"
     title="${esc(lockTitle)}" aria-pressed="${treeLocked ? "true" : "false"}" aria-label="lock this worktree">${treeLocked ? "\u{1F512}" : "\u{1F513}"}</button>`;
   const branchLockTitle = branchLockedByBranch
     ? `${lock.line || "🔒 this branch is locked"} — click to unlock it. Every worktree on ${lock.branch || "this branch"}, now and later, is protected while it is locked.`
     : "lock this BRANCH — protects this worktree and every worktree created on the branch later (a turnover branch stays protected as trees come and go)";
-  const branchLockBtn = isProjectRoot
+  const branchLockBtn = isProjectRoot || container
     ? ""
     : `<button class="btn-row-lock btn-branch-lock${branchLockedByBranch ? " is-locked" : ""}" type="button" data-lock-scope="branch" data-lock-tree="${lockKeyAttr}"
       title="${esc(branchLockTitle)}" aria-pressed="${branchLockedByBranch ? "true" : "false"}" aria-label="lock this branch">${branchLockedByBranch ? "\u{1F512}" : "\u{1F513}"}</button>`;
@@ -976,12 +1214,12 @@ function rowHtml(row, forceOwner = false) {
     // carried both; the amber mark and its press stay here, and the chip that prints the summary, the age and
     // "reviewed" moved out. The collision side is ONE diamond button in this line - it replaced both the per-pair
     // marks and the counts chip that used to sit after them, so the width those two spent is the name's again.
-    name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${collisionDiamondHtml(row, delKey)}${reviewRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
+    name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span>${container ? "" : `<button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button>`}<span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(container ? `${row.branch} - one of this project's turnover branches, drawn as its own row because no worktree stands on it yet; press start to make the container tree` : row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${parentGapHtml(row)}${container ? "" : collisionDiamondHtml(row, delKey)}${container ? "" : reviewRowMarkHtml(row)}${container ? "" : agentBadgeHtml(row)}</div></td>`,
     // THE SECOND REVIEW CHIP, in a cell of its own (CHART_COLUMNS `reviewedExtra`). Off means the whole column is
     // absent - header, cell and colspan - so there is no empty cell to leave behind; the amber mark in the name line
     // is a different chip with its own switch. A row with no delivery draws the chart's usual dash, never a blank.
-    reviewedExtra: `<td class="reviewed-extra">${resultChipHtml(row, delKey) || `<span class="dimmer">—</span>`}</td>`,
+    reviewedExtra: `<td class="reviewed-extra">${container ? `<span class="dimmer">—</span>` : resultChipHtml(row, delKey) || `<span class="dimmer">—</span>`}</td>`,
     // Same rule for the branch, whose whole column is one ellipsis (chart.css line 83). The cell also holds the
     // remote link, a `local` chip and the branch's padlock, so the value is the branch itself, never the cell's text.
     branch: `<td class="mono branch" data-copy-value="${esc(row.branch || "")}">${branchCellHtml(row)}${branchLockBtn}</td>`,
@@ -991,24 +1229,24 @@ function rowHtml(row, forceOwner = false) {
     assistant: ownerCellHtml(row),
     initiative: initiativeCellHtml(row),
     tip: `<td class="mono dim nowrap">${esc(row.head || "—")}</td>`,
-    ahead: `<td class="mono nowrap">${aheadBehindCellHtml(row)}</td>`,
-    cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
+    ahead: `<td class="mono nowrap">${container ? `<span class="dimmer" title="this row is the turnover branch, not a worktree: it has no copy on the remote to count against">—</span>` : aheadBehindCellHtml(row)}</td>`,
+    cherry: `<td class="mono dim nowrap">${container ? `<span class="dimmer" title="this row is the turnover branch, not a worktree: nothing has been cherry-read here">—</span>` : `+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}`}</td>`,
     pr: `<td class="pr">${pr}</td>`,
     dirty: `<td class="mono nowrap">${dirty}</td>`,
-    life: lifeCellHtml(row),
-    nextread: nextReadCellHtml(row),
+    life: container ? `<td class="age nowrap"><span class="age-line"><span class="age-num dimmer" title="this row is a turnover branch, not a worktree - no agent has ever run in it">branch row</span></span></td>` : lifeCellHtml(row),
+    nextread: container ? `<td class="nextread nowrap"><span class="dimmer" title="nothing to read: this row is the branch, not a worktree - start it, then the container tree is read like any other row">—</span></td>` : nextReadCellHtml(row),
     verdict: `<td class="verdict">${badge}</td>`,
     // THE KIND revisited: the mark is in `kind`, a cell of its own to the LEFT of the verdict, because in the verdict
     // cell it clipped the words the reader needs (the badge is what says ON MAIN or MERGED). Empty is the honest
     // answer for a row with no record: the column says "nothing recorded", and no letter is invented for it.
     kind: `<td class="kind">${kindMarkHtml(row)}</td>`,
-    actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
+    actions: `<td class="row-actions">${container ? startTurnoverBtn : isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
   // The lane is read through `typeof`: a scope without it reads as "no delivery" instead of throwing. The amber left
   // edge is part of the reviewed chip, so it goes when the chip's switch is off: a row still banded amber beside a
   // name line with no mark would be the chart half-hiding the thing the reader switched off.
   const reviewOn = reviewChipShown();
-  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${reviewOn && typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaitingCollisions(row).length ? " has-collision" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
+  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${container ? " is-turnover-container" : ""}${reviewOn && !container && typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}${!container && typeof wtReviewLane !== "undefined" && wtReviewLane.awaitingCollisions(row).length ? " has-collision" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
 }
@@ -1078,15 +1316,23 @@ function kindMarkHtml(row) {
 // name without moving that rule); the marker is the half a reader who cannot see blue still has - a shape of its own,
 // plus the same sentence in its tooltip and its aria-label.
 const TURNOVER_ROW_SAY = "the turnover branch for this project - assistants may cut child worktrees from it at will";
-
-function isTurnoverBranchRow(row) {
-  const branch = String(row?.branch || "").trim();
-  return Boolean(branch) && branch === turnoverFor(row?.project);
-}
+const TURNOVER_START_ROW_SAY =
+  "a turnover branch this project names, drawn as its own container row: children are cut from it and merge back into it, and no worktree stands on it yet";
 
 function turnoverRowMarkHtml(row) {
   if (!isTurnoverBranchRow(row)) return "";
-  return `<span class="turnover-mark" role="img" aria-label="${esc(TURNOVER_ROW_SAY)}" title="${esc(TURNOVER_ROW_SAY)}">\u21c4</span>`;
+  const say = row.placeholder ? TURNOVER_START_ROW_SAY : TURNOVER_ROW_SAY;
+  return `<span class="turnover-mark" role="img" aria-label="${esc(say)}" title="${esc(say)}">\u21c4</span>`;
+}
+
+// THE ∅ MARK: a tree the chart did not hang under a parent, with the reason in a tooltip. It is drawn from
+// `parentGapOf` (the grouping region), which answers only when the cut book cannot give the chart a parent it can
+// trust - a reconstruction, an unknown, or a recorded parent with no row on this chart. A tree cut from the base, a
+// container and a plain row carry nothing: silence there is the truth, not a gap.
+function parentGapHtml(row, tree = null) {
+  const gap = parentGapOf(row, tree);
+  if (!gap) return "";
+  return `<span class="parent-gap" role="img" aria-label="${esc(gap.why)}" title="${esc(gap.title)}">\u2205</span>`;
 }
 
 // ---- reviewed chip: the amber mark, its press, and the switch that takes both away -----------------
@@ -1577,6 +1823,9 @@ function queueRow(project, row, opts) {
 function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
+  // A real row standing on a branch the chart was drawing as a container placeholder replaces it: the branch is no
+  // longer a row of its own, it is this worktree. Done before the row is painted so the two never both exist.
+  if (typeof dropTurnoverPlaceholder === "function") dropTurnoverPlaceholder(project, row.branch);
   const prevRow = state.rows.get(key) || null;
   // A row seeded from the cached tree list (lib/tree-cache.js) being replaced by its own fresh read is not NEWS: it is
   // the same row, read at last. No green flash and no rank move - the cached row was painted in the slot its own read

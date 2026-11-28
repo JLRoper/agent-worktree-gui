@@ -48,7 +48,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { loadPlaywright, notRun, withBrowser } from "./browser.mjs";
-import { sliceRegion } from "./panel-testkit.mjs";
+import { queueCardsSource, sliceRegions } from "./panel-testkit.mjs";
 import { readStyleSheets, styleSheetFiles } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -88,8 +88,8 @@ const esc = (s) =>
     .replace(/"/g, "&quot;");
 
 function cardsFromSource() {
-  const src = readFileSync(path.join(ROOT, "public", "queue-cards.js"), "utf8");
-  const region = sliceRegion(src, "the queue sub-tab");
+  const src = queueCardsSource();
+  const region = sliceRegions(src, "the queue sub-tab");
   return new Function(
     "esc",
     "assistantIds",
