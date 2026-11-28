@@ -14,8 +14,9 @@ import vm from "node:vm";
 
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const consoleSrc = read("public/board/console.js");
-const jobsSrc = read("public/render-jobs.js");
-const renderSrc = read("public/render-jobs.js");
+// Cut 1 of render-jobs.js: the stream body and the placeholder are public/board/stream-body.js.
+const jobsSrc = `${read("public/board/stream-body.js")}\n${read("public/render-jobs.js")}`;
+const renderSrc = jobsSrc;
 
 const sliceBetween = (src, a, b) => {
   const begin = src.indexOf(a);

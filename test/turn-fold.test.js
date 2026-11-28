@@ -27,7 +27,11 @@ const fold = globalThis.wtTurnFold;
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 // The card itself moved out of app.js with step 7 of docs/reports/module-map-2026-11-07.html: renderJobs,
 // conversationHtml and turnBlock live in public/render-jobs.js now, and they are card renderers too.
-const jobs = readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8");
+// The card and the body are two scripts since the render-jobs.js cut; each is named in the list below.
+const body = readFileSync(new URL("../public/board/stream-body.js", import.meta.url), "utf8");
+const card = readFileSync(new URL("../public/board/conversation.js", import.meta.url), "utf8");
+const parent = readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8");
+const jobs = [body, card, parent].join("\n");
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
@@ -235,9 +239,10 @@ test("a cleared job takes its fold entries, and a cleared thread its page", () =
 // ---- 7. one owner ---------------------------------------------------------------------------------------------
 test("the books are written only in the module, and both card renderers go through it", () => {
   // No file outside the module writes `turnOpen` / `turnCompact` / `turnPage`: every gesture above has an API here.
+  // public/render-jobs.js is header only since the cut and declares nothing, so there is nothing there to check.
   for (const [name, src] of [
     ["public/app.js", app],
-    ["public/render-jobs.js", jobs],
+    ["public/board/conversation.js", card],
     ["public/assistant.js", assistant],
   ]) {
     for (const book of ["turnOpen", "turnCompact", "turnPage"]) {

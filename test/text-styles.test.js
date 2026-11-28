@@ -24,7 +24,7 @@ const settingsWindow = read("public/settings-window.js");
 const html = read("public/index.html");
 // The card that re-emits the zoom is drawn by renderConversation, which moved to public/render-jobs.js with step 7
 // of docs/reports/module-map-2026-11-07.html; the wheel handler itself stayed in app.js.
-const jobs = read("public/render-jobs.js");
+const jobs = ["public/board/stream-body.js", "public/board/conversation.js", "public/render-jobs.js"].map((f) => read(f)).join("\n");
 const css = readStyleSheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- text styles");
