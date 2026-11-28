@@ -1589,6 +1589,13 @@
        which calls them by bare name and re-exports them on window.WMApp.scaffold; it declares only, so that order
        costs nothing and nothing here waits on boot. -->
   <script src="/board-scaffold.js"></script>
+  <!-- The approval dock, cut out of app.js (cut 1 of the eight in docs/reports/module-separation-2026-11-28.html's
+       card for public/app.js): the permission box and its choices table, the one-flight answer per request, a run's
+       own parked question and its answer path, the dock's list with the gestures that walk the reader to the agent
+       that asked, and the panel's own remote-write permission with its receipts, its review and its clock. Loaded
+       before app.js, which calls them by bare name and re-exports them on window.WMApp.approvals; it declares only,
+       so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/approvals.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

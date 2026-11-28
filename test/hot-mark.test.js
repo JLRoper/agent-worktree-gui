@@ -209,7 +209,11 @@ test("a turn starting or stopping repaints it, on every seam a turn change passe
   const jobs = read("public/render-jobs.js");
   assert.match(jobs, /paintHotButton\(\)/, "a job frame repaints it too");
   const app = read("public/app.js");
-  const tick = sliceBetween(app, "function tickApprovals", "setInterval(tickApprovals");
+  // tickApprovals was cut out of app.js into public/board/approvals.js (cut 1 of the eight in
+  // docs/reports/module-separation-2026-11-28.html); the interval that drives it is registered in app.js with the
+  // page's other load-time wiring, so the function is sliced from the file that now carries it.
+  const approvals = read("public/board/approvals.js");
+  const tick = sliceBetween(approvals, "function tickApprovals", "const approvalSent = new Map();");
   assert.doesNotMatch(tick, /paintHumanButton/, "the 1 s clock no longer repaints a Human button: there is none");
   assert.match(tick, /paintHotButton\(\)/, "and the same clock repaints the bolt: a turn's own clock moves without a job frame");
 });

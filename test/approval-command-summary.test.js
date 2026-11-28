@@ -32,6 +32,9 @@ const M = globalThis.wtCommandSummary;
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const app = read("../public/app.js");
+// The permission box was cut out of app.js into public/board/approvals.js (cut 1 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the card's markup and its two callers are read from there.
+const approvals = read("../public/board/approvals.js");
 const html = read("../public/index.html");
 const css = readStyleSheets();
 const source = read("../public/core/command-summary.js");
@@ -229,7 +232,7 @@ test("the lead line is escaped like every other value on the page", () => {
 test("the block is drawn above the command, and the command, the four buttons and the countdown are untouched", () => {
   // The card's own markup: the summary sits between the head and the command, and the command's <pre> is the one
   // that was there before, carrying the command it was given.
-  const box = app.slice(app.indexOf("function permissionBoxHtml("), app.indexOf("function approvalPrompt("));
+  const box = approvals.slice(approvals.indexOf("function permissionBoxHtml("), approvals.indexOf("function approvalPrompt("));
   const at = (needle) => box.indexOf(needle);
   assert.ok(at("${summary}") > at('class="ta-head mono"'), "the summary is under the head");
   assert.ok(at('<pre class="ta-cmd mono">${esc(command || "(no command text)")}</pre>') > at("${summary}"), "the command is under the summary");
@@ -240,8 +243,8 @@ test("the block is drawn above the command, and the command, the four buttons an
   // The page loads the module before app.js, and the callers pass the tree the command runs in.
   assert.ok(html.indexOf('/core/command-summary.js') > 0);
   assert.ok(html.indexOf('/core/command-summary.js') < html.indexOf('/app.js'));
-  assert.match(app, /root: turn\.cwd \|\| ""/);
-  assert.match(app, /root: r\.worktree \|\| ""/);
+  assert.match(approvals, /root: turn\.cwd \|\| ""/);
+  assert.match(approvals, /root: r\.worktree \|\| ""/);
   // And the look is a stylesheet rule, not an inline style.
   assert.match(css, /\.ta-summary \{/);
   assert.match(css, /\.ta-summary-chip\.is-danger/);
@@ -335,5 +338,5 @@ test("a destructive command keeps its delete in full, and only the harmless tail
 test("one summary per card, derived at paint time from the same string the card shows", () => {
   // The block is built from `command`, the same variable the <pre> is built from: a second source would let the
   // summary and the command drift.
-  assert.match(app, /globalThis\.wtCommandSummary\.html\(command, \{ root, esc \}\)/);
+  assert.match(approvals, /globalThis\.wtCommandSummary\.html\(command, \{ root, esc \}\)/);
 });
