@@ -233,7 +233,9 @@ test("an open card survives a re-render, and Escape closes it", () => {
   // A body redrawn under the reader's caret puts the caret back on the same control.
   assert.match(scaffold, /const at = rowChipFocusables\(pop\)\.indexOf\(document\.activeElement\);/);
   // Every path that replaces a row's chip nodes calls it: placeRow's chip repaint and the project's full rebuild.
-  assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
+  // The full rebuild's call (refreshChips) is cut 1 of row 530, so it is read from the module that carries it now.
+  const order = read("public/board/project-order.js");
+  assert.match(order, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
   assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(name\);/);
   // Keyboard: Escape closes and hands the caret back, the arrows step the card's own controls.
   const keys = sliceBetween(scaffold, 'document.addEventListener("keydown"', "// The popup is fixed");
