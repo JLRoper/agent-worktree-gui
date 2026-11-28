@@ -34,6 +34,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
+import { readStyleSheets as sheetText } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -757,15 +758,10 @@ async function browserPhase(pw) {
 }
 
 // ---- what can only be read off the source --------------------------------------------------------
-// The 1.191.0 split moved every rule out of public/style.css and into the sheets public/index.html loads in order. A
-// source check that opens the old path answers ENOENT for CSS that IS there, so the sheets are read in the page's own
-// order and joined: a rule the page really loads is found wherever the split put it.
-function sheetText(root) {
-  const html = readFileSync(path.join(root, "public", "index.html"), "utf8");
-  return [...html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"]+\.css)"/g)]
-    .map((m) => readFileSync(path.join(root, "public", m[1]), "utf8"))
-    .join("\n");
-}
+// The 1.191.0 split moved every rule out of the one panel sheet and into the sheets public/index.html loads in order.
+// A source check that opens the old path answers ENOENT for CSS that IS there, so the sheets are read in the page's
+// own order, through tools/style-sheets.mjs, and joined: a rule the page really loads is found wherever the split
+// put it.
 
 function sourceChecks() {
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
