@@ -82,10 +82,10 @@ function fakeEl(props = {}) {
 }
 
 // A global `window`/`document` for the duration of one test: the module reads both through `root`/bare globals.
-function withDom(run, { viewport = { width: 1440, height: 900 } } = {}) {
+function withDom(run, { viewport = { width: 1440, height: 900 }, zoom = 1 } = {}) {
   const docListeners = new Map();
   const winListeners = new Map();
-  const before = { window: globalThis.window, document: globalThis.document };
+  const before = { window: globalThis.window, document: globalThis.document, getComputedStyle: globalThis.getComputedStyle };
   globalThis.window = {
     innerWidth: viewport.width,
     innerHeight: viewport.height,
@@ -95,16 +95,20 @@ function withDom(run, { viewport = { width: 1440, height: 900 } } = {}) {
     },
   };
   globalThis.document = {
+    documentElement: {},
     addEventListener(type, fn) {
       if (!docListeners.has(type)) docListeners.set(type, []);
       docListeners.get(type).push(fn);
     },
   };
+  // Settings > Display's zoom: the module reads it off documentElement to turn a visual rect into a layout length.
+  globalThis.getComputedStyle = () => ({ zoom: String(zoom) });
   try {
     return run({ window: globalThis.window, document: globalThis.document, docListeners, winListeners });
   } finally {
     globalThis.window = before.window;
     globalThis.document = before.document;
+    globalThis.getComputedStyle = before.getComputedStyle;
   }
 }
 
@@ -306,6 +310,23 @@ test("the popover carries a drag strip with a close x, and a grip, and show re-a
     for (const fn of strip.listeners.get("mousedown") || []) fn({ clientX: 0, clientY: 0, preventDefault() {}, stopPropagation() {} });
     assert.equal(pop.classList.contains("is-moving"), true, "the strip starts a move");
   });
+});
+
+test("a zoomed page is written in layout px: the popover opens at the box's own left, not zoom-times past it", () => {
+  withDom(
+    () => {
+      const input = fakeEl({ getBoundingClientRect: () => ({ left: 1200, right: 1255, bottom: 40, top: 20, width: 55, height: 20 }) });
+      const pop = fakeEl({ hidden: true });
+      const bar = mount({ input, pop, readout: () => ({ text: "" }) });
+      bar.show("<i>x</i>");
+      // Visual 1200 at zoom 1.1 is layout 1090.9: the length a style write needs. The old rule wrote 1200, which draws
+      // at 1320 - 120px right of the box.
+      assert.ok(Math.abs(parseFloat(pop.style.left) - 1200 / 1.1) < 1e-6, `left ${pop.style.left} is layout px`);
+      assert.equal(pop.style.top, "42px", "top is the box's bottom plus the gap, in layout px (40 / 1.1 + 6, rounded)");
+      assert.ok(parseFloat(pop.style.width) >= 250, "the width floor is layout px too");
+    },
+    { viewport: { width: 1760, height: 1000 }, zoom: 1.1 },
+  );
 });
 
 test("resetPlacement forgets the reader's rectangle while the list stays open", () => {
