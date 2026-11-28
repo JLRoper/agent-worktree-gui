@@ -42,7 +42,7 @@ import test from "node:test";
 // read from the script that now carries it - reorderProjects, reorder and placeRow moved to public/render-projects.js
 // in step 7 of docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
-const src = `${page("public/board/console.js")}\n${page("public/render-projects.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/render-projects.js")}\n${page("public/board/anchor.js")}\n${page("public/app.js")}`;
 
 const begin = src.indexOf("// ---- moving nodes without losing what is scrolled inside them");
 const end = src.indexOf("// ---- end moving nodes without losing what is scrolled inside them");

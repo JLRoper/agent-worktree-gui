@@ -22,8 +22,10 @@ import test from "node:test";
 import { AGENT_CLEANUP_DEFAULT, agentCleanupFrom, releasesEnabled } from "../lib/worktrees.js";
 import { post, startPanel } from "../tools/panel-testkit.mjs";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+// The row's two readers and its painter were cut out of app.js into public/settings-window.js (cut 8 of the
+// eight in docs/reports/module-separation-2026-11-28.html); the change listener stayed in app.js.
+const settingsSrc = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
 
 // ---- 1. the normaliser ----------------------------------------------------------------------------------------------
 test("a missing switch is ON, and only the literal `true` keeps it open", () => {
@@ -92,10 +94,10 @@ test("the row is in the Board group and names both clean-ups it closes", () => {
 });
 
 // ---- 4. the paint ---------------------------------------------------------------------------------------------------
-const begin = src.indexOf("// ---- whether an agent may clean up after itself");
-const end = src.indexOf("// ---- end agent cleanup");
-assert.ok(begin > 0 && end > begin, "the agent-cleanup region is in public/app.js");
-const region = src.slice(begin, end);
+const begin = settingsSrc.indexOf("// ---- whether an agent may clean up after itself");
+const end = settingsSrc.indexOf("// ---- initiatives: how often a change to the map asks", begin);
+assert.ok(begin > 0 && end > begin, "the agent-cleanup region is in public/settings-window.js");
+const region = settingsSrc.slice(begin, end);
 
 function paint(settings, { note = "", bad = false, checked = null } = {}) {
   const box = { checked, addEventListener() {} };

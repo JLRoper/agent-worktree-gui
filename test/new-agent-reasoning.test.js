@@ -32,7 +32,7 @@ test("the actual spawn form reads the reasoning choice and the row shortcut rese
   fields.get("job-reasoning").disabled = false;
   fields.get("job-reasoning").value = "";
   assert.equal(form().reasoningEffort, undefined, "default leaves Hermes configuration alone");
-  const resetSource = app.slice(app.indexOf("function resetSpawnDefaults()"), app.indexOf("// ---------------- worktrees", app.indexOf("function resetSpawnDefaults()")));
+  const resetSource = app.slice(app.indexOf("function resetSpawnDefaults()"), app.indexOf("\nfunction fillAgentSlots(", app.indexOf("function resetSpawnDefaults()")));
   const reset = new Function("$", `${resetSource}; return resetSpawnDefaults;`)((id) => fields.get(id));
   fields.get("job-reasoning").value = "high";
   reset();
