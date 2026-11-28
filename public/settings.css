@@ -276,6 +276,8 @@
 .maintenance-size { margin-left: auto; flex: none; font-size: 11px; color: var(--dimmer); white-space: nowrap; }
 .maintenance-detail { margin-top: 3px; font-size: 11.5px; color: var(--dim); overflow-wrap: anywhere; }
 .maintenance-detail.bad { color: #ff9c94; }
+.maintenance-window { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; margin-right: 6px; font-size: 11px; color: var(--dim); }
+.maintenance-window select { font: 11px var(--mono); padding: 1px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--text); }
 .maintenance-actions { display: flex; gap: 6px; margin-top: 7px; }
 .maintenance-actions button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
 .maintenance-actions button:hover { border-color: #3b4757; }
