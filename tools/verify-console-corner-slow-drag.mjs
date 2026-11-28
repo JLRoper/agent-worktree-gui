@@ -159,8 +159,8 @@ const PAGE_HELPERS = () => {
         held: typeof outDragging === "function" ? outDragging(o) : null,
         consoleAtBottom: o._atBottom === true,
         bodyAtBottom: b._atBottom !== false,
-        dragH: typeof outGripDrag !== "undefined" && outGripDrag && outGripDrag.out === o ? +Number(outGripDrag.h).toFixed(2) : null,
-        dragTop: typeof outGripDrag !== "undefined" && outGripDrag && outGripDrag.out === o ? +Number(outGripDrag.top).toFixed(2) : null,
+        dragH: (() => { const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null); return d && d.out === o ? +Number(d.h).toFixed(2) : null; })(),
+        dragTop: (() => { const d = window.wtConsoleGripDrag || (typeof outGripDrag !== "undefined" ? outGripDrag : null); return d && d.out === o ? +Number(d.top).toFixed(2) : null; })(),
         same: o === window.__D.node,
       };
     },
