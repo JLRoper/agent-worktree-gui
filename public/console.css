@@ -1,0 +1,873 @@
+/* public/console.css
+   The console: the agent pane and its thought rows.
+
+   The running card's pulse and the stuck-turn chip, the output box and its grip, the copy button, the markdown
+   prose, the raw and focus views, the tool-call groups, the thought rows, the diff and code blocks, the command
+   card and the stats readout. This is the surface a lane touches when it changes how an agent's output reads.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ---- the running card's pulse -------------------------------------------------------------------
+   The heartbeat on a live run's event stream (app.js livePulse): a looping dot and the last thing the panel
+   actually heard. It is a heartbeat, not a thought bubble - the tooltip says so in the agent's own card - and
+   the two quiet states are drawn differently on purpose: "no events yet" is the gateway not sending (amber,
+   attention), while a silent stream is a live run between events (grey, still pulsing). "polled" is the third
+   kind of not-knowing: a gateway with no event stream, where the card is read every 15s and nothing here can
+   judge the model. The pulse never carries reasoning text and never says what the agent is thinking. */
+.live-pulse {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex: none; align-self: center;
+  font-family: var(--mono); font-size: 11px; line-height: 1.4;
+  padding: 1px 7px 1px 6px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--dim);
+  white-space: nowrap; user-select: none;
+}
+.live-pulse .pulse-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  animation: livepulse 1.4s ease-in-out infinite;
+}
+/* Scrolled out of view the compositor stops painting the dot and the animation falls back to the main thread, every
+   frame, for nothing anyone can see (4.5 points of a core per dot, measured; app.js "motion nobody can see"). */
+.live-pulse .pulse-dot.is-offscreen { animation-play-state: paused; }
+.live-pulse .pulse-text { font-variant-numeric: tabular-nums; }
+.live-pulse.is-stream { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.live-pulse.is-tool { color: #86c5ff; border-color: #1e3a56; background: var(--blue-bg); }
+.live-pulse.is-silent { color: var(--dim); border-color: var(--line); background: transparent; }
+.live-pulse.is-nosignal { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* A status the run raised about itself (hermes.status: compaction, provider wait). Violet, not amber: amber is the
+   panel saying the gateway is not sending; this is the gateway saying what it is doing. */
+.live-pulse.is-status { color: #c3a6ff; border-color: #3a2d56; background: rgba(140, 110, 220, .12); }
+.live-pulse.is-poll { color: var(--dimmer); border-style: dashed; background: transparent; }
+.live-pulse.is-poll .pulse-dot { animation: none; opacity: .5; }
+@keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.72); } }
+/* A looping dot is exactly what this asks to turn off. The state word and the age stay: only the motion goes. */
+@media (prefers-reduced-motion: reduce) { .live-pulse .pulse-dot { animation: none; } }
+/* ---- the stuck-turn chip ------------------------------------------------------------------------
+   A quiet or reaped worker run, on the card's head beside the pulse (public/render-jobs.js stuckChipHtml,
+   fed by the job's own `stuck`/`reaped` fields). The pulse says what the panel last HEARD; this says what the
+   panel decided about the silence. Same pill geometry as the pulse so the head does not reflow when one turns
+   into the other, and the three states are three colours: amber = watched (quiet, not yet past its budget),
+   violet = the gateway is compacting (a silence explained, not a stall), red = the reaper stopped it. */
+.stuck-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex: none; align-self: center;
+  font-family: var(--mono); font-size: 11px; line-height: 1.4;
+  padding: 1px 7px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--dim);
+  white-space: nowrap; user-select: none; font-variant-numeric: tabular-nums;
+}
+.stuck-chip.is-quiet { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.stuck-chip.is-reaped { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+.stuck-chip.is-compacting { color: #c3a6ff; border-color: #3a2d56; background: rgba(140, 110, 220, .12); }
+/* The console's marching tail (public/board/console.js marchRowHtml). It is a SIBLING of the console, drawn under
+   the box: the record's text, height and scroll are the console's own, so the row can neither enter the record nor
+   move the feed. The pulse idiom supplies the dot (the @keyframes livepulse breath above) and the mono 11px text;
+   this variant drops the pill's chrome because it is a tail, not a chip, and gives the dots a FIXED slot of exactly
+   ". . . . " - eight characters - so a step never changes the row's width, the fourth dot clears at that edge, and
+   the row is always one line tall. */
+.out-wrap > .live-pulse.march {
+  display: flex;
+  align-self: flex-start;
+  margin: 5px 0 0 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  min-height: 1.5em;
+  line-height: 1.5;
+  white-space: pre;
+}
+.out-wrap > .live-pulse.march .march-dots {
+  display: inline-block;
+  width: 8ch;
+  white-space: pre;
+}
+/* Still (reduced motion): the dot stops by the ONE existing rule above, the march is never started, and the row says
+   in words what the dots were saying. */
+.out-wrap > .live-pulse.march .march-label { display: none; }
+.out-wrap > .live-pulse.march.is-still .march-dots { display: none; }
+.out-wrap > .live-pulse.march.is-still .march-label { display: inline; }
+/* The re-attach pill is the not-running pill: same word, same amber, same refresh glyph, same place on the card.
+   The reader is not asked to learn a second control for a card that is not running, and the state is the same one
+   the word already names. Only the CLICK differs, which is what this hook class carries: it asks the gateway about
+   the run this panel lost before it starts anything (still live -> the card re-attaches; ended -> the result is
+   adopted; forgotten -> the card settles and the thread is continued). */
+button.pill-reattach {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+}
+button.pill-reattach .pill-again { font-size: 12px; line-height: 1; opacity: .8; }
+button.pill-reattach:hover { border-color: #6f5a1e; background: #33290f; }
+/* The failed chip stays RED on hover: `.pill.pill-notrunning.is-failed` outranks `button.pill-reattach:hover`, so
+   without this line the press turns back into an amber continue pill the moment the pointer lands on it. */
+button.pill-reattach.pill-notrunning.is-failed:hover { border-color: #7a3138; background: #341a1c; }
+button.pill-reattach:hover .pill-again { opacity: 1; }
+button.pill-reattach:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-reattach:disabled { cursor: progress; }
+/* While the gateway is being asked the glyph turns, exactly as the continue pill's does. */
+button.pill-reattach.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
+/* The COMPLETE chip on a card whose latest turn is done: the same pill in the same place, at the same size — only the
+   colour and the word change, because a finished agent is not a stopped one. Green is the panel's own "finished happily"
+   colour (the RUNNING pill and a worktree row's MERGED use it), so nothing new is taught here. No refresh glyph: this pill
+   resumes nothing. Its press queues one ask for the board assistant instead of nudging the agent that already finished, and
+   `is-asked` is the short state change that says the ask landed. */
+button.pill-complete {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+  color: #7ee787; border-color: #1f4a2a; background: var(--green-bg);
+}
+button.pill-complete:hover { border-color: #2f6b3d; background: #16301f; }
+button.pill-complete:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-complete:disabled { cursor: progress; }
+button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); background: #20242c; }
+.pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+.pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
+.pill.interrupted { border-style: dashed; }
+.pill.yolo { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+/* A turn's prompt line folds the turn, exactly like the "turn 1 · done" head above it. */
+.job-cmd { font-size: 11px; word-break: break-all; margin-bottom: 6px; font-family: var(--term); }
+/* The console and the thinking body live in a positioned wrapper so the "to the newest line" chip can sit in
+   the corner of the CONSOLE, not in the flow of its text. The chip is only visible while the reader is scrolled
+   away from the end; at the end there is nothing to jump to. */
+.out-wrap { position: relative; }
+/* The console's own box: the <pre> and the grip that resizes it, and nothing else. It exists so the grip's corner is
+   the CONSOLE's corner: the marching tail and the chips below are siblings of this box, not part of it, so a row that
+   appears under a live transcript cannot move the corner the reader is holding. */
+.out-box { position: relative; }
+/* The grip. It is the ONLY thing that resizes a console: the browser's own `resize: vertical` handle is driven by the
+   browser's layout of the node it started on, and this panel rebuilds and re-pins consoles as a matter of course, so
+   that handle walked out from under the pointer whenever the box under it was replaced. An 18px hit band (bigger than
+   the 16px corner it replaces, and the whole band is the target) with `touch-action: none`, so a touch drag is this
+   gesture and never a scroll. The ticks are the shape the float's corner grip already draws (`.deliver-pop
+   .dl-resize`), so the panel teaches one resize affordance and not two. */
+.out-box > .out-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  /* NO border-radius here, deliberately. A radius clips the element's own hit area, and the pixel a reader aims at
+     when they reach for a corner is the corner itself: with a 6px rounding the two corner-most pixels were dead, the
+     press fell through to the box, and nothing resized. The float's corner lost its grab to exactly this, under a
+     radius it needed for its frame; these ticks do not need one. */
+  cursor: nwse-resize;
+  touch-action: none;
+  user-select: none;
+  opacity: .45;
+  background-image:
+    linear-gradient(135deg, transparent 0 78%, #6b7c96 78% 90%, transparent 90% 100%),
+    linear-gradient(135deg, transparent 0 52%, #6b7c96 52% 64%, transparent 64% 100%),
+    linear-gradient(135deg, transparent 0 26%, #6b7c96 26% 38%, transparent 38% 100%);
+}
+.out-box > .out-grip:hover,
+.out-wrap:hover > .out-box > .out-grip,
+.out-box.is-resizing > .out-grip { opacity: 1; }
+/* A live corner drag is not a text selection, and the pointer keeps the resize cursor even when it strays off the
+   18px band the gesture was started on. (The board's own anchor compensation stands down for the same length of
+   time - see the guard in compensateAnchor, public/app.js - or the page scrolls under the gesture.) */
+body.is-out-gripping { user-select: none; cursor: nwse-resize; }
+body.is-out-gripping * { cursor: nwse-resize; }
+/* NO `overflow-anchor: none` FOR A GESTURE, and the omission is a decision with a measurement behind it. The
+   console's corner drag stands the PAGE's tail pin down (public/board/console.js cardBodyHeld) because that pin
+   jumps the transcript to its FOOT, which cancels a drag. The BROWSER's scroll anchor is the opposite: it holds the
+   reader's place, so a row landing in the turn ABOVE the console leaves the box's top edge - and the hand on its
+   corner - exactly where they were. Disabling it for the gesture was tried and measured in
+   tools/verify-console-corner-slow-drag.mjs's "above" case: the box's top edge moved 86.25px under a still hand and
+   the grip left the pointer by the same 86.25px. Leave this alone; the gate fails if it is added back. */
+/* The console has an 18px left tab (.job-cmd, .job-out, .job-foot). The wrapper takes the tab instead, so the two
+   boxes line up exactly and the chip centred in the wrapper is centred in the console. */
+.out-wrap.out-tab { margin-left: 18px; }
+.out-wrap.out-tab .job-out { margin-left: 0; }
+/* The chip both tail controls are, written once. The console's "jump to the newest line" and the worktree chart's
+   "show the trees this chart is holding back" (`.wt-age-toggle`, further down) are the same 21px circle, and every
+   declaration here is one the two rules carried verbatim. What they do NOT share stays with its owner: where the
+   chip is placed, and its ink and letterform — the chart's arrow is deliberately brighter, because it sits on the
+   legend's dark strip rather than floating over a console's own text. This rule is the earlier of the two, which is
+   what lets `.wt-age-toggle` keep overriding it. */
+.tail-chip {
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
+}
+.out-wrap > .to-bottom {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 9px;
+  z-index: 2;
+  display: grid;
+  font-size: 12px;
+  /* Centred over the console's own text, so it has to be opaque and carry a halo: at 92% the lines behind it
+     showed through the circle and the arrow read as a ghost. */
+  color: #c3ccd8;
+  background: #161c24;
+  border: 1px solid #39424f;
+  box-shadow: 0 0 0 4px rgba(10, 13, 18, .55), 0 2px 8px rgba(0, 0, 0, .45);
+}
+.out-wrap > .to-bottom:hover { color: var(--text); border-color: #3a4353; }
+.out-wrap > .to-bottom:active { transform: translate(-50%, 1px); }
+/* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
+.out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
+
+/* THE CHIP IN A PANE THAT SCROLLS ITS CARD, NOT ITS CONSOLE. In the two places the sheet makes a card's BODY the
+   scrollport - the docked Chat pane and a maximized card - a turn is taller than the viewport, so a chip anchored to
+   the turn's own bottom hangs below the fold: the reader who has scrolled away from the newest line is exactly the
+   reader who cannot reach it. There it rides the scroller's own foot instead (sticky, in flow, centred over the text),
+   so it is where the eye already is while the turn is in view, and it settles back into its old place the moment the
+   turn's bottom reaches the reader. The halo is the base rule's.
+   In the PANE the foot is not the scroller's edge: the composer is `position: sticky; bottom: 0` inside the very same
+   body (line 4199), so a chip at 9 px would sit behind it and take no press. `--reply-h` is the composer's own height,
+   written by the pane (public/assistant.js, watchPaneFoot) the one time it changes, and the chip rides above it. */
+.job.maximized .out-wrap > .to-bottom,
+.as-subpane[data-subpane="chat"] .out-wrap > .to-bottom {
+  position: sticky;
+  left: auto;
+  margin: -21px auto 6px;
+  transform: none;
+}
+.job.maximized .out-wrap > .to-bottom { bottom: 9px; }
+.as-subpane[data-subpane="chat"] .out-wrap > .to-bottom { bottom: calc(var(--reply-h, 0px) + 9px); }
+.job.maximized .out-wrap > .to-bottom:active,
+.as-subpane[data-subpane="chat"] .out-wrap > .to-bottom:active { transform: translateY(1px); }
+
+/* ---- the hover copy button -------------------------------------------------------------------------
+   One attribute, one mechanism: anything carrying `data-copy` is a block the reader can lift, and app.js
+   mounts a button into its corner itself - so a block another worker draws opts in by carrying the same
+   attribute, with nothing per-renderer. Hidden it is completely inert: out of the pointer's way, out of
+   the tab order and the accessibility tree, out of a selection dragged across the block, and always out
+   of the text flow - so revealing it reflows the block by nothing, and the gutter the block reserves for
+   it (below) is what keeps it off the block's own text, first line and fold chevron included. */
+.copy-block {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font: 11px/1 var(--mono);
+  color: #c3ccd8;
+  background: #161c24;
+  border: 1px solid #39424f;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity .14s ease, visibility .14s ease, color .14s ease, border-color .14s ease;
+}
+[data-copy] { position: relative; }
+/* The room the button needs, reserved whether or not it is showing so its appearance moves nothing:
+   the console's own text, a burst's call lines, a thinking block's title line. 24px is that room and stays the
+   floor; Settings > Display's "console text side margin" raises the right inset with the left one when the reader
+   sets it past 24, so the two sides of the console's text stay level. */
+[data-copy] > .job-out,
+[data-copy] > .out-box > .job-out,
+[data-copy] > .tgrp-head,
+[data-copy] > summary { padding-right: max(24px, var(--con-side, 10px)); }
+/* The reveal - the whole of it. A <details>'s button lives in its summary (the only part a folded one
+   renders), so both placements answer to the block being hovered. */
+[data-copy]:hover > .copy-block,
+[data-copy]:hover > summary > .copy-block { opacity: 1; visibility: visible; pointer-events: auto; }
+/* Nested blocks (a tool burst inside a console): only the block the pointer is actually in shows its
+   button, so hovering a burst never shows the console's as well. */
+[data-copy]:has([data-copy]:hover) > .copy-block:not(.is-copied):not(.is-failed) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.copy-block:hover { color: var(--text); border-color: #3a4353; }
+/* A confirmation stands on its own for a moment - the pointer may already have left the block, and it is
+   never the one a nested block's hover hides. */
+.copy-block.is-copied,
+.copy-block.is-failed { opacity: 1; visibility: visible; pointer-events: auto; }
+.copy-block.is-copied { color: #7ee787; border-color: #2f5f38; }
+.copy-block.is-failed { color: #ff9c94; border-color: #57262a; }
+
+.job-out {
+  margin: 0;
+  /* The console's height has ONE owner: `--out-h`, written only by setOutHeight (public/board/console.js) - the
+     corner gesture, the remembered height a rebuild restores, and the float's slack console drag all go through it.
+     Nothing else writes a height on this box, so a rewrite of what is INSIDE it cannot invent a second geometry.
+     Unset, `auto` is the sheet's own size (content, capped by max-height below). */
+  height: var(--out-h, auto);
+  /* The max-height is the cap the console sits on before anyone resizes it. The corner grip (`.out-grip`) writes an
+     explicit height instead, and lifts this cap while that height needs it - there is no `resize` here on purpose: a
+     native handle belongs to the node it started on, and this panel replaces that node. See public/app.js's grip. */
+  max-height: 230px;
+  min-height: 34px;
+  overflow: auto;
+  /* The panel owns this pane's reading position. Native anchoring otherwise follows a row AFTER an expanded
+     result and jumps the reader past the text they just opened, even when this console is not pinned. */
+  overflow-anchor: none;
+  background: var(--console);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  /* The text's own side inset: 10px, which is what this console has always kept, and the one number Settings >
+     Display's "console text side margin" moves - the command card's side margin is measured from it. The right side
+     is reserved for the copy button on a block that has one (see `[data-copy]`), which is unchanged by the setting. */
+  padding: 8px var(--con-side, 10px);
+  /* ONE console size: the root's --term-size from Settings, overridden on a card the reader has Ctrl+wheel-zoomed.
+     Normal output, tool output and the reasoning below all resolve to this same variable, so they cannot drift. */
+  font-weight: var(--term-weight);
+  font-family: var(--term);
+  /* ONE console row spacing: Settings > Display's Console row spacing, a MULTIPLIER on the console's line-height
+     (1.5 is what this console has always used, and it is the fallback an unset key draws). Every row a card's console
+     draws inherits this number - its own words, a tool's call and output, the reasoning lines of the stream - so one
+     setting moves them all, and a px value would fight Console size and a card's Ctrl+wheel zoom instead of scaling
+     with them. The spacing BETWEEN rows is this leading; the console's padding and the prompt box's own padding are
+     not touched by it. */
+  line-height: var(--con-row-space, 1.5);
+  font-size: var(--term-size);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.jl { color: #b9c2ce; }
+.jl-text { color: var(--con-color, #e6e9ef); }
+.jl-init { color: #9ecbff; }
+.jl-result { color: #7ee787; }
+.jl-tool { color: #c8a6ff; }
+/* A run of tool calls between two pieces of output: one row per tool, a tally, and the input of the last call.
+   The individual lines stay behind the "N lines" button, so nothing is lost by condensing them. */
+/* The console is a <pre>: the template's own newlines would render as blank lines, so the block normalises
+   whitespace and only its real transcript lines keep it. */
+.tgrp { margin: 3px 0 6px; padding-left: 8px; border-left: 2px solid #2c3542; white-space: normal; }
+/* A piece of ONE stream: the same markup without the rail, the indent or the gap, so a call sits in the flow exactly
+   like the prose and the reasoning around it — and bracketed by the two rules that make a run of calls one group:
+   one above the row list, one below it, in the console's own line colour. The blank line it stands apart by is still
+   `jl-sep` (wtStream.pieces), outside these edges, so nothing here decides where a group begins or ends. */
+.tgrp.tgrp-flat { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.tgrp-flat > .tgrp-body { margin-top: 0; padding-top: 0; border-top: 0; }
+/* The row list between those rules: one row per call, stacked the way the condensed head stacks its rows. A row is
+   the call's own line, so it keeps the console's flow and a press on it opens that call's output under it. */
+.tgrp-flat > .tgrp-calls { display: flex; flex-direction: column; gap: 1px; padding: 4px 0; }
+.tgrp-call > .tgrp-row { padding: 0 2px; }
+.tgrp-call > .tgrp-out { margin: 2px 0 5px; padding-left: 21px; }
+/* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
+   (italic, dim) so it still reads as thought and not as something the agent said out loud — and the console's one
+   size, so a Ctrl+wheel over any of a card's text moves this line with the rest of it. */
+.jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--term-size); }
+/* A thinking row is MINIMIZED, not merely clipped: it draws only the thought's first section - everything up to the
+   first blank line - and ends in four dots inside the same text run whenever anything is hidden (public/board/
+   console.js, fitThinkRow). The four-line clip below is the SECOND bound, for a first section that is itself longer
+   than the clip: the minimized form is whichever ends first, and the code cuts it at a word boundary. The rule stays
+   in CSS as the safety bound - a card in a collapsed console, a row drawn before its width is known, or a console
+   whose width changed under it - and it is a BOTTOM clip (four lines kept from the TOP), never a start clip. */
+.jl-think.think-row { position: relative; display: block; cursor: pointer; padding-right: 92px; border-radius: 2px; }
+.jl-think.think-row:hover { background: rgba(157, 180, 208, .05); }
+.jl-think.think-row:focus-visible { outline: 1px solid #55407a; outline-offset: 1px; }
+.jl-think .think-text { display: block; max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
+.jl-think.think-row.is-open .think-text { max-height: none; }
+/* The measuring surface a FOLDED row's four-line cut is found on (thinkLidCut/thinkProbe in
+   public/board/console.js): one hidden box on <body>, given the row's own computed text properties and the box's width
+   in px. It sits outside the console on purpose - a hidden element inside the console would still join its
+   `textContent`, and a copy or a search would find the thought twice. Out of flow and invisible, so it changes no
+   geometry and paints nothing. */
+.think-measure { position: fixed; left: -10000px; top: 0; width: 0; height: 0; overflow: visible; visibility: hidden; pointer-events: none; }
+.think-measure-text { display: block; max-height: none; overflow: visible; }
+.jl-think .think-more { white-space: nowrap; }
+/* The clip is the ROW's too, for a row that has no .think-text box of its own (a painter that had to set the row's
+   own innerHTML - see drawRowText). The rule is the same one either way: four lines kept from the TOP, the bottom
+   cut, never the start, and the press releases it. A thought with no clip at all is a wall of italic over the
+   console, which is the other half of what this rule is for. */
+.jl-think.think-row:not(:has(> .think-text)) { max-height: calc(1em * var(--con-row-space, 1.5) * 4); overflow: hidden; }
+.jl-think.think-row.is-open:not(:has(> .think-text)) { max-height: none; }
+/* ...and while the thought is still arriving, the row says so IN the console: a pulsing dot and the age since its
+   first word, in the row's own top-right corner so it never pushes the words around. It appears with the first
+   delta and is removed at the first tool or at the end of the turn (public/board/console.js). */
+.jl-think .think-live { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; gap: 5px; font-style: normal; font-size: 10px; letter-spacing: .02em; color: var(--dimmer); }
+.jl-think .think-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: think-pulse 1.1s ease-in-out infinite; }
+.jl-think .think-live .jl-live { font-size: 10px; }
+@keyframes think-pulse { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+/* ONE blank line sets every piece of the stream apart from the piece above it — a reasoning block, a group of tool
+   output, a chunk of the agent's own words. The reasoning block had this rule first and everything else wears the same
+   class (`jl-sep`, put on each piece by streamBodyHtml and by the live append), so the three cannot drift into three
+   different gaps: 1.5em is one line of this console at its own line-height. Declared below `.tgrp.tgrp-flat`'s
+   `margin: 0` on purpose — at equal specificity the later rule is the one a flat group's top margin comes from. */
+.job-out > .jl-sep { margin-top: 1.5em; }
+/* ...except at the very top of a console, where there is nothing above it to be set apart from. */
+.job-out > .jl-sep:first-child { margin-top: 0; }
+
+/* ---- the console's prose, drawn as markdown ----------------------------------------------------------------
+   An agent writes `**PR #279 MERGED**` and `origin/main` in backticks, and the console used to print the
+   punctuation: one grey wall. core/console-markdown.js renders the subset (bold, italic, inline code, fences,
+   headings, lists, links) and everything below is its frame. The rules are deliberately quiet — this is the
+   reading surface of a card, not a document — so the weight of a heading is a couple of points and a fence is a
+   well, never a second console. */
+.md-block { display: block; }
+/* Real paragraph spacing: one block to the next is a gap, not a blank row. */
+.md-block + .md-block { margin-top: .6em; }
+.md-l { display: block; }
+.job-out strong { color: #f4f7fb; font-weight: 650; }
+.job-out em { font-style: italic; color: inherit; }
+/* Inline code as a chip: tinted, monospace, and never so wide it breaks the line's rhythm. */
+.md-code {
+  font-family: var(--term);
+  font-size: .94em;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(120, 150, 190, .22);
+  background: rgba(120, 150, 190, .13);
+  color: #dbe6f5;
+}
+.md-link-url { color: var(--dimmer); font-size: .9em; margin-left: .4em; word-break: break-all; }
+/* Headings: a step up from the prose, not a page title. */
+.md-head { margin: .45em 0 .18em; }
+.md-head:first-child { margin-top: 0; }
+.md-head-l { font-weight: 650; color: #f2f5fa; }
+.md-h1 { font-size: 1.32em; }
+.md-h2 { font-size: 1.2em; }
+.md-h3 { font-size: 1.1em; }
+.md-h4, .md-h5, .md-h6 { font-size: 1em; color: #d8dee8; }
+/* Lists: the marker in its own column so a wrapped item stays aligned under its own text, not under the bullet. */
+.md-list { display: flex; flex-direction: column; gap: 1px; margin: .15em 0; }
+.md-li { display: flex; gap: .45em; align-items: baseline; }
+.md-marker { flex: none; min-width: 1.1em; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.md-li-t { flex: 1 1 auto; min-width: 0; }
+/* A fenced block is a WELL: bordered, its own surface, with a head that names the language and counts the lines.
+   Past fifteen lines it arrives folded — the head stays, the body is one press away — because a 200-line build log
+   is not what the reader opened the card to read. */
+.md-fence { border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, .025); margin: .45em 0; overflow: hidden; }
+.md-fence-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, .04);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: normal;
+}
+.md-fence.is-folded .md-fence-head { border-bottom: 0; }
+.md-fence-caret { color: var(--dimmer); }
+.md-fence-lang { color: #9ecbff; font-weight: 600; letter-spacing: .02em; }
+.md-fence-n { color: var(--dim); }
+.md-fence-btn {
+  margin-left: auto;
+  padding: 1px 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.md-fence-btn:hover { color: var(--text); border-color: #3a4353; }
+.md-fence-btn:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.md-fence-body { padding: 5px 8px; max-height: 360px; overflow: auto; }
+.md-code-l { font-family: var(--term); white-space: pre-wrap; word-break: break-word; color: #cfd8e6; }
+
+/* ---- the console's two views: raw and focus ---------------------------------------------------------------
+   A small strip in the console's top-right, revealed on hover or focus and PINNED while a view is on (the reader
+   must always be able to get back out). It sits left of the copy chip's reserved gutter so the two never stack. */
+.out-tools {
+  position: absolute;
+  top: 3px;
+  right: 28px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.out-wrap:hover > .out-tools,
+.out-wrap:focus-within > .out-tools,
+.out-wrap.is-focus > .out-tools,
+.out-wrap.is-raw > .out-tools {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.out-tool {
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: rgba(12, 15, 20, .92);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.out-tool:hover { color: var(--text); border-color: #3a4353; }
+.out-tool.is-on { color: #eaf1fb; border-color: #4a90d9; background: rgba(74, 144, 217, .18); }
+.out-tool:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* Focus: the console stops being a log and becomes the answer. Every tool row goes — the tallied group and a flat
+   run alike — while the agent's prose, the panel's own lines (an error is a `raw` line, a warning too) and the
+   final message stay exactly where they are. */
+.out-wrap.is-focus .job-out > .tgrp,
+.out-wrap.is-focus .job-out > .jl-tool,
+.out-wrap.is-focus .job-out > .jl-tool-out { display: none; }
+/* The raw view is the turn's own bytes: no boxes, no chips, no spacing rules of ours — the text as it arrived. */
+.job-out[data-raw-view="1"] { white-space: pre-wrap; }
+.job-out[data-raw-view="1"] * { display: inline; }
+.tgrp .jl { white-space: pre-wrap; }
+.tgrp-head { display: flex; flex-direction: column; gap: 1px; }
+.tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
+.tgrp-row:hover { background: rgba(255, 255, 255, .035); }
+.tgrp-row.is-active { background: rgba(200, 166, 255, .10); }
+.tgrp-row.is-active .tgrp-name { color: #ecd9ff; }
+.tgrp-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* A trimmed burst's head row names the block; it is not a filter target like a tool row, so it must not look clickable. */
+.tgrp-row.tgrp-row-trimmed { cursor: default; }
+.tgrp-row.tgrp-row-trimmed:hover { background: none; }
+.tgrp-g { flex: none; width: 15px; }
+.tgrp-name { flex: none; color: #c8a6ff; }
+.tgrp-n { flex: none; color: var(--dim); }
+.tgrp-last { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+/* The "+ 3 commands" tail: the run stream only carries the gateway's summary of a batch, so this is a button that
+   reads the rest of the calls out of the session transcript. Quiet until pointed at - it lives inside a row that is
+   itself a button. */
+.tgrp-batch {
+  font: inherit; color: #9ecbff; background: none; border: 0; padding: 0 2px; margin: 0;
+  text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer;
+}
+.tgrp-batch:hover { color: #cfe6ff; }
+.tgrp-batch:disabled { color: var(--dim); text-decoration: none; cursor: progress; }
+/* The clock's slot. One fixed box for every text a row's state can produce: the running label grows a character at
+   9 s to 10 s (82.2 px to 88.53 px in the measured row) and the completion swap shrinks it to a duration (37.94 px,
+   which grew the target by 50.59 px in one frame). tabular-nums makes every digit the same width and 16ch covers the
+   widest label either state can print ("· running 99m59s"), so the row's geometry is constant for its life and the
+   file name on it is truncated at the same character before and after the swap. An empty slot reserves nothing. */
+.tgrp-state { flex: none; color: var(--dimmer); text-align: right; font-variant-numeric: tabular-nums; }
+.tgrp-state:not(:empty) { min-width: 16ch; }
+.tgrp-more { align-self: flex-start; margin: 3px 0 0; background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--dimmer); font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
+.tgrp-more:hover { color: var(--text); border-color: #3b4757; }
+.tgrp-more.is-open { color: var(--text); }
+/* Output that came from the session store rather than the live stream: same size as the rest of the console,
+   dimmed so a live preview above it stays the headline. A note under it (cut, or nothing recorded) is italic. */
+.jl-note { font-style: italic; }
+.jl-store { color: var(--con-color, var(--dim)); white-space: pre-wrap; word-break: break-word; }
+.tgrp-body { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); }
+/* One tool call and its output. The call's own row is the handle for the fold: the caret is a real button (so Tab
+   reaches it and Enter/Space press it) and the row around it does the same thing, which is why the caret is small
+   and quiet. Folded, the row is the whole call: its own line plus the line count. The fold covers this call's
+   output and nothing else - the rest of the card is not touched by it. */
+.call { margin: 1px 0; }
+.call-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; border-radius: 3px; cursor: pointer; }
+.call-head:hover { background: rgba(255, 255, 255, .035); }
+.call-head > .jl { flex: 1 1 auto; min-width: 0; }
+.call-fold {
+  flex: none; width: 15px; padding: 0; border: 0; background: none; color: var(--dimmer);
+  font: inherit; line-height: inherit; text-align: left; cursor: pointer;
+}
+.call-fold:hover { color: var(--text); }
+.call-fold:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.call-n { flex: none; color: var(--dimmer); font-size: .92em; }
+.call-hint { flex: none; color: var(--dimmer); font-size: .92em; font-style: italic; }
+.call.is-folded .call-head > .jl { color: #c8a6ff; }
+.call-body { min-width: 0; }
+/* Pasted documents, as chips above the box: [name.txt] ×. The path is what the agent gets, so it
+   lives in the tooltip rather than in the sentence being typed. */
+.attach-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.attach-chips:empty { display: none; }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 4px 1px 7px; border: 1px solid #3b4757; border-radius: 5px;
+  background: var(--surface); color: #9ecbff; font-size: 11px; line-height: 1.5;
+}
+.attach-chip[data-open-path] { cursor: pointer; }
+.attach-chip:hover { border-color: #2f5a7a; }
+/* A turn's own attachments, under its prompt: the same chip look, but a link and no x — the turn
+   happened, and taking the file off the record afterwards would be a lie. */
+.turn-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px 18px; }
+.turn-attach {
+  padding: 1px 7px; border: 1px solid #2c3644; border-radius: 5px; background: var(--console);
+  color: #8fb8dd; font-size: 11px; line-height: 1.5; cursor: pointer;
+}
+.turn-attach:hover { border-color: #2f5a7a; color: #b9d9f5; background: #141b24; }
+.chip-x {
+  border: none; background: transparent; color: var(--dimmer);
+  font: 12px/1 var(--mono); padding: 0 3px; cursor: pointer; border-radius: 3px;
+}
+.chip-x:hover { color: var(--red); background: var(--red-bg); }
+
+/* The one-click fix offered beside an unborn-HEAD refusal in the New agent form. */
+/* Same pill as "make the first commit": a one-click answer to an error that can be answered. */
+button.btn-retry {
+  margin-left: 6px; padding: 0 8px; border: 1px solid #2f5a7a; border-radius: 999px;
+  background: var(--blue-bg); color: #9ecbff; font-size: 10.5px; line-height: 1.7; cursor: pointer;
+}
+button.btn-retry:hover { background: #16202c; border-color: #3d78a3; }
+button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
+
+.btn-fix-first {
+  margin-left: 6px; padding: 1px 8px; border: 1px solid #2f5a7a; border-radius: 999px;
+  background: var(--blue-bg); color: #9ecbff; font-size: 11px; line-height: 1.6; cursor: pointer;
+}
+.btn-fix-first:hover { background: #16202c; border-color: #3d78a3; }
+.btn-fix-first:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
+
+/* A document is being dragged over the box that will carry its path. */
+textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
+
+/* a tool's own output, shown under its call so the console says what actually happened. It states the console's one
+   size rather than inheriting it, so the size a Ctrl+wheel writes on the card reaches it whatever wraps it. */
+.jl-tool-out { color: var(--con-color, var(--dim)); padding-left: 14px; white-space: pre-wrap; font-size: var(--term-size); }
+.jl-cmd { color: var(--dimmer); }
+.jl-dim { color: var(--dimmer); font-style: italic; }
+/* The gateway wait line (public/board/console.js waitLineHtml, written by lib/jobs.js at subscribe): the console's own
+   statement of a run whose stream has sent nothing yet, with its age. Quiet and dim while the wait is young; past
+   PULSE_SILENT_SECONDS it stops being an aside and states the silence plainly, in the amber the head badge already
+   uses for "no events yet" - it is the same fact, said where the reader is looking. Tabular figures keep the age from
+   reflowing the sentence as it ticks. */
+.jl-gwait { font-variant-numeric: tabular-nums; }
+.jl-gwait.is-silent { color: #f0c674; font-style: normal; }
+.jl-raw { color: var(--dim); }
+
+/* A unified diff, drawn as a window per hunk (core/console-format.js builds it). The head is the frame's own
+   chrome: the identifiers (the file headers, the @@ line, a git/mode line) sit on it as a compact wrapped strip,
+   never as rows of the body — the body is the file's changed lines and nothing else. The body is a two-column
+   grid: the AFTER side on the left, the BEFORE side on the right, so a modification's two halves sit on one row
+   and read as one change with what the file says now first.
+   Both sides WRAP. A diff line is often 200+ characters (a minified line, a long path) and the console is a
+   few hundred pixels wide: with `nowrap` the window would scroll sideways and the reader would lose the
+   alignment that is the whole point of two sides. minmax(0, 1fr) is load-bearing — a bare 1fr refuses to
+   shrink below its content and pushes the grid wider than the console. */
+.df-win {
+  margin: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #10151c;
+  overflow: hidden;
+  white-space: normal;
+}
+.df-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 4px 8px;
+  background: #161d26;
+  border-bottom: 1px solid var(--line);
+}
+.df-body { padding: 2px 0; white-space: normal; }
+.df-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); white-space: normal; }
+.df-row > .df-c:nth-child(2) { border-left: 1px solid rgba(255, 255, 255, .07); }
+.df-c {
+  min-width: 0;
+  padding: 0 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Context is the unchanged surroundings: quiet, and drawn in BOTH columns - a run of unchanged lines is a row of
+   two cells carrying the same text, so the card reads as two columns on every line, not only where it changed. */
+.df-c.is-ctx { padding-left: 8px; color: var(--dimmer); }
+/* A modification: the after half green on the left, the before half yellow on the right. A pure removal is red on
+   the left with an empty right cell after it, and a pure addition green on the left with the same empty cell. */
+.df-c.is-mod { color: #f0c674; background: rgba(210, 153, 34, .10); padding-left: 8px; }
+.df-c.is-del { color: #ff9c94; background: rgba(229, 83, 75, .10); padding-left: 8px; }
+.df-c.is-add { color: #7ee787; background: rgba(46, 160, 67, .10); padding-left: 8px; }
+.df-c.is-gap { background: transparent; }
+/* The labels: the headers and the hunk line, quiet and monospace, never competing with the body. */
+.df-label { padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .96em; }
+.df-label.is-meta { color: var(--dimmer); }
+.df-label.is-minus { color: #ff9c94; }
+.df-label.is-plus { color: #7ee787; }
+.df-label.is-hunk { color: #9ecbff; }
+.df-lab-path { font-style: italic; }
+/* The cut edge of a hunk the gateway's preview stopped in the middle of: the frame's own sentence that this is
+   not the whole change, and where the rest of the result can be read. It spans the window's width, because it is
+   about the hunk above it rather than a line of either side. */
+.df-cut { padding: 2px 8px 3px; color: var(--dim); background: rgba(210, 153, 34, .07); border-top: 1px dashed rgba(210, 153, 34, .35); }
+.df-cut-hint { color: #e0b341; font-style: italic; }
+
+/* A file printed into the console that is NOT a diff: the same window shape, its header naming the file, and
+   folded by default — the reader can see that a file was printed, and which one, without reading it. */
+/* THE WHOLE FRAME IS THE HANDLE (public/app.js). A press anywhere in it folds or unfolds it, so the box wears the
+   pointer the head used to wear alone; the head is still a real button, and its own cursor rule stays for the
+   keyboard focus ring's sake. Selection still works: a press that finishes a text selection is not a fold. */
+.code-box { margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; background: #10151c; overflow: hidden; white-space: normal; cursor: pointer; }
+.code-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  /* The head is console text, not chrome: at 4px/8px this padding was a fifth and a third of the console's own
+     size, so it is written in em and grows and shrinks WITH the one size instead of crowding the head at 24px or
+     swallowing it at 7px. */
+  padding: .35em .7em;
+  border: 0;
+  background: #161d26;
+  color: var(--dim);
+  font: inherit;
+  /* ONE console size. The head is the console's text: its size and its mono face are named here from --term-size, the
+     one property Settings writes and a card's Ctrl+wheel zoom overrides, so a head cannot sit at one size while the
+     rows around it move. Its weight and its line-height still inherit the box it is drawn in (the console's row
+     spacing), and the em padding above scales with the text at both ends of the zoom's clamp. */
+  font-family: var(--mono);
+  font-size: var(--term-size);
+  text-align: left;
+  cursor: pointer;
+}
+.code-head:hover { background: #1b232e; color: var(--text); }
+.code-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: -1px; }
+.code-box.is-open .code-head { border-bottom: 1px solid var(--line); }
+.code-caret { flex: none; color: var(--dimmer); }
+.code-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8a6ff; }
+.code-n { flex: none; margin-left: auto; color: var(--dimmer); }
+/* A SLOT, NOT A LABEL: the frame no longer spells out the gesture (the box is the handle), so this holds only the
+   transient status a fold note writes while it fetches its stored result; the hover rule hides it as it always did. */
+.code-hint { flex: none; color: var(--dimmer); font-size: .9em; }
+.code-head:hover .code-hint { visibility: hidden; }
+.code-body { padding: 4px 8px; white-space: normal; }
+.code-body .jl { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
+   would render anyway. */
+.code-body[hidden] { display: none; }
+/* A SKILL's result (skill_view, skills_list, skill_manage) is the longest thing a run hands the console, and the one a
+   reader reads rather than scans, so it has its own colour and size (Settings > Display). Unset, a skill reads exactly
+   like the rest of the console: the colour falls back to the console's, then to the line's own. Only the box's own
+   plain rows are recoloured, never a diff window inside it: a +/- row keeps its green and red. */
+.code-box.is-skill > .code-body { font-size: var(--skill-font-size, inherit); }
+.code-box.is-skill > .code-body > .jl { color: var(--skill-color, var(--con-color, var(--dim))); }
+/* Every tool result is one of these boxes (core/console-format.js): its lines, a file's body, or a diff. A diff's
+   framed windows are drawn INSIDE it, so the box is the only frame — the windows give up their own border and the
+   next window is told from the one above by a rule — and what the change adds and removes sits in the header, so a
+   closed box still says how big the change is. */
+.code-box.is-diff > .code-body { padding: 0; }
+.code-box .df-win { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.code-box .df-win + .df-win { border-top: 1px solid var(--line); }
+.code-delta { flex: none; display: inline-flex; gap: 6px; }
+.code-delta .is-add { color: #7ee787; }
+.code-delta .is-del { color: #ff9c94; }
+
+/* ---- the assistant's command card ----------------------------------------------------------------
+   A command line the assistant wrote (public/core/assistant-command.js), drawn in the SAME frame as a tool's
+   result and folded to its preview rows instead of shut: the head keeps the frame's caret, header, count and
+   "click to read", and the body stays on the page so a reader who never clicks still sees the start of what the
+   line asked for. `.is-clamped` is the folded state; the press handler (public/app.js) keeps it in step with
+   `.is-open`.
+   THE SEVEN NUMBERS ARE THE READER'S (Settings > Display). They are variables with today's look as the fallback,
+   so an unset setting draws exactly what this card drew before they existed: the fold is 2 rows of this card's
+   line height (36px, the 3em this rule used to say), the body's side padding is 8px, its inside padding above and
+   below the prompt is 0, the card's side margin is 0, nothing is added above or below its 4px base margin, and the
+   console's own text keeps the 10px inset it has always had inside its box. The blank lines are the OUTSIDE
+   spacing (the card's margin in the console); the three paddings are the INSIDE one (the text against the frame). */
+/* The body's padding is its four sides, from three variables: `--cmd-pad` the sides (8px today), and
+   `--cmd-pad-top` / `--cmd-pad-bottom` the air above the prompt's first row and below its last (0 today, which is
+   the look the card has always had). The fold is a WHOLE number of this card's rows (`--cmd-rows`, a border-box
+   max-height at the card's own 1.5 line-height), so the clamp adds the two new paddings back on: the same number of
+   preview rows stays on the page at any value of the setting, instead of the padding eating a row.
+   THE TEXT IS THE CONSOLE'S. The body used to say `12px/1.5`: a second size that Settings and a Ctrl+wheel zoom
+   could not move, so the prompt, its label and the category glyphs sat at 12px in a console the reader had just
+   zoomed to 24px. It now resolves from `--term-size` - the ONE size - and keeps the mono face and the 1.5 ratio. */
+.code-box.is-cmd > .code-body {
+  font: var(--term-size)/1.5 var(--mono);
+  color: #cfd8e3;
+  padding: var(--cmd-pad-top, 0px) var(--cmd-pad, 8px) var(--cmd-pad-bottom, 0px);
+}
+.code-box.is-cmd.is-clamped > .code-body { max-height: calc(var(--cmd-rows, 2) * 1.5em + var(--cmd-pad-top, 0px) + var(--cmd-pad-bottom, 0px)); overflow: hidden; }
+/* The card's own box, as the reader wants it beside the console's text: its side margin, and the blank lines above
+   and below it on top of the 4px frame margin it has always carried (one line here is the body's own 1.5 line-height,
+   so a blank line is a blank line at 7px and at 24px too, not a fixed 18px against a 36px row). */
+.code-box.is-cmd { margin: calc(4px + var(--cmd-blank, 0) * 1.5em) var(--cmd-side, 0px); }
+/* The three dots that end a folded card's last preview row, written by public/board/console.js at the character the
+   clamp cuts. Quiet - they are the card saying "there is more", not a word of the prompt - and never bold, so the
+   Prompt: label beside them keeps its weight on its own. */
+.code-fold-dots { color: var(--dim); font-weight: 400; }
+/* The Prompt: label that starts the body: it names what the text under it is, so it carries the weight the rest of
+   the prompt does not. Inline on the first row, which is why a folded card still shows its two rows of prompt. */
+.code-prompt-label { font-weight: 700; color: #e2e9f3; }
+/* The header's emoji is the kind, and a kind is not a tool: it keeps the frame's own colour so the card reads as
+   one family, with the recipient and the title after it in the transcript's ink. The TITLE is the whole point of
+   the card, so the header WRAPS rather than ellipsizing the one word the reader came for: a tool's header names a
+   path it is fine to cut, this one names a task. Its side padding is the body's, so the two texts line up at any
+   value of the setting. */
+.code-box.is-cmd > .code-head { align-items: flex-start; padding-left: var(--cmd-pad, 8px); padding-right: var(--cmd-pad, 8px); }
+.code-box.is-cmd > .code-head .code-what { color: #c8a6ff; white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 auto; }
+/* No count: a command's body is one line of text that wraps, so "1 line" would count separators and not what the
+   reader sees, and the room it takes is room the title needs. A card that carries a SPAWN's TODOs is the exception:
+   "5 todos" is a number the body does not give, and it is what a folded card should still say. */
+.code-box.is-cmd > .code-head .code-n { display: none; }
+.code-box.is-cmd[data-cmd-bullets] > .code-head .code-n { display: inline; }
+.code-box.is-cmd > .code-head .code-caret { padding-top: 1px; }
+/* A SPAWN's TODOs, as bullet rows BETWEEN the head and the body: the two-line clamp cuts the BODY, so a folded card
+   still shows every item the tree has to do. Each row is one line of text (glyph, category, the item), escaped by the
+   module that draws it. */
+/* The bullets keep the body's own side padding, the item text one glyph-width in from it (14px at the 12px size this
+   row used to be pinned to, now 1.17em so the indent holds at every console size), so a card's list and its prompt
+   stay in one column at any value of the setting. The text is the console's ONE size, like the body above it: the
+   bullet's category glyph and its words move with a zoom instead of sitting at a fixed 12px inside a zoomed card. */
+.code-box.is-cmd > .code-bullets { display: flex; flex-direction: column; gap: 2px; padding: .25em var(--cmd-pad, 8px) .42em calc(var(--cmd-pad, 8px) + 1.17em); font: var(--term-size)/1.5 var(--mono); color: #cfd8e3; }
+.code-box.is-cmd > .code-bullets + .code-body { border-top: 1px solid var(--line); }
+.code-bullet { display: flex; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
+.code-bullet-glyph { flex: none; }
+.code-bullet-text { flex: 1 1 auto; min-width: 0; }
+/* The category is the label the reader scans for - the manager's short name for the item - so it carries the weight
+   and the item reads after it. */
+.code-bullet-cat { font-weight: 700; color: #e2e9f3; }
+/* Folded, the card sits in a folded turn's tail where every other line is quiet: a 4px margin there would read as
+   a gap in the head, so the tail keeps the card tight against it - the reader's side margin still applies, because
+   that is the card's place beside the console's text, not this tail's own gap. */
+.turn-peek.is-command { font-style: normal; }
+.turn-peek.is-command .code-box { margin: 2px var(--cmd-side, 0px) 0; }
+/* The compacted answer draws its cards line by line; a line that is not a command keeps the answer's own font. */
+.turn-compact .tc-line { font: inherit; }
+/* The transcript's entry, with cards in it: the container stops pre-wrapping (each line is its own block) and the
+   lines that are not commands keep the transcript's ink and wrapping. */
+.as-msg-text.is-cards { white-space: normal; }
+.as-msg-text .as-msg-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.as-msg-text.is-cards .code-box { margin: 3px var(--cmd-side, 0px); }
+
+/* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
+   read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
+   it reads as the note it has always been until the pointer is over it — a card full of long results should read
+   as a transcript, not as a wall of controls. */
+.jl-fold { margin: 1px 0; }
+.fold-read {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--dimmer);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-read:hover { color: var(--text); border-color: var(--line); background: #161d26; }
+.fold-read:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.fold-read[disabled] { cursor: progress; }
+.job-foot { margin-top: 6px; font-size: 11.5px; }
+/* the CLI's prompt readout for a card: context occupancy, cache hit, latency, throughput. It rides
+   on the footer line, to the right of the outcome and token count, behind a rule so the two groups
+   read as separate facts instead of one long run-on. */
+.job-stats {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 7px;
+  margin-left: 9px; padding-left: 9px; border-left: 1px solid var(--line);
+  font-size: 11px; color: var(--dim); white-space: nowrap; vertical-align: baseline;
+}
+/* The readout is a measurement the reader may want to keep, so the figures select and copy like any other text on
+   the card. Its two controls do not: a drag that starts to their left used to run straight through them and leave a
+   highlight sitting on the model id and the ceiling, and a double-click on the model selected the word it was about
+   to open a picker for. `user-select` is a selection rule only — both are still ordinary buttons and take every
+   click (verified by the context ladder's own POST, not by the CSS). */
+.job-stats { user-select: text; }
+.job-stats .stat-sep { color: var(--line); }

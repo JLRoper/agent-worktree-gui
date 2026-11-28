@@ -1,0 +1,542 @@
+/* public/pipeline.css
+   The pipeline window, the message board and the flow.
+
+   The task pipeline window's stages and notes, the Messages tab's threads, the Settings hand-off for pipelines
+   and bundles, the pipeline flow and its modal, and the run's artifact lane.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ---- the task pipeline window -------------------------------------------------------------------- */
+/* The row's opener: a press, not a chip, because it opens a window. It sits on its own line under the agents so a long
+   pipeline id can never squeeze the title out of a 340px rail, and it renders what the RECORD says — the resolved
+   "2 of 5" is the window's job, one press away. */
+.as-task-pipeline { margin: 2px 0 0 19px; display: flex; min-width: 0; }
+.as-task-pipe { font-size: 10px; line-height: 1.5; padding: 1px 7px; border-radius: 999px; color: #a9c4ff; background: #17202e; border: 1px solid #2b3d57; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-task-pipe:hover { color: var(--text); border-color: #3d5a8a; background: #1b2838; }
+.as-task-pipe:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+/* The dialog: a fixed card over the board, centred, with the page behind locked (body.pipew-open) and dimmed. It is
+   OUTSIDE #assistant on purpose (the rail's Escape closes the rail), and `tabindex="-1"` on the card is what takes the
+   caret on open without adding a Tab stop of its own. */
+.pipew { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px 14px; background: #05070ac9; }
+.pipew[hidden] { display: none; }
+.pipew-card { width: min(780px, 100%); max-height: 84vh; overflow: auto; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 26px 70px #000d; outline: none; }
+.pipew-card:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 2px; }
+.pipew-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.pipew-kicker { font-family: var(--mono); font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--dimmer); }
+.pipew-title { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipew-bar .spacer { flex: 1; }
+.pipew-close { flex: 0 0 auto; font-size: 12px; line-height: 1; padding: 3px 7px; }
+.pipew-sub { min-width: 0; font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipew-sub code, .pipew-pipe code { font-family: var(--mono); color: var(--dimmer); }
+.pipew-body { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 14px; font-size: 11.5px; }
+.pipew-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.pipew-pipe { font-weight: 600; }
+.pipew-since { color: var(--dim); font-size: 10.5px; }
+.pipew-prev { padding: 5px 8px; border-left: 2px solid #2c3442; color: var(--dim); background: #12171e; border-radius: 0 6px 6px 0; }
+.pipew-prev b { color: var(--text); }
+.pipew-note { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--dim); line-height: 1.45; }
+.pipew-note b { color: var(--text); }
+.pipew-note.is-bad { border-color: #57262a; background: var(--red-bg); color: #ffb4ac; }
+.pipew-note.is-bad b { color: #ffd7d2; }
+.pipew-stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pipew-stage { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: baseline; gap: 1px 8px; padding: 6px 9px; border: 1px solid #1f2530; border-radius: 8px; background: var(--panel-2); }
+.pipew-stage.is-before { opacity: .68; }
+.pipew-stage.is-after { opacity: .82; }
+.pipew-stage.is-unplaced { border-style: dashed; opacity: .7; }
+/* The current stage is the one thing the reader came for: a lit left edge, a warmer card, and the only row carrying the
+   elapsed number. Everything else is context for it. */
+.pipew-stage.is-current { border-color: #365a8c; background: #16202c; box-shadow: inset 2px 0 0 #8fb8ff; opacity: 1; }
+.pipew-n { font-family: var(--mono); font-size: 10px; color: var(--dimmer); }
+.pipew-name { font-weight: 600; min-width: 0; }
+.pipew-pos { font-family: var(--mono); font-size: 9.5px; color: var(--dimmer); white-space: nowrap; }
+/* The row is a three-column grid — the ordinal, the title, the position — and every line UNDER the title is placed by
+   the rule below, never left to auto-placement. `grid-column: 2 / -1` is what makes each of them a line of its own;
+   a child this rule does not name (the visit line and the decision line were the two) is auto-placed into the 18 px
+   ordinal column by the row's own placement cursor, where its text is 18 px wide and overflows: the visit line was
+   painted across the elapsed line, which is how "visit" and "in this stage" came to read as "visin this stage". */
+.pipew-phase, .pipew-live, .pipew-visit, .pipew-decision, .pipew-artifact, .pipew-gate { grid-column: 2 / -1; font-size: 10px; color: var(--dim); }
+.pipew-phase { color: var(--dimmer); }
+.pipew-live { color: #cfe0ff; font-size: 11px; }
+.pipew-live b { font-family: var(--mono); }
+.pipew-warn { color: #e0b341; }
+.pipew-artifact { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipew-gate b { color: var(--text); }
+.pipew-note.mono { font-family: var(--mono); font-size: 9.5px; overflow-wrap: anywhere; }
+/* The assignment control: a quiet strip under the sequence, not a second dialog. The selects are native and sized to the
+   card, the two presses are ordinary buttons, and the status line reserves its height so a refusal cannot push the
+   stages around under the reader's eyes. */
+.pipew-assign { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.pipew-assign-head { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
+.pipew-assign-head b { color: var(--text); }
+.pipew-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.pipew-form label { display: flex; flex-direction: column; gap: 2px; font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--dimmer); }
+.pipew-form select { font-size: 11px; padding: 3px 6px; max-width: 240px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
+.pipew-form button { font-size: 11px; padding: 4px 9px; }
+.pipew-clear { color: var(--dim); }
+.pipew-assign-note { flex: 1 0 100%; min-height: 13px; font-size: 10px; color: #e0b341; }
+body.pipew-open { overflow: hidden; }
+
+/* The rail's one grab: the edge it shares with the board, a 6px band down the whole column. `touch-action: none`
+   is what lets a finger drag it instead of scrolling the board under it. */
+.as-split { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; z-index: 5; cursor: ew-resize; touch-action: none; }
+.as-split:hover, #assistant.is-splitting .as-split { background: #3d6ea8; }
+
+/* A parked question in the float: violet, same family as the card's own box, because "answer me" must not
+   read as an alert about a failure. A single-select choice is one button; a multi-select question is ticks,
+   since one click must never answer with only the first label. */
+.as-alert.is-parked { border-left-color: #a78bfa; background: linear-gradient(180deg, #1b1a26, var(--card)); }
+.as-choices { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.as-choices button { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; }
+.as-choices.is-multi { flex-direction: column; gap: 4px; align-items: stretch; }
+.as-qcheck { display: flex; align-items: center; gap: 7px; font-size: 11.5px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.as-qcheck input { margin: 0; accent-color: #a78bfa; }
+.as-qcheck.on { border-color: #a78bfa; background: #241f38; }
+
+/* The float is a window, not a strip of content: head, the two tab rows and the card's own head are fixed rows,
+   the transcript is the only scroller, and the composer sits at the foot of the panel at every size. Scoped to
+   .as-subpane[data-subpane="chat"] — the board keeps its natural card height, and Alerts/Watches/Pad keep scrolling as before, as does
+   Settings once Chat is put away. */
+.as-body:has(.as-subpane[data-subpane="chat"]:not(.hidden)) { display: flex; flex-direction: column; overflow: hidden; }
+/* The session's pane and the Chat pane inside it are pass-through boxes: each fills its parent, so the card under
+   them claims the float exactly as it did when Chat was a direct child of the body. */
+.as-pane[data-pane^="assistant-"]:not(.hidden) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.as-subpane[data-subpane="chat"]:not(.hidden) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.as-subpane[data-subpane="chat"] > .job { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.as-subpane[data-subpane="chat"] > .job > .job-head { flex: none; }
+.as-subpane[data-subpane="chat"] > .job > .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
+/* A spacer before the turns, so a conversation shorter than the panel starts at its foot instead of leaving
+   dead panel under the last line. It is a flex item with no content: it takes exactly the free room, and 0
+   when the transcript overflows (shrink 0, basis 0), so a tall conversation still scrolls from its first
+   line and nothing above it becomes unreachable. */
+.as-subpane[data-subpane="chat"] > .job > .job-body::before { content: ""; flex: 1 0 auto; }
+/* Room the panel gains belongs to the transcript, not to blank panel. The spacer above the turns exists for a
+   conversation too short to fill the float; the moment a turn can take the room, the spacer stands down and the
+   lowest OPEN turn's console claims it (`.is-slack`, painted from assistant.js — the reader's open turn is the one
+   they are reading, and a folded turn has no console on the page to grow). The `flex` half of that rule lives at the
+   end of this block, beside the other `flex: 0 0 auto` rules it has to beat. */
+.as-subpane[data-subpane="chat"] > .job > .job-body:has(> .turn.is-slack)::before { content: none; }
+/* The mirror of that case, and the reader's ask: with every turn folded there is no console to read, so the spacer
+   stands down and flex-start leaves the folded rows, the composer and its usage strip directly under the head —
+   the free room falls BELOW them (grey under the block) instead of sitting between the head and the first row.
+   One open turn puts the spacer back and the composer travels down with it, which is the state the rules above
+   were written for. `content: none` takes the pseudo's box out of the flex line entirely, so no basis is left to
+   grow into the slack. */
+.as-subpane[data-subpane="chat"] > .job > .job-body:not(:has(> .turn:not(.folded)))::before { content: none; }
+/* The composer is the last thing in the scrollport and is pinned there: while the conversation is longer
+   than the panel it stays on the scrollport's foot, the spacer above puts it there when it is shorter, and with
+   every turn folded it sits high with the free room painted below it. Opaque and above the turns it covers — the
+   box you type in must never be scrollable away. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .reply { position: sticky; bottom: 0; z-index: 2; flex: none; background: var(--panel); box-shadow: 0 -10px 14px -8px #000c; }
+/* The usage strip stays in flow just above the composer: two items both pinned to `bottom: 0` overlay each
+   other, which is how the stats line was drawn underneath the reply box. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .job-foot { position: static; flex: none; }
+/* Natural height, never grow: a turn that grows into spare room leaves a blank console under the last line
+   (the "empty panel below the transcript" report). It must not shrink either, or a scrolling body squeezes
+   the console below its content — `flex: 0 0 auto` is both halves of that. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn:not(.folded) { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.folded { flex: 0 0 auto; }
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 34px; }
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto; min-height: 0; }
+/* The assistant float is the exception the reader asked for: room the panel gains goes INTO the console they are
+   reading instead of becoming blank panel above it. Same specificity as the `flex: 0 0 auto` rules just above, so
+   this has to come after them — that is why the `.is-slack` set is split across the block.
+   GROW, NEVER SHRINK (`1 0 auto`). In an overflowing transcript there is no room to gain, and a shrink factor
+   spent the whole overflow on this one turn: it collapsed to a zero-height box while its console — min-height
+   34px, and `max-height: none` here — painted outside it, straight behind the sticky composer. That is the
+   newest message disappearing under the reply box; the composer's `bottom: 0` only decided what it hid behind.
+   With no shrink the turn keeps its content's height, the transcript scrolls instead, and the composer stays
+   after it at the foot of the scrollport at every width and in both frames. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack { flex: 1 0 auto; }
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap { flex: 1 1 auto; }
+/* The console's box takes the slack (the grip rides its corner, so it must), and the console inside it fills that box:
+   the same two declarations the console itself carried before the grip needed a box of its own. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+}
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box > .job-out { flex: 1 1 auto; max-height: none; }
+/* A console somebody has given a height is drawn AT it, even in the slack turn. `flex: 1 1 auto` above grows the box
+   into whatever room the pane has left, so a 20px height in a transcript shorter than the pane drew 105.41px: the
+   number the gesture wrote, the store kept and the next restore put back was not the box on screen, and a drag to the
+   floor stopped 105px above it. The room a pane has left belongs to the spacer above the turns once the console's
+   height is somebody's answer. `[style*=...]` is the one writer's own output (setOutHeight writes the variable
+   inline), so a console nobody has resized keeps the flex and the frame's room still lands in it. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box > .job-out[style*="--out-h"] {
+  flex: 0 0 auto;
+}
+/* AND THE BOX THE GRIP IS DRAWN IN FOLLOWS IT. `.out-box` carries the grip at `bottom: 0 right: 0`, so a wrapper that
+   keeps taking the pane's slack while the console inside it is 140px draws the handle under the console's own bottom
+   edge, in blank room: the reader presses a corner the console does not have, and a drag then grows the console inside
+   that blank while the handle stands still. Measured on the live pane from a 140px start: a 285.41px wrapper around a
+   140px console at 1600 (a 28.61px wrapper slack at 820), the grip 145.41px / 28.61px below the console's own bottom
+   edge, 60px of pointer travel drawing 60px of height with the grip's bottom edge on the same pixel for all 30 steps
+   (tools/verify-console-corner-drag.mjs reads the pair as `corner gap`). The room belongs to the turn once the
+   console's height is somebody's answer, exactly as the rule above says; the wrapper is then the console's own box and
+   the grip is on its corner, so the drag's growth moves the corner the hand is on. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box:has(> .job-out[style*="--out-h"]) {
+  flex: 0 0 auto;
+}
+.as-subpane[data-subpane="chat"] > .job .reply-box { min-height: 79px; }
+
+/* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
+   marked so a wrong one is obvious and deletable without wondering where it came from. */
+.as-rule-row .as-rule-name i.as-rule-by {
+  display: inline-block; margin-left: 6px; vertical-align: 1px;
+  font-style: normal; font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase;
+  color: #c4b5fd; border: 1px solid #4b3a75; background: #241f38; border-radius: 99px; padding: 0 5px;
+}
+
+/* ---- the message board (the Messages tab) ---------------------------------------------------------
+   A conversation, so it is laid out as one: a thread per block, oldest at the top of it, and the two
+   directions told apart by a WORD before any colour ("assistant → wtgui-x" vs "wtgui-x → assistant"),
+   because a reader who cannot see the border colour still has to be able to tell which way it went. */
+.as-msg-bar { display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: baseline; padding: 6px 8px; margin-bottom: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.as-msg-window { font-size: 11.5px; font-weight: 600; color: var(--text); }
+.as-msg-cap { margin: -2px 0 7px; padding: 5px 8px; border: 1px solid #6b4d16; border-radius: 6px; background: var(--amber-bg); color: var(--amber); font-size: 11px; line-height: 1.4; }
+.as-msg-chips, .as-msg-people { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
+.as-msg-chips button, .as-msg-people button, .as-alert-who button {
+  border: 1px solid var(--line); background: var(--card); color: var(--dim);
+  font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
+}
+.as-msg-chips button:hover, .as-msg-people button:hover, .as-alert-who button:hover { color: var(--text); }
+.as-msg-chips button.is-on, .as-msg-people button.is-on, .as-alert-who button.is-on { color: var(--text); border-color: #8fb8ff; background: #1b2432; }
+/* The Alerts tab's scope row: the same pill chips the message board uses, with the sentence that says what the
+   narrowing hides (and how to undo it) on the same line. */
+.as-alert-who { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
+.as-alert-who .as-hint { font-size: 11px; color: var(--dim); }
+.as-alert-who .as-hint button { margin-left: 5px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--dim); cursor: pointer; }
+.as-alert-who .as-hint button:hover { color: var(--text); }
+.as-msg-thread { border: 1px solid var(--line); border-radius: 7px; margin-bottom: 9px; background: var(--card); overflow: hidden; }
+.as-msg-thread.is-assistant { border-color: #3a3450; }
+.as-msg-thread-head { display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 11px; }
+.as-msg-thread-head .as-thread { max-width: 42%; font-size: 11px; }
+.as-msg-thread-head .as-ago { margin-left: auto; }
+.as-msg { padding: 7px 9px; border-bottom: 1px solid #1c222b; border-left: 3px solid #4a5568; }
+.as-msg:last-child { border-bottom: 0; }
+.as-msg.is-out { border-left-color: #58a6ff; }
+.as-msg.is-in { border-left-color: #7ee787; }
+.as-msg-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; flex-wrap: wrap; }
+.as-msg-dir { font-family: var(--mono); color: var(--text); font-size: 10.5px; }
+.as-msg-kind { font-family: var(--mono); text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; color: #8fb8ff; border: 1px solid #2b3b52; border-radius: 4px; padding: 0 4px; }
+.as-msg.is-in .as-msg-kind { color: #7ee787; border-color: #24452c; }
+.as-msg-src { font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--amber); border: 1px solid #6b4d16; background: var(--amber-bg); border-radius: 4px; padding: 0 4px; }
+.as-msg-head .as-ago { margin-left: auto; }
+.as-msg-text { margin-top: 4px; font: 11.5px/1.5 var(--term); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.as-msg-text.is-missing { color: var(--dimmer); font-style: italic; }
+.as-msg-cut { color: var(--dimmer); font-style: italic; }
+.as-msg-more { margin-top: 3px; border: 0; background: none; color: #8fb8ff; font-size: 10.5px; cursor: pointer; padding: 0; }
+.as-msg-more:hover { text-decoration: underline; }
+.as-msg-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.as-msg-meta span {
+  font-family: var(--mono); font-size: 10px; color: var(--dimmer);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+}
+.as-msg-meta b { color: var(--text); font-weight: 400; }
+.as-msg-report { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.as-msg-path {
+  border: 1px solid var(--line); background: var(--console); color: var(--dim);
+  font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}
+.as-msg-path:hover { color: var(--text); border-color: #8fb8ff; }
+.as-msg-copy { border: 1px solid var(--line); background: var(--card); color: var(--dim); font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer; }
+.as-msg-copy:hover { color: var(--text); }
+.as-msg-copy.is-copied { color: #7ee787; border-color: #2ea043; }
+
+/* ---- Settings > Pipeline: the catalogue list and its editor ------------------------------------------------ */
+/* The list is rows like every other Settings list. The editor is a card under it: the only place in Settings a
+   textarea appears, because a stage's prompt is prose, not a one-line value. */
+.pipeline-row { gap: 8px; }
+.pipeline-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-row.bad .settings-unit { color: #ff9a9a; }
+.pipeline-editor { margin-top: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.pipeline-editor .settings-row { flex-wrap: wrap; }
+.pipeline-editor input[type="text"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.pipeline-editor textarea { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); resize: vertical; }
+.pipeline-stage { padding: 6px 0; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; }
+.pipeline-stage:first-child { border-top: none; }
+.pipeline-stage .settings-row { gap: 6px; }
+.pipeline-editor-actions { margin-top: 4px; }
+.pipeline-findings { margin-top: 8px; padding: 6px 8px; border: 1px solid #6b2a2a; border-radius: 6px; background: #2a1414; color: #ffb4b4; font-size: 12px; }
+.pipeline-finding-head { font-weight: 600; margin-bottom: 4px; }
+.pipeline-finding { white-space: pre-wrap; word-break: break-word; }
+
+/* ---- Settings > Bundles: the imported pipeline list and the tasks on it -------------------------------------- */
+/* The two lists are rebuilt markup inside their own containers, so their rows carry the divider rather than the
+   group: one thin line between entries makes a list of pipelines or tasks readable without turning each row into a
+   card. The press target is the row itself (a task row opens the task pipeline window), so the hover state says so. */
+#bundle-list > .settings-row,
+#bundle-tasks > .settings-row { padding: 4px 0; border-bottom: 1px solid var(--line); }
+#bundle-list > .settings-row:last-child,
+#bundle-tasks > .settings-row:last-child { border-bottom: none; }
+#bundle-tasks > .settings-row { cursor: pointer; }
+#bundle-tasks > .settings-row:hover { color: var(--text); }
+
+/* ---- the pipeline flow (public/pipeline-flow.js) and its modal (public/pipeline-modal.js) --------------------- */
+/* The flow is a COLUMN per stage, left to right, inside a horizontal scroller: thirteen stages of a studio bundle do
+   not fit a 340px settings rail, and squeezing them into one is how a sequence becomes an unreadable strip. The
+   connector is the grid's gap, so a gate's notch sits at the middle of the gap and a stage's own column never has to
+   know how wide its neighbour is. The arcs above the track are positioned in CSS calc from --pflow-n (columns),
+   --pflow-i/--pflow-j (the two stage indexes) and the same --pflow-gap the track uses — no measurement, no resize
+   handler, and an arc cannot drift from the stage it joins. */
+.pflow { --pflow-gap: 26px; --pflow-minw: 96px; --pflow-maxw: 400px; --pflow-ink-quiet: #8b96a5; --pflow-min-h: 100px; --pflow-head: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* The tile row's HEADROOM: 8 px of the scroller's own top that the tiles do not start in. The marks (`--pflow-dot`)
+   sit 5 px above a tile's top edge, so a track that began at the scroller's edge had the top of every dot - and the
+   tile's 1 px top border and rounded corners - sliced flat by `overflow-y: hidden` (the 3285x472 capture: a row of
+   half-circles above the tiles). The drawing owns this band outright: it is padding on the canvas, outside every
+   tile, so it costs no stage a pixel and cannot be mistaken for one. */
+/* `fit`: the SAME grid one step narrower, for a definition too long for the card at the readable floor. Thirteen
+   columns at 56 px with a 12 px gap are 872 px of content in a 1090 px track — the whole chain visible, the titles
+   wrapped instead of the reader losing four stages off the edge. This is the deliberate trade the integration plan's
+   C8 states ("legibility for overview"), and it is a press rather than a resize: a reader who wants the 96 px
+   columns back presses the control again. Nothing else re-lays out. */
+.pflow[data-fit="1"] { --pflow-gap: 12px; --pflow-minw: 56px; }
+/* The NARROW shape, for a card that cannot give a column a readable width. The track WRAPS into rows of the 96 px
+   columns in reading order (the ordinals carry the sequence across the break) instead of squeezing thirteen stages into
+   thirteen slivers. The arcs and the artifact bus are horizontal devices - a lane above one row and a bus under it -
+   so they are put away with it, and the last tile on a row loses its connector stub: there is no next column to join.
+   The modal decides the shape from the share one row would give a column (pipeline-modal.js, wrapRows), so a drawing
+   that fits never wraps and a narrow one never shrinks its type. */
+.pflow[data-wrap="1"] .pflow-track { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 22px var(--pflow-gap); max-width: none; }
+.pflow[data-wrap="1"] .pflow-canvas { padding-top: var(--pflow-head); }
+.pflow[data-wrap="1"] .pflow-arcs,
+.pflow[data-wrap="1"] .pflow-artifacts { display: none; }
+.pflow[data-wrap="1"] .pflow-node[data-row-end="1"] .pflow-link { display: none; }
+/* No horizontal padding inside the scroller: horizontal padding counts toward scrollWidth (it produced a scrollbar
+   under a drawing that fitted, by 4 px). The canvas carries the row's top headroom instead (--pflow-head), which is
+   vertical only, and the body's own 8 px across and 2 px above and below is the frame. */
+.pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0; }
+.pflow-canvas { position: relative; padding-top: calc(var(--pflow-pad, 0px) + var(--pflow-head)); min-width: 100%; }
+.pflow-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--pflow-n, 1), minmax(var(--pflow-minw), 1fr));
+  gap: var(--pflow-gap);
+  /* The track is the ONE width policy: `1fr` columns that share what the card gives them, a 96 px floor so a title is
+     never squeezed into a strip, and a 400 px ceiling so a two-stage drawing is not two billboards. `max-width` is that
+     ceiling in the same custom properties the grid and the arcs use, and `margin: 0 auto` CENTRES the capped track - so
+     a short sequence is a centred drawing rather than a small island against the left edge with 599 px of empty card to
+     its right (round 5A's finding 3). This is `clamp(96, (usable - (n - 1) * gap) / n, 400)` evaluated by the grid
+     itself at whatever width the card is. A card so narrow that even the compact 56 px row cannot fit does not squeeze
+     this row: it takes the wrapped shape below, where every stage keeps its readable width. */
+  max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap));
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  /* Every tile in a row is as tall as the tallest one: a drawing whose stages are ragged strips reads as a broken
+     table, and the shorter tiles leave a band of card under themselves that nothing paints. */
+  align-items: stretch;
+}
+/* The stage card is a TILE, not a strip: the ordinal and the title share one baseline at its top, and the one line of
+   meta (what the stage writes, or the exit check that ends it) sits on the tile's floor. `--pflow-min-h` is what makes
+   the drawing the bigger half of the dialog: a card whose content is one 17 px line is 35 px tall, and a dialog 340 px
+   wide then spends four fifths of its height on its own header — the 26% this round exists to fix. The height is the
+   drawing's, not a frame's: the card still sizes to the drawing it holds. */
+.pflow-node { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 7px; min-width: 0; min-height: var(--pflow-min-h); padding: 10px 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+/* The ordinal is an index PREFACE: it opens the title's first line and the words after it keep the whole column, so a
+   narrow column wraps like a sentence rather than like a column squeezed beside a numeral. */
+/* 13 px at 500 is the readable floor the width audit set: the title is the one word a reader came to read, and
+   11.5 px at 400 made a definition's quietest mark look like disabled text. The hierarchy still comes from the
+   mark's colour and the ordinal/detail line, never from shrinking the title. */
+.pflow-title { display: block; min-width: 0; font-size: 13px; line-height: 1.35; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+/* The ordinal and the detail line are the stage's meta, one step quieter than its title — but still above the AA
+   floor: #8b96a5 on --surface is 6.05:1 (5.45:1 on the 100% contrast theme's surface), where --dimmer measured 3.77:1. */
+.pflow-node .pflow-art { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 11px; line-height: 1.25; color: var(--pflow-ink-quiet); overflow: hidden; overflow-wrap: anywhere; }
+.pflow-node .pflow-n { margin-inline-end: 4px; font-size: 11px; line-height: 1.25; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pflow-ink-quiet); }
+.pflow-dot { position: absolute; top: -5px; left: 8px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
+/* The four marks, and no fifth. Colour is the panel's own language: green finished, blue where the work is, grey not
+   yet, red a gate that said no. */
+.pflow-node[data-mark="done"] { border-color: #24452c; }
+.pflow-node[data-mark="done"] .pflow-dot { background: var(--green); border-color: var(--green); }
+.pflow-node[data-mark="done"] .pflow-title { color: var(--dim); }
+.pflow-node[data-mark="current"] { border-color: #2b5480; background: var(--blue-bg); }
+.pflow-node[data-mark="current"] .pflow-dot { background: #58a6ff; border-color: #58a6ff; box-shadow: 0 0 0 3px #58a6ff33; }
+.pflow-node[data-mark="current"] .pflow-title { color: var(--text); font-weight: 600; }
+.pflow-node[data-mark="not-reached"] .pflow-dot { background: var(--panel); border-color: var(--dimmer); }
+/* The not-reached title was --dimmer, 3.77:1 on the node's surface — below AA at 11.5 px, and in edit mode it was ALL
+   the text in the drawing (round 5A's finding 4). It keeps the hierarchy (quieter than done's --dim, brighter than the
+   --dimmer it replaced) and clears the line: 6.05:1. */
+.pflow-node[data-mark="not-reached"] .pflow-title { color: var(--pflow-ink-quiet); }
+.pflow-node[data-mark="refused"] { border-color: #6b2a2a; background: var(--red-bg); }
+.pflow-node[data-mark="refused"] .pflow-dot { background: var(--red); border-color: var(--red); }
+.pflow-node[data-mark="refused"] .pflow-title { color: #ff9a9a; }
+/* The connector: the whole gap between two columns, with the gate's notch crossing its middle. `top: 19px` is the
+   middle of the stage card's title line (10 px of padding + half of the 17.6 px line), so the hairline meets the
+   title it joins rather than floating below it - the notch straddles the same line (its own `top: 11.5px`). */
+.pflow-link { position: absolute; top: 19px; left: 100%; width: var(--pflow-gap); height: 1px; background: var(--line); }
+/* There is no end stub: every gate draws its notch on its own stage's closing edge (pipeline-flow.js writes the
+   notch with no position at all; `.pflow-notch` below owns it), so nothing hangs past the last column. The 18 px
+   stub that used to live here widened the drawing past its own track - 15 px of scrollbar-producing decoration, and
+   the notch it labelled was clipped away (round 5A's finding 1). */
+.pflow-link::before { content: ""; position: absolute; left: -3px; top: -2px; width: 6px; height: 5px; border-left: 1px solid var(--line); }
+/* A connector the document hands an artifact across is THICK: the picture says which edge carries something, not
+   merely that two stages are adjacent. 3 px at `top: 18px` keeps the line's centre where the hairline's was. */
+.pflow-link[data-handoff] { top: 18px; height: 3px; background: var(--dim); }
+.pflow-link[data-handoff]::before { border-left-color: var(--dim); }
+/* The gate's notch: a 3 px bar whose whole box, and its 2 px halo, sit INSIDE the column it belongs to - the
+   trailing edge, `left: 100%` pulled back by its own width. It straddles the connector's hairline (`top: 11.5px` is
+   half of the 15 px bar above the link's 19 px line) instead of hanging below it, so it reads as one notch crossing
+   the line. Nothing about this position is measured, so it cannot be cut at any window shape: the tile's box is
+   inside the scroller, and the notch is inside the tile's box. */
+.pflow-notch { position: absolute; left: 100%; top: 11.5px; width: 3px; height: 15px; margin-left: -3px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 0 2px var(--panel); cursor: help; }
+.pflow-node[data-mark="done"] .pflow-notch { background: #6f8f5a; }
+.pflow-node[data-mark="not-reached"] .pflow-notch { background: #4a5568; }
+/* A capped loop: one arc above the track, in its own lane, and the cap is the only word on it. */
+/* The arcs layer is the track's own box: the same ceiling, centred the same way, so a percentage of it IS a percentage
+   of the track in both regimes — capped (a centred short track) and overflowing (a long one). */
+.pflow-arcs { position: absolute; left: 0; right: 0; top: var(--pflow-head); height: var(--pflow-pad, 0px); width: 100%; max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap)); margin-inline: auto; pointer-events: none; }
+.pflow-arc {
+  position: absolute;
+  top: calc(18px + var(--pflow-lane, 0) * 26px);
+  left: calc((100% - (var(--pflow-n) - 1) * var(--pflow-gap)) / var(--pflow-n) * (var(--pflow-i) + 0.5) + var(--pflow-i) * var(--pflow-gap));
+  width: calc((100% - (var(--pflow-n) - 1) * var(--pflow-gap)) / var(--pflow-n) * (var(--pflow-j) - var(--pflow-i)));
+  height: 22px;
+  border: 1px solid #55407a;
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+}
+.pflow-arc-label { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--panel); color: #b9a2e0; font-size: 11px; line-height: 14px; white-space: nowrap; }
+/* ---- the artifact view: the document's artifacts, on a lane under the track ----------------------------------------
+   Two bands: the chips, then a bus of hairlines under them. A chip sits on a boundary — the gap after the column that
+   writes it — and its route runs along the bus to the column that reads it. The three edge kinds the document already
+   distinguishes are the three styles: thin for an `inputs.read`, thick for a handoff, dashed for the `external_inputs`
+   boundary. Everything is written in the track's own `--pflow-n` / `--pflow-gap`, so nothing is measured and a resize
+   costs no script. The layer is the track's box (the same ceiling, centred the same way), or a percentage of it would
+   not be a percentage of the track. */
+.pflow-artifacts { position: relative; margin-top: 16px; max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap)); margin-inline: auto; }
+.pflow-artifact { position: absolute; bottom: 0; transform: translateX(-50%); max-width: calc(var(--pflow-minw) + var(--pflow-gap) - 8px); padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--pflow-ink-quiet); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* At either end of the track a centred chip would hang outside the drawing; aligned to the edge it cannot. */
+.pflow-artifact[data-side="left"], .pflow-artifact[data-side="right"] { transform: none; }
+.pflow-artifact[data-kind="handoff"] { border-color: #3f4d61; color: var(--dim); }
+.pflow-artifact[data-kind="external"] { border-style: dashed; border-color: var(--amber); color: #d8b26a; }
+.pflow-artifact[data-kind="missing"] { border-style: dashed; border-color: var(--red); color: #ff9a9a; }
+.pflow-artifact-edge { position: absolute; bottom: 0; border-top: 1px solid var(--pflow-ink-quiet); color: var(--pflow-ink-quiet); }
+.pflow-artifact-edge[data-edge="handoff"] { border-top-width: 3px; border-color: var(--dim); color: var(--dim); }
+.pflow-artifact-edge[data-edge="external"] { border-top-style: dashed; border-color: var(--amber); color: var(--amber); }
+/* The route's own ends: a riser from the bus up to the chip that starts it, and a 4 px square under every column it
+   reaches, so a long read ends ON the column it points at rather than somewhere beneath it. */
+.pflow-artifact-edge::before { content: ""; position: absolute; left: -1px; bottom: 1px; width: 1px; height: 5px; background: currentColor; }
+.pflow-artifact-dot { position: absolute; width: 4px; height: 4px; border-radius: 2px; background: var(--dim); transform: translateX(-2px); }
+.pflow-artifact-dot[data-edge="external"] { background: var(--amber); }
+.pflow-artifact-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--pflow-ink-quiet); }
+.pflow-artifact-key-item { display: inline-flex; align-items: center; gap: 5px; }
+.pflow-artifact-key-item i { width: 14px; height: 0; border-top: 1px solid currentColor; }
+.pflow-artifact-key-item[data-edge="handoff"] i { border-top-width: 3px; }
+.pflow-artifact-key-item[data-edge="external"] i { border-top-style: dashed; color: var(--amber); }
+.pflow-artifact-key-item[data-edge="missing"] i { border-top-style: dashed; color: var(--red); }
+.pflow-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--dim); }
+.pflow-key { display: inline-flex; align-items: center; gap: 5px; }
+.pflow-key i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
+.pflow-key[data-mark="done"] i { background: var(--green); border-color: var(--green); }
+.pflow-key[data-mark="current"] i { background: #58a6ff; border-color: #58a6ff; }
+.pflow-key[data-mark="not-reached"] i { border-color: var(--dimmer); }
+.pflow-key[data-mark="refused"] i { background: var(--red); border-color: var(--red); }
+.pflow-key b { color: var(--text); font-weight: 500; }
+/* The count of what the scroller is hiding, and the press that answers it. The row starts hidden (`hidden` in the
+   markup) and the modal's own measurement unhides it only when something is out of view or `fit` is on — so a short
+   definition is not given a sentence in place of a picture, and the thirteen-stage case keeps the count under the
+   drawing it is describing. The explicit `[hidden]` rules are needed: `display: flex/inline-flex` would otherwise
+   override the user agent's `[hidden] { display: none }`. */
+.pflow-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 11px; line-height: 17px; color: var(--dim); }
+.pflow-status[hidden], .pflow-fit[hidden] { display: none; }
+.pflow-count { font-variant-numeric: tabular-nums; }
+.pflow-count[data-out="0"] { color: var(--pflow-ink-quiet); }
+.pflow-fit { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 9px; font-family: inherit; font-size: 11px; line-height: 17px; cursor: pointer; }
+.pflow-fit:hover { color: var(--text); border-color: #8fb8ff; }
+.pflow-fit:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+/* Motion is a courtesy, never the meaning: the current stage's dot breathes and an arc fades in. data-motion="off"
+   is what the script sets from the reader's preference, and the media query repeats it for a page whose script never
+   ran — a mark still reads exactly the same either way. */
+@keyframes pflow-breathe { 0%, 100% { box-shadow: 0 0 0 3px #58a6ff22; } 50% { box-shadow: 0 0 0 6px #58a6ff44; } }
+@keyframes pflow-in { from { opacity: 0; } to { opacity: 1; } }
+.pflow[data-motion="on"] .pflow-node[data-mark="current"] .pflow-dot { animation: pflow-breathe 2.6s ease-in-out infinite; }
+.pflow[data-motion="on"] .pflow-arc { animation: pflow-in 0.45s ease-out both; }
+
+/* The dialog. z-index 140 is above the Settings window (120) — the edit-mode press comes FROM that window, and a
+   dialog drawn under the thing that opened it is a press that appears to do nothing. */
+.pmodal { position: fixed; inset: 0; z-index: 140; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px 14px; background: #05070ac9; }
+.pmodal[hidden] { display: none; }
+/* The card is as wide as the drawing it holds, not as wide as a desktop: one stage is a small panel (the 340 px
+   floor keeps the facts and title readable), seven stages take 846 px, thirteen take 1578 px. The arithmetic is the
+   track's own policy — n columns at the 96 px floor plus n-1 26 px gaps plus the body's 16 px of horizontal padding
+   and 2 px of border — so a definition that fits is a card that fits, and only a drawing wider than 96vw scrolls.
+   `--pflow-card-n` is set by PipelineModal.paint() from the flow it is drawing. */
+.pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 18px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; position: relative; }
+/* The reader can move and size it: the BAR is the handle (a press on one of its own controls is that control) and the
+   CORNER grip is the size. `position: relative` above is what the grip is placed against; once a gesture has run, the
+   modal writes `position: fixed`, a left/top/width, and a max-height on the card - the HEIGHT still follows the
+   content, so the reader's number is the room the body may grow into, never a box drawn around an empty field.
+   `is-dragging` is on for the length of a gesture only, so a drag never selects the header's text. */
+.pmodal-card.is-dragging { user-select: none; }
+.pmodal-card.is-dragging .pmodal-bar { cursor: grabbing; }
+/* The corner grip. It is inside the card's own clipped box (a grip outside it would be a control the reader cannot
+   see), takes no Tab stop and no accessible name, and is the only way the card's SIZE changes. */
+.pmodal-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; }
+.pmodal-resize::before, .pmodal-resize::after { content: ""; position: absolute; right: 3px; bottom: 3px; border-right: 1px solid var(--dimmer); border-bottom: 1px solid var(--dimmer); }
+.pmodal-resize::before { width: 9px; height: 9px; }
+.pmodal-resize::after { width: 4px; height: 4px; }
+.pmodal-resize:hover::before, .pmodal-resize:hover::after { border-color: var(--text); }
+/* The header is ONE band of two rows, not a bar plus a facts strip: the kicker, the title and the single close control
+   share the first row; the facts — what the definition is, its kind, its stage count and its next gate — are the second
+   row, full width. Wrapping to the next line was the old header's way of turning a 300 px title into a 40 px band, and
+   the facts' own band then cost the drawing another 30 px of card. */
+.pmodal-bar { display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; padding: 3px 9px 3px; background: var(--panel-2); border-bottom: 1px solid var(--line); cursor: grab; touch-action: none; }
+.pmodal-kicker { flex: 0 1 auto; min-width: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmodal-title { flex: 0 0 auto; font-size: 13px; color: var(--text); }
+.pmodal-sub { flex: 0 0 auto; font-size: 11px; color: var(--dim); }
+.pmodal-bar .spacer { flex: 1 1 0; }
+/* The status moved out of the deleted footer and onto the header's first row: a "2 stages" that describes the drawing
+   belongs beside the title, and the footer it used to sit in was 30 px of band under a 130 px drawing. */
+.pmodal-status { flex: 0 1 auto; min-width: 0; font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmodal-status:empty { display: none; }
+.pmodal-close { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 6px; font: inherit; font-size: 12px; line-height: 16px; cursor: pointer; }
+.pmodal-close:hover { color: var(--text); border-color: #8fb8ff; }
+/* The bar's two ACTIONS are one flex item: `map ↗` sits beside ✕ and a narrow card (two stages is a 340 px panel)
+   wraps them TOGETHER instead of dropping the close control onto a line of its own under the title. */
+.pmodal-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* The map door: the same small control as ✕, one step quieter, because it leaves the dialog instead of closing it.
+   It is a real anchor (target="_blank"), so a middle-click and a copy-the-address both work. */
+.pmodal-map { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 6px; font-size: 11px; line-height: 16px; text-decoration: none; }
+.pmodal-map:hover { color: var(--text); border-color: #8fb8ff; }
+.pmodal-map:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+.pmodal-facts { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 1px 12px; font-size: 11px; line-height: 1.2; color: var(--dim); }
+.pmodal-facts > * { flex: 0 0 auto; white-space: nowrap; }
+.pmodal-facts i { color: var(--dimmer); font-style: normal; }
+.pmodal-facts b { color: var(--text); font-weight: 500; }
+/* The body's padding is the drawing's frame and nothing more: 16 px across (it is in the card's width arithmetic), 2 px
+   above and below. It used to be 12 px all round plus a 10 px gap under a facts strip — 40 px of frame for a card whose
+   drawing was 130 px tall. */
+.pmodal-body { padding: 2px 8px 2px; display: flex; flex-direction: column; gap: 5px; overflow: auto; min-height: 0; }
+.pmodal-note { font-size: 11.5px; line-height: 1.5; color: var(--dim); }
+.pmodal-empty { padding: 10px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dimmer); font-size: 11.5px; }
+.pmodal-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
+.pmodal-preview-note { color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
+.pmodal-preview select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font: 11px var(--mono); }
+.pmodal-check { display: inline-flex; align-items: center; gap: 5px; }
+/* The PREVIEW switch: two words with a pressed state, and the read-only hint beside them while the chart is up. It
+   sits in the header's first row, after the subtitle, because it changes what the body shows and nothing about the
+   definition. The card inside the chart is the map page's own (public/core/pipeline-card.css), so only its placement
+   is decided here. */
+.pmodal-views { flex: 0 0 auto; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.pmodal-views button { appearance: none; border: 0; background: transparent; color: var(--dim); font: 11px var(--mono); line-height: 16px; padding: 1px 8px; cursor: pointer; }
+.pmodal-views button + button { border-left: 1px solid var(--line); }
+.pmodal-views button:hover { color: var(--text); }
+.pmodal-views button[aria-pressed="true"] { background: var(--surface); color: var(--text); }
+.pmodal-views button:focus-visible { outline: 2px solid #4a90d9; outline-offset: 1px; }
+.pmodal-views-note { font: 10px var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--dimmer); padding: 0 7px 0 6px; border-left: 1px solid var(--line); }
+.pmodal-chart .pm-card { margin: 0; }
+.pmodal-chart .pm-card .pm-draw .pm-node { cursor: default; }
+/* There is no `.pmodal-foot`: the close control and the status are in the header, so the card's last band is the
+   drawing's own bottom edge. */
+body.pipeline-modal-open { overflow: hidden; }
+/* The queue row's flow press: a glyph beside the pipeline chip, quiet until it is pointed at. */
+.as-task-pipeline .as-qflow { margin-left: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 5px; padding: 0 7px; font-size: 12px; line-height: 1.5; cursor: pointer; }
+.as-task-pipeline .as-qflow:hover { color: var(--text); border-color: #8fb8ff; }
+@media (prefers-reduced-motion: reduce) {
+  .pflow[data-motion] .pflow-node[data-mark="current"] .pflow-dot,
+  .pflow[data-motion] .pflow-arc,
+  .jl-think .think-dot { animation: none; }
+}

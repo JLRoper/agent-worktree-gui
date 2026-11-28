@@ -18,9 +18,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 // Comments are stripped so a word in prose can never satisfy an assertion about a declaration.
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8")
+const css = readStyleSheets()
   .replace(/\r\n/g, "\n")
   .replace(/\/\*[\s\S]*?\*\//g, "");
 

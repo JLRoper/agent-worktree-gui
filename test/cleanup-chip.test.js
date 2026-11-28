@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 // The drop-all selection is the real module the page loads, not a stand-in: the chip's bar draws its button and its
 // confirm from these answers, so a harness that stubbed them could pass while the page showed something else.
@@ -30,7 +31,7 @@ const wtCleanupDropAll = globalThis.wtCleanupDropAll;
 
 const scaffold = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
 const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const css = readStyleSheets();
 const code = sliceRegion(scaffold, "the cleanup chip");
 
 const esc = (s) =>

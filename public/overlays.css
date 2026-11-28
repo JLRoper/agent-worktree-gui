@@ -1,0 +1,666 @@
+/* public/overlays.css
+   The deliverables list, the reply box and the question cards.
+
+   The deliverables popover, a pasted block folded into a chip, the reply box and its action row, the container
+   query that unseats those actions in a narrow card, the turn's approval and question cards, and the ghost and
+   live turn rows.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* The DELIVERABLES list: the panel's own idiom for a list that hangs off a control, in the shape .artifacts-pop
+   above. Fixed, because it is anchored under a sticky header button; bounded, because "every deliverable" is a
+   cap of 200 and 200 rows must scroll rather than grow the page; z-index 60, the layer the artifacts pop uses so
+   it sits above the board and below Settings. The head is the count, the filter and the close; only the rows
+   scroll, so the filter is always reachable. */
+.deliver-pop {
+  position: fixed;
+  z-index: 60;
+  width: min(560px, 92vw);
+  max-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #10141b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  overflow: hidden;
+}
+.deliver-pop[hidden] { display: none; }
+.deliver-pop .dl-head {
+  display: flex; align-items: center; gap: 8px;
+  flex: none;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #12161d;
+  cursor: grab;
+  touch-action: none;
+}
+.deliver-pop.is-dragging .dl-head { cursor: grabbing; }
+/* ...and it says so twice: the pointer's cursor, and the six dots every title bar a reader has ever dragged
+   carries. Drawn as a background so the head's own text (the count, the filter, the chips) is untouched. */
+.deliver-pop .dl-head::before {
+  content: "";
+  flex: none;
+  width: 8px; height: 14px;
+  background-image: radial-gradient(circle, #55657e 1px, transparent 1.3px);
+  background-size: 4px 4px;
+  background-position: 0 1px;
+  opacity: .9;
+}
+/* A drag is not a text selection: the class is on for the length of the gesture, and off again on release. */
+.deliver-pop.is-dragging { user-select: none; }
+/* The grab handle: the panel's own corner, drawn as diagonal ticks and sized to the 16 px it reacts to. It is the
+   only thing that RESIZES the panel (the head only moves it), and it is visible without hovering — "the list can be
+   resized" is not a fact a reader should have to discover. */
+.deliver-pop .dl-resize {
+  position: absolute; right: 3px; bottom: 3px;
+  z-index: 1;
+  width: 16px; height: 16px;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: .9;
+  /* Three diagonal ticks in the corner — the shape a window's own grip has, not a glyph a reader could read as a
+     second control (a hatch read as an ✕). */
+  background-image:
+    linear-gradient(135deg, transparent 0 78%, #6b7c96 78% 90%, transparent 90% 100%),
+    linear-gradient(135deg, transparent 0 52%, #6b7c96 52% 64%, transparent 64% 100%),
+    linear-gradient(135deg, transparent 0 26%, #6b7c96 26% 38%, transparent 38% 100%);
+}
+.deliver-pop .dl-resize:hover { opacity: 1; }
+.deliver-pop .dl-count {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 11px/1.4 var(--ui); color: var(--dim);
+}
+.deliver-pop .dl-filter {
+  flex: 1 1 auto; min-width: 80px;
+  padding: 3px 7px;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: #0c0f14; color: var(--text);
+  font: 11px/1.5 var(--mono);
+}
+.deliver-pop .dl-filter:focus { outline: none; border-color: #3b5680; box-shadow: 0 0 0 2px #24466a66; }
+/* One chip per KIND, beside the search box: a real button, pressed by default, and the only control that narrows by
+   kind. The `[hidden]` rule below is load-bearing — an author `display` beats the UA's rule for the attribute, so a
+   kind with no row would otherwise draw a dead chip instead of no chip at all. */
+.deliver-pop .dl-kinds { flex: none; display: flex; align-items: center; gap: 2px; }
+.deliver-pop .dl-kinds[hidden], .deliver-pop .dl-kind[hidden] { display: none; }
+.deliver-pop .dl-kind {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 21px; padding: 0;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: #0c0f14; color: var(--text);
+  font: 12px/1 var(--ui); cursor: pointer;
+}
+.deliver-pop .dl-kind:hover { border-color: #3b5680; background: #1b2029; }
+.deliver-pop .dl-kind:focus-visible { outline: none; border-color: #3b5680; box-shadow: 0 0 0 2px #24466a66; }
+/* Pressed = this kind is IN the list. Off is dimmed rather than removed, because the chip is the way back. */
+.deliver-pop .dl-kind[aria-pressed="false"] { opacity: .45; border-color: #222a36; background: #0a0d12; }
+.deliver-pop .dl-kind-glyph { line-height: 1; }
+.deliver-pop .dl-close {
+  flex: none; padding: 1px 7px;
+  font: 11px/1.6 var(--ui); color: var(--dimmer);
+  border: 1px solid transparent; border-radius: 4px; background: none;
+}
+.deliver-pop .dl-close:hover { color: var(--text); border-color: var(--line); background: #1b2029; }
+/* Only the rows scroll. The head and the footer are the two things a 200-row list must keep in reach. */
+.deliver-pop .dl-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 6px; }
+.deliver-pop .dl-day {
+  padding: 8px 8px 3px;
+  font: 700 9.5px/1.4 var(--ui); letter-spacing: .08em;
+  color: var(--dimmer);
+}
+.deliver-pop .dl-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.deliver-pop .dl-row:hover { background: var(--band); }
+.deliver-pop .dl-row[aria-selected="true"] { background: #17202c; box-shadow: inset 0 0 0 1px #2b3b52; }
+.deliver-pop .dl-glyph { flex: none; font-size: 13px; line-height: 1.5; }
+.deliver-pop .dl-main { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+/* The row's ONE Open control, and it is the name: a card in a 200-row list has one thing that opens it, the line the
+   reader reads first. The Open tag is what makes the affordance visible instead of implied by an underline — and it
+   sits inside the same button, so it is not a second control and cannot disagree with the first. */
+.deliver-pop .dl-name {
+  display: flex; align-items: baseline; gap: 8px;
+  width: 100%; min-width: 0; padding: 0;
+  border: none; background: none;
+  color: var(--text);
+  font: 600 12.5px/1.4 var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+.deliver-pop .dl-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The Open tag is DRAWN by the button rather than written into it: a `textContent` read of a row's name has to stay
+   the name and nothing else (the row's gate, the copy button and a reader's selection all read that string), and the
+   tag is the button's own affordance, not a second thing to click. */
+.deliver-pop .dl-name::after {
+  content: "Open";
+  flex: none; margin-left: auto;
+  padding: 0 5px;
+  border: 1px solid #2f4664; border-radius: 4px;
+  background: #16202c; color: #cfe6ff;
+  font: 10px/1.6 var(--term);
+}
+.deliver-pop .dl-name:hover .dl-title { color: #fff; text-decoration: underline; }
+.deliver-pop .dl-name:hover::after { background: #1d2b3d; border-color: #3b5680; color: #fff; }
+.deliver-pop .dl-name:focus-visible { outline: 2px solid #3b5680; outline-offset: 2px; border-radius: 3px; }
+.deliver-pop .dl-name.is-gone .dl-title { text-decoration: line-through; color: var(--dimmer); }
+.deliver-pop .dl-target {
+  min-width: 0;
+  color: var(--dimmer);
+  font: 10.5px/1.4 var(--term);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.deliver-pop .dl-meta { font: 10.5px/1.4 var(--ui); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deliver-pop .dl-age { color: var(--dimmer); }
+/* A target the store last failed to find. The click still tries: the file may have been restored. */
+.deliver-pop .dl-gone {
+  flex: none; align-self: center;
+  padding: 0 6px;
+  border: 1px solid #57262a; border-radius: 4px;
+  color: #ff9c94;
+  font: 10px/1.6 var(--term);
+}
+/* The keyboard/AT twin of the row click. It appears on hover and on the active row, so the pointer's row is not
+   shouting a second button at every entry in a 200-row list. */
+.deliver-pop .dl-agent {
+  flex: none; align-self: center;
+  padding: 1px 6px;
+  border: 1px solid var(--line); border-radius: 4px;
+  background: #151a22; color: var(--dimmer);
+  font: 10px/1.6 var(--term);
+  cursor: pointer;
+  opacity: 0;
+}
+.deliver-pop .dl-row:hover .dl-agent,
+.deliver-pop .dl-row[aria-selected="true"] .dl-agent,
+.deliver-pop .dl-agent:focus { opacity: 1; }
+.deliver-pop .dl-agent:hover { color: var(--text); border-color: #3b4757; }
+/* `.dl-agent` is the quiet hover twin: it answers the other question (which agent produced this). */
+/* A refusal is said on the ROW it belongs to — never a banner, and never a blank tab opened to find out. */
+.deliver-pop .dl-why {
+  color: #ff9c94;
+  font: 10.5px/1.45 var(--term);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* The other answer, on the same row: a 200 `{open:"handler"}` names what was handed over and which opener took it.
+   Green, and deliberately smaller news than the refusal's red — it reports the spawn, not a window. */
+.deliver-pop .dl-opened {
+  color: #8ee08a;
+  font: 10.5px/1.45 var(--term);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.deliver-pop .dl-empty { padding: 14px 10px; color: var(--dim); font: 12px/1.5 var(--ui); }
+.deliver-pop .dl-hint { padding-top: 0; color: var(--dimmer); }
+.deliver-pop .dl-hint code { display: block; margin-top: 7px; color: #8ee08a; font: 11px/1.5 var(--term); white-space: pre-wrap; }
+.deliver-pop .dl-err { color: #ff9c94; }
+.deliver-pop .dl-retry { margin: 0 10px 10px; }
+.deliver-pop .dl-foot {
+  flex: none;
+  padding: 6px 10px;
+  border-top: 1px solid var(--line);
+  color: var(--dimmer);
+  font: 10.5px/1.4 var(--term);
+}
+.deliver-pop .dl-foot[hidden] { display: none; }
+/* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
+a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
+a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
+/* A TASK ID in the assistant's transcript (public/core/console-markdown.js builds the anchor while it renders). It is
+   not an external link, so it does not wear the out-link's dotted blue: it stays in the panel, and the underline plus
+   the tabular figures say "a number you can press". Hover lifts it out of the sentence. */
+a.as-task-ref {
+  color: #a9c0dd;
+  text-decoration: none;
+  border-bottom: 1px solid #4a6076;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+a.as-task-ref:hover { color: #d7e6f7; border-bottom-color: #7fb3ff; background: #1a212b; }
+a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
+.thread-name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The name is the only thing allowed to give up width: without min-width:0 its nowrap text refuses to
+   shrink and pushes the buttons that follow it onto a second row. */
+.job-head .thread-name { min-width: 0; flex: 0 1 auto; }
+.reply {
+  margin: 8px 0 0 18px;
+  padding-top: 8px;
+  border-top: 1px solid #1d222b;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reply-box {
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: 12.5px/1.45 var(--ui);
+  /* It sizes itself from the draft (see growReplyBox): a drag handle would be overruled on the next keystroke. */
+  resize: none;
+  /* rows="2" on the textarea this used to be: two lines of text, this box's own padding (which includes the
+     34px the send buttons sit in — see .reply-wrap .reply-box) and its border. Then it grows itself. */
+  min-height: 79px;
+}
+.reply-box:focus { outline: none; border-color: #2b5480; }
+/* ---- a pasted block, collapsed into one inline chip ------------------------------------------------
+   The box is contenteditable — a textarea cannot hold an inline widget — and the chip is a non-editable
+   atom inside it, so the caret steps over it, Backspace deletes it whole, and nothing inside it is ever
+   editable. Inline-BLOCK is the point: that is what lets the reader put quotes around it and keep typing. */
+.chipbox { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; cursor: text; }
+/* A div has no placeholder attribute: an empty box says what it is for through :empty. */
+.chipbox:empty::before { content: attr(data-ph); color: var(--dimmer); pointer-events: none; }
+.paste-chip {
+  display: inline-block; vertical-align: baseline; max-width: 100%;
+  margin: 0 1px; padding: 0 4px; border: 1px solid #5a4a2a; border-radius: 4px;
+  background: #2c2617; color: #ffd479;
+  font: 11.5px/1.5 var(--mono); white-space: nowrap; user-select: none; cursor: pointer;
+}
+.paste-chip:hover { border-color: #8a6f33; background: #38301d; }
+/* Unfolded, the chip takes the line it is on and shows the whole paste: read-only, wrapped, scrollable. */
+.paste-chip.is-open { display: block; white-space: normal; margin: 4px 0; padding: 0 6px 6px; cursor: default; }
+.paste-chip .pc-x { display: inline-block; margin-left: 5px; padding: 0 3px; color: var(--dimmer); cursor: pointer; font-weight: 700; }
+.paste-chip .pc-x:hover { color: #ffb3b3; }
+.paste-chip .pc-body { margin-top: 3px; }
+.paste-chip .pc-text {
+  max-height: 26vh; overflow: auto; padding: 5px 6px; border-radius: 4px;
+  background: #1a1710; border: 1px solid #3b3220; color: var(--text);
+  font: 11.5px/1.45 var(--term); white-space: pre-wrap; user-select: text; cursor: text;
+}
+/* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
+   it submits. The box keeps a bottom pad so typed text never runs under it.
+   `container-type` because whether the buttons fit INSIDE the box depends on the box's own width, not the
+   window's: the same card is ~1250px on the board's table, ~330px in a worktree row on a phone, and whatever
+   the assistant's float is dragged to. See the @container rule below the buttons. */
+.reply-wrap { position: relative; display: block; container-type: inline-size; }
+/* Send and Cancel sit side by side inside the box, bottom left: both act on the reply you are writing. */
+.reply-actions { position: absolute; left: 7px; bottom: 8px; display: flex; align-items: center; gap: 6px; z-index: 1; }
+.reply-actions button.btn-reply { position: static; left: auto; bottom: auto; }
+.reply-actions button.btn-cancel { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #3a1f22; border-color: #5c2a2e; color: #ffb3b3; }
+.reply-actions button.btn-cancel:hover { background: #4a262a; }
+.reply-actions button.btn-reply:disabled { opacity: .45; cursor: default; }
+.reply-actions button.btn-queue { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #2a2f3a; border-color: #3b4757; color: #cfd8e6; }
+.reply-actions button.btn-queue:hover { background: #333a47; }
+/* Steer: the one action that reaches into a turn that is already running. Amber, like other
+   "this changes what is happening right now" affordances. */
+.reply-actions button.btn-steer { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #3a3320; border-color: #6b4d16; color: #ffd479; }
+/* Steer is the PRIMARY action while a turn runs: it takes the Send button's place and its look,
+   because that is what typing mid-turn now does. */
+.reply-actions button.btn-steer-primary { background: #3a3320; border-color: #6b4d16; color: #ffd479; font-weight: 600; }
+.reply-actions button.btn-steer-primary:hover { background: #463c24; }
+/* A run parked on a flagged command: the prompt sits under the output it belongs to, raised like a
+   popup but in the flow, so it never covers what it is asking about. */
+.turn-approval { margin: 8px 2px 6px; border: 1px solid #6b4d16; border-radius: 8px; background: linear-gradient(180deg, rgba(58,51,32,.55), rgba(38,34,24,.55)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
+.ta-head { font-size: 11.5px; color: #ffd479; letter-spacing: .01em; }
+.ta-cmd { margin: 7px 0 9px; padding: 7px 9px; background: rgba(0,0,0,.42); border: 1px solid rgba(107,77,22,.5); border-radius: 5px; color: var(--text); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+/* The summary above the command (public/core/command-summary.js): the plain reading of what the command does, with
+   the effects flagged. It is a READING, not the thing being allowed - the command stays beneath it, byte for byte -
+   so it is drawn as an inset note with a lighter weight than the command's own box: a head carrying the one chip,
+   the agent's lead line when it wrote one, one row per step, the flags, then the read-only sentence. */
+.ta-summary { margin: 8px 0 6px; padding: 8px 10px; background: rgba(255,212,121,.045); border: 1px solid rgba(107,77,22,.42); border-left: 2px solid #c79a3a; border-radius: 5px; }
+.ta-summary-head { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #d8c79a; }
+.ta-summary-chip { margin-left: auto; padding: 1px 7px; border: 1px solid #6b4d16; border-radius: 999px; font-size: 9.5px; letter-spacing: .04em; color: #ffd479; background: rgba(107,77,22,.18); }
+.ta-summary-chip.is-read { color: #8fd6a0; border-color: #2f6b3f; background: rgba(47,107,63,.14); }
+.ta-summary-chip.is-danger { color: #ff9c9c; border-color: #6b2a2a; background: rgba(107,42,42,.20); }
+.ta-summary-lead { margin-top: 6px; font-size: 12.5px; color: var(--text); }
+.ta-summary-steps { margin: 5px 0 0; padding: 0; list-style: none; }
+.ta-summary-steps li { position: relative; padding-left: 12px; font-size: 11.5px; line-height: 1.45; color: #ece2c6; }
+.ta-summary-steps li::before { content: "-"; position: absolute; left: 2px; color: #a8842f; }
+.ta-summary-steps li.is-fold { padding-left: 0; }
+.ta-summary-steps li.is-fold::before { content: ""; }
+.ta-fold { display: block; }
+.ta-fold-line { cursor: pointer; font-size: 11.5px; line-height: 1.45; color: #b9a97f; list-style: none; }
+.ta-fold-line::-webkit-details-marker { display: none; }
+.ta-fold-line::before { content: ">"; display: inline-block; width: 11px; color: #a8842f; }
+.ta-fold[open] > .ta-fold-line::before { content: "v"; }
+.ta-fold-line:hover { color: #d8c79a; }
+.ta-fold-line:focus-visible { outline: 1px solid #6b4d16; outline-offset: 2px; }
+.ta-fold-steps { margin: 3px 0 0; padding: 0 0 0 11px; list-style: none; }
+.ta-fold-steps li { position: relative; padding-left: 11px; font-size: 11px; line-height: 1.45; color: #d9cfb4; }
+.ta-fold-steps li::before { content: "-"; position: absolute; left: 0; color: #7d6a2a; }
+.ta-summary-flag { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
+.ta-summary-read { margin-top: 5px; font-size: 11px; color: #8fd6a0; }
+.ta-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ta-actions button { padding: 3px 12px; font-size: 11.5px; background: #3a3320; border-color: #6b4d16; color: #ffd479; }
+.ta-actions button:hover { background: #463c24; }
+.ta-actions button.btn-deny { background: #3a2222; border-color: #6b2a2a; color: #ff9c9c; }
+.ta-actions button.btn-deny:hover { background: #46292a; }
+/* The window the gateway gives the answer. Its own line under the buttons rather than a countdown in the head:
+   the head is a sentence, and a number next to it competed with it. */
+.ta-foot { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.ta-timer { flex: 1; min-width: 0; height: 4px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.ta-timer > span { display: block; height: 100%; border-radius: inherit; background: #b98a2f; transition: width 1s linear, background .4s; }
+.ta-left { flex: none; font-size: 10.5px; color: #c9b98f; }
+.ta-foot.is-low .ta-timer > span { background: #ffd479; }
+.ta-foot.is-over .ta-timer > span { background: #ff9c9c; }
+.ta-foot.is-over .ta-left { color: #ff9c9c; }
+/* …and what the box becomes when the window has closed: a record, not a decision. The buttons are gone — the
+   gateway denied the command on its own — so there is nothing to press, only something to read. */
+.turn-approval.is-expired { border-color: #4a4030; background: linear-gradient(180deg, rgba(44,40,28,.5), rgba(30,28,22,.5)); }
+.turn-approval.is-expired .ta-head { color: #d8c79a; }
+.ta-note { margin-top: 7px; font-size: 11px; color: #c9b98f; }
+.ta-note:empty { display: none; }
+/* …and once answered it collapses to this one line. */
+.turn-approval-done { margin: 6px 2px 2px; padding: 3px 9px; font-size: 11px; color: #8fd6a0; border-left: 2px solid #2f6b3f; background: rgba(47,107,63,.10); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-approval-done.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
+/* Nobody answered: the gateway denied the command when its window ran out. Not green (approved), not red (denied
+   by a person) — amber, the colour of the prompt that went unanswered. */
+.turn-approval-done.is-expired { color: #d8c79a; border-left-color: #6b4d16; background: rgba(107,77,22,.10); }
+/* An approval that expired is a TRACE, not a one-line shrug (queue row #286, and the same shape the question's own
+   timeout wears at `.turn-question-done.is-closed`): the reason, the command it asked to run and the choices it
+   offered stay on the card, dead. The flat spans are not buttons — the gateway has already denied this, so there is
+   nothing left to press, only something to read. */
+.turn-approval-done.is-trace { margin: 8px 2px 6px; padding: 8px 11px; white-space: normal; overflow: visible; text-overflow: clip; border: 1px dashed #6b4d16; border-left: 2px solid #6b4d16; border-radius: 7px; }
+.tad-head { font-size: 11px; color: #ffd479; letter-spacing: .01em; }
+.tad-why { margin-top: 4px; font-size: 10.5px; color: #c9b98f; }
+.tad-cmd { margin: 7px 0 6px; padding: 6px 8px; background: rgba(0,0,0,.35); border: 1px solid rgba(107,77,22,.4); border-radius: 5px; color: var(--text); font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+.tad-choices { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 5px; }
+.tad-choice { padding: 2px 8px; border: 1px dashed #6b4d16; border-radius: 999px; color: #c9b98f; font-size: 10.5px; }
+.tad-when { font-size: 10px; color: #b9a97f; opacity: .9; }
+/* The landing: an approval that has just parked is scrolled to, so it arrives where the reader is looking rather
+   than below the fold with only the dock's corner saying anything (row #286). Same flash the question's landing
+   wears, so two versions of "look here" never look like two different events. */
+.turn-approval.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
+/* The agent's own question: the approval box's place in the flow, in light purple instead of amber, and sized for
+   sentences rather than a command. A choice is a full-width row so a long label wraps inside its own control
+   instead of stretching the box; the typed "Other" answer and the send button share the row under them.
+
+   Every colour here is a variable because Settings > Display retints the box, sizes its text and packs its rows:
+   the tints are SIGNAL colours (the way the approval's amber is), not panel surfaces, so the contrast slider
+   leaves them alone and a tint only ever changes this box. */
+:root {
+  --q-line: #55407a; --q-head: #ecd9ff; --q-question: #f4efff;
+  --q-bg-a: rgba(42, 32, 68, .72); --q-bg-b: rgba(30, 24, 46, .72);
+  --q-choice-bg: rgba(26, 20, 40, .55); --q-choice-line: #4a3a6b; --q-choice-text: #e7dcff;
+  --q-choice-hover: #352a52; --q-choice-hover-line: #66509a;
+  --q-choice-on: #3b2e5c; --q-choice-on-line: #8a6fc0;
+  --q-accent: #8a6fc0; --q-box: #66509a; --q-tick: #ecd9ff; --q-note: #b6a3d6;
+  --q-size: 13px;
+}
+:root.q-tint-sky {
+  --q-line: #33628c; --q-head: #dceeff; --q-question: #f2f8ff;
+  --q-bg-a: rgba(28, 44, 62, .72); --q-bg-b: rgba(20, 32, 46, .72);
+  --q-choice-bg: rgba(18, 30, 42, .55); --q-choice-line: #3d6081; --q-choice-text: #dceeff;
+  --q-choice-hover: #2a4258; --q-choice-hover-line: #5b86ab;
+  --q-choice-on: #2f4d68; --q-choice-on-line: #7fb0d4;
+  --q-accent: #7fb0d4; --q-box: #5b86ab; --q-tick: #dceeff; --q-note: #9dc2dd;
+}
+:root.q-tint-mint {
+  --q-line: #2f6249; --q-head: #d8ffe9; --q-question: #effff6;
+  --q-bg-a: rgba(24, 50, 40, .72); --q-bg-b: rgba(18, 36, 30, .72);
+  --q-choice-bg: rgba(14, 32, 25, .55); --q-choice-line: #3a6f56; --q-choice-text: #d8ffe9;
+  --q-choice-hover: #264a3a; --q-choice-hover-line: #5a9a78;
+  --q-choice-on: #2b5442; --q-choice-on-line: #6fbf95;
+  --q-accent: #6fbf95; --q-box: #5a9a78; --q-tick: #d8ffe9; --q-note: #96c9b1;
+}
+:root.q-tint-rose {
+  --q-line: #7a3a52; --q-head: #ffd9e6; --q-question: #fff2f6;
+  --q-bg-a: rgba(62, 26, 40, .72); --q-bg-b: rgba(44, 20, 30, .72);
+  --q-choice-bg: rgba(40, 18, 26, .55); --q-choice-line: #7f4560; --q-choice-text: #ffd9e6;
+  --q-choice-hover: #5c2f42; --q-choice-hover-line: #b06a8b;
+  --q-choice-on: #6b3a4f; --q-choice-on-line: #d98fb0;
+  --q-accent: #d98fb0; --q-box: #b06a8b; --q-tick: #ffd9e6; --q-note: #d9a9bf;
+}
+:root.q-tint-slate {
+  --q-line: #4a5462; --q-head: #e2e8f0; --q-question: #f2f5f9;
+  --q-bg-a: rgba(34, 40, 48, .72); --q-bg-b: rgba(24, 28, 34, .72);
+  --q-choice-bg: rgba(22, 26, 32, .55); --q-choice-line: #485262; --q-choice-text: #dfe6ee;
+  --q-choice-hover: #333c48; --q-choice-hover-line: #647085;
+  --q-choice-on: #3a4452; --q-choice-on-line: #8a97ab;
+  --q-accent: #8a97ab; --q-box: #647085; --q-tick: #e2e8f0; --q-note: #a3adbb;
+}
+/* The box is the console's box: the same 18px tab the console wrapper carries (`out-tab`, inside the turn's 11px
+   rail padding) and the same right edge, so the question lines up with the output it follows (the console's own text
+   sits one 10px inset further in, and the question box does not try to match that). Settings > Display > Question
+   width can narrow it to a fixed number of pixels, which then centres it under the console instead of following the
+   console's edges. */
+.turn-question { max-width: none; margin: 8px 0 6px 18px; border: 1px solid var(--q-line); border-radius: 8px; background: linear-gradient(180deg, var(--q-bg-a), var(--q-bg-b)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
+/* A set width centres the box under the console, and the 18px keeps it inside the console's own span when the number
+   is larger than the card - otherwise the cap stops binding and the box would start 18px left of the console it is
+   supposed to sit under. */
+:root.q-width-set .turn-question { margin: 8px auto 6px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
+.tq-head { font-size: 11.5px; color: var(--q-head); letter-spacing: .01em; }
+/* The re-ask count: the question is the same one, and this is how many times the panel has put it back in
+   front of the reader. Dimmer than the head — it is a fact about the wait, not a second question — and it
+   carries the box's own accent so it reads as part of the box rather than a warning. */
+.tq-again { display: inline-block; margin: 4px 0 0; font: 11px/1.4 var(--mono, var(--ui)); color: var(--q-accent); opacity: .9; }
+.tq-question { margin: 8px 0 9px; font: var(--q-size, 13px)/1.5 var(--ui); color: var(--q-question); white-space: pre-wrap; word-break: break-word; }
+/* The four-direction strip: one muted line under the question saying what shape the card has. It annotates and never
+   gates - the choices below it stay live whatever it says - so it takes the quiet note colour, and only a complete
+   card earns the accent. */
+.tq-shape { margin: -3px 0 9px; font: 10.5px/1.45 var(--mono, var(--ui)); color: var(--q-note); word-break: break-word; }
+.tq-shape::before { content: "◇ "; opacity: .75; }
+.tq-shape.is-complete { color: var(--q-accent); }
+/* The Links section: a reserved block between the question and its choices, one anchor per link. Same place on every
+   card that has one, and absent entirely when a question carries none - an empty box would be a hole in the card.
+   Colours are the box's OWN tint variables, so Settings > Display retints this block with the rest of the card. */
+.tq-links { display: flex; flex-direction: column; gap: 4px; margin: 0 0 9px; padding: 7px 9px; border: 1px solid var(--q-line); border-left: 2px solid var(--q-accent); border-radius: 5px; background: var(--q-choice-bg); }
+.tq-links-head { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--q-note); }
+.tq-links-browser { text-transform: none; letter-spacing: 0; opacity: .85; }
+/* One anchor per link, the label first and the target under it in the panel's mono face: a file path is something a
+   reader sometimes wants to read in full (to paste into a terminal) even when they mean to click it. */
+.tq-link { display: flex; flex-direction: column; gap: 1px; padding: 3px 5px; margin: 0 -5px; border-radius: 4px; color: var(--q-head); text-decoration: none; font: calc(var(--q-size, 13px) - 0.5px)/1.4 var(--ui); }
+.tq-link:hover { background: var(--q-choice-hover); text-decoration: underline; }
+.tq-link:focus-visible { outline: 1px solid var(--q-accent); outline-offset: 1px; }
+.tq-link-where { font: 10.5px/1.35 var(--mono, var(--ui)); color: var(--q-note); word-break: break-all; }
+.tq-link-where::before { content: "↳ "; opacity: .7; }
+/* A link the card could not resolve: the row keeps its label and its target, and both read as a note rather than as
+   something to press - no pointer, no hover tint, because a press would answer "no such file". */
+.tq-link.is-relative { cursor: default; color: var(--q-note); }
+.tq-link.is-relative:hover { background: none; text-decoration: none; }
+.tq-link-relative { color: var(--q-question); }
+/* The one line under the question text that says why a relative path is not clickable. Dim, mono, and wrapped like the
+   path it names, so it reads as the card's footnote and not as part of the question. */
+.tq-relnote { margin: -4px 0 9px; font: 10.5px/1.4 var(--mono, var(--ui)); color: var(--q-note); word-break: break-word; }
+/* A path or URL inside the question text: a link, but still part of the sentence - so it inherits the sentence's size
+   and wraps where the sentence wraps. */
+.tq-question .out-link, .tq-question .out-file { color: var(--q-head); text-decoration: underline; text-underline-offset: 2px; }
+.tq-question .out-link:hover, .tq-question .out-file:hover { text-decoration-thickness: 2px; }
+.tq-choices { display: flex; flex-direction: column; gap: 6px; }
+.tq-choice { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: var(--q-choice-bg); color: var(--q-choice-text); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+button.tq-choice:hover { background: var(--q-choice-hover); border-color: var(--q-choice-hover-line); }
+label.tq-choice { position: relative; }
+label.tq-choice:hover { background: var(--q-choice-hover); }
+label.tq-choice.on { border-color: var(--q-choice-on-line); background: var(--q-choice-on); }
+.tq-choice:focus-within { border-color: var(--q-accent); }
+/* Compact answers: the same rows with less air, for a reader who wants the question to take less room. */
+:root.q-compact .tq-choice { padding: 3px 8px; }
+:root.q-compact .tq-choices { gap: 3px; }
+:root.q-compact .tq-question { margin: 5px 0 6px; }
+:root.q-compact .tq-other { min-height: 28px; }
+/* The tick is drawn by .tq-box, so the native control is present (focusable, clickable) but invisible. */
+.tq-choice.is-multi input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.tq-box { flex: none; width: 13px; height: 13px; margin-top: 2px; border: 1px solid var(--q-box); border-radius: 50%; background: rgba(0,0,0,.35); }
+.tq-choice.is-multi .tq-box { border-radius: 4px; }
+.tq-choice.is-multi.on .tq-box { background: var(--q-tick); border-color: var(--q-tick); box-shadow: inset 0 0 0 2px var(--q-bg-b); }
+/* The label fills its row (the row itself is the click target, and a choice that runs the same width as the
+   console above reads as one list). No character cap: a capped measure left dead space at the end of every
+   row, which is what the reading line used to report as "everything off to the left". */
+.tq-text { min-width: 0; flex: 1 1 auto; }
+.tq-rec { flex: none; margin-right: 7px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--q-accent); color: var(--q-head); font: 10px/1.7 var(--ui); letter-spacing: .04em; white-space: nowrap; }
+.tq-other-row { display: flex; align-items: stretch; gap: 8px; margin-top: 9px; }
+.tq-other { flex: 1; min-width: 0; min-height: 34px; max-height: 160px; resize: vertical; padding: 6px 9px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: rgba(0,0,0,.34); color: var(--q-question); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); }
+.tq-other:focus { outline: none; border-color: var(--q-accent); }
+button.tq-send { flex: none; align-self: flex-end; padding: 4px 14px; font-size: 11.5px; background: var(--q-choice-on); border-color: var(--q-box); color: var(--q-head); }
+button.tq-send:hover { background: var(--q-choice-hover); }
+button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: default; }
+.tq-note { margin: 9px 0 5px; font-size: 10.5px; color: var(--q-note); }
+/* How long the answer has left: a bar, not just a number, so "nearly out" is visible without reading. Purple
+   like the box, a shade lighter in the last eighth, red once the gateway's wait is over. */
+.tq-foot { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.tq-timer { flex: 1; min-width: 0; height: 4px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.tq-timer > span { display: block; height: 100%; border-radius: inherit; background: var(--q-accent); transition: width 1s linear, background .4s; }
+.tq-left { flex: none; font-size: 10.5px; color: var(--q-note); }
+.tq-foot.is-low .tq-timer > span { background: var(--q-head); }
+.tq-foot.is-over .tq-timer > span { background: #ff9c9c; }
+.tq-foot.is-over .tq-left { color: #ff9c9c; }
+.tq-warn { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
+.tq-warn:empty { display: none; }
+.turn-question.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
+/* The Settings sample is the real markup with the real classes, so the preview IS the setting. It is inert
+   (no data-* attributes, so no handler claims a click) and merely smaller than a card's box. */
+.settings-preview.q-sample { padding: 0; border-style: solid; background: var(--surface); }
+.settings-preview.q-sample .turn-question { margin: 0; border-radius: 6px; box-shadow: none; }
+.settings-preview.q-sample .tq-other { pointer-events: none; }
+:root.q-no-typed .settings-preview.q-sample .tq-other-row { display: none; }
+/* With the typed box off, a multi-select question keeps only its Send button. */
+.tq-other-row.is-send-only { justify-content: flex-end; }
+.q-swatches { display: flex; gap: 6px; margin-left: auto; }
+.q-swatches button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid var(--line); }
+.q-swatches button.on { box-shadow: 0 0 0 2px var(--text); }
+.q-swatches button[data-q-tint="violet"] { background: #55407a; }
+.q-swatches button[data-q-tint="sky"] { background: #33628c; }
+.q-swatches button[data-q-tint="mint"] { background: #2f6249; }
+.q-swatches button[data-q-tint="rose"] { background: #7a3a52; }
+.q-swatches button[data-q-tint="slate"] { background: #4a5462; }
+/* …and once answered, the same one-line record the approval leaves. */
+.turn-question-done { margin: 6px 0 2px 18px; padding: 3px 9px; font-size: 11px; color: var(--q-head); border-left: 2px solid var(--q-line); background: rgba(255,255,255,.05); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root.q-width-set .turn-question-done { margin: 6px auto 2px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
+.turn-question-done.is-quiet { color: var(--dimmer); }
+/* A question that closed unanswered is a TRACE, not a one-line shrug: the reason, what was asked and the choices it
+   offered stay on the card, dead. Same violet family as the live box so it reads as the question it was, with its
+   choices flat (spans, not buttons) - there is nothing left to press on a wait the gateway has given up on. */
+.turn-question-done.is-closed { margin: 8px 0 6px 18px; padding: 8px 11px; white-space: normal; overflow: visible; text-overflow: clip; border: 1px dashed var(--q-line); border-left: 2px solid var(--q-line); border-radius: 7px; background: rgba(255,255,255,.03); }
+:root.q-width-set .turn-question-done.is-closed { margin: 8px auto 6px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
+.tqd-head { font-size: 11px; color: #ff9c9c; letter-spacing: .01em; }
+.tqd-question { margin: 6px 0 6px; font: calc(var(--q-size, 13px) - 0.5px)/1.5 var(--ui); color: var(--q-question); opacity: .78; white-space: pre-wrap; word-break: break-word; }
+.tqd-choices { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 5px; }
+.tqd-choice { padding: 2px 8px; border: 1px dashed var(--q-choice-line); border-radius: 999px; color: var(--q-note); font: calc(var(--q-size, 13px) - 1.5px)/1.6 var(--ui); }
+.tqd-when { font-size: 10px; color: var(--q-note); opacity: .85; }
+/* A question whose turn sits on another page of the thread: drawn at the top of the card, naming the turn, rather
+   than left behind the pager where the reader would have to go looking for it. */
+.turn-question-away { margin: 0 0 4px; }
+.tqa-head { margin: 6px 0 0 18px; font-size: 10px; color: var(--q-note); letter-spacing: .02em; }
+:root.q-width-set .tqa-head { margin-left: auto; margin-right: auto; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
+/* An approval whose turn sits on another page of the thread, drawn at the top of the card and naming the turn for
+   the same reason the question is (row #286): behind the pager it is a wait the reader can only find by walking the
+   pages. Amber, like the box it carries. */
+.turn-approval-away { margin: 0 0 4px; }
+.taa-head { margin: 6px 0 0 2px; font-size: 10px; color: #b9a97f; letter-spacing: .02em; }
+.queue-note { font-size: 11px; color: #ffd479; }
+/* A reply is queued and waiting: ONE press put it in flight, so the box is closed and the button is off until the
+   held reply goes out. The note beside them says why, and it is the same face a repaint draws from the queue. */
+.reply-box.queued-waiting { opacity: .6; cursor: default; }
+.reply-actions button.btn-queue:disabled, .reply-actions button.btn-queue[aria-disabled="true"] { opacity: .45; cursor: default; }
+.reply-actions button.btn-queue:disabled:hover, .reply-actions button.btn-queue[aria-disabled="true"]:hover { background: #2a2f3a; }
+/* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */
+.ghost-turns { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.ghost-turn { border: 1px dashed #3a4353; border-radius: 8px; padding: 7px 10px; background: rgba(18, 22, 29, .5); opacity: .62; }
+.ghost-head { display: flex; gap: 8px; align-items: baseline; font-size: 10.5px; color: var(--dim); }
+.ghost-badge { color: #ffd479; border: 1px dashed #6b4d16; border-radius: 4px; padding: 0 5px; font-size: 10px; letter-spacing: .04em; }
+.ghost-prompt { font: italic 12.5px/1.45 var(--ui); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
+/* The held text is the handle for editing it in place, so it reads as one: a text caret over it, and a hover/focus
+   edge — nothing about the line moves when it becomes a textarea. */
+.ghost-prompt { cursor: text; border-radius: 5px; }
+.ghost-prompt:hover, .ghost-prompt:focus-visible { background: rgba(255, 212, 121, .07); outline: 1px dashed #4a4353; outline-offset: 2px; }
+/* The files a held reply carries, under its text: the composer's chip skin, with no × — they are the entry's
+   now, and the entry's own × is what gives them back. */
+.ghost-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+/* The in-place editor the held text becomes: the same ghost block, undimmed, holding a box and its two actions. An
+   edit is not a send, so neither control here is drawn like a send. */
+.ghost-turn.editing { opacity: 1; }
+.ghost-edit { margin-top: 4px; }
+.ghost-edit-box { display: block; width: 100%; box-sizing: border-box; padding: 5px 7px; font: 12.5px/1.45 var(--mono); color: var(--text); background: #10141a; border: 1px solid #3a4353; border-radius: 6px; resize: vertical; }
+.ghost-edit-box:focus { outline: none; border-color: #6b4d16; }
+.ghost-edit-actions { display: flex; gap: 6px; margin-top: 5px; }
+.ghost-edit-actions button { padding: 1px 8px; font: 10.5px/1.6 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-edit-actions .btn-edit-save { color: #ffd479; border-color: #6b4d16; }
+.ghost-edit-actions button:hover, .ghost-edit-actions button:focus-visible { background: rgba(255, 255, 255, .06); }
+/* what is waiting to go out, with how long it has been waiting */
+.queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }
+.queue-ago { color: #ffd479; flex: none; min-width: 44px; }
+/* The × on a queued entry: the small dismiss control the card's own head uses, on the ghost line itself, and
+   drawn no taller than that line so adding it reflows nothing. Never a send: transparent, no fill, no arrow. */
+.ghost-head .ghost-cancel { flex: none; margin-left: auto; padding: 0 4px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-head .ghost-cancel:hover, .ghost-head .ghost-cancel:focus-visible { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+/* A PARKED held reply: the panel could not start it and will not ask again. It is not dimmed like a waiting one —
+   it is a thing that failed — and it carries the two honest actions, Retry and ×. */
+.ghost-turn.parked { opacity: .9; border-color: #5b2a2a; background: rgba(70, 26, 26, .16); }
+.ghost-badge.parked { color: #ff9c94; border-color: #57262a; }
+.ghost-head .ghost-retry { flex: none; margin-left: auto; padding: 0 6px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid #6b4d16; color: #ffd479; border-radius: 5px; cursor: pointer; }
+.ghost-head .ghost-retry:hover, .ghost-head .ghost-retry:focus-visible { background: rgba(255, 212, 121, .1); }
+.ghost-head .ghost-retry + .ghost-cancel { margin-left: 0; }
+.ghost-turn.parked .ghost-prompt { cursor: default; }
+.ghost-turn.parked .ghost-prompt:hover { background: transparent; outline: none; }
+.queue-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
+   button's bottom offset is measured from there — which is why it sat on the border. */
+.reply-wrap .reply-box { display: block; padding-bottom: 34px; vertical-align: top; }
+.reply-row { display: flex; align-items: center; gap: 10px; }
+.reply-row .spacer { flex: 1; }
+button.btn-reply { position: absolute; left: 7px; bottom: 8px; z-index: 1; padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
+button.btn-reply:hover { background: #24466a; }
+/* ---- a box too narrow to hold its own buttons --------------------------------------------------------------
+   The actions sit inside the box (bottom left) so that sending is one gesture in the control that sends it, and
+   that only works while the box is wider than the row of buttons. It is not: `Steer turn · Queue reply · 1
+   queued · Cancel turn` wants ~330px, and a worktree row's card on a phone is ~330px WIDE including its
+   padding — so the row did not fit. A flex row shrinks its items before it wraps, so instead of spilling the
+   labels broke onto two lines ("Steer / turn"), the row grew taller than the 34px the box reserves for it, and
+   the buttons came up over the placeholder and over whatever had been typed. Under the width they need they
+   leave the box and become an ordinary wrapping row beneath it, and the box stops reserving the strip (the
+   box's own height comes from `growReplyBox`/`growBoxToDraft`, which read the computed padding, so it follows).
+   A container query, not a media query: the box's width is set by the card it sits in — the board's table, a
+   worktree row, the assistant's float, a maximized chat — not by the window.
+   It sits AFTER the box's own `padding-bottom` rule because a `container-type` query adds no specificity: the
+   reduced pad below only beats that declaration on order. Same reason the two wrapping rules are scoped through
+   `.reply-wrap` — each labelled button carries its own size class (`.reply-actions button.btn-cancel` and its
+   siblings, `.reply-actions button.btn-queue`, `.reply-actions button.btn-steer`) at a higher specificity than a
+   bare `.reply-actions button`, so the full-size labels have to be asked for through the wrap. */
+.reply-actions button { white-space: nowrap; }
+@container (max-width: 380px) {
+  .reply-wrap .reply-box { padding-bottom: 7px; }
+  /* Two lines of buttons are two lines of thumb: a little more to hit, and the label back at full size. */
+  .reply-wrap .reply-actions { position: static; flex-wrap: wrap; margin-top: 6px; gap: 6px 8px; }
+  .reply-wrap .reply-actions button { padding: 4px 10px; font-size: 12px; }
+}
+
+/* minimize / expand one job card (click its header) */
+.job-head { cursor: pointer; user-select: none; }
+.job-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
+.job-head:hover .chev { color: var(--text); }
+
+/* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
+button.btn-max { padding: 1px 6px; font-size: 12px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-max:hover { color: var(--text); background: #232936; }
+/* liveness evidence: folds to its header, with the strongest line kept visible to the right */
+.live-block { margin-bottom: 6px; }
+.live-head { display: flex; align-items: baseline; gap: 7px; cursor: pointer; user-select: none; min-width: 0; }
+.live-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.live-head h4 { margin: 0; font-size: 11.5px; letter-spacing: .02em; color: var(--dim); flex: none; }
+.live-head:hover h4, .live-head:hover .chev { color: var(--text); }
+.live-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.live-block.collapsed ul { display: none; }
+/* tr.detail ul sets a plain 18px padding with a zero margin; this needs the same left tab the git
+   body gets, so it has to out-specify that rule rather than sit before it. */
+tr.detail .live-block ul { margin: 4px 0 10px 28px; }
+.live-block li { font-size: 11.5px; color: var(--dim); }
+/* star a turn to keep it above the paged turns (still accordionable, still in its page) */
+button.btn-star { background: transparent; border: none; padding: 0 6px 0 0; margin: 0; font-size: 16.5px; line-height: 1; color: var(--dimmer); cursor: pointer; vertical-align: -2px; }
+button.btn-star:hover { color: var(--text); }
+button.btn-star.on { color: #ffd479; }
+.pinned-turns { margin: 6px 0 8px; padding: 3px 0 3px 10px; border-left: 2px solid #6b4d16; }
+.pinned-head { display: flex; gap: 8px; align-items: center; font-size: 10.5px; letter-spacing: .04em; color: #ffd479; margin-bottom: 2px; }
+/* turns page five at a time: arrows sit next to the turn count in the card head. `flex: none` for the same reason
+   `.job-head > button` and `.job-head > .pill` carry it (:870): the head is `nowrap`, so a shrinkable flex item
+   goes to its min-content instead of pushing back, and in the docked rail (480px) this one squeezed the count to
+   11.5px — one word per line, four lines tall. The pager keeps its own width; the arrows keep theirs. */
+.turn-pager { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; flex: none; }
+button.pager-btn { padding: 0 5px; font-size: 10px; line-height: 1.6; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 4px; }
+button.pager-btn:hover:not(:disabled) { color: var(--text); background: #232936; }
+button.pager-btn:disabled { opacity: .3; cursor: default; }
+/* "3–7 / 7" is a value, not prose: it holds one line in every rail width, so the head never reads as a column. */
+.turn-pager .pager-n { font-size: 10.5px; color: var(--dimmer); white-space: nowrap; }

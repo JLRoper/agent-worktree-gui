@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>public/style.css, split by surface - the proof</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --line: #262c37; --text: #e6e9ef; --dim: #9aa4b2;
+    --dimmer: #6b7482; --green: #2ea043; --amber: #d29922; --blue: #4a90d9; --mono: ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 32px 60px; background: var(--bg); color: var(--text);
+         font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 34px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 13.5px; margin: 20px 0 6px; color: #c7d0db; }
+  p { margin: 8px 0; color: #d5dbe4; max-width: 92ch; }
+  .sub { color: var(--dim); font-size: 13px; margin: 0 0 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 14px 16px; margin: 12px 0; }
+  .pass { color: var(--green); font-weight: 700; }
+  .fail { color: #ff9c94; font-weight: 700; }
+  .note { color: var(--amber); }
+  code, .num { font-family: var(--mono); font-size: 12px; }
+  code { background: #1b2029; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #1d222b; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0 6px; }
+  figure { margin: 0; background: #12161d; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  figure img { width: 100%; display: block; border-radius: 4px; }
+  figcaption { color: var(--dim); font-size: 11.5px; margin-top: 6px; }
+  .kv { display: grid; grid-template-columns: 210px 1fr; gap: 3px 14px; font-size: 12.5px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  ul { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 3px 0; color: #d5dbe4; }
+</style>
+</head>
+<body>
+
+<h1>public/style.css, split by surface</h1>
+<p class="sub">The cut, the rule-stream proof and the six-pane layout delta. Every number below was measured by
+<code>tools/verify-css-split.mjs</code> on this tree, against this tree with the cut undone -
+<code>public/style.css</code> restored from <code>623f3864</code>, the last commit in which it exists. That
+counterfactual is the only one that isolates the stylesheet: main moved under the branch while the cut was
+written, so an older commit would put its own app code next to the old sheet and a measured difference would
+belong to that landing rather than to the cut.</p>
+
+<div class="card">
+  <div class="kv">
+    <div>The pre-split file</div><div><span class="num">7,880 lines, 537,460 bytes</span> in the working copy (CRLF);
+      <span class="num">529,580 bytes</span> as the git blob (LF)</div>
+    <div>Rule blocks in it</div><div><span class="num">3,061</span> selector-and-declaration rules (comments dropped)</div>
+    <div>Sheets it became</div><div><span class="num">19</span>, each loaded by <code>public/index.html</code> in the order its rules had</div>
+    <div>Lines moved</div><div><span class="num">7,865</span> verbatim, plus <span class="num">15</span> blank separators between blocks;
+      no line was rewritten</div>
+    <div>New text</div><div>one boundary comment per sheet, and nothing else</div>
+    <div>Left alone</div><div><code>public/chart.css</code>, <code>public/core/pipeline-card.css</code>,
+      <code>public/core/task-card.css</code> - same files, same load position after the sheets</div>
+    <div>The proof</div><div>
+      <span class="pass">PASS</span> the rule stream is identical, rule for rule, in order<br />
+      <span class="pass">PASS</span> the harness repeats itself on the pre-split tree<br />
+      <span class="pass">PASS</span> every box and text position is identical across six panes<br />
+      <span class="pass">PASS</span> the CSSOM carries the same number of rule nodes (3,312)</div>
+  </div>
+</div>
+
+<h2>1. What was cut</h2>
+<p>The file was cut at blank-line seams, at brace depth 0, into contiguous ranges. Contiguity is what lets the
+sheets load in file order and reproduce the cascade exactly: the concatenation, not a re-arrangement. A sheet may
+own more than one block when an unrelated feature sat inside its range, and the ranges it covers are listed here so
+a reviewer can re-cut the file and get the same answer.</p>
+<table>
+  <thead><tr><th>Sheet</th><th>Surface</th><th class="num">style.css lines</th><th class="num">Moved</th><th class="num">Bytes</th><th>sha256 of the moved text</th></tr></thead>
+  <tbody id="sheets">
+    <tr><td><code>base.css</code></td><td>tokens and resets</td><td class="num">1-85</td><td class="num">85</td><td class="num">4,832</td><td><code>f4b7226c475f9adb</code></td></tr>
+    <tr><td><code>chrome.css</code></td><td>header and status strip</td><td class="num">87-322</td><td class="num">236</td><td class="num">14,703</td><td><code>01f5c662b84affbd</code></td></tr>
+    <tr><td><code>settings.css</code></td><td>Settings drawer and its tabs</td><td class="num">323-737</td><td class="num">415</td><td class="num">43,669</td><td><code>cabd7c1f953d7612</code></td></tr>
+    <tr><td><code>board.css</code></td><td>project boxes, folders, agent rows, new-agent form</td><td class="num">739-1212</td><td class="num">474</td><td class="num">30,403</td><td><code>0ee3fe8ecbd288f2</code></td></tr>
+    <tr><td><code>jobs.css</code></td><td>job cards</td><td class="num">1214-1396</td><td class="num">183</td><td class="num">15,887</td><td><code>0e0a07a119da9519</code></td></tr>
+    <tr><td><code>console.css</code></td><td>the console: agent pane and thought rows</td><td class="num">1397-2256</td><td class="num">860</td><td class="num">59,021</td><td><code>62a93f55cbbc46d8</code></td></tr>
+    <tr><td><code>turns.css</code></td><td>conversation turns</td><td class="num">2258-2377</td><td class="num">120</td><td class="num">9,527</td><td><code>36ac1e704ae48d3d</code></td></tr>
+    <tr><td><code>rows.css</code></td><td>the jobs table's row controls, marks and artifacts</td><td class="num">2379-2951</td><td class="num">573</td><td class="num">31,091</td><td><code>0460587363323301</code></td></tr>
+    <tr><td><code>overlays.css</code></td><td>deliverables, reply box, question cards, ghost turns</td><td class="num">2953-3605</td><td class="num">653</td><td class="num">50,424</td><td><code>6ec65d9fbfd582db</code></td></tr>
+    <tr><td><code>rowstrips.css</code></td><td>git, description, release and TODO strips</td><td class="num">3606-3873</td><td class="num">268</td><td class="num">21,032</td><td><code>239415d81246dde6</code></td></tr>
+    <tr><td><code>boardchips.css</code></td><td>host, rules, turnover, board and cleanup chips</td><td class="num">3875-4170</td><td class="num">296</td><td class="num">17,736</td><td><code>e7a7cebf421062fc</code></td></tr>
+    <tr><td><code>assistant.css</code></td><td>the assistant entry, spawn strip and float shell</td><td class="num">4172-4440</td><td class="num">269</td><td class="num">20,117</td><td><code>3e19a28a6bd8a818</code></td></tr>
+    <tr><td><code>feedback.css</code></td><td>Clarify, Collisions and Permissions controls</td><td class="num">4442-5099</td><td class="num">658</td><td class="num">30,977</td><td><code>c46305cda4e9a6e2</code></td></tr>
+    <tr><td><code>assistant-panes.css</code></td><td>the float's tabs, panes, search and settings</td><td class="num">5102-5329</td><td class="num">228</td><td class="num">17,910</td><td><code>aae25e4e9ba8c169</code></td></tr>
+    <tr><td><code>initiatives.css</code></td><td>the initiatives tab</td><td class="num">5331-6778</td><td class="num">1,448</td><td class="num">87,535</td><td><code>4d7590d6d1a64635</code></td></tr>
+    <tr><td><code>panes.css</code></td><td>the assistant's Worktrees and Bridge sub-tabs</td><td class="num">6781-6952</td><td class="num">172</td><td class="num">16,615</td><td><code>c888d64820a32801</code></td></tr>
+    <tr><td><code>queue.css</code></td><td>the queue cards and the assistant queue pane</td><td class="num">6953-7071</td><td class="num">119</td><td class="num">12,924</td><td><code>59286eb19aed7e90</code></td></tr>
+    <tr><td><code>pipeline.css</code></td><td>pipeline window, messages, flow and modal</td><td class="num">7072-7601</td><td class="num">530</td><td class="num">52,512</td><td><code>77168f9fc3113d8a</code></td></tr>
+    <tr><td><code>late.css</code></td><td>late overrides, loaded last</td><td class="num">7603-7880</td><td class="num">278</td><td class="num">14,428</td><td><code>5087507b012c8399</code></td></tr>
+  </tbody>
+</table>
+<p class="sub">7,865 moved + 15 blank separators = 7,880 source lines. The 13,883 bytes the sheets carry beyond the
+old file are the 19 boundary comments; every rule, selector and declaration is byte-for-byte the source's own text.</p>
+
+<h2>2. The rule stream</h2>
+<p>The claim is not "the selectors still exist", it is "the sequence is the same". The harness reads the pre-split
+blob out of git, parses it and the sheets into a normalized stream - <code>{at-rule context, selector, declarations}</code>
+with comments dropped and whitespace collapsed, and nothing else touched - and compares the two as sequences
+(<code>tools/verify-css-split.mjs:143</code>). The at-rule context is part of the key, so a rule that moved out of its
+<code>@media</code> block would fail even with the same selector.</p>
+<div class="card">
+  <p><span class="pass">PASS</span> stream: the sheets in load order carry the old file's rule count: <b>3,061 vs 3,061</b><br />
+     <span class="pass">PASS</span> stream: selector and declaration sequence is identical: <b>3,061 rules, in order</b></p>
+  <p class="sub">The load order itself is read from <code>public/index.html</code> (<code>public/index.html:5-33</code>),
+  not from a list in the harness, so the proof follows the page rather than a second hand-kept copy of it.</p>
+</div>
+
+<h2>3. The browser's own reading</h2>
+<p>Two independent readings back the stream. First the CSSOM: the page applied <b>3,312 rule nodes</b> before the
+split and <b>3,312</b> after it, across 5 sheets and then 23 (<code>style.css</code> became 19, plus
+<code>chart.css</code> and the two <code>core/</code> card sheets). Rule NODES outnumber selectors because at-rules
+carry their own, so only the sum is the claim, and the sum matches.</p>
+<p>Second the cascade itself, which is the part a text comparison cannot see: a specificity tie decided by source
+order. Six panes were measured as the browser laid them out, and every box and text position matches (section 4).</p>
+
+<h2>4. The six panes</h2>
+<p>Both trees are driven through the same fixture - two projects, four worktrees (one dirty, one ahead), two job
+records with output, a thought row, a tool call and an error line, four queue tasks, one initiative - booted from
+this tree with the cut undone (<code>git archive HEAD</code>, the pre-split sheet written back over the nineteen
+sheets and the shell's single link restored) and from this tree as committed. The fixture is byte-identical
+(fixed commit dates, so even the shas match) and the page clock is frozen at one instant, so a difference can
+only come from the stylesheet. Every element under the pane root contributes its border box, measured <b>relative
+to the pane's own root</b> (the page's scroll position is not a stylesheet decision); every text run contributes
+its client rects (<code>tools/verify-css-split.mjs:395</code>). A pane is measured only after its own text and
+element count hold still for five consecutive samples, and a cell still carrying the panel's not-read-yet mark
+holds the measurement back until the scan classifies it.</p>
+<table>
+  <thead><tr><th>Pane</th><th>Root</th><th class="num">Elements</th><th class="num">Boxes differ</th><th class="num">Max delta</th><th class="num">Text runs</th><th class="num">Text positions differ</th></tr></thead>
+  <tbody>
+    <tr><td>board table</td><td><code>#projects</code></td><td class="num">778</td><td class="num">0</td><td class="num">0</td><td class="num">438</td><td class="num">0</td></tr>
+    <tr><td>console</td><td><code>.job[data-thread]</code></td><td class="num">68</td><td class="num">0</td><td class="num">0</td><td class="num">33</td><td class="num">0</td></tr>
+    <tr><td>queue cards</td><td><code>#as-queue</code></td><td class="num">174</td><td class="num">0</td><td class="num">0</td><td class="num">109</td><td class="num">0</td></tr>
+    <tr><td>assistant float</td><td><code>#assistant</code></td><td class="num">295</td><td class="num">0</td><td class="num">0</td><td class="num">165</td><td class="num">0</td></tr>
+    <tr><td>initiatives</td><td><code>#as-initiatives</code></td><td class="num">49</td><td class="num">0</td><td class="num">0</td><td class="num">33</td><td class="num">0</td></tr>
+    <tr><td>settings</td><td><code>#settings</code></td><td class="num">1,652</td><td class="num">0</td><td class="num">0</td><td class="num">1,030</td><td class="num">0</td></tr>
+  </tbody>
+</table>
+<p><span class="pass">PASS</span> every box and text position is identical across the six panes.
+The pre-split export was measured twice first and matched itself on all six panes (max delta 0): a harness that
+cannot repeat itself makes a before/after match meaningless, so that pair is printed as its own row set in the tool's
+output.</p>
+
+<h3>The captures</h3>
+<p>Five of the six captures are byte-identical between the two trees. The board table is not, and the difference is
+the countdown rings: <b>1,066 pixels of 7,264,384 (0.015%)</b>, in one 37 px wide column (x 2,552-2,588 of a
+3,296 px wide 2x capture) running the height of the table, where four
+<code>svg</code> arcs carry a <code>stroke-dashoffset</code> that moves every second. That is the one time-driven value
+the measurement deliberately excludes, and it differs between two runs of the <em>same</em> tree as well. The layout
+boxes and text positions of that pane are identical, which is the claim the rings cannot touch.</p>
+
+<div class="shots">
+  <figure><img src="css-split/before/board-table.png" alt="board table, pre-split" /><figcaption>board table - pre-split</figcaption></figure>
+  <figure><img src="css-split/after/board-table.png" alt="board table, split" /><figcaption>board table - split into 19 sheets (rings differ in ink only)</figcaption></figure>
+  <figure><img src="css-split/before/console.png" alt="console, pre-split" /><figcaption>console (agent pane, thought row, tool call, error) - pre-split</figcaption></figure>
+  <figure><img src="css-split/after/console.png" alt="console, split" /><figcaption>console - split (byte-identical capture)</figcaption></figure>
+  <figure><img src="css-split/before/queue-cards.png" alt="queue cards, pre-split" /><figcaption>queue cards and the assistant queue pane - pre-split</figcaption></figure>
+  <figure><img src="css-split/after/queue-cards.png" alt="queue cards, split" /><figcaption>queue cards - split (byte-identical capture)</figcaption></figure>
+  <figure><img src="css-split/before/assistant-float.png" alt="assistant float, pre-split" /><figcaption>assistant float - pre-split</figcaption></figure>
+  <figure><img src="css-split/after/assistant-float.png" alt="assistant float, split" /><figcaption>assistant float - split (byte-identical capture)</figcaption></figure>
+  <figure><img src="css-split/before/initiatives.png" alt="initiatives, pre-split" /><figcaption>initiatives - pre-split</figcaption></figure>
+  <figure><img src="css-split/after/initiatives.png" alt="initiatives, split" /><figcaption>initiatives - split (byte-identical capture)</figcaption></figure>
+  <figure><img src="css-split/before/settings.png" alt="settings, pre-split" /><figcaption>settings - pre-split</figcaption></figure>
+  <figure><img src="css-split/after/settings.png" alt="settings, split" /><figcaption>settings - split (byte-identical capture)</figcaption></figure>
+</div>
+
+<h2>5. What else had to move</h2>
+<p>Nothing in the CSS, but a stylesheet move is also a pin move for anything that reads the sheet by name.</p>
+<ul>
+  <li><b>46 test files</b> read <code>public/style.css</code> to assert a rule's presence or its order. They now read
+    one shared helper, <code>test/style-sheets.js:17</code>, which concatenates the sheets in the order
+    <code>public/index.html</code> links them - the order the browser applies. The assertions themselves are
+    unchanged; only the file they read is. <span class="pass">509 tests in those 46 files pass.</span></li>
+  <li><b><code>lib/build-version.js:30</code></b> named <code>style.css</code> in the bundle's <code>ALWAYS</code> list.
+    The list now names <code>base.css</code>, the token layer the shell cannot render without; the other eighteen
+    sheets are found from the shell's own tags, which is how that module was already written to work.</li>
+  <li><b><code>test/build-http.test.js</code></b> pinned <code>/api/build</code>'s per-file hash and the versioned asset
+    URL by the old name. It now pins <code>chrome.css</code> and <code>chart.css</code> - one sheet the split created
+    and one that stayed put - and a stale <code>/initiatives.css?v=</code> URL still serves.</li>
+</ul>
+<p>No rule was edited to make a test pass, and no test's assertion was relaxed: the one order-sensitive pin
+(<code>test/tail-chip-shared-rule.test.js</code>) reads the sheets and then <code>chart.css</code>, which is the page's
+own order.</p>
+
+<h2>6. What a follow-up row names now</h2>
+<p>A UI lane that touches one surface names <b>one sheet</b> instead of a 7,880-line file: a console change names
+<code>public/console.css</code>, an initiatives change names <code>public/initiatives.css</code>, a settings change
+names <code>public/settings.css</code>. There are <b>19 surfaces</b> to name, against one before; the largest is
+<code>initiatives.css</code> at 1,448 lines and the median is 278. Two lanes whose work lands in different sheets no
+longer serialise behind each other, and the panel's lane map is what makes that visible before the cut.</p>
+<p>Two naming notes, because a sheet's name is a promise: the table's own cells live in <code>public/chart.css</code>
+(the earlier chart cut) and were left there, so <code>rows.css</code> carries the row's controls and marks rather than
+<code>table</code>/<code>thead</code>. And <code>late.css</code> is loaded last on purpose: its rules are the ones that
+have to beat the rest, and they were already at the end of the file.</p>
+
+<h2>7. What was run</h2>
+<ul>
+  <li><b>The focused set:</b> the 46 test files that read the stylesheet, run together - <span class="pass">509 tests, 509 pass</span> on the branch as first cut, and 1,210 tests in the 119 files the rebased diff names, 1,208 pass, on the rebased tree (the two failures are the junction walk, which needs a node_modules link this host does not have, and the live-gate wiring row, which is already red on main).</li>
+  <li><b>The full suite</b> (<code>node --test --test-concurrency=4 --test-timeout=60000</code>) over 463 files, in two halves because this host stalls a single 463-file run, and the second half in four chunks of about 58 files because it stalled on its own:</li>
+</ul>
+<table>
+  <thead><tr><th>Run</th><th class="num">Files</th><th class="num">Tests</th><th class="num">Pass</th><th class="num">Fail</th></tr></thead>
+  <tbody>
+    <tr><td>half A (files 1-232)</td><td class="num">232</td><td class="num">2,107</td><td class="num">2,094</td><td class="num">9</td></tr>
+    <tr><td>half B, chunk 1 (233-290)</td><td class="num">58</td><td class="num">464</td><td class="num">462</td><td class="num">2</td></tr>
+    <tr><td>half B, chunk 2 (291-348)</td><td class="num">58</td><td class="num">417</td><td class="num">411</td><td class="num">6</td></tr>
+    <tr><td>half B, chunk 3 (349-406)</td><td class="num">58</td><td class="num">502</td><td class="num">502</td><td class="num">0</td></tr>
+    <tr><td>half B, chunk 4 (407-463)</td><td class="num">57</td><td class="num">553</td><td class="num">544</td><td class="num">9</td></tr>
+    <tr><td><b>total</b></td><td class="num">463</td><td class="num">4,043</td><td class="num">4,013</td><td class="num">26</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><b>Every failure is the environment, not the cut.</b> The set is the one this repo's own notes list for a worktree: <code>config.json</code> is gitignored and absent (gateway-permissions, the settings route, the config-key walk, the discovery tier, the park hold, the rebase route, the reconcile depth, scan roots, the main-moving counts), the waves route and the assistant store's restart reads need that same file, there is no <code>node_modules</code> junction to walk, and <code>tools/verify-queue-agents.mjs</code> declares itself a LIVE GATE with no <code>verify:</code> script on the base too. <code>gateway-permissions</code> was re-run in a <code>git archive</code> export of <code>623f3864</code> (this base) and fails there with the identical <code>ENOENT ... config.json</code>, which is the attribution. No failure names a file this cut touched.</li>
+  <li>One failure WAS ours and is fixed: <code>test/reports-are-tracked.test.js</code> caught this page being written but not staged, because <code>.git/info/exclude</code> carries <code>docs/reports/*.html</code>. It is force-added.</li>
+  <li>Chunk 4 exited 124 with a complete <code>tests / pass / fail</code> block: the tests finished and the process refused to exit, so its block is the reading.</li>
+  <li>The two-half suite ran on the branch as first cut. The rebase onto main moved no file this cut touched
+  (main's landings were <code>public/app.js</code>, <code>public/board-scaffold.js</code> and
+  <code>public/assistant.js</code>), and the one test failure that was ours is a staging rule, not a code path.</li>
+</ul>
+<h2>8. Re-running it</h2>
+<pre style="background:#12161d;border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto"><code>node tools/verify-css-split.mjs              # both halves, about 90 s
+node tools/verify-css-split.mjs --stream     # the rule stream only, about 1 s
+node tools/verify-css-split.mjs --old &lt;rev&gt;  # a different pre-split revision</code></pre>
+<p>The pixel half exports this tree with <code>git archive HEAD</code> into the scratch directory, undoes the cut
+there (the pre-split sheet written back, the sheets removed, the shell's single link restored), boots the panel
+from that root and from this tree against identical fixtures, and writes the captures under
+<code>docs/reports/css-split/{before,after}</code> plus <code>delta.json</code>. It exits 2, not 0, when Playwright is
+absent, so an unrun half is never read as a pass.</p>
+
+<h2>Caveats, stated plainly</h2>
+<ul>
+  <li>The board table's capture is not byte-stable across runs (section 4). Its <b>layout</b> is, and so is every other
+    pane's capture.</li>
+  <li>The six panes are a sample of the surfaces, not every pixel of the page: 3,312 rule nodes apply to more than six
+    panes. The rule-stream half is what covers the sheets the sample does not open (the pipeline window, messages,
+    cut dialog and legend among them), and it covers them by sequence, not by name.</li>
+  <li>The fixture is synthetic and fixed on purpose. It exercises each surface's rules with real markup, but it is not
+    the reader's board: nothing here was measured against <code>~/.wag</code> or the live listener on 7331.</li>
+  <li>The queue tasks name a retired tree, not a tree on the board. A queue card resolves its board row when the pane
+    paints, and the row map is rebuilt by every scan pass, so a card bound to a live row drew a different meta line
+    between two runs of the <em>same</em> tree. The retired path is a real state the pane draws, and the only one
+    that does not depend on which scan pass is in flight.</li>
+</ul>
+
+<p class="sub" style="margin-top:26px">Written by the <code>split-public-style-css-into-per-surface</code> worktree run.
+Sources: <code>tools/verify-css-split.mjs</code>, <code>docs/reports/css-split/delta.json</code>,
+<code>public/index.html:5-33</code>, <code>test/style-sheets.js:17</code>, <code>lib/build-version.js:30</code>.</p>
+
+</body>
+</html>

@@ -16,9 +16,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const here = (p) => new URL(p, import.meta.url);
-const css = (await readFile(here("../public/style.css"), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\r/g, "");
+const css = (await readStyleSheets()).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\r/g, "");
 const html = (await readFile(here("../public/index.html"), "utf8")).replace(/\r/g, "");
 const js = (await readFile(here("../public/assistant.js"), "utf8")).replace(/\r/g, "");
 

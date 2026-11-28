@@ -31,6 +31,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 // The page's module: a classic script over `window`. Loaded the way public/index.html loads it (after the frame).
 globalThis.window = globalThis;
@@ -40,7 +41,7 @@ const M = globalThis.wtAssistantCommand;
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const app = read("../public/app.js");
-const css = read("../public/style.css");
+const css = readStyleSheets();
 const html = read("../public/index.html");
 const consoleJs = read("../public/board/console.js");
 

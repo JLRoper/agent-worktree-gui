@@ -21,12 +21,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").split(String.fromCharCode(13)).join("");
 const assistant = read("public/assistant.js");
 const app = read("public/app.js");
 const html = read("public/index.html");
-const css = read("public/style.css");
+const css = readStyleSheets();
 
 // The branch, from its own condition through the `return;` that ends it - the same shape the hot-agent binding test
 // reads, widened to the whole block so the guard and the call are both inside the window that is judged.

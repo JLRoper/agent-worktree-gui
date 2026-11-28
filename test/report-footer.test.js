@@ -25,9 +25,10 @@ import {
   reportFooter,
   resolveReportProvenance,
 } from "../lib/report-footer.js";
+import { readStyleSheets } from "./style-sheets.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const STYLE = readFileSync(path.join(ROOT, "public", "style.css"), "utf8");
+const STYLE = readStyleSheets();
 
 // The scp-style remote a clone of this repo carries, spelled in two pieces so the file holds no literal
 // address: the renderer has to read that shape, and a test that only ever sees an https URL would miss it.

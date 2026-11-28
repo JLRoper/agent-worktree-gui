@@ -16,10 +16,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const lf = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const projects = lf("../public/render-projects.js");
-const css = lf("../public/style.css");
+const css = readStyleSheets();
 
 const code = sliceRegion(projects, "the legend");
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

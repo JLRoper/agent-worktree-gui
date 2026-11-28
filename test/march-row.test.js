@@ -13,12 +13,13 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { readStyleSheets } from "./style-sheets.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8").replace(/\r\n/g, "\n");
 const consoleSrc = read("public/board/console.js");
 const jobsSrc = read("public/render-jobs.js");
-const cssRaw = read("public/style.css");
+const cssRaw = readStyleSheets();
 const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = consoleSrc.indexOf("// ---- the console's marching tail");

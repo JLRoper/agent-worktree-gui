@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { LADDER_DEFINITIONS } from "./fixtures/ladder-definitions.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 await import("../public/pipeline-flow.js");
 const { fromDefinition, fromBundle, fromWindowModel, marksFor, markup, render } = globalThis.PipelineFlow;
@@ -86,7 +87,7 @@ test("every gate is a notch on the closing edge of the stage it ends, drawn insi
   const html = markup(flow, null);
   assert.doesNotMatch(html, /pflow-link is-end/, "nothing is drawn past the last column");
   assert.doesNotMatch(html, /class="pflow-notch"[^>]*style=/, "a notch carries no inline position");
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replaceAll(String.fromCharCode(13), "");
+  const css = readStyleSheets().replaceAll(String.fromCharCode(13), "");
   const rule = /\.pflow-notch \{ ([^}]*)\}/.exec(css)?.[1] || "";
   assert.match(rule, /left: 100%/, "the notch starts at the column's own trailing edge");
   assert.match(rule, /margin-left: -3px/, "and is pulled back by its own width, so its whole box is inside the column");

@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "owner cell", "owner cell");
@@ -80,7 +81,7 @@ test("the cell does not carry the rail's own class, and its tag is not `.assista
   const html = ownerCellHtml({ assistant: owner() });
   assert.match(html, /^<td class="owner nowrap"/, "the cell's class is `owner`");
   assert.doesNotMatch(html, /class="[^"]*\bassistant\b/, "no ancestor of the tag may inherit the rail's .assistant rule");
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  const css = readStyleSheets();
   assert.match(css, /#assistant \{[^}]*position: sticky/, "the rail's rule is scoped to #assistant");
   assert.doesNotMatch(css, /^\.assistant \{/m, "an unscoped `.assistant` rule would catch the cell again");
 });

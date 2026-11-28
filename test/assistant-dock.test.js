@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const cssRaw = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const cssRaw = readStyleSheets();
 const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, ""); // the prose explains the rules the dock no longer needs
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const code = assistant.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

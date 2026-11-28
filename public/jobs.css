@@ -1,0 +1,195 @@
+/* public/jobs.css
+   The job cards.
+
+   One card per agent run: its head and control cluster, the subagent rows, the continue and reattach pills and
+   the card's footer rules.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ---- jobs ---- */
+.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 17px; overflow-anchor: none; }
+/* A card that draws its own box ends the list with a line: the last card in a worktree's agents block and
+   a maximized card both lost their bottom edge here and faded into the background. Slightly stronger than
+   the hairlines between cards, so the group reads as closed rather than cut off. */
+.job:last-child { border-bottom: none; }
+.agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
+.job-head { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; min-width: 0; padding-bottom: 6px; }
+.job-head .spacer { flex: 1; }
+/* The card's head controls — pin, think, stream (only while the Wave button switch draws it), max, clear — are ONE
+   block at the head's right edge. `flex: 0 0 auto` keeps every control at its own width, `flex-wrap: nowrap` inside
+   means the cluster cannot break across lines, and `margin-left: auto` pins it to the edge. The head itself is `nowrap`
+   too, so a long title or a long meta line trims instead of pushing the controls onto a second row — which is what a
+   long session name did while it was the head's last item, after the spacer. The pencil is not here: it rides the cwd
+   line beside the name it renames. */
+.job-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; }
+/* …and with the head unable to wrap, no control may be squeezed into two lines either: a pill's word and the
+   attach button's word stay on one line at their own width, so the head trims its TEXT (title, meta) instead of
+   its buttons. */
+.job-head > button, .job-head > .pill { flex: none; white-space: nowrap; }
+/* The head's text gives up width rather than growing the row: the title has its own
+   ellipsis rule, and the meta line gets one here so a long project/tree name cannot make the head two lines tall. */
+.job-head > span.mono.dim { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The pipeline chip on a card's head (public/app.js `pipelineChipHtml`): which pipeline this tree is in, and where in
+   it. It is the HOST chip's pill — `button.btn-host`'s height, type scale, radius and surface — because the two answer
+   the same kind of question in the same line of chrome, and it inherits the head's own 8px gap by being one more flex
+   item there. A record WITH a stage is the louder state and takes the host chip's mapped blue; an id with no stage
+   keeps the quiet surface; no record draws nothing at all — no "local" stand-in, no empty pill. */
+.pipeline-chip {
+  /* The head is `nowrap`, so the chip has to be able to give up width rather than push the controls off the card: it
+     trims its tail with an ellipsis (the whole record is still in its `title`). The 0.01 shrink weight is what makes
+     it the LAST item to give up — the meta line's rule below hands its own width over first, and only a head with
+     nothing else left (the 480px docked rail) squeezes the chip. */
+  flex: 0 0.01 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #20242c;
+  color: var(--dim);
+}
+/* Which pipeline the tree is on is a fact about the card; `owner <path>`, the model and the turn count are the head's
+   bookkeeping. When the two compete for the same row, the meta gives its width up first: a 1600px card draws the chip
+   in full and only a head with nothing else left squeezes it. `:has()` scopes this to heads that carry a chip, so
+   every other card's head is untouched. */
+.job-head:has(> .pipeline-chip) > span.mono.dim { flex-shrink: 200; }
+/* The staged form, in the host chip's mapped family (public/style.css `button.btn-host.is-mapped`). */
+.pipeline-chip[data-pipeline-stage] { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+/* Where the agent runs: one dim line under the card's head, on every card. It answers "which tree is
+   this one in" at a glance, so it must stay legible but never compete with the head — smallest size,
+   dimmest ink, one line, the tail of the path only, and the full path in the tooltip. */
+.job-cwd {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 5px 26px;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--dimmer);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.job-cwd .cwd-label { flex: none; letter-spacing: .04em; color: var(--dimmer); }
+.job-cwd .cwd-path { flex: 0 1 auto; min-width: 96px; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.job-cwd .cwd-row { flex: none; color: var(--dimmer); border: 1px solid #2b3240; border-radius: 4px; padding: 0 5px; }
+/* The run id rides the cwd line, right of the path: bookkeeping, so it stays as quiet as the label and never
+   costs a line of its own. */
+.job-cwd .cwd-run { flex: none; color: var(--dimmer); }
+.job-cwd:hover .cwd-path, .job-cwd:hover .cwd-row, .job-cwd:hover .cwd-run { color: var(--text); }
+.job.collapsed .job-cwd { margin-bottom: 3px; }
+/* The cwd line is the card's SECOND row in both states, and the session's name is its right-hand item: the path and
+   the run/row chips read from the left margin, then the name and the pencil that renames it close the row, in the
+   column under the controls. `margin-left: auto` is what right-justifies the pair (no head buttons follow it on this
+   line), `max-width: none` lifts the head's 320px cap so a wide card gives the name room, and the ellipsis trims its
+   tail. The path keeps its own 96px floor, so neither item squeezes the other to nothing. */
+.job-cwd .thread-name { flex: 0 1 auto; min-width: 0; max-width: none; margin-left: auto; }
+/* The pencil is the name's own item: it never gives up width, it sits at the glyph size of the cwd line rather than the
+   head's 11px, and the name's ellipsis is what absorbs a long label beside it. */
+.job-cwd .btn-rename { flex: none; padding: 0 4px; font-size: 10px; line-height: 1.4; }
+/* The rename box replaces the name in place, on this line too — the head's 200px width would overflow the row. */
+.job-cwd input.rename-input { flex: 1 1 auto; min-width: 0; width: auto; }
+/* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
+   these rows are what the children are actually doing, read from their own sessions in the store. */
+/* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
+.subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
+/* The card's own switch. Off is a quiet glyph; on is visibly live, because the block it controls is easy to miss. */
+/* The anchor pin: one card can hold its place on screen while other cards above it grow. Off is a quiet
+   glyph in the card head; on is the accent, because it changes how the whole board scrolls. */
+button.btn-pin { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 11px; line-height: 1; padding: 2px 4px; cursor: pointer; filter: grayscale(1); opacity: .55; }
+button.btn-pin:hover { color: var(--text); border-color: var(--line); opacity: .9; }
+button.btn-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a2044; filter: none; opacity: 1; }
+button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+button.btn-think:hover { color: var(--text); border-color: var(--line); }
+button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
+
+
+/* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
+.reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
+.subagents[hidden] { display: none; }
+.subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; cursor: pointer; user-select: none; }
+.subagents .sub-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* Finished children stay, greyed: they are part of the turn, and their consoles are still worth opening. */
+.subagents.is-done .sub-head,
+.subagents.is-done .sub-title,
+.subagents.is-done .sub-meta { color: var(--dimmer); }
+.subagents.is-done .sub-dot { background: #46505f; box-shadow: none; }
+.subagents.is-done .sub-row:hover .sub-title { color: var(--text); }
+/* Folded turn: the tally stays with it, small enough not to reopen the transcript. */
+.subagents.is-compact { margin: 2px 0 4px 18px; font-size: 10.5px; color: #c8a6ff; }
+.subagents.is-compact.is-done { color: var(--dimmer); }
+.subagents.is-collapsed .sub-row,
+.subagents.is-collapsed .sub-console-wrap { display: none; }
+.subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
+.subagents .sub-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dimmer); }
+.subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
+/* A child that has gone quiet is not "working": say so, and stop pretending with the pulse. */
+.subagents .sub-row.is-hung .sub-dot { background: #f0c674; box-shadow: 0 0 0 3px rgba(240, 198, 116, .16); animation: none; }
+.subagents .sub-row.is-hung .sub-meta { color: #f0c674; }
+.subs-collected { margin-left: 8px; color: var(--dimmer); font-size: 10px; }
+.subs-collect { margin-left: 8px; background: none; border: 1px solid #3d3350; border-radius: 4px; color: #c8a6ff; font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
+.subs-collect:hover { color: #ecd9ff; border-color: #55407a; background: #241d33; }
+.subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.subagents .sub-meta { flex: none; white-space: nowrap; color: var(--dimmer); font-size: 10.5px; }
+/* The clock on a running row reads as part of the status, not as another column. */
+.subagents .sub-meta [data-sub-elapsed] { color: var(--dim); font-variant-numeric: tabular-nums; }
+/* A folded running row keeps saying what is happening: the newest thing the child wrote, pushed to the right of the
+   line and cut short when it is long. It takes the space the title leaves rather than shoving the status around. */
+.subagents .sub-preview { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--dimmer); font-size: 10.5px; padding-left: 12px; }
+.subagents .sub-row:hover .sub-preview { color: var(--dim); }
+/* A subagent line is a door: click it for that child's own console, click it again to close. */
+.subagents .sub-row { cursor: pointer; border-radius: 4px; }
+.subagents .sub-row:hover { background: rgba(255, 255, 255, .035); }
+.subagents .sub-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.subagents .sub-caret { flex: none; width: 9px; color: var(--dimmer); }
+/* The triangles come from the UI font: the monospace stack on Windows has no ▾/▸, so the caret vanished. */
+.subagents .sub-chev { font-family: var(--ui); font-size: 9px; line-height: 1; }
+.subagents .sub-row.is-open { background: rgba(255, 255, 255, .02); }
+/* The docked console's own frame: the margin moves the whole box (the control), the scroller keeps the old shape.
+   Its prose is drawn as blocks, so the box no longer preserves the source's whitespace; a non-prose row still does,
+   because a tool result's indentation IS its shape. */
+.sub-console-wrap { margin: 4px 0 8px 36px; }
+.sub-console-tools { display: flex; justify-content: flex-end; gap: 4px; padding: 0 2px 3px; }
+.sub-tool { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; font: 10px/1.6 var(--mono); color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.sub-tool:hover { color: var(--text); border-color: var(--dim); }
+.sub-tool:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.sub-swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--sub-console-fg, var(--text)); border: 1px solid var(--line); }
+.sub-console { margin: 0; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--sub-console-fg, var(--text)); white-space: normal; }
+.sub-console .jl { font: inherit; white-space: pre-wrap; word-break: break-word; }
+.sub-console .md-para > .jl, .sub-console .jl.md-li, .sub-console .jl.md-head-l { white-space: normal; }
+.sub-console strong { font-weight: 650; }
+@keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+}
+.pill.running, .pill.starting { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* Status words the panel actually shows: green while the agent is working, amber when it is not.
+   Amber is deliberately "attention may be needed" rather than "finished happily" — a failure gets
+   the red variant so it does not disappear into the same yellow. */
+.pill.pill-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.pill.pill-notrunning { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.pill.pill-notrunning.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+/* The not-running pill IS the continue button. The status and the action were the same thing, and a separate
+   "▶ continue" beside it said it twice. The word stays the status; the refresh glyph on its right is the only part
+   that says "this reacts to a click" - so a card can still be read at a glance without a second badge on the head. */
+button.pill-continue {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+}
+button.pill-continue .pill-again { font-size: 12px; line-height: 1; opacity: .8; }
+button.pill-continue:hover { border-color: #6f5a1e; background: #33290f; }
+button.pill-continue:hover .pill-again { opacity: 1; }
+button.pill-continue.pill-notrunning.is-failed:hover { border-color: #7a3138; background: #341a1c; }
+button.pill-continue:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-continue:disabled { cursor: progress; }
+/* While the nudge is being sent the glyph turns: "starting" without pretending to a status the panel does not know. */
+button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
+@keyframes pill-again-spin { to { transform: rotate(360deg); } }

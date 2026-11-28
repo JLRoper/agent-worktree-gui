@@ -4,9 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   <title>Worktree Agent Monitor</title>
-  <link rel="stylesheet" href="/style.css" />
+  <!-- style.css is split by surface: these nineteen sheets load in the order their rules had inside it, so every
+       rule keeps the cascade position it held in the one file. tools/verify-css-split.mjs proves the concatenation
+       rule for rule, and the six-pane layout delta against the pre-split commit. Add a rule to the sheet that owns
+       its surface, never to a later sheet as a shortcut. -->
+  <link rel="stylesheet" href="/base.css" />
+  <link rel="stylesheet" href="/chrome.css" />
+  <link rel="stylesheet" href="/settings.css" />
+  <link rel="stylesheet" href="/board.css" />
+  <link rel="stylesheet" href="/jobs.css" />
+  <link rel="stylesheet" href="/console.css" />
+  <link rel="stylesheet" href="/turns.css" />
+  <link rel="stylesheet" href="/rows.css" />
+  <link rel="stylesheet" href="/overlays.css" />
+  <link rel="stylesheet" href="/rowstrips.css" />
+  <link rel="stylesheet" href="/boardchips.css" />
+  <link rel="stylesheet" href="/assistant.css" />
+  <link rel="stylesheet" href="/feedback.css" />
+  <link rel="stylesheet" href="/assistant-panes.css" />
+  <link rel="stylesheet" href="/initiatives.css" />
+  <link rel="stylesheet" href="/panes.css" />
+  <link rel="stylesheet" href="/queue.css" />
+  <link rel="stylesheet" href="/pipeline.css" />
+  <link rel="stylesheet" href="/late.css" />
   <!-- The worktree chart's own rules: the table, its cells and rows, the legend and the row detail. It loads right
-       after style.css so every rule keeps the cascade position it had inside that file. -->
+       after the per-surface sheets that now hold style.css's rules, so every rule keeps the cascade position it had
+       when that file was one sheet. -->
   <link rel="stylesheet" href="/chart.css" />
   <!-- The mermaid pipeline card's own stylesheet, shared with public/pipeline-map.html: the flow dialog's Preview
        draws that page's cards, so the two read one file. -->

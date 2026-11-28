@@ -1,0 +1,132 @@
+/* public/turns.css
+   The conversation turns.
+
+   A turn's head, rail, peek, compact form, prompt line and the live clock on a running tool call. Shared by the
+   job cards and the assistant's chat pane.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* a conversation: turns stacked top to bottom, reply box at the bottom */
+.turn { margin: 0; }
+/* The turns hang off a 2px rail under the card's title, so the transcript reads as content nested under the
+   head rather than a sibling of it — the head is a title, the rail says where the body starts. It carries the
+   run's state: violet while a turn is executing, slate when nothing is. */
+.job-body > .turn { box-shadow: inset 2px 0 0 #46536b; margin-left: 3px; padding-left: 11px; }
+.job-body > .turn.is-running { box-shadow: inset 2px 0 0 #7a5cc0; }
+.turn-head {
+  margin: 8px 0 2px 18px;
+  padding-top: 6px;
+  border-top: 1px solid #1d222b;
+  font-size: 11px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  user-select: none;
+}
+.turn-head .chev { color: var(--dimmer); font-size: 18px; line-height: 1; display: inline-block; width: 16px; vertical-align: -3px; }
+/* The model on the readout: a control by double-click, quiet enough to still read as part of the line. */
+.stat-model { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; user-select: none; }
+.stat-model:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
+.stat-model.is-static { cursor: default; }
+/* The context reading is a control too: the ceiling it is measured against is the reader's call. */
+.stat-ctx { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; user-select: none; }
+.stat-ctx:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
+.stat-ctx.is-over { color: #e8a33d; }
+/* The tiny chevron says "this cycles" without turning the readout into a form control. */
+.stat-caret { margin-left: 3px; font-size: 9px; opacity: .6; }
+.stat-ctx:hover .stat-caret { opacity: 1; }
+.model-ctx-n { color: var(--dimmer); font-size: 10.5px; padding-left: 6px; }
+.model-hint { font-size: 10.5px; padding: 4px 7px 6px; }
+.ctx-pop .model-item.is-current { color: #c8a6ff; }
+/* The picker: a search box and the list, floating under the readout. It is portaled onto <body>, so its z-index
+   has to out-rank every panel it can be opened over — the assistant float (90) and Settings (120) included —
+   or the list would open behind the thing the reader is picking for. */
+.model-pop { position: fixed; z-index: 200; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
+.model-search::selection { background: #4b3a6b; color: #ecd9ff; }
+.model-search { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; }
+/* Opened upwards (no room below the label): the list goes above the search bar so the box you type in stays
+   against the model name, which is where the eye already is. */
+.model-pop.is-flipped { flex-direction: column-reverse; }
+.model-pop.is-flipped .model-search { border-bottom: 0; border-top: 1px solid var(--line); }
+.model-list { overflow: auto; padding: 4px; }
+.model-group { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 6px 3px; }
+.model-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 5px; color: var(--text); font-size: 12px; padding: 4px 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.model-item:hover, .model-item.is-sel { background: #241d33; color: #ecd9ff; }
+.model-item.is-current { color: #c8a6ff; }
+/* The shared picker (core/model-menu.js) is a table of columns, not a line of prose: the id takes the room it
+   needs and the rest sit flush right, in the same order on the board and in the assistant's settings. */
+.model-pop-shared { width: 430px; }
+.model-pop-shared .model-item { display: flex; align-items: baseline; gap: 8px; }
+.model-pop-shared .model-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.model-pop-shared .model-ctx-n { padding-left: 0; }
+/* The rating column: 0-10, gold so it does not read as part of the price. A model the benchmark has not
+   scored shows nothing here, not a zero. */
+.model-rating { flex: none; color: #d9a441; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+/* The price column: in/out USD per million tokens, quiet — it informs the choice, it is not the point of
+   the row. `variable` marks a router whose rate OpenRouter does not quote, which is not "free". */
+.model-price { flex: none; color: var(--dimmer); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.model-price.is-variable { font-style: italic; }
+.model-check { flex: none; color: #c8a6ff; }
+/* The closed state of a model field: the text the native select printed, as the thing you click. The select is
+   still in the DOM (hidden) because it is the value and the control whose `change` the panel listens for. */
+select.model-native { display: none; }
+.model-trigger { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: 12px var(--mono); min-width: 210px; max-width: 460px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.model-trigger:hover { border-color: #3a4352; }
+.model-trigger:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.model-trigger:disabled { opacity: .55; cursor: default; }
+.model-trigger.is-default { color: var(--dim); }
+.as-group .model-trigger { min-width: 0; max-width: 300px; font-size: 11.5px; padding: 4px 6px; }
+.model-none { padding: 8px; font-size: 12px; }
+/* A turn that answers a subagent delivery: the attribution rides on the turn head, not in the transcript. */
+.turn-origin { flex: none; white-space: nowrap; color: #c8a6ff; border: 1px solid #3d3350; background: #241d33; border-radius: 4px; padding: 0 5px; font-size: 10.5px; }
+/* A turn the panel's watchdog started: the panel reporting a run, not a reply in the conversation. Same box as the
+   origin chip above (size, radius, padding); near-black on grey, so it cannot be read as one of the assistant's own
+   purple chips. */
+.turn-origin.is-watchdog { background: #14171b; border-color: #333a44; color: #b6bec9; }
+.turn-head:hover { color: var(--text); }
+.turn-head:hover .chev { color: var(--text); }
+.job-body > .turn:first-child > .turn-head { margin-top: 4px; border-top: none; }
+/* A folded turn is TWO lines: the head carries the request inline (ellipsized, full text on hover), and
+   the peek underneath says what the turn is doing — or, once it is done, what it concluded. */
+.turn.folded .turn-head { margin-bottom: 0; }
+.turn-head { display: flex; align-items: baseline; gap: 0; }
+.turn-head .turn-text { flex: none; }
+.turn-prompt-inline {
+  flex: 1 1 auto; min-width: 0; margin-left: 10px;
+  font: 12.5px/1.5 var(--ui); color: #c7d0db;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.turn-head:hover .turn-prompt-inline { color: #e6e9ef; }
+.turn-peek {
+  margin: 1px 0 3px 27px; font: 11.5px/1.5 var(--mono); color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A running turn's peek is a tool call in flight: quieter than an answer, which is worth reading. */
+.turn-peek.is-tool { color: #7f8b9b; font-style: italic; }
+.turn-peek[hidden] { display: none; }
+/* A compacted turn: the answer it ended on, the last tool it used, and one line saying what went away. The
+   thinking block and the run of tool calls are gone, so this is a fraction of the body it replaces - but it
+   still says what the turn concluded, which a one-line peek could not. */
+.turn.compact { padding-bottom: 3px; }
+.turn-compact { margin: 2px 0 4px 27px; }
+.turn-compact .tc-tool { font-size: 11px; line-height: 1.5; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-compact .tc-answer { margin-top: 2px; font: 12.5px/1.5 var(--ui); color: var(--text); white-space: pre-wrap; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.turn-compact .tc-more { margin-top: 3px; font-size: 10.5px; color: var(--dimmer); }
+.turn-prompt {
+  margin: 1px 0 1px 27px;
+  font: 12.5px/1.5 var(--ui);
+  color: #c7d0db;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  opacity: .82;
+}
+.turn-prompt:hover { opacity: 1; color: #e6e9ef; }
+/* The live clock on a tool call that is still running: quiet while it is short, amber once it has
+   been going long enough that a reader would otherwise conclude the turn is frozen. */
+.jl-live { color: var(--dimmer); }
+.jl-live.is-long { color: #e0b341; }

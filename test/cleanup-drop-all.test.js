@@ -21,6 +21,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 await import("../public/core/cleanup-drop-all.js");
 const dropAll = globalThis.wtCleanupDropAll;
@@ -30,7 +31,7 @@ const scaffold = here("public/board-scaffold.js");
 const app = here("public/app.js");
 const core = here("public/core/cleanup-drop-all.js");
 const html = here("public/index.html");
-const css = here("public/style.css");
+const css = readStyleSheets();
 const doc = here("docs/using-the-board.md");
 const DASHES = /[\u2013\u2014]/;
 

@@ -1,0 +1,249 @@
+/* public/chrome.css
+   The header and the status strip.
+
+   The sticky top bar, its brand and controls, the meta readouts, the zoom and Active controls, the update
+   chip and the banner. The generic button/select/input rules ride here because they sit between the header
+   rules in the source file and a move may not reorder anything.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #12161c, #0f1115);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Focus mode has no button to read, so the bar wears the state it toggles: a violet edge while the board is narrowed
+   to the worktrees with a live panel. The gesture is the bar's own double-click (public/app.js). */
+body.focus-mode .topbar {
+  border-bottom-color: var(--violet);
+  box-shadow: inset 0 -1px 0 0 var(--violet);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { font-size: 15px; margin: 0; letter-spacing: .02em; }
+.sub { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dimmer); }
+.dot.ok { background: var(--green); box-shadow: 0 0 8px #2ea04380; }
+.dot.bad { background: var(--red); box-shadow: 0 0 8px #e5534b80; }
+.dot.warn { background: var(--amber); box-shadow: 0 0 8px #d2992280; }
+
+/* The action group FILLS the header's free width and packs its buttons to the right edge. That is not a look — it
+   is what pins them: the status line beside them (`#stream-rate`) is rewritten by a 1 s clock and grows a character
+   as its numbers do, and while the group was content-sized every one of those characters pushed `#btn-deliver` right
+   (measured: 654.25 -> 660.84 on one extra digit, 588.28 -> 660.84 when the pool clause first arrived). Growing the
+   group instead of the line means the line can say anything and the buttons do not move. */
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+.meta { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+/* The status line takes the row's free space and ellipsizes when there is none, so its own length is never a layout
+   input for the buttons after it. `font-variant-numeric` keeps the digits from jittering inside the box. */
+#stream-rate { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
+   swallows the browser's own zoom shortcuts */
+.zoom { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 1px; }
+/* ACTIVE AGENTS (the control whose id, label span and badge keep the old word `hot`): the bolt that is drawn only
+   while an agent is working. Amber is the panel's own amber (#d29922 / #f0c674), never the yellow lock's #ffb454 in
+   a row's name line and never the turnover mark's blue-violet, and it is the opposite of the counts beside it: a
+   permission or a clarify question is a run stopped, and this is an agent burning right now.
+   `is-hot` is the state, and the button exists at all only while one agent is
+   working AND Settings > General has it switched on: zero is not a quiet control here, and neither is a reader who
+   turned it off - both are no control (public/app.js paintHotButton, public/core/active-button.js). The `[hidden]`
+   rule is explicit because this button's own display would otherwise beat the attribute and a dead bolt would sit in
+   the header at rest. */
+#btn-hot { display: inline-flex; align-items: center; gap: 6px; }
+#btn-hot[hidden] { display: none; }
+#btn-hot.is-hot { border-color: #4d3d12; background: var(--amber-bg); color: #f0c674; }
+#btn-hot.is-hot:hover { border-color: #6b531b; background: #332a14; color: #ffd479; }
+#hot-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: var(--amber); color: #1a1408;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #d2992255;
+}
+#hot-badge[hidden] { display: none; }
+
+/* DELIVERABLES: every thing an agent handed back, in one list. A quiet header button while there is nothing new —
+   this is an archive, not a queue — and it carries a count ONLY for what arrived above the reader's watermark, never
+   everything ever delivered. `has-unseen` is the highlight, a class on the button (no inline style, so the pressed
+   state and the unseen state have one definition each), and it is the same blue the board uses for "this is the thing
+   you are looking at". */
+#btn-deliver { display: inline-flex; align-items: center; gap: 6px; }
+#btn-deliver.has-unseen { border-color: #3f6f52; background: #14251c; color: #d6f5e3; }
+#btn-deliver.has-unseen:hover { border-color: #4d8a67; background: #19301f; }
+#btn-deliver[aria-expanded="true"] { border-color: #3b5680; background: #1b2534; color: #cfe6ff; }
+#btn-deliver[aria-expanded="true"]:hover { background: #223047; }
+/* The pill exists only while something is unseen: public/app.js creates it with a real count and REMOVES it when the
+   count is zero, so the button's text is never "Deliverables0" and there is no dead 0x0 span inside the control. */
+#deliver-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: #3f9d6b; color: #fff; cursor: pointer;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #3f9d6b55;
+}
+
+/* The whole card flashes amber when a header control lands on it, and fades back to the panel it always
+   was. Amber, not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches
+   the card's resting border and background, so it settles instead of snapping. */
+@keyframes hotflash {
+  0% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .55), 0 0 20px rgba(255, 181, 69, .18); background: rgba(255, 181, 69, .055); }
+  65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28), 0 0 12px rgba(255, 181, 69, .09); background: rgba(255, 181, 69, .03); }
+  100% { border-color: var(--line); box-shadow: none; background: var(--card); }
+}
+.job.hot-flash { animation: hotflash var(--flash-ring, 1700ms) ease-out; }
+.zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
+.zoom button:hover { background: var(--panel-2); color: var(--text); }
+.zoom #zoom-pct { min-width: 42px; text-align: center; font-size: 11px; color: var(--dim); }
+/* The zoom control lives in Settings now: keep its own look rather than inheriting .settings-row button. */
+.settings-row .zoom { margin-left: auto; }
+.settings-row .zoom button { border: none; background: transparent; padding: 2px 7px; font-size: 13px; line-height: 1.15; color: var(--dim); }
+.settings-row .zoom button:hover { background: var(--panel-2); color: var(--text); }
+
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+button:hover { background: #232936; }
+button:disabled { opacity: .5; cursor: default; }
+/* A steer press greys the box for the round trip: the box is contenteditable, where `disabled` is not a property
+   that paints anything, so this class is what button:disabled does for the button beside it. */
+.reply-box.steer-pending { opacity: .5; cursor: default; }
+button.primary { background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
+button.primary:hover { background: #24466a; }
+
+/* ---- the panel's CHROME is not text --------------------------------------------------------------
+   A press that starts on the page's own furniture — the status strip, a section header, a column
+   header, a tab label or a counter chip — must not paint a selection over it. Measured before this
+   rule: dragging across the status strip selected "v1.29.0 · 1 project(s) · cheap fields every …", and
+   dragging from the New agent header (already `user-select: none` through `.project-head[data-toggle-fixed]`)
+   reached PAST it and selected the sticky topbar's wording instead, which is the worst shape of it —
+   the reader aims at the board and the header goes blue.
+
+   The list is named container by container on purpose: never `body`, never `*`. Everything a reader
+   copies lives OUTSIDE these boxes — console lines, tool output, file paths, diffs, commit SHAs and an
+   agent's report keep the browser's own selection. `user-select` is a selection rule only, so a button
+   inside any of these still takes its press, its `:hover` background and its `:focus-visible` ring
+   exactly as before.
+
+   Not repeated here because they already carried it: `.project-head[data-toggle-project]` and
+   `.project-head[data-toggle-fixed]` (the fold heads), `.as-bar` (the assistant's title row) and
+   `.settings-tab` (a Settings tab label). `.project-head.meta-line` is deliberately NOT chrome: it
+   prints the main branch, both tips' commit SHAs and the fetch note, and those stay copyable. */
+.topbar,
+.spawn-strip-head,
+.ap-dock-head,
+thead th,
+.settings-tabs,
+.as-tabs button,
+.as-subtabs button,
+.chips,
+.chip { user-select: none; }
+
+/* The banner FLOATS under the sticky topbar instead of sitting in the page. A message that appears must not move
+   the board under the reader's hands, so the layer is `position: fixed` and takes no height from the flow. Its top
+   is the topbar's MEASURED height (the header wraps to a second row on a narrow window, so it is never a constant)
+   and its sides are the board's own column — written by placeBanner() in app.js — because a full-width bar would
+   sit over the docked rail. The layer takes no press; only the bar inside it does. */
+.banner-layer {
+  position: fixed;
+  top: 0; /* written by placeBanner() from the topbar's measured height before the bar is ever shown */
+  left: 0;
+  right: 0;
+  z-index: 9; /* under the topbar (10), over the board */
+  display: flex;
+  pointer-events: none;
+}
+.banner {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--red-bg);
+  border: 1px solid #57262a;
+  color: #ffb4ae;
+  font-size: 13px;
+  box-shadow: 0 8px 20px #0007;
+  pointer-events: auto;
+  animation: banner-in 140ms ease-out;
+}
+/* It fades in where it lands: the bar is fixed, so a slide would read as movement that never happened. */
+@keyframes banner-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.banner-text { flex: 1 1 auto; min-width: 0; }
+/* The ✕ is the red banner's own: it dismisses a failure at once, whatever Settings → Board's banner timeout says. */
+.banner .banner-x {
+  flex: none;
+  margin: -2px -4px -2px 0;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: .7;
+  cursor: pointer;
+}
+.banner .banner-x:hover { background: transparent; opacity: 1; }
+.banner.ok { background: var(--green-bg); border-color: #1f4a2a; color: #b7f7c1; }
+/* ---- the update chip ----
+   A different build than the one this tab loaded is an interruption the reader can decline, so it
+   is a chip and not a window: bottom-left, clear of the approvals dock (bottom-right) and the
+   assistant (top-right). The Reload button is disabled while a draft or a streaming turn holds it,
+   and its text says which — the panel never reloads over something the reader cannot get back. */
+.update-chip {
+  position: fixed; left: 16px; bottom: 16px; z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 8px 11px;
+  background: var(--panel-2); border: 1px solid #4a3a17; border-left: 3px solid var(--amber);
+  border-radius: 8px; box-shadow: 0 10px 26px #0008;
+  color: var(--text); font-size: 12px;
+}
+.update-chip .uc-text { color: var(--dim); }
+.update-chip button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.update-chip button:hover { border-color: #3b4757; }
+.update-chip button:disabled { color: var(--dimmer); cursor: default; }
+/* The expanded chip: hovering it (or focusing its button, for a keyboard reader) opens the build a
+   reload would pick up and one line per release between this tab's build and that one. It opens
+   upward because the chip lives at the bottom edge, and the list scrolls so a tab left open across
+   many releases cannot grow past half the window. The panel's bottom edge touches the chip's top
+   edge: a margin there would be a strip the pointer crosses with nothing hovered, and the panel
+   would close under it. */
+.update-chip .uc-panel {
+  display: none; position: absolute; left: 0; bottom: 100%;
+  width: max-content; max-width: min(560px, calc(100vw - 32px)); max-height: min(320px, 55vh);
+  overflow-y: auto; padding: 9px 11px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 12px 30px #0009;
+}
+.update-chip:hover .uc-panel, .update-chip:focus-within .uc-panel { display: block; }
+.update-chip .uc-restart { font: 11px var(--mono); color: var(--text); margin-bottom: 7px; }
+.update-chip .uc-releases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.update-chip .uc-releases li { display: flex; gap: 7px; align-items: baseline; }
+.update-chip .uc-ver { flex: none; font: 10px var(--mono); color: var(--amber); }
+.update-chip .uc-line { color: var(--dim); font-size: 11px; line-height: 1.35; }
+.update-chip .uc-empty:not(:empty) { margin-top: 7px; color: var(--dimmer); font-size: 11px; }
