@@ -1691,9 +1691,13 @@
        declares one factory and no page names, so the order among these files is all that matters.
 
        THE DRAG is next: the pointer gesture, its record and the pane's edge crawl. It reads the row cut and the
-       card cut by name, so it is built last; here it only has to load before /queue-cards.js. -->
+       card cut by name, so it is built last; here it only has to load before /queue-cards.js.
+
+       THE CARD is last of the three: the full card in both modes, the paint, the two reads and the one write path.
+       It reads the row cut and asks the drag one question, so /queue-cards.js is what puts them in build order. -->
   <script src="/board/queue-row.js"></script>
   <script src="/board/queue-drag.js"></script>
+  <script src="/board/queue-detail.js"></script>
   <script src="/queue-cards.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
