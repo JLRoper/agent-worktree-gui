@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.193.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.194.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-779 releases from v0.1.0 (2026-10-20) to v1.193.0 (2026-11-27), 2758 commits between the tags. Every release is anchored by an
+780 releases from v0.1.0 (2026-10-20) to v1.194.0 (2026-11-27), 2763 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.194.0 — 2026-11-27 · 5 commits
+
+[`0217ca1`](https://github.com/JLRoper/agent-worktree-gui/commit/0217ca168cf249a9d43b8a3596f6cce8d7c7a834) · [compare v1.193.0...v1.194.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.193.0...v1.194.0)
+
+### Docs & tests
+
+- docs(report): the landing's version, and long row text that wraps inside its table ([`3216c0f`](https://github.com/JLRoper/agent-worktree-gui/commit/3216c0f857468cb51b91acafb6ec8c729e70180e))
+- docs: render the changelog - 779 releases ([`c2ecc06`](https://github.com/JLRoper/agent-worktree-gui/commit/c2ecc06071bc37c287ec0febb3c0f645932ac968))
+
+### Other
+
+- tools: review the 1.191.0 split, and measure what it left behind ([`8fd19ac`](https://github.com/JLRoper/agent-worktree-gui/commit/8fd19acceae33c492a4872322fa1f18ba3a2b97b))
+- css: give the cut dialog, the board table and the console composer their own sheets ([`a4cb193`](https://github.com/JLRoper/agent-worktree-gui/commit/a4cb193d59ebffc23ea5accd4559e3656f63315d))
+- chore: 1.194.0 - the version this landing carries ([`0217ca1`](https://github.com/JLRoper/agent-worktree-gui/commit/0217ca168cf249a9d43b8a3596f6cce8d7c7a834))
 
 ## v1.193.0 — 2026-11-27 · 5 commits
 
