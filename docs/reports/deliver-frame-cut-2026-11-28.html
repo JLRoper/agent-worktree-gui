@@ -37,7 +37,7 @@
 <body>
 <main>
 <h1>The deliver frame: cut 1 of public/deliverables.js</h1>
-<p class="sub">Row 521, measured and run on 2026-11-28. Worktree <code>row-521-is-the-first-cut-of-public-b5bc56</code>, branch <code>wtgui/row-521-is-the-first-cut-of-public-b5bc56</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>1c7cabdd</code>. Merged into that branch locally, not pushed.</p>
+<p class="sub">Row 521, measured and run on 2026-11-28. Worktree <code>row-521-is-the-first-cut-of-public-b5bc56</code>, branch <code>wtgui/row-521-is-the-first-cut-of-public-b5bc56</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>1c7cabdd</code>, merged into it locally as <code>4602588f</code>, not pushed.</p>
 
 <div class="verdict">
 <p><b>The cut.</b> <code>public/deliverables.js</code> was 1,063 lines and one file held the popover, its place and size, its two gestures, the badge, the rows, the keydown and both openers. This row moves the popup's place on the page and its two gestures, byte for byte, into <code>public/board/deliver-frame.js</code>, and leaves <code>public/deliverables.js</code> as the entry point: the header, the deliver state object, the badge, the rows, the keydown and the openers. The module-separation report proposes two cuts; this is the first, and <code>public/board/deliver-rows.js</code> is the second.</p>
@@ -139,7 +139,16 @@ tests 58 | pass 58 | fail 0 | cancelled 0 | skipped 0</pre>
 
 <section>
 <h2>7. Where it lands</h2>
-<p>Merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, by a <code>--no-ff</code> merge made in the turnover branch's own worktree. Not pushed, and no pull request: the turnover has not landed, and the reader decides when it does. No version bump, and no file outside <code>public/</code> and <code>docs/reports/</code> changed in this row.</p>
+<p>Merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, by a <code>--no-ff</code> merge made in the turnover branch's own worktree: merge commit <code>4602588f</code>, on top of the turnover's then-head <code>91cc6667</code> (the base this branch was cut from, <code>1c7cabdd</code>, had moved four cuts and three pages further; <code>public/index.html</code> auto-merged, nothing else overlapped). Not pushed, and no pull request: the turnover has not landed, and the reader decides when it does. No version bump, and no file outside <code>public/</code> and <code>docs/reports/</code> changed in this row.</p>
+<h3>And re-read at the merged head</h3>
+<p>The three gates were run a third time, in the turnover worktree at the merge commit <code>4602588f</code>, which is what a reader of that branch gets:</p>
+<table>
+<tr><th>gate</th><th class="num">merged head 4602588f</th><th class="num">same as 1c7cabdd and 333b5d70?</th></tr>
+<tr><td><code>verify:deliverables-ui</code></td><td class="num">123 pass / 125</td><td class="num good">yes, the same two reds</td></tr>
+<tr><td><code>verify:deliverables-stable</code></td><td class="num">13 pass / 15</td><td class="num good">yes, the same two reds</td></tr>
+<tr><td><code>verify:deliverables-stale</code></td><td class="num">12 pass / 12</td><td class="num good">yes, 0 reds</td></tr>
+</table>
+<p>The merge added no red of its own and cleared none: the four reds are the same four, in the same words, with the same causes.</p>
 </section>
 
 <section>
