@@ -139,27 +139,139 @@ export function readVersionAtCommit(root = process.cwd(), commit) {
   }
 }
 
+// ---------- ancestry: a tag is an anchor only where the release branch carries its commit ----------
+//
+// THE ANCHOR IS JUDGED AGAINST MAIN, NOT AGAINST THE REF THAT HAPPENS TO BE CHECKED OUT. A tag is a
+// repository-wide claim, and a reader of main can only follow a commit main carries, so a tag whose commit main
+// never took is not an anchor whatever package.json at that commit says. `git rev-list main` answers "is this on
+// main" for every tag in ONE subprocess; asking `merge-base --is-ancestor` 855 times took minutes on this history.
+//
+// `branchesHolding` answers the other half of a refusal: which branch the commit sits on instead. A commit no
+// branch holds is reachable only by its own tag. That is the difference between a claim somebody can still land
+// and a fossil of a rewritten history, so the callers name it rather than lumping the two together.
+export function readReachable(root = process.cwd(), ref = "main") {
+  const at = repoRoot(root);
+  let commit;
+  try {
+    commit = execFileSync("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], {
+      cwd: at,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 20000,
+    }).trim();
+  } catch {
+    return null; // no such ref: the caller must say it cannot judge ancestry rather than pass every tag
+  }
+  if (!commit) return null;
+  const raw = execFileSync("git", ["rev-list", commit], {
+    cwd: at,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    maxBuffer: 256 * 1024 * 1024,
+    timeout: 120000,
+  });
+  return { ref, commit, commits: new Set(raw.split("\n").filter(Boolean)) };
+}
+
+export function branchesHolding(root = process.cwd(), commit) {
+  if (!commit) return [];
+  try {
+    return git(repoRoot(root), [
+      "for-each-ref",
+      "--contains",
+      commit,
+      "--format=%(refname:short)",
+      "refs/heads",
+      "refs/remotes",
+    ])
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch {
+    return []; // a commit git cannot walk is held by nothing this checkout can name
+  }
+}
+
+// The commits any branch or remote branch carries, in one walk. It is the cheap half of "which branch holds this
+// tag": a commit missing from this set is a fossil and needs no per-tag `for-each-ref --contains` (89 of those on
+// this repository cost a minute), while the handful that are in it get their branch named one call each.
+export function readBranchReach(root = process.cwd()) {
+  try {
+    const raw = execFileSync("git", ["rev-list", "--branches", "--remotes"], {
+      cwd: repoRoot(root),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 256 * 1024 * 1024,
+      timeout: 120000,
+    });
+    return new Set(raw.split("\n").filter(Boolean));
+  } catch {
+    return null; // the caller names no branch rather than claiming there is none
+  }
+}
+
 // The history and the tags it should be anchored by, joined. `transitions` is every change to the version line in
 // the order it happened (a number that went backwards is visible there); `versions` is the first appearance of
 // each number, each carrying its tag, or null when the bump was never tagged.
-export function readReleaseHistory({ root = process.cwd(), ref = "HEAD" } = {}) {
+//
+// `mainRef` is opt-in because only the two release tools judge a tag against main: when it is given, every tag
+// carries `onMain` (true, false, or absent when the ref could not be read), and `main` records which commit was
+// judged. A caller that does not ask pays no ancestry walk.
+export function readReleaseHistory({ root = process.cwd(), ref = "HEAD", mainRef = null } = {}) {
   const transitions = readVersionHistory({ root, ref });
   const byName = new Map(readTags(root).map((t) => [t.name, t]));
+  const main = mainRef ? readReachable(root, mainRef) : null;
+  const mark = (t) => (t && main ? { ...t, onMain: main.commits.has(t.commit) } : t);
   const versions = firstAppearances(transitions).map((v) => {
     const tag = byName.get(`v${v.version}`) || null;
-    return { ...v, tag };
+    return { ...v, tag: mark(tag) };
   });
   const known = new Set(versions.map((v) => `v${v.version}`));
   // A version the ref's walk does not carry is not automatically a false claim: a live branch bumps and tags
-  // before it lands, and that tag is honest about its own commit — docs/versioning.md says so ("the branch
-  // carries a tag the gate can read"). Read each such commit's tree and record what it says, so the gate reports
-  // only the tags whose own package.json does not declare the number. A tag inside the walk is judged by first
-  // appearance instead, so `declares` is left off it.
+  // before it lands, and that tag is honest about its own commit. Read each such commit's tree and record what it
+  // says, so the tools report only the tags whose own package.json does not declare the number.
   const orphanTags = [...byName.values()]
     .filter((t) => t.version && !known.has(t.name))
-    .map((t) => ({ ...t, declares: readVersionAtCommit(root, t.commit) === t.version }));
+    .map((t) => ({ ...mark(t), declares: readVersionAtCommit(root, t.commit) === t.version }));
   const commit = git(repoRoot(root), ["rev-parse", `${ref}^{commit}`]).trim();
-  return { ref, commit, transitions, versions, tags: [...byName.values()], orphanTags };
+  return {
+    ref,
+    commit,
+    main: main ? { ref: main.ref, commit: main.commit, commits: main.commits } : null,
+    transitions,
+    versions,
+    tags: [...byName.values()].map(mark),
+    orphanTags,
+  };
+}
+
+// Every version tag whose commit main never carried, each with the branches that still hold it. `release` says the
+// ref carries that version (so a render prints its section and the gate expects its anchor at `releaseSha`);
+// `ownTopAnchor` says it is the ref's own newest bump, tagged on the commit the ref's walk says declared it. That
+// last shape is the pre-landing anchor `version.mjs apply` writes, and docs/versioning.md has the branch carry it
+// so the gate can read it, so the tools hold it rather than refuse it.
+//
+// A tag with no branch at all is a fossil of a rewritten history: no commit can still be landed from it. It is
+// returned too, and the callers report it as a note, because a refusal nobody can act on is noise in every
+// landing's gate.
+export function offMainTags(history, { root = process.cwd() } = {}) {
+  if (!history || !history.main) return [];
+  const top = history.versions[history.versions.length - 1] || null;
+  const byVersion = new Map(history.versions.map((v) => [v.version, v]));
+  const onBranch = readBranchReach(root);
+  return history.tags
+    .filter((t) => t.version && t.onMain === false)
+    .map((t) => {
+      const v = byVersion.get(t.version) || null;
+      const held = onBranch ? onBranch.has(t.commit) : true;
+      return {
+        ...t,
+        release: Boolean(v),
+        releaseSha: v ? v.sha : null,
+        ownTopAnchor: Boolean(v && top && v.version === top.version && t.commit === v.sha),
+        branches: held ? branchesHolding(root, t.commit) : [],
+      };
+    });
 }
 
 // Where a number may be anchored: the commit whose patch FIRST writes it to package.json's top-level version
