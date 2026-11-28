@@ -170,7 +170,16 @@ after (75878d5c)            LOADED public/core/command-summary-git.js then publi
   public/index.html | 23 +++++++++++++++++++++--      (row 521's tags, not this cut's lines)
 git merge-tree --write-tree 4602588f 125b672f   ->  clean, tree 7e0cfcaf
 git show 7e0cfcaf:public/index.html             ->  /core/command-summary-git.js at 1310, /board/deliver-frame.js at 1578</pre>
-<p>So the one overlapping file merges to both cuts' tags, and the merge is made in the turnover worktree with <code>--no-ff</code>. The merge commit is reported on the row, not in this page: this page was written before the merge, and a page that predicts a merge's sha is the page that has to be corrected.</p>
+<p>So the one overlapping file merges to both cuts' tags, and the merge is made in the turnover worktree with <code>--no-ff</code>.</p>
+<pre>first parent at merge time      0f714cd9   (the tip had moved again, from 4602588f)
+merge commit                    fc5777cc   parents 0f714cd9, 4fdb7d4e
+git diff --stat fc5777cc^1 fc5777cc     the 7 paths this cut owns, and nothing else
+git rev-parse fc5777cc:&lt;each path&gt;      equal to 4fdb7d4e:&lt;each path&gt; except public/index.html,
+                                         which also carries the target's own tags
+merged tree, taken there:     node --check clean; test:module 21/21 pass, exit 0; the published
+                              surface still the four names with the same hashes; the rendered
+                              projection 11a1467f..., 7 commands, 0 failures</pre>
+<p>The merge commit is reported on the row as well.</p>
 <div class="note"><b>The collision this row could see coming, and it arrived.</b> Its subject is <code>public/index.html</code>: every classic-script cut in this wave adds a tag to it, and row 521's <code>public/deliverables.js</code> cut (<code>wtgui/row-521-is-the-first-cut-of-public-b5bc56</code>) landed its tags first. Row 524's cut of the same entry point, <code>public/core/command-summary-programs.js</code>, will add a tag immediately below this one. The tags are one line each and the merge above proves the two that exist today combine; a third inside the same few lines is where a conflict will come from, and it will be a tag, not code.</div>
 </section>
 
@@ -194,7 +203,7 @@ npm run verify:command-summary-git -- --root /tmp/command-summary-base</pre>
 <p>No full suite was run for this cut: the brief forbids it, and the focused selector plus the two gates are the row's proof.</p>
 </section>
 
-<footer>Row 523. Cut 75878d5c, gate 125b672f, base f22b1c78, target 20261127_2134_TASK-405_row-405-is-the-complete (4602588f at merge time).</footer>
+<footer>Row 523. Cut 75878d5c, gate 125b672f, page 4fdb7d4e, base f22b1c78, merge fc5777cc into 20261127_2134_TASK-405_row-405-is-the-complete (first parent 0f714cd9 at merge time).</footer>
 </main>
 </body>
 </html>
