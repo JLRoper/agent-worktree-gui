@@ -86,11 +86,15 @@ function pane({ read }) {
     "activeSessionId",
     "isAssistant",
     `${region}
-return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueCache, queueInflight, queueJobs, queueShown, queueWindowOf, queueWindowIds, queueWindowRows, queueMoreHtml };`,
+return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueCache, queueInflight, queueJobs, queueShown, queueWindowOf, queueWindowIds, queueWindowRows, queueSorted, queueMoreHtml };`,
   )(
     esc,
     () => ["assistant-1", "assistant-2"],
-    (id) => ({ id, name: id === "assistant-1" ? "Assistant #1" : "Assistant #2" }),
+    // The page's own session record: the server's `assistants[]` row when a test set one - that is where `queueStamp`
+    // lives - and the bare id/name otherwise, which is the page's own fallback for a payload with no list.
+    (id) =>
+      (Array.isArray(state.assistant?.assistants) ? state.assistant.assistants.find((x) => x.id === String(id)) : null) ||
+      { id, name: id === "assistant-1" ? "Assistant #1" : "Assistant #2" },
     (t) => t,
     hostFor,
     (id, kind) => `as-${id}-${kind}`,
@@ -301,4 +305,58 @@ test("the more press is the delegated handler's own window write, not a route", 
   assert.match(handler, /queueShown\.set\(own, queueWindowOf\(own\) \+ QUEUE_MORE\)/, "the press grows the stored window");
   assert.match(handler, /renderAssistantQueue\(own, true\)/, "and forces a repaint past the focused button it was pressed on");
   assert.doesNotMatch(handler, /apiFetch|queueAct|await /, "the press itself owes no request and no state write");
+});
+
+// THE READER'S DEFECT, 2026-11-28: the caption read "4 queued - 5 running - 1 parked - 190 done" while the list drew
+// exactly two running cards (#438 and #443). The window counted from the newest task ID, so #402, #404 and #411 - three
+// running rows, three live runs - were not drawn at all: work the assistant is CARRYING was hidden by a rule meant to
+// bound its finished history. The window bounds the FINISHED bucket and nothing else.
+test("the window bounds the finished history only: every open row is drawn, however old its id", () => {
+  const { api: apiBare } = pane({ read: async () => reply({ queue: view(), assistant: {} }) });
+  const running = [402, 404, 411, 438, 443];
+  const queued = [420, 425, 430, 435];
+  const parked = 300;
+  const tasks = [];
+  for (let id = 244; id <= 443; id += 1) {
+    const state = running.includes(id) ? "running" : id === parked ? "parked" : queued.includes(id) ? "queued" : "done";
+    tasks.push({ id, title: `task ${id}`, state, files: [] });
+  }
+  const shown = apiBare.queueWindowRows(apiBare.queueSorted(tasks), 20);
+  const ids = shown.map((t) => Number(t.id));
+  assert.deepEqual(running.filter((id) => !ids.includes(id)), [], "every running row is drawn");
+  assert.deepEqual([...queued, parked].filter((id) => !ids.includes(id)), [], "and every queued and parked one");
+  assert.equal(shown.filter((t) => t.state === "done").length, 20, "the finished history is still the newest twenty");
+  assert.equal(shown.length, 30, "ten open rows plus twenty finished - the window never touches an open row");
+  assert.deepEqual(ids.slice(0, 3), [402, 404, 411], "the open rows lead, in the pane's own bucket/order");
+});
+
+// THE REPAINT, 2026-11-28: the pane re-read its queue on a twenty-second clock, so a page open while rows went running
+// kept drawing them as they were. The panel now stamps each assistant with its queue file's mtime+size, and the pane
+// re-reads when that stamp MOVES - one read per change, and none for a board frame that changed nothing.
+test("a queue file whose stamp moved is re-read on the next paint; an unchanged one is not", async () => {
+  let stamp = "1:100";
+  const { api, calls, state } = pane({ read: async () => reply({ queue: view({ stamp }), assistant: {} }) });
+  state.assistant = { assistantId: "assistant-1", assistants: [{ id: "assistant-1", name: "Assistant #1", queueStamp: stamp }] };
+  api.renderAssistantQueue("assistant-1", true);
+  await api.queueInflight.get("assistant-1");
+  assert.equal(calls.length, 1, "the first paint read the queue once");
+  api.renderAssistantQueue("assistant-1");
+  assert.equal(calls.length, 1, "an unchanged stamp asks for nothing - a board frame is not a reason to read");
+  stamp = "2:140";
+  state.assistant.assistants[0].queueStamp = stamp;
+  api.renderAssistantQueue("assistant-1");
+  assert.equal(calls.length, 2, "a moved stamp asks for exactly one read");
+  await api.queueInflight.get("assistant-1");
+  api.renderAssistantQueue("assistant-1");
+  assert.equal(calls.length, 2, "and the answer's own stamp is what settles it");
+});
+
+// The one control under the list: the remainder is offered as itself, and the note says what is drawn against the whole
+// queue - "showing N of M" is the affordance the reader's bug report asked for, so a hidden row is never silent.
+test("the more control names the remainder and says what is drawn", () => {
+  const { api } = pane({ read: async () => reply({ queue: view(), assistant: {} }) });
+  const html = api.queueMoreHtml("assistant-1", 3, 118, 121);
+  assert.match(html, />Load 3 more</, "a remainder is offered as itself, not as a full fifty");
+  assert.match(html, /showing 118 of 121 - 3 older tasks not shown/, "and the note counts what is drawn against the whole queue");
+  assert.equal(api.queueMoreHtml("assistant-1", 0, 121, 121), "", "nothing hidden means no control at all");
 });
