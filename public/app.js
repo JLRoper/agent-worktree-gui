@@ -296,7 +296,7 @@ window.WMApp.spawn = {
 window.WMApp.worktrees = {
   TREE_LIST_ORDER_HOLD_MS, TREE_LIST_ORDER_SETTLE_MS, rowOrderHold, paintTreeListChips,
   applyTreeList, treeListComplete, rowForOwner, isPendingScanConv, isHomelessConv, homelessConversations,
-  pendingScanConversations, worktreeOptionsHtml, deletableWithoutAsking, showWorktreeConfirm, scanTick, waitForScanPass,
+  pendingScanConversations, worktreeOptionsHtml, startTurnoverContainer, deletableWithoutAsking, showWorktreeConfirm, scanTick, waitForScanPass,
   confirmDeleteWorktree, toggleWorktreeLock, rowConfirmSent, answerRowConfirm, renameWorktreePrompt, childPresses,
   cutDialog, closeCutDialog, cutDialogHtml, openCutDialog, cutSubmit, cutChildTree, kindConfirmEls, kindConfirmOf,
   closeKindConfirm, showKindConfirm, confirmKindLift,
@@ -6320,6 +6320,15 @@ document.addEventListener("click", async (e) => {
     void probeWorktreeAgents(rowAgent.dataset.agentPath || "", rowAgent);
     return;
   }
+  // The container row's START press: put a worktree on a turnover branch that has none, so its children can be rolled
+  // into it and the row reconciled. Nothing is pushed, landed or opened as a PR; the route says which gate refused.
+  const startTurnover = e.target.closest(".btn-start-turnover");
+  if (startTurnover) {
+    e.stopPropagation();
+    e.preventDefault();
+    void startTurnoverContainer(startTurnover);
+    return;
+  }
   // The + bar under a row's agents: start a new agent in this worktree. This is what the ▶ used to do.
   // The green + bar: it becomes a text field in place. The field itself carries the same data attributes, so this
   // matches the button only - a click inside the input must not re-open it.
@@ -8117,6 +8126,12 @@ $("projects").addEventListener("click", (e) => {
   const key = tr.dataset.key;
   const row = state.rows.get(key);
   if (!row) return;
+  // A container row is a BRANCH, not a worktree: its detail would be a Merge state and an agents block for a directory
+  // that does not exist. Say what the row is for instead of opening an empty one.
+  if (row.placeholder) {
+    showBanner(`${row.branch} is a turnover branch with no worktree yet - press start to make the container tree; there is nothing to read until then`);
+    return;
+  }
   keepInPlace(
     () => document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`),
     () => {

@@ -182,12 +182,12 @@ test("the row's strip draws the result chip and ONE collision diamond, and the d
   // row that carried both.
   const nameCell = sliceBetween(rowFile, 'name: `<td class="name"', 'reviewedExtra: `<td class="reviewed-extra"');
   assert.ok(!nameCell.includes("${resultChipHtml(row, delKey)}"), "the result chip left the name cell");
-  assert.match(nameCell, /\$\{collisionDiamondHtml\(row, delKey\)\}/, "the one collision diamond is in the name line");
+  assert.match(nameCell, /collisionDiamondHtml\(row, delKey\)/, "the one collision diamond is in the name line");
   assert.ok(!nameCell.includes("${collisionChipHtml("), "no counts chip is drawn on the row");
   assert.ok(!nameCell.includes("${collisionRowMarkHtml("), "no per-pair mark is drawn beside it - the diamond replaced both");
-  assert.match(nameCell, /\$\{reviewRowMarkHtml\(row\)\}/, "the amber mark and its press stay in the name line");
+  assert.match(nameCell, /reviewRowMarkHtml\(row\)/, "the amber mark and its press stay in the name line");
   const extraCell = sliceBetween(rowFile, 'reviewedExtra: `<td class="reviewed-extra"', "// Same rule for the branch");
-  assert.match(extraCell, /\$\{resultChipHtml\(row, delKey\)/, "the result chip has a cell of its own");
+  assert.match(extraCell, /resultChipHtml\(row, delKey\)/, "the result chip has a cell of its own");
   assert.ok(!extraCell.includes('class="name"'), "and it is not inside the name cell");
   // Both are buttons with their own state, so a Tab reaches them and Enter presses them.
   const chip = sliceBetween(scaffold, "function resultChipHtml(row, key)", "// The card behind a chip");

@@ -666,6 +666,28 @@ tr.row:hover .btn-child-tree { opacity: 1; }
 .btn-child-tree:hover { background: #16211d; border-color: #2f4a3f; color: #8fe0bd; }
 .btn-child-tree:disabled { cursor: progress; opacity: .5; }
 .btn-child-tree.is-starting { animation: pill-again-spin .9s linear infinite; }
+/* The container row's START: the one control a turnover branch with no worktree carries. It makes the container tree
+   rather than changing one, so it reads as a word - start - in the same additive ink as the + beside it. */
+.btn-start-turnover {
+  border: 1px solid var(--line);
+  background: #15181e;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 6px;
+  cursor: pointer;
+  opacity: .8;
+}
+.btn-start-turnover:hover { background: #16211d; border-color: #2f4a3f; color: #8fe0bd; opacity: 1; }
+.btn-start-turnover:disabled { cursor: progress; opacity: .5; }
+/* THE ∅ MARK: the row attaches nowhere, and its tooltip carries the cut book's own reason. Amber is the panel's
+   "look at this" ink; it is deliberately neither the review's ▣ nor the delete's red - it is a fact about the picture. */
+.parent-gap {
+  margin-left: 4px;
+  color: #d9a441;
+  font: 11px/1 var(--term);
+  cursor: help;
+}
 /* The row's own refresh, to the LEFT of the ✕ and in the same family: quiet at rest, bright under the pointer, and a
    spin while the read is in flight (the panel's own "this is happening" for a glyph control — no label change). */
 .btn-refresh-tree {
