@@ -111,9 +111,10 @@ export function createMaintenanceRoutes({
             : `${out.removedFiles} file(s), ${out.removedBytes} byte(s) removed, ${out.remaining} remaining (${out.ms} ms)`
         }`,
       );
-      // A refusal is a 409 with the reason in `refused`; the shape stays the contract's — `ok` is true because the
-      // request was answered, not because anything was deleted.
-      sendJson(res, out.refused ? 409 : 200, out);
+      // A refusal answers 200 with the reason in `refused`: the request WAS answered and nothing was deleted — which is
+      // what `ok: true` relays — and the General tab paints that sentence in red (`maintenanceResultText`). Only a bad
+      // request (an unknown target, a missing token) is a non-2xx.
+      sendJson(res, 200, out);
       return true;
     }
 
