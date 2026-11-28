@@ -364,9 +364,10 @@ test("the wait for a pid that will not leave is bounded, and says so", async () 
 
 // The controller is the one link these three cases do not drive (a panel bounce exits the process that would be
 // doing the asserting). The helper's argv is the contract between them, and losing the port there would silently
-// turn the freeing step back off, so it is pinned.
+// turn the freeing step back off, so it is pinned. The controller is its own file since row 512, so the source is
+// read there; lib/restart.js is the entry point and no longer holds a spawn.
 test("the controller tells the helper the outgoing pid, the port to free, and that it may flush", () => {
-  const src = readSource("lib/restart.js");
+  const src = readSource("lib/restart-controller.js");
   const call = /panel-restart\.cjs[\s\S]{0,700}?String\(this\.config\.port/.exec(src);
   assert.ok(call, "the spawn of lib/panel-restart.cjs carries the parent pid and this panel's port");
   assert.match(src, /\[helper,[^\]]*?"graceful"\]/, "and the word that says the panel asked to exit, so only a real bounce may wait");
