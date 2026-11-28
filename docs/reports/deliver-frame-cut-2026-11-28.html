@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The deliver frame: cut 1 of public/deliverables.js (row 521)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#161a21; --card:#151a22; --line:#262c37; --text:#e6e9ef; --dim:#9aa4b2; --dimmer:#6b7482; --blue:#7fb2e8; --good:#7ec699; --bad:#e08a8a; --warn:#d8b06a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.62 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 44px 24px 80px; }
+  h1 { margin:0 0 6px; font-size:29px; line-height:1.16; letter-spacing:-0.02em; }
+  h2 { margin:40px 0 10px; font-size:20px; line-height:1.25; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { margin:22px 0 6px; font-size:14px; color:var(--dim); text-transform:uppercase; letter-spacing:0.05em; }
+  p { max-width:82ch; color:#c6cdd8; }
+  .sub { color:var(--dim); font-size:13px; margin:0 0 22px; }
+  .facts { display:grid; grid-template-columns:190px 1fr; gap:4px 14px; margin:16px 0 0; font-size:13.5px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family:ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; margin:14px 0 8px; font-size:13px; }
+  th, td { padding:8px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; }
+  td.num, th.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .good { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  code { font-family:ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; color:#c9d6e8; background:#11161d; border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  pre { margin:12px 0; padding:13px 15px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#11161d; color:#c9d6e8; font:12px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  ul, ol { max-width:82ch; color:#c6cdd8; }
+  li { margin:4px 0; }
+  .note { margin:16px 0; padding:12px 15px; border:1px solid var(--line); border-left:3px solid var(--blue); border-radius:8px; background:var(--card); color:#c6cdd8; font-size:13.5px; }
+  .verdict { margin:20px 0; padding:15px 17px; border:1px solid var(--line); border-left:4px solid var(--good); border-radius:8px; background:var(--panel); }
+  details { margin:10px 0; }
+  summary { cursor:pointer; color:var(--dim); font-size:13px; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+  .chip { font:11.5px/1.4 ui-monospace, Consolas, monospace; color:#c9d6e8; background:#11161d; border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  footer { margin-top:52px; padding-top:14px; border-top:1px solid var(--line); color:var(--dimmer); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The deliver frame: cut 1 of public/deliverables.js</h1>
+<p class="sub">Row 521, measured and run on 2026-11-28. Worktree <code>row-521-is-the-first-cut-of-public-b5bc56</code>, branch <code>wtgui/row-521-is-the-first-cut-of-public-b5bc56</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>1c7cabdd</code>. Merged into that branch locally, not pushed.</p>
+
+<div class="verdict">
+<p><b>The cut.</b> <code>public/deliverables.js</code> was 1,063 lines and one file held the popover, its place and size, its two gestures, the badge, the rows, the keydown and both openers. This row moves the popup's place on the page and its two gestures, byte for byte, into <code>public/board/deliver-frame.js</code>, and leaves <code>public/deliverables.js</code> as the entry point: the header, the deliver state object, the badge, the rows, the keydown and the openers. The module-separation report proposes two cuts; this is the first, and <code>public/board/deliver-rows.js</code> is the second.</p>
+<p><b>What the proof says.</b> The moved block is 11,028 bytes and 215 lines with sha256 <code>b41718fe711ee920f9685ac0aad9f1dda4c470f1b1efada84f5f191ba6d9583d</code>, identical to lines 246-460 of the base blob. The declaration scan reads 58 names before and 58 after, missing <code>[]</code>, added <code>[]</code>. <code>node --check</code> parses both files. The three deliver gates read <span class="good">123/125</span>, <span class="good">13/15</span> and <span class="good">12/12</span> both before and after the cut, with the same four reds at both ends, and one rendered deliver row draws with its file chip, identically, on both pages.</p>
+</div>
+
+<section>
+<h2>1. What moved, and where</h2>
+<dl class="facts">
+  <dt>base blob</dt><dd>1c7cabdd:public/deliverables.js (1,063 lines)</dd>
+  <dt>moved range</dt><dd>lines 246-460, 215 lines, 11,028 bytes</dd>
+  <dt>sha256</dt><dd>b41718fe711ee920f9685ac0aad9f1dda4c470f1b1efada84f5f191ba6d9583d</dd>
+  <dt>new file</dt><dd>public/board/deliver-frame.js (263 lines: 48 of header, the 215-line block)</dd>
+  <dt>entry point</dt><dd>public/deliverables.js (869 lines; header, record, deliver state, badge, rows, keydown, openers)</dd>
+  <dt>load order</dt><dd>public/index.html:1563-1576 puts /board/deliver-frame.js before /deliverables.js and /app.js</dd>
+  <dt>cut commit</dt><dd>333b5d70</dd>
+</dl>
+<p>The 23 names in the new file are <code>DL_MARGIN</code>, <code>DL_GAP</code>, <code>DL_MIN_W</code>, <code>DL_MIN_H</code>, <code>DL_MAX_W</code>, <code>DL_MAX_H</code>, <code>DL_SLOP</code>, <code>DL_RECT_KEY</code>, <code>deliverGeo</code>, <code>deliverZoom</code>, <code>deliverSpace</code>, <code>clampDeliverRect</code>, <code>paintDeliverRect</code>, <code>clearDeliverRect</code>, <code>deliverStoredRect</code>, <code>deliverRemember</code>, <code>deliverForget</code>, <code>deliverStoredFits</code>, <code>deliverRestore</code>, <code>deliverPosition</code>, <code>deliverGestureStart</code>, <code>deliverGestureMove</code> and <code>deliverGestureEnd</code>. Not one body was rewritten and not one call site was touched.</p>
+
+<h3>The boundary, read from the file and not from the report's line numbers</h3>
+<p>The report's card for <code>public/deliverables.js</code> gives this cut as lines 246-509 and the second cut as 510-1,063. In the base blob, 463-509 is THE BADGE (<code>deliverUnseenCount</code> and <code>paintDeliverBadge</code>), which the report's own second cut claims as "the badge, the rows, the keydown and the open control". So the frame ends where the gesture code ends, at <code>deliverGestureEnd</code>'s closing brace (line 460), and the badge stays in <code>public/deliverables.js</code> to begin the second cut. Rows 444 and 530 changed the board's deliver rows after the report was measured, so the boundaries here were read from the file as it stands.</p>
+</section>
+
+<section>
+<h2>2. The export surface, before and after</h2>
+<p>The page loads classic scripts, so a file's export surface is its top-level declarations: every <code>function</code> is a window property and every top-level <code>const</code> a binding every later script reads by bare name. The scan reads the base blob and the two committed files, and the sorted lists diff clean.</p>
+<pre>base declarations: 58
+split declarations: 58
+missing from split: []
+added by split: []
+frame: 23 names, entry: 35 names
+WMApp.deliverables names: 48, not declared in the two files: []</pre>
+<details>
+<summary>the 58 declarations, sorted (identical before and after)</summary>
+<div class="chips"><span class="chip">DELIVER_DEFAULT_CAP</span><span class="chip">DELIVER_POLL_MS</span><span class="chip">DL_GAP</span><span class="chip">DL_MARGIN</span><span class="chip">DL_MAX_H</span><span class="chip">DL_MAX_W</span><span class="chip">DL_MIN_H</span><span class="chip">DL_MIN_W</span><span class="chip">DL_RECT_KEY</span><span class="chip">DL_SLOP</span><span class="chip">clampDeliverRect</span><span class="chip">clearDeliverRect</span><span class="chip">clearDeliverWhy</span><span class="chip">closeDeliverPop</span><span class="chip">deliver</span><span class="chip">deliverAgeText</span><span class="chip">deliverDayLabel</span><span class="chip">deliverFetch</span><span class="chip">deliverForget</span><span class="chip">deliverGeo</span><span class="chip">deliverGestureEnd</span><span class="chip">deliverGestureMove</span><span class="chip">deliverGestureStart</span><span class="chip">deliverHookStream</span><span class="chip">deliverKeydown</span><span class="chip">deliverKindChipsHtml</span><span class="chip">deliverLinkLabel</span><span class="chip">deliverList</span><span class="chip">deliverMarkActive</span><span class="chip">deliverMarkSeen</span><span class="chip">deliverOpenAgent</span><span class="chip">deliverOpenOnServer</span><span class="chip">deliverOpenTarget</span><span class="chip">deliverOpenWorktree</span><span class="chip">deliverPollTick</span><span class="chip">deliverPopEl</span><span class="chip">deliverPosition</span><span class="chip">deliverRemember</span><span class="chip">deliverRestore</span><span class="chip">deliverRowHtml</span><span class="chip">deliverSpace</span><span class="chip">deliverStoredFits</span><span class="chip">deliverStoredRect</span><span class="chip">deliverTabStops</span><span class="chip">deliverTargetName</span><span class="chip">deliverUnseenCount</span><span class="chip">deliverViaText</span><span class="chip">deliverZoom</span><span class="chip">openDeliverPop</span><span class="chip">paintDeliverAges</span><span class="chip">paintDeliverBadge</span><span class="chip">paintDeliverKinds</span><span class="chip">paintDeliverRect</span><span class="chip">paintDeliverRows</span><span class="chip">sayDeliverOpened</span><span class="chip">sayDeliverWhy</span><span class="chip">toggleDeliverKind</span><span class="chip">toggleDeliverPop</span></div>
+</details>
+
+<h3>What the re-export is, for a classic script</h3>
+<p><code>public/deliverables.js</code> is not an IIFE: it declares, and the module's one door is <code>window.WMApp.deliverables</code>, built in <code>public/app.js:59-72</code> from the same bare names. So the re-export is the page's global scope plus the record: a top-level function in <code>public/board/deliver-frame.js</code> is the same window property it was in the entry point, a top-level <code>const</code> the same lexical binding, and <code>public/deliverables.js:250-268</code> is the record that names all 23 and says where they went. Nothing is declared twice, and <code>app.js</code> still lists every one of the 48 names it listed before. (A module with its own IIFE can alias the moved names inside its own returned object, which is what <code>public/board/paste-chips.js</code> does for the chip cut; a bare-globals entry point has no such object to write into.)</p>
+
+<h3>The page-order load probe</h3>
+<p>The two files run in page order in one vm context, with a stub document: a duplicate lexical declaration would throw, and every moved name must bind.</p>
+<pre>load public/board/deliver-frame.js: OK
+load public/deliverables.js: OK
+moved names, page-order binding kind: DL_MARGIN:number DL_GAP:number DL_MIN_W:number DL_MIN_H:number
+DL_MAX_W:number DL_MAX_H:number DL_SLOP:number DL_RECT_KEY:string deliverGeo:object deliverZoom:function
+deliverSpace:function clampDeliverRect:function paintDeliverRect:function clearDeliverRect:function
+deliverStoredRect:function deliverRemember:function deliverForget:function deliverStoredFits:function
+deliverRestore:function deliverPosition:function deliverGestureStart:function deliverGestureMove:function
+deliverGestureEnd:function
+missing: []
+deliver state object: object | deliverRowHtml: function | openDeliverPop: function</pre>
+<p>The same probe against the base blob alone reads the same 23 names, in the same kinds, with <code>missing: []</code>.</p>
+</section>
+
+<section>
+<h2>3. The syntax check</h2>
+<pre>node --check public/board/deliver-frame.js  -> clean
+node --check public/deliverables.js         -> clean</pre>
+</section>
+
+<section>
+<h2>4. The deliver gates, before and after</h2>
+<p>All three gates were run twice: against the base tree (<code>1c7cabdd</code>, a <code>git archive</code> of the turnover head, which is this branch's parent) and against this tree's cut commit (<code>333b5d70</code>). Each boots a throwaway panel of that root and drives it in headless Chromium. The counts are identical at both ends: the cut changed no deliver behaviour.</p>
+<table>
+<tr><th>gate</th><th class="num">base 1c7cabdd</th><th class="num">this tree 333b5d70</th><th class="num">reds</th></tr>
+<tr><td><code>verify:deliverables-ui</code></td><td class="num">123 pass / 125</td><td class="num">123 pass / 125</td><td class="num">2, the same two</td></tr>
+<tr><td><code>verify:deliverables-stable</code></td><td class="num">13 pass / 15</td><td class="num">13 pass / 15</td><td class="num">2, the same two</td></tr>
+<tr><td><code>verify:deliverables-stale</code></td><td class="num">12 pass / 12</td><td class="num">12 pass / 12</td><td class="num">0</td></tr>
+</table>
+
+<h3 class="warn">The four reds, quoted and attributed to the turnover</h3>
+<p><b>The stable gate's two</b>, both the header label the turnover renamed, not this cut:</p>
+<pre>FAIL  …so the button's own text is exactly DELIVERABLES — got "📦 Deliverables" want "DELIVERABLES"
+FAIL  …so the control reads DELIVERABLES, never DELIVERABLES0 — got "📦 Deliverables" want "DELIVERABLES"</pre>
+<p>The gate still wants the pre-rename word; commit <code>78a21818</code> ("the Human button is gone, its four kinds keep their own controls") made the button <code>📦 Deliverables</code>, and <code>test/deliverables-ui.test.js</code> already asserts that new label. The two checks are stale, not red behaviour: every badge, geometry, tick and zero-node check around them passes at both ends.</p>
+<p><b>The UI gate's two</b>, both the reuse line the turnover's own one-window rule produces:</p>
+<pre>FAIL  a 200 handler says which browser took the file — already open in msedge.exe - the registered default browser (MSEdgeHTM) - not opened again, this click started nothing (2s ago)
+FAIL  …and claims no window, because the panel cannot see one — already open in msedge.exe - the registered default browser (MSEdgeHTM) - not opened again, this click started nothing (2s ago)</pre>
+<p>The gate opens the same file a second time and expects the <code>opened &lt;file&gt; with &lt;browser&gt;</code> line; the route answers a reuse (the first open was two seconds earlier) and the row draws the reuse sentence instead. The reuse branch landed in <code>public/deliverables.js</code> at <code>2ac4401d</code> ("one browser window per file"), which is in the turnover head, so both runs fail the same two checks for the same reason. The row code that draws both lines is untouched by this cut.</p>
+<div class="note">The stale gate reads git history (<code>git log -S btn-deliver</code>, then <code>git show &lt;commit&gt;^:public/app.js</code>), so it cannot run from an archive. Its base run was made in this worktree with <code>public/</code> restored from <code>1c7cabdd</code> (git restored afterwards, tree clean); its after run is the cut commit. Both read 12/12.</div>
+</section>
+
+<section>
+<h2>5. One rendered deliver row</h2>
+<p>A throwaway panel seeded one file deliverable through the real store (<code>lib/deliverables.js</code>, <code>Deliverables.record</code>), the page was opened, <code>#btn-deliver</code> pressed, and the painted row read from the DOM. Run against the base archive and against this tree; the line is identical:</p>
+<pre>row drawn: {"wired":"1","open":true,"rows":1,"glyph":"📄","title":"The deliver frame cut",
+"target":"…/the-deliver-frame-probe-5210ab/docs/deliver-frame-report.html","kindChips":["file:true"],"expanded":"true"}
+PROBE PASS a deliver row draws with its file chip</pre>
+<p>One row, the <code>📄</code> file glyph, the title, the three-segment path and the <code>file</code> kind chip pressed on: the row and its chip are drawn by the code this cut did not move.</p>
+</section>
+
+<section>
+<h2>6. The focused tests</h2>
+<p>No full suite. The four deliver test files, which read <code>public/deliverables.js</code> and the page's wiring, answer 58 tests, 58 pass, 0 fail:</p>
+<pre>node --test test/deliverables-ui.test.js test/deliverables.test.js test/deliverables-brief.test.js test/deliver-kinds.test.js
+tests 58 | pass 58 | fail 0 | cancelled 0 | skipped 0</pre>
+</section>
+
+<section>
+<h2>7. Where it lands</h2>
+<p>Merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, by a <code>--no-ff</code> merge made in the turnover branch's own worktree. Not pushed, and no pull request: the turnover has not landed, and the reader decides when it does. No version bump, and no file outside <code>public/</code> and <code>docs/reports/</code> changed in this row.</p>
+</section>
+
+<section>
+<h2>8. Reproduce</h2>
+<pre># the moved block, from the two committed blobs
+git show 1c7cabdd:public/deliverables.js | sed -n '246,460p' | sha256sum
+git show 333b5d70:public/board/deliver-frame.js | sed -n '49,263p' | sha256sum
+
+# the declaration scan: top-level function/const/let/class, sorted, on the base blob and on the two files
+# the page-order load probe: vm.runInContext of the two files, then `typeof <name>` for each moved name
+
+# the gates, base and after
+git archive 1c7cabdd | tar -x -C $SCRATCH/turnover && (cd $SCRATCH/turnover && node tools/verify-deliverables-ui.mjs; node tools/verify-deliverables-stable.mjs)
+node tools/verify-deliverables-ui.mjs; node tools/verify-deliverables-stable.mjs; node tools/verify-deliverables-stale.mjs</pre>
+</section>
+
+<footer>Row 521. Cut commit 333b5d70. The scratch probes (declaration scan, load probe, rendered row) are kept under <code>C:/Users/roper/AppData/Local/Temp/wag/9aacc3f0</code> and are not part of this tree.</footer>
+</main>
+</body>
+</html>
