@@ -338,14 +338,22 @@ async function main() {
         const up = [];
         for (let i = 1; i <= MOVES; i += 1) up.push(await slide(page, LONG, g1.x, g1.y - i * STEP));
         if (process.env.PROBE_SCROLL) console.log("scrollBy:", JSON.stringify(await page.evaluate(() => window.__scrollWho.slice(0, 2))));
+        // THE FLOOR IS THE SHRINK'S ONLY STOP, and it is the box's own computed min-height: once the box is that short
+        // the corner cannot follow the hand any further, and the last step of a fixed ten is the one that reaches it
+        // (the LONG console starts at the cap, and ten 20px steps want a height under this fixture's 34px floor). So
+        // tracking and the 20px step are asserted while the box is above the floor, and the step that reaches it is
+        // asserted to land ON it. Demanding 20px forever would be the viewport-only band's mistake in a second
+        // costume: a stop the box really makes, read as a defect.
+        const floor = await page.evaluate(() => Number(window.wtConsoleGripDrag && window.wtConsoleGripDrag.min) || 0);
+        const above = (i) => g1.at.h - (i + 1) * STEP > floor + 0.5;
         const upGapsX = up.map((s) => Math.abs(s.gapX));
         const upGapsY = up.map((s) => Math.abs(s.gapY));
-        check(upGapsX.every((v) => v <= TOL) && upGapsY.every((v) => v <= TOL),
-          `ten 20px moves up: the grip's box stays within ${TOL}px of the cursor at every step`,
-          `x ${upGapsX.join(",")} | y ${upGapsY.join(",")} | topbar ${up.map((s) => s.bar).join(",")}`);
-        check(monotone(up.map((s) => s.h), "up") && up.every((s, i) => near(s.h, g1.at.h - (i + 1) * STEP, 2)),
-          "and the console moves 20px a step in one direction, never back",
-          `heights ${up.map((s) => s.h).join(",")}`);
+        check(upGapsX.every((v) => v <= TOL) && up.every((s, i) => !above(i) || Math.abs(s.gapY) <= TOL),
+          `ten 20px moves up: the grip's box stays within ${TOL}px of the cursor while the box is above its floor`,
+          `x ${upGapsX.join(",")} | y ${upGapsY.join(",")} | floor ${floor} | topbar ${up.map((s) => s.bar).join(",")}`);
+        check(monotone(up.map((s) => s.h), "up") && up.every((s, i) => (above(i) ? near(s.h, g1.at.h - (i + 1) * STEP, 2) : near(s.h, floor, 1))),
+          "and the console moves 20px a step down to the floor, which then holds it",
+          `heights ${up.map((s) => s.h).join(",")} floor ${floor}`);
 
         // ---- the board-wide rebuild, fired MID-DRAG: the gesture owns the box, so nothing may replace or re-pin it
         {
