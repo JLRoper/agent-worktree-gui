@@ -43,7 +43,7 @@
   <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at 334989a8, main at 632af659 (1.194.0)</dd>
   <dt>version</dt><dd>1.195.1 (patch: a tooling cut, no route, payload or layout change)</dd>
   <dt>the helper</dt><dd>tools/style-sheets.mjs: <code>styleSheetFiles</code>, <code>styleSheetPaths</code>, <code>readStyleSheets</code>, <code>styleLinkTags</code></dd>
-  <dt>the sweep</dt><dd><code>grep -rln 'public/style.css' tools/*.mjs</code> answers nothing (0 files, was 28)</dd>
+  <dt>the sweep</dt><dd><code>grep -rln 'public/style.css' tools/*.mjs</code> answers nothing (0 files, was 28 on the base)</dd>
   <dt>the page</dt><dd>22 stylesheet links in public/index.html, 613,223 characters of CSS in load order</dd>
   <dt>the queue gate</dt><dd>tools/verify-queue-cards.mjs: the eight route checks the brief names are all green, the SKIPPED note now reads "files in use by #5"</dd>
   <dt>the other parsers</dt><dd>four copies of the index.html parse collapsed to one (test/style-sheets.js, verify-css-split, css-split-review, verify-queue-agents)</dd>
@@ -116,6 +116,7 @@ styleLinkTags({ root, prefix })  the &lt;link&gt; tags a fixture page serves, on
   <tr><td class="tool">test/style-sheets.js</td><td>its own index.html parse</td><td>delegates to the helper, keeps the 19-sheet filter</td><td><span class="ok">suite: see section 6</span></td></tr>
 </table>
 <p class="small">"static (comment only)" means the edit is prose or fixture data: the tool's code path is unchanged, so it is not re-run here. Every edited <code>.mjs</code> passed <code>node --check</code>.</p>
+<p><b>Two more arrived with the merge.</b> The turnover branch had moved since this branch was cut: a sibling's commit rewrote a comment in <code>tools/verify-console-boxes.mjs</code> (the 1.191.0 split, named by its old path) and added <code>tools/verify-console-fonts.mjs</code>, a new console gate carrying its own copy of the page's sheet parse and the same sentence. Both were converted on the merged tip in the same shape: <code>sheetText</code> is now <code>readStyleSheets</code>, the comment names the sheets, and the two gates run (fonts 347/347; boxes fails "two calls, each with its own fold key" identically before and after, a page error in its own fixture). That makes 29 tools on the merged tip, and the sweep answers nothing there too.</p>
 
 <h2>4. The queue gate: a skip needs a live holder</h2>
 <p>The lane rule (queue row #293) skipped a queued row only when a LIVE job's row claims one of its files (<code>liveRowHolders</code> + <code>laneRefusal</code>, lib/spawn-check.js:170 and :241). <code>verify-queue-cards.mjs</code> seeded one running task with no live run at all, so after that rule landed the SKIPPED note the gate pins could never appear: 6 of the eight route checks passed (the eighth was the <code>readFileSync</code> throw).</p>
@@ -149,7 +150,7 @@ $ node tools/style-sheets.mjs | wc -l
 22
 $ node tools/style-sheets.mjs --text | wc -c
 613223</pre>
-<p>The suite that reads this stylesheet (<code>test/style-sheets.js</code> and the ~100 test files importing it) runs on the same helper and the same filter as before: <code>npm test</code> was run once on this branch, after the last commit, and its totals are in the final message. <code>npm run test:changed</code> was run while the cut was built.</p>
+<p>The suite that reads this stylesheet (<code>test/style-sheets.js</code> and the ~100 test files importing it) runs on the same helper and the same filter as before: the 45 test files that import it answered 506 tests, 506 pass, 0 fail in 4.5 s. <code>npm test</code> over all 466 test files was started twice and cancelled at 20 and again at 36 minutes without a summary; what it had run was green in both, and the changed module's consumers were run directly instead. That is the one thing this page cannot claim: a full-suite total.</p>
 
 <h2>7. What is left</h2>
 <ul>
