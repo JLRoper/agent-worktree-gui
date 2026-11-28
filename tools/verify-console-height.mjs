@@ -312,6 +312,10 @@ async function grab(page, thread, out) {
 // position: the page holds the card still while the box grows (an anchor correction), so the corner does not move down
 // the viewport even as the height does.
 async function dragTo(page, thread, out, target) {
+  // The node the hand is about to hold, stamped before the press: a gesture that ends mid-leg can then say whether its
+  // console left the page (a rebuild) or the gesture itself was released. Without the stamp a short drag and a replaced
+  // console read the same.
+  const heldUid = await stamp(page, out);
   const g = await grab(page, thread, out);
   if (!g.pinned) {
     console.log(`DRAG-NOT-TAKEN  the press never landed on the console's corner (${out})`);
@@ -341,6 +345,16 @@ async function dragTo(page, thread, out, target) {
     const d = window.wtConsoleGripDrag;
     return d ? { want: d.want, room: d.room, min: d.min, edge: d.edge } : null;
   });
+  const survived = await page.evaluate((o) => {
+    const pre = document.querySelector(`pre[data-out="${o}"]`);
+    return pre ? pre.dataset.probeUid || "" : "";
+  }, out);
+  if (!held) {
+    console.log(
+      `DRAG-DIED  the gesture ended before the target (${out}, h ${g.from.h} -> ${last}): ` +
+        (survived && survived === heldUid ? "the node is the same, so the gesture was released (blur or a lost pointer capture)" : "the console node was replaced under the hand"),
+    );
+  }
   await page.mouse.up();
   await page.waitForTimeout(120);
   return { from: g.from, pressed, held, after: await measure(page, out), pinned: true };
