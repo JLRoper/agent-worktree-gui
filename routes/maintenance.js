@@ -54,6 +54,20 @@ export function createMaintenanceRoutes({
     if (typeof fn !== "function") throw new Error(`createMaintenanceRoutes needs ${name} from the composition root`);
   }
 
+  // The census walks the whole process table (2-3 s on Windows) and the section can be re-read while a reader
+  // refreshes it; the process list does not need to be live to the second, while the FILE SIZES do. So only the
+  // census is memoised — the targets are measured on every read — and a census that throws is never remembered.
+  const CENSUS_TTL_MS = 30_000;
+  let censusAt = 0;
+  let censusValue = null;
+  const censusCached = async (options) => {
+    if (censusValue !== null && now() - censusAt < CENSUS_TTL_MS) return censusValue;
+    const value = await census(options);
+    censusValue = value;
+    censusAt = now();
+    return value;
+  };
+
   // The folders a mistyped scratchDir could be an ancestor of: this checkout, the config's folder, the panel's own
   // state, its working folder, the scan roots and every project the registry knows. Asked per request because the
   // registry changes as projects come and go, and `scratchProblem` needs the CURRENT list, not a boot-time copy.
@@ -83,7 +97,7 @@ export function createMaintenanceRoutes({
       // Both halves are measured on demand: the targets are a directory read each, the census one process-table read.
       const [targets, processes] = await Promise.all([
         readMaintenanceTargets({ config, jobs: liveJobs(), keep: keepPaths(config), now: at, hermes }),
-        census({ ownPid: process.pid, now: at }),
+        censusCached({ ownPid: process.pid, now: at }),
       ]);
       sendJson(res, 200, { ok: true, targets, processes });
       return true;

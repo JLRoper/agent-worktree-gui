@@ -601,6 +601,7 @@ function harness({
   census = async () => ({ sandboxPanels: [], testRunners: [], orphanPids: [] }),
   runHermes = silentHermes,
   hermes = { bin: null },
+  now = () => Date.now(),
 }) {
   const state = { body: {}, token: "tok-test-alpha", log: [] };
   const handles = createMaintenanceRoutes({
@@ -617,7 +618,7 @@ function harness({
     authorised: (req, token) => req.headers?.["x-panel-token"] === token,
     log: (line) => state.log.push(line),
     census,
-    now: () => Date.now(),
+    now,
     runHermes,
     hermes,
   });
@@ -674,6 +675,30 @@ test("the route: a refused clean answers 200 with the reason in `refused`, never
   assert.equal(refused.body.removedFiles, 0, "and nothing was removed");
   assert.ok((await readdir(scratch)).includes("held.txt"), "the held file is still there");
   assert.match(refused.log.join("\n"), /refused:/, "the log says what was refused too");
+});
+
+// The census is the slow half of the Settings read (a process-table walk), so it is memoised for its TTL while the
+// file sizes are re-measured every time. Two reads inside the window share one walk; past it, the walk runs again.
+test("the route: the census is memoised for its TTL, the file sizes are not", async (t) => {
+  const dir = await sandbox(t);
+  const config = { ...configOf(dir), scratchDir: path.join(dir, "scratch"), scratchDirSource: "config", token: "secret" };
+  let clock = 1_000_000;
+  let walks = 0;
+  const census = async () => {
+    walks += 1;
+    return { sandboxPanels: [], testRunners: [], orphanPids: [] };
+  };
+  const { call } = harness({ config, census, now: () => clock });
+
+  const first = await call("GET", MAINTENANCE_PATH);
+  const second = await call("GET", MAINTENANCE_PATH);
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(walks, 1, "two reads inside the TTL share one process-table walk");
+
+  clock += 30_001;
+  await call("GET", MAINTENANCE_PATH);
+  assert.equal(walks, 2, "past the TTL the walk runs again");
 });
 
 test("the route: a clean dry run returns the contract shape and a real press deletes", async (t) => {

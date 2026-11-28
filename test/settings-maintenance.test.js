@@ -255,3 +255,9 @@ test("the sessions card offers the unused-for window and the press carries it", 
   assert.deepEqual(calls.posts[0], { target: "hermes-sessions", dryRun: true, olderThanHours: 168 }, "the chosen window rides the press");
   assert.ok(Number(calls.postOpts[0] && calls.postOpts[0].timeoutMs) >= 300000, "a Hermes prune waits past its VACUUM, not 60 s");
 });
+
+test("nothing is read at boot; the section waits for the General tab", async () => {
+  const { doc, calls } = makePanel({ get: async () => ({ ok: true, json: async () => GET_ANSWER }) });
+  assert.equal(calls.gets, 0, "no read happens when the page loads");
+  assert.equal(doc.getElementById("maintenance-targets").innerHTML, "", "and nothing is painted over the static markup");
+});

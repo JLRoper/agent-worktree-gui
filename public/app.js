@@ -10195,8 +10195,9 @@ document.getElementById(MAINTENANCE_TARGETS_ID)?.addEventListener("click", (e) =
   if (preview) void runMaintenance(preview.getAttribute("data-maintenance-preview"), true);
   else if (clean) void runMaintenance(clean.getAttribute("data-maintenance-clean"), false);
 });
-paintMaintenance();
-void loadMaintenance();
+// Nothing is read at boot: the census is a process-table walk (2-3 s on Windows) and this section is opened rarely.
+// The first Settings -> General select starts the read (selectSettingsTab), Refresh re-reads, and the static "not
+// read" lines stand until then.
 
 // ---- end settings > storage & cleanup
 
