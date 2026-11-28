@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// HARNESS: REVIEW - npm run review:css-split measures how well the 1.191.0 cut of public/style.css
+// HARNESS: REVIEW - npm run review:css-split measures how well the 1.191.0 cut of the one panel sheet
 // became per-surface sheets. It is not a proof that the cut is faithful (tools/verify-css-split.mjs is
 // that proof); it asks the next question: is the RESULT a good split of the work, or only a good copy?
 //
@@ -38,6 +38,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { styleSheetFiles } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -60,15 +61,11 @@ const num = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : v);
 // ---------------------------------------------------------------------------------------------
 
 // Every local sheet public/index.html loads, in load order. chart.css and the two core/ card sheets
-// were never part of style.css; they are still in the order because the cascade measurement needs the
-// whole list, but a "split sheet" is one of the nineteen the cut produced.
+// were never part of the one panel sheet; they are still in the order because the cascade measurement needs the
+// whole list, but a "split sheet" is one of the nineteen the cut produced. The list is parsed from the page by
+// tools/style-sheets.mjs, so a sheet added there is reviewed without an edit here.
 export function stylesheetsInLoadOrder(root = ROOT) {
-  const html = readFileSync(path.join(root, "public", "index.html"), "utf8");
-  const out = [];
-  for (const m of html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"]+\.css)"/g)) {
-    out.push({ href: m[1], split: !(m[1] === "chart.css" || m[1].startsWith("core/")) });
-  }
-  return out;
+  return styleSheetFiles({ root }).map((href) => ({ href, split: !(href === "chart.css" || href.startsWith("core/")) }));
 }
 
 // The surface each sheet owns, as the split's own report names it.

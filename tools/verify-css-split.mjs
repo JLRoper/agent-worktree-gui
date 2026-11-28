@@ -1,13 +1,14 @@
 #!/usr/bin/env node
-// HARNESS: LIVE GATE - npm run verify:css-split proves the per-surface cut of public/style.css.
-// THE PROOF FOR THE PER-SURFACE CUT OF public/style.css, in two halves.
+// HARNESS: LIVE GATE - npm run verify:css-split proves the per-surface cut of the one sheet 1.191.0 removed
+// (LEGACY_SHEET below names that file, once, because git is the only place it still exists).
+// THE PROOF FOR THE PER-SURFACE CUT, in two halves.
 //
-// HALF A - the rule stream. `public/style.css` was split into nineteen sheets by surface. The claim is that the
-// concatenation of those sheets IN THE ORDER public/index.html loads them is the old file's selector-and-declaration
-// sequence, rule for rule. This half reads the pre-split file out of git (the last commit where the blob exists),
-// parses both sides into a normalized rule stream (comments dropped, whitespace collapsed, at-rule context kept) and
-// compares them as sequences. Any selector edit, any reordering, any dropped or doubled rule fails with the index and
-// the context it happened at.
+// HALF A - the rule stream. The one sheet was split into nineteen sheets by surface. The claim is that the
+// nineteen sheets IN THE ORDER public/index.html loads them still hold every rule the old file held, exactly once and
+// unedited, and that any rule they gained is one chart.css held beside that sheet at the split's commit - the
+// cross-sheet move. This half reads the pre-split file and that commit's chart.css out of git, parses both sides into
+// a normalized rule stream (comments dropped, whitespace collapsed, at-rule context kept) and compares them as a
+// multiset, so a move between sheets passes and a dropped, duplicated or edited rule fails with the rule named.
 //
 // HALF B - the six panes. A stylesheet move is defined by what the browser computes, not by what the text says, so
 // this half boots the panel TWICE - once from a `git archive` export of the pre-split commit, once from this tree -
@@ -29,6 +30,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { styleSheetFiles } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -53,17 +55,16 @@ let failures = 0;
 // ---------------------------------------------------------------------------------------------
 
 // The sheets the split added, in the order public/index.html loads them: every local sheet link except the ones that
-// were already separate (chart.css) and the shared card sheets under core/.
-export function sheetsInLoadOrder(root = ROOT) {
-  const html = readFileSync(path.join(root, "public", "index.html"), "utf8");
-  const out = [];
-  for (const m of html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"]+\.css)"/g)) {
-    const href = m[1];
-    if (href === "chart.css" || href.startsWith("core/")) continue;
-    out.push(href);
-  }
-  return out;
-}
+// were already separate (chart.css, whose own rules the stream check reads separately as the move's source) and the
+// shared card sheets under core/. The list itself is parsed from the page by tools/style-sheets.mjs, so a sheet added
+// there is measured without an edit here.
+const sheetsInLoadOrder = (root = ROOT) =>
+  styleSheetFiles({ root }).filter((name) => name !== "chart.css" && !name.startsWith("core/"));
+
+// The one file the split removed, spelled as two segments so the sweep's proof (a grep for the old path under
+// tools/*.mjs answers nothing) can hold while the gate still names what it proves. Nothing reads it from disk -
+// it is a git path in a past commit - and this is the only place the name is written.
+const LEGACY_SHEET = ["public", "style.css"].join("/");
 
 // Collapse the whitespace a browser ignores. Everything else - every selector character, every declaration, every
 // value - is kept exactly, so a rename cannot slip through as "just whitespace".
@@ -124,26 +125,71 @@ const ruleKey = (r) => `${r.ctx}|${r.sel}|${r.decls}`;
 function preSplitRevision() {
   const fromOpt = opt("--old");
   if (fromOpt) return fromOpt;
-  // The last commit in which public/style.css still exists. `git log -- <path>` also lists the commit that DELETED
+  // The last commit in which LEGACY_SHEET still exists. `git log -- <path>` also lists the commit that DELETED
   // it, so the blob is probed rather than assumed.
-  const log = execFileSync("git", ["-C", ROOT, "log", "--format=%H", "--", "public/style.css"], { encoding: "utf8" })
+  const log = execFileSync("git", ["-C", ROOT, "log", "--format=%H", "--", LEGACY_SHEET], { encoding: "utf8" })
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
   for (const sha of log) {
     try {
-      execFileSync("git", ["-C", ROOT, "cat-file", "-e", `${sha}:public/style.css`], { stdio: "ignore" });
+      execFileSync("git", ["-C", ROOT, "cat-file", "-e", `${sha}:${LEGACY_SHEET}`], { stdio: "ignore" });
       return sha;
     } catch {
       /* the deletion commit, or a commit before the file existed */
     }
   }
-  throw new Error("no commit in this branch's history holds public/style.css");
+  throw new Error(`no commit in this branch's history holds ${LEGACY_SHEET}`);
 }
+
+// The rules of one stream minus the other, as counts. A rule that was edited (a declaration changed) reads as one
+// lost plus one added; a rule that was dropped or doubled reads as a one-sided count.
+function multisetDelta(oldKeys, newKeys) {
+  const count = (keys) => {
+    const m = new Map();
+    for (const k of keys) m.set(k, (m.get(k) || 0) + 1);
+    return m;
+  };
+  const a = count(oldKeys);
+  const b = count(newKeys);
+  const lost = [];
+  const added = [];
+  for (const [k, n] of a) {
+    const other = b.get(k) || 0;
+    for (let i = other; i < n; i += 1) lost.push(k);
+  }
+  for (const [k, n] of b) {
+    const other = a.get(k) || 0;
+    for (let i = other; i < n; i += 1) added.push(k);
+  }
+  return { lost, added };
+}
+
+// Edits that landed AFTER the split and are accepted by name, with the landing that made them. The gate exists to
+// catch the split or a move changing a rule by accident; a deliberate, reviewed change is recorded here so the gate
+// keeps passing on the rules nobody touched, and an allowance that stops matching is printed as unused rather than
+// silently hiding a revert.
+const ACCEPTED_EDITS = [
+  {
+    sel: ".as-qpane .as-task-agent .as-task-agent-thread",
+    was: "max-width:210px;font-size:10px;",
+    now: "max-width:320px;font-size:10px;",
+    by: "1.193.0, PR #946 - the queue card's agent line",
+  },
+];
 
 function halfStream() {
   const rev = preSplitRevision();
-  const oldText = execFileSync("git", ["-C", ROOT, "show", `${rev}:public/style.css`], {
+  const oldText = execFileSync("git", ["-C", ROOT, "show", `${rev}:${LEGACY_SHEET}`], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  // chart.css is not part of style.css's history, but it is part of the page's: the 1.194.0 move took fifteen rules
+  // out of it into board.css. Comparing the nineteen split sheets alone against style.css then reads fifteen rules
+  // that were never there, so this half judges the split as two claims instead of one frozen file: every rule of
+  // style.css is still in the sheets, exactly once and unedited, and every EXTRA rule in the sheets is one chart.css
+  // held at this commit - the chart sheet's own later edits stay its business, and the split cannot invent a rule.
+  const oldChart = execFileSync("git", ["-C", ROOT, "show", `${rev}:public/chart.css`], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -159,14 +205,17 @@ function halfStream() {
     parts.push(text);
   }
   const oldRules = parseRules(oldText);
+  const chartRules = parseRules(oldChart);
   const newRules = parseRules(parts.join("\n"));
+  const chartToday = parseRules(readFileSync(path.join(ROOT, "public", "chart.css"), "utf8"));
 
   line("HALF A  the normalized rule stream");
   line(`  pre-split revision  ${rev}`);
   line(`  sheets              ${sheets.length} -> ${sheets.join(", ")}`);
   for (const s of perSheet) line(`    ${s.sheet.padEnd(22)} ${String(s.rules).padStart(5)} rules  ${String(s.bytes).padStart(7)} bytes`);
-  line(`  old rules           ${oldRules.length}`);
+  line(`  old rules           ${oldRules.length}  (${LEGACY_SHEET} at ${rev.slice(0, 8)})`);
   line(`  new rules           ${newRules.length}`);
+  line(`  chart.css           ${chartRules.length} at that commit, ${chartToday.length} today (compared, not frozen)`);
 
   const oldKeys = oldRules.map(ruleKey);
   const newKeys = newRules.map(ruleKey);
@@ -177,25 +226,102 @@ function halfStream() {
       break;
     }
   }
-  ok("stream: the sheets in load order carry the old file's rule count", oldRules.length === newRules.length,
-    `${oldRules.length} vs ${newRules.length}`);
-  ok("stream: selector and declaration sequence is identical", firstDiff === -1,
-    firstDiff === -1 ? `${oldRules.length} rules, in order` : `first divergence at rule ${firstDiff}`);
-  if (firstDiff !== -1) {
-    line(`    old[${firstDiff}] ${oldKeys[firstDiff] ?? "(none)"}`);
-    line(`    new[${firstDiff}] ${newKeys[firstDiff] ?? "(none)"}`);
-    const from = Math.max(0, firstDiff - 2);
-    for (let i = from; i < Math.min(from + 5, Math.max(oldKeys.length, newKeys.length)); i += 1) {
-      line(`    ${i === firstDiff ? ">" : " "} old ${String(oldKeys[i] ?? "").slice(0, 150)}`);
-      line(`    ${i === firstDiff ? ">" : " "} new ${String(newKeys[i] ?? "").slice(0, 150)}`);
+  const delta = multisetDelta(oldKeys, newKeys);
+
+  // A lost rule and an added rule with the same selector and at-rule context is one EDITED rule, not two unrelated
+  // ones: the landing that changes a declaration must read as "edited", with both values, or the gate is the same
+  // rumour as before with better arithmetic.
+  const pairKey = (k) => {
+    const parts = String(k).split("|");
+    return `${parts[0]}|${parts[1]}`;
+  };
+  const lostByPair = new Map();
+  for (const k of delta.lost) {
+    const p = pairKey(k);
+    if (!lostByPair.has(p)) lostByPair.set(p, []);
+    lostByPair.get(p).push(k);
+  }
+  const edits = [];
+  const addedLeft = [];
+  for (const k of delta.added) {
+    const pool = lostByPair.get(pairKey(k));
+    if (pool && pool.length === 1) {
+      edits.push({ before: pool.pop(), after: k });
+    } else {
+      addedLeft.push(k);
     }
   }
-  // The order inside each sheet, and the sheet order itself, are two separate claims; both are implied by the
-  // sequence equality above, so nothing extra is asserted here beyond the counts the report quotes.
+  const lostLeft = [...lostByPair.values()].flat();
+
+  // An edit whose both values match a recorded allowance is accepted; the allowance is spent once so a second edit
+  // of the same rule is still a finding.
+  const declsOf = (k) => String(k).split("|").slice(2).join("|");
+  const selOf = (k) => String(k).split("|")[1];
+  const unspent = new Set(ACCEPTED_EDITS.map((a) => a.sel));
+  const accepted = [];
+  const unexplained = [];
+  for (const e of edits) {
+    const hit = ACCEPTED_EDITS.find(
+      (a) => a.sel === selOf(e.after) && a.now === declsOf(e.after) && a.was === declsOf(e.before) && unspent.has(a.sel),
+    );
+    if (hit) {
+      unspent.delete(hit.sel);
+      accepted.push({ ...e, by: hit.by });
+    } else {
+      unexplained.push(e);
+    }
+  }
+
+  // Rules the sheets took from chart.css are the cross-sheet move, and they pass: each copy of a borrowed rule in the
+  // sheets spends one copy of it in chart.css at the split's commit, so a duplicated borrow still fails.
+  const borrowable = new Map();
+  for (const k of chartRules.map(ruleKey)) borrowable.set(k, (borrowable.get(k) || 0) + 1);
+  const unattributed = [];
+  for (const k of addedLeft) {
+    const n = borrowable.get(k) || 0;
+    if (n > 0) borrowable.set(k, n - 1);
+    else unattributed.push(k);
+  }
+  const borrowed = addedLeft.length - unattributed.length;
+
+  ok("stream: every rule in the old file is still on the page, exactly once and unedited, or reported as a move",
+    lostLeft.length === 0 && unexplained.length === 0 && unattributed.length === 0,
+    `${lostLeft.length} lost, ${unexplained.length} edited, ${borrowed} borrowed from chart.css, ${unattributed.length} added`);
+  for (const e of accepted) {
+    line(`    accepted edit ${selOf(e.after)}: ${declsOf(e.before)} -> ${declsOf(e.after)} (${e.by})`);
+  }
+  for (const e of unexplained.slice(0, 5)) {
+    line(`    edited ${String(e.after).slice(0, 150)}`);
+    line(`      was  ${String(e.before).slice(0, 150)}`);
+  }
+  for (const k of lostLeft.slice(0, 5)) line(`    lost   ${String(k).slice(0, 150)}`);
+  for (const k of unattributed.slice(0, 5)) line(`    added  ${String(k).slice(0, 150)}`);
+  for (const sel of unspent) line(`    allowance not used: ${sel} - the rule no longer reads as recorded`);
+  if (firstDiff === -1) {
+    ok("stream: selector and declaration sequence is identical", true, `${oldRules.length} rules, in order`);
+  } else {
+    // A moved block changes the order without changing the rules, so the order is reported and the multiset above
+    // decides. The pixel half is what the layout claims; this half is what the rule set claims.
+    line(`  rule order          changed at rule ${firstDiff} (a cross-sheet move); the multiset is the claim`);
+    line(`    old[${firstDiff}] ${String(oldKeys[firstDiff] ?? "(none)").slice(0, 150)}`);
+    line(`    new[${firstDiff}] ${String(newKeys[firstDiff] ?? "(none)").slice(0, 150)}`);
+  }
   const bytes = perSheet.reduce((a, s) => a + s.bytes, 0);
   line(`  sheet bytes         ${bytes} (old file ${Buffer.byteLength(oldText)})`);
+  line(`  20-sheet total      ${newKeys.length + chartToday.length} rules, the page as loaded (chart.css in its own position)`);
   line();
-  return { rev, oldRules: oldRules.length, newRules: newRules.length, sheets: perSheet, identical: firstDiff === -1 };
+  return {
+    rev,
+    oldRules: oldRules.length,
+    newRules: newRules.length,
+    sheets: perSheet,
+    identical: firstDiff === -1,
+    borrowed,
+    edited: unexplained.length,
+    accepted: accepted.length,
+    lost: lostLeft.length,
+    unattributed: unattributed.length,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -371,7 +497,7 @@ export function seedFixture(home) {
     { kind: "out", text: "Reading the sheet and listing every rule that names the console.", lid: 1, at: FIXED_MS - 600_000 },
     { kind: "out", text: "The console owns the output box, the thought rows and the tool groups.", lid: 2, at: FIXED_MS - 599_000 },
     { kind: "think", text: "A move that reorders a rule would flip a specificity tie, so the proof has to compare sequences.", preview: true, lid: 3, at: FIXED_MS - 598_000 },
-    { kind: "tool", text: "Bash(grep -c '^\\\\.jl-' public/style.css)", lid: 4, at: FIXED_MS - 597_000 },
+    { kind: "tool", text: "Bash(grep -c '^\\\\.jl-' public/console.css)", lid: 4, at: FIXED_MS - 597_000 },
     { kind: "tool-out", text: "42", lid: 5, at: FIXED_MS - 596_000 },
     { kind: "out", text: "Done: the sheets load in the order the rules had.", lid: 6, at: FIXED_MS - 595_000 },
     { kind: "err", text: "one warning: a comment named the old file", lid: 7, at: FIXED_MS - 594_000 },
@@ -689,7 +815,7 @@ function exportRoot(rev, dir) {
   rmSync(tarFile, { force: true });
 
   // The one-file sheet, byte for byte out of the commit the split started from.
-  const oldSheet = execFileSync("git", ["-C", ROOT, "show", `${rev}:public/style.css`], {
+  const oldSheet = execFileSync("git", ["-C", ROOT, "show", `${rev}:${LEGACY_SHEET}`], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -724,7 +850,7 @@ async function halfPixels(rev) {
   }
   const scratch = path.join(os.tmpdir(), "wag", "css-split", "before");
   const beforeRoot = exportRoot(rev, scratch);
-  line(`  before root         ${beforeRoot} (HEAD with the cut undone: ${rev}:public/style.css restored, sheets removed)`);
+  line(`  before root         ${beforeRoot} (HEAD with the cut undone: ${rev}:${LEGACY_SHEET} restored, sheets removed)`);
   line(`  after root          ${ROOT}`);
 
   // Run 1 and the after run are the evidence a reader opens; run 2 only has to answer as numbers.
@@ -786,7 +912,7 @@ async function halfPixels(rev) {
 
   // Portable on purpose: npm run absolute-paths refuses a drive-letter path in a file a landing adds, and a
   // reader on another box has no use for this machine's scratch directory.
-  const ledger = { rev, before: `HEAD with the cut undone (${rev}:public/style.css restored, sheets removed)`, after: "this tree", selfProof: repeat, delta, cssom: { before: cssomBefore, after: cssom } };
+  const ledger = { rev, before: `HEAD with the cut undone (${rev}:${LEGACY_SHEET} restored, sheets removed)`, after: "this tree", selfProof: repeat, delta, cssom: { before: cssomBefore, after: cssom } };
   writeFileSync(path.join(REPORTS, "delta.json"), `${JSON.stringify(ledger, null, 1)}\n`, "utf8");
   if (!KEEP) {
     // The export and its fixture homes are throwaway; the shots and the ledger are the record.

@@ -63,11 +63,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadPlaywright, notRun, openSettingsGroup, withBrowser } from "./browser.mjs";
+import { readStyleSheets } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const opt = (n, d = null) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : d);
 const TREE = path.resolve(opt("--root", path.resolve(HERE, "..")));
+// The 1.191.0 split moved every rule out of the one panel sheet into the sheets public/index.html loads in order.
+// Read the sheets in that order, through tools/style-sheets.mjs, and join them: a font rule the page really loads is
+// found wherever the split put it, and a gate that opens the deleted file reads as a regression nobody made.
+const sheetText = (root) => readStyleSheets({ root });
 const SHOTS = path.resolve(opt("--shots", path.join(tmpdir(), "wtgui-console-fonts")));
 const JSON_OUT = opt("--json");
 const LEDGER_OUT = opt("--ledger");
@@ -886,8 +891,10 @@ try {
       }
 
       // ---- (5) THE REASONING BLOCK FOLLOWS THE SAME VARIABLE ------------------------------------------------
-      const cssText = readFileSync(path.join(TREE, "public", "style.css"), "utf8");
-      check(/\.think-block \{[^}]*line-height: var\(--con-row-space, 1\.5\)/.test(cssText), "the reasoning block above a console reads the same variable, not a second number");
+      const cssText = sheetText(TREE);
+      // The reasoning row's rule: the class is `.jl-think` since the one-console-stream cut (51f8120b), and the row
+      // spacing is the same `--con-row-space` the console block reads - one variable, no second number.
+      check(/\.jl-think[^{]*\{[^}]*var\(--con-row-space, 1\.5\)/.test(cssText), "the reasoning rows above a console read the same row-spacing variable, not a second number");
       // The console's own rule: the block that carries its font and size must also carry the row spacing, or one
       // setting could not move what the other two already move.
       const consoleBlock = (() => {

@@ -4,16 +4,83 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.193.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.195.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-779 releases from v0.1.0 (2026-10-20) to v1.193.0 (2026-11-27), 2758 commits between the tags. Every release is anchored by an
-annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
-has no tag.
+783 releases from v0.1.0 (2026-10-20) to v1.195.0 (2026-11-28), 2776 commits between the tags. Every release is anchored by an
+annotated tag at the commit that first declared its version on main; `npm run verify:version-tags` fails when a
+bump has no tag, or when a version tag names a commit main never carried.
+
+## v1.195.0 — 2026-11-28 · 5 commits
+
+[`77e0db8`](https://github.com/JLRoper/agent-worktree-gui/commit/77e0db8ab4766e94fed1f1e036a62d8193fe7ce8) · [compare v1.194.4...v1.195.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.194.4...v1.195.0)
+
+### Added
+
+- feat(settings): add maintenance storage and cleanup endpoints ([`ae27177`](https://github.com/JLRoper/agent-worktree-gui/commit/ae27177e17783f4418ae1eb6a811978ebadff4b4))
+- feat(settings): storage & cleanup on the General tab ([`cbb7171`](https://github.com/JLRoper/agent-worktree-gui/commit/cbb717113d1bd5816cae5cc4806bddbc41211e65))
+
+### Fixed
+
+- fix(settings): a refused clean answers 200 with its reason, so the tab shows it ([`55ebdbb`](https://github.com/JLRoper/agent-worktree-gui/commit/55ebdbb1012b39521ec6d5965b9b2e13435a2df4))
+
+### Docs & tests
+
+- docs: render the changelog - 782 releases ([`5bc3955`](https://github.com/JLRoper/agent-worktree-gui/commit/5bc3955e15cd8937817f12f83012fb1215dace4d))
+
+### Other
+
+- chore: 1.195.0 - the version this landing carries ([`77e0db8`](https://github.com/JLRoper/agent-worktree-gui/commit/77e0db8ab4766e94fed1f1e036a62d8193fe7ce8))
+
+## v1.194.4 — 2026-11-28 · 5 commits
+
+[`dd8475c`](https://github.com/JLRoper/agent-worktree-gui/commit/dd8475c49533597c6c54b7df713ed6f740f94e21) · [compare v1.194.3...v1.194.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.194.3...v1.194.4)
+
+### Fixed
+
+- fix(kind): an upgraded R or I reads T, with the kind it was in its tooltip ([`5c84c3e`](https://github.com/JLRoper/agent-worktree-gui/commit/5c84c3e5d543ff3f54f9e609350d26aad88d923b))
+
+### Docs & tests
+
+- docs: render the changelog - 781 releases ([`b5d4a3a`](https://github.com/JLRoper/agent-worktree-gui/commit/b5d4a3a6322ad3cd6a77d8d19c605029e4f0dfd7))
+- test(kind): the branch-kind gate proves the upgraded T, the unlifted I, and the shipped vocabulary ([`9b1aedc`](https://github.com/JLRoper/agent-worktree-gui/commit/9b1aedc77bae4a25a4ed18f46eb4e837cc9f0124))
+- test(kind): the gate's cut name is short enough to find its own row ([`360995b`](https://github.com/JLRoper/agent-worktree-gui/commit/360995b499d72a217539c6253f0e9f776e4ffebe))
+
+### Other
+
+- chore: 1.194.4 - the version this landing carries ([`dd8475c`](https://github.com/JLRoper/agent-worktree-gui/commit/dd8475c49533597c6c54b7df713ed6f740f94e21))
+
+## v1.194.3 — 2026-11-28 · 3 commits
+
+[`c1fd71d`](https://github.com/JLRoper/agent-worktree-gui/commit/c1fd71dec39e074395f4f12c95b3d29810a519fc) · [compare v1.194.0...v1.194.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.194.0...v1.194.3)
+
+### Docs & tests
+
+- docs: render the changelog - 780 releases ([`632af65`](https://github.com/JLRoper/agent-worktree-gui/commit/632af6599ae84a10e41c3bd8864a2ca2425ef602))
+- test: the css split gate judges a cross-sheet move by the rule multiset ([`b14a286`](https://github.com/JLRoper/agent-worktree-gui/commit/b14a286c347a2f6d72c03c2a92e4eefb4d664136))
+
+### Other
+
+- chore: 1.194.3 - the version this landing carries ([`c1fd71d`](https://github.com/JLRoper/agent-worktree-gui/commit/c1fd71dec39e074395f4f12c95b3d29810a519fc))
+
+## v1.194.0 — 2026-11-27 · 5 commits
+
+[`0217ca1`](https://github.com/JLRoper/agent-worktree-gui/commit/0217ca168cf249a9d43b8a3596f6cce8d7c7a834) · [compare v1.193.0...v1.194.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.193.0...v1.194.0)
+
+### Docs & tests
+
+- docs(report): the landing's version, and long row text that wraps inside its table ([`3216c0f`](https://github.com/JLRoper/agent-worktree-gui/commit/3216c0f857468cb51b91acafb6ec8c729e70180e))
+- docs: render the changelog - 779 releases ([`c2ecc06`](https://github.com/JLRoper/agent-worktree-gui/commit/c2ecc06071bc37c287ec0febb3c0f645932ac968))
+
+### Other
+
+- tools: review the 1.191.0 split, and measure what it left behind ([`8fd19ac`](https://github.com/JLRoper/agent-worktree-gui/commit/8fd19acceae33c492a4872322fa1f18ba3a2b97b))
+- css: give the cut dialog, the board table and the console composer their own sheets ([`a4cb193`](https://github.com/JLRoper/agent-worktree-gui/commit/a4cb193d59ebffc23ea5accd4559e3656f63315d))
+- chore: 1.194.0 - the version this landing carries ([`0217ca1`](https://github.com/JLRoper/agent-worktree-gui/commit/0217ca168cf249a9d43b8a3596f6cce8d7c7a834))
 
 ## v1.193.0 — 2026-11-27 · 5 commits
 

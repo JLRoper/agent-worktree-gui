@@ -283,3 +283,63 @@ test("tag refuses loudly when no reachable commit declares the ref's version", a
   assert.match(r.err, /2 bumps seen there: v0\.1\.0 \.\. v0\.2\.0/, "it names the history it found instead");
   assert.deepEqual(tags(dir), [], "nothing was tagged");
 });
+
+// A tag is a claim about a commit, and the reader of a release only exists on main: a tag pushed from a side
+// branch for a number main never carried says "this number was released from here" about a commit nobody on main
+// can open. The gate names the tag, its commit and the branch holding it, because either one is what gets moved.
+test("a tag on a side branch whose commit main never carried is refused by name", async (t) => {
+  const { dir } = await fixture(t, ["0.1.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", git(dir, ["rev-parse", "HEAD"]), "-m", "v0.1.0"]);
+  git(dir, ["checkout", "-b", "wtgui/side"]);
+  await writeFile(path.join(dir, "package.json"), pkg("0.2.0"));
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "chore: 0.2.0 - a landing that has not landed"]);
+  git(dir, ["tag", "-a", "v0.2.0", "-m", "v0.2.0"]);
+  git(dir, ["checkout", "main"]);
+
+  const r = tool(GATE, ["--ref", "main"], dir);
+  assert.equal(r.code, 1, `${r.out}${r.err}`);
+  assert.match(
+    r.out,
+    /off-main\s+v0\.2\.0 points at [0-9a-f]{10}, which is not an ancestor of main - the tag is held by wtgui\/side; re-point it/,
+    "the finding is the tag, the commit and the branch, not a wrong-commit about a number main does not carry",
+  );
+  assert.match(r.out, /FAIL - 1 finding/);
+});
+
+// The other side of the same rule: a commit no branch holds cannot be landed, so a tag on it is a fossil of a
+// rewritten history rather than a claim somebody can settle. Refusing it on every run would be noise no reader
+// can act on, so it is reported as a note and the gate does not fail for it.
+test("a tag no branch holds is a note, not a refusal", async (t) => {
+  const { dir } = await fixture(t, ["0.1.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", git(dir, ["rev-parse", "HEAD"]), "-m", "v0.1.0"]);
+  git(dir, ["checkout", "-b", "gone"]);
+  await writeFile(path.join(dir, "package.json"), pkg("0.2.0"));
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "chore: 0.2.0"]);
+  git(dir, ["tag", "-a", "v0.2.0", "-m", "v0.2.0"]);
+  git(dir, ["checkout", "main"]);
+  git(dir, ["branch", "-D", "gone"]);
+
+  const r = tool(GATE, ["--ref", "main"], dir);
+  assert.equal(r.code, 0, `${r.out}${r.err}`);
+  assert.match(r.out, /no branch still holds \(a fossil of a rewritten history, not a claim somebody can land\)/);
+  assert.doesNotMatch(r.out, /off-main/);
+  assert.match(r.out, /PASS/);
+});
+
+// And the shape the branch workflow depends on: the bump a branch is still carrying, tagged on the commit that
+// declared it, is held rather than refused. The landing moves it onto the commit main carries.
+test("the branch's own pre-landing anchor is held, not refused", async (t) => {
+  const { dir } = await fixture(t, ["0.1.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", git(dir, ["rev-parse", "HEAD"]), "-m", "v0.1.0"]);
+  git(dir, ["checkout", "-b", "work"]);
+  await writeFile(path.join(dir, "package.json"), pkg("0.2.0"));
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "chore: 0.2.0 - the version this landing carries"]);
+  git(dir, ["tag", "-a", "v0.2.0", "-m", "v0.2.0"]);
+
+  const r = tool(GATE, ["--ref", "work"], dir);
+  assert.equal(r.code, 0, `${r.out}${r.err}`);
+  assert.match(r.out, /PASS/);
+});

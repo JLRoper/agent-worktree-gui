@@ -130,6 +130,7 @@
     "verify:queue-drag": "node tools/verify-queue-drag.mjs",
     "verify:assistant-queue-ui": "node tools/verify-assistant-queue-ui.mjs",
     "verify:assistant-queue-window": "node tools/verify-assistant-queue-window.mjs",
+    "verify:assistant-queue-open-cards": "node tools/verify-assistant-queue-open-cards.mjs",
     "verify:approvals-dock": "node tools/verify-approvals-dock.mjs",
     "verify:rw-review-compact": "node tools/verify-rw-review-compact.mjs",
     "dogfood:chat": "node tools/dogfood-chat.mjs",

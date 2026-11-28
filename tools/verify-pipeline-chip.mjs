@@ -8,7 +8,7 @@
 //
 // THE RECORD. `lib/jobs.js` writes `pipeline` on every job row (`summary()`, via `pipelineForJob`) and a cut writes
 // `{id: "local", stage: "work", since, history[]}` into the tree's durable book (`lib/pipelines.js`, docs/pipelines.md
-// §3). The page drew none of it: before this change "pipeline" appeared zero times in public/app.js, public/style.css
+// §3). The page drew none of it: before this change "pipeline" appeared zero times in public/app.js, the sheets
 // and public/index.html.
 //
 // THE THREE STATES, which is all this gate knows how to accept:

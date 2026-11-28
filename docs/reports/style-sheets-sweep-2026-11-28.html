@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Every tool reads the sheets the page links, through one helper</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 200px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap: anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Every tool reads the sheets the page links, through one helper</h1>
+<p class="sub">agent-worktree-gui 1.195.1. Queue row #438. 1.191.0 split <code>public/style.css</code> into nineteen per-surface sheets and deleted it; twenty-eight tools still named it, seven of them used it as a file. One helper now parses <code>public/index.html</code> for all of them, the queue gate's skip fixture is rebuilt for the live-holder lane rule, and the sweep that started this row answers nothing.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#438 (27 tools named in the brief; 28 found on the base, the count in section 1)</dd>
+  <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at 334989a8; main read 632af659 (1.194.0) when this branch was cut, 52708bbf (1.195.0) at the merge</dd>
+  <dt>version</dt><dd>1.195.1 for this cut (patch: a tooling cut, no route, payload or layout change); the turnover branch reads 1.196.1 after a later row landed on top of it</dd>
+  <dt>the helper</dt><dd>tools/style-sheets.mjs: <code>styleSheetFiles</code>, <code>styleSheetPaths</code>, <code>readStyleSheets</code>, <code>styleLinkTags</code></dd>
+  <dt>the sweep</dt><dd><code>grep -rln 'public/style.css' tools/*.mjs</code> answers nothing (0 files, was 28 on the base)</dd>
+  <dt>the page</dt><dd>22 stylesheet links in public/index.html, 613,223 characters of CSS in load order</dd>
+  <dt>the queue gate</dt><dd>tools/verify-queue-cards.mjs: the eight route checks the brief names are all green, the SKIPPED note now reads "files in use by #5"</dd>
+  <dt>the other parsers</dt><dd>four copies of the index.html parse collapsed to one (test/style-sheets.js, verify-css-split, css-split-review, verify-queue-agents)</dd>
+</dl>
+
+<h2>1. What was wrong</h2>
+<p>The split landed rule for rule (<code>tools/verify-css-split.mjs</code> is that proof), but the tools that measure the page were never moved with it. <code>grep -rln 'public/style.css' tools/*.mjs</code> named <b>28</b> files on the base, not the 27 the brief counted: <code>tools/verify-child-button.mjs</code> is the extra one. The seven that used it as a file are the ones that mattered:</p>
+<table>
+  <tr><th>kind</th><th>tools</th><th>what happened on the base</th></tr>
+  <tr><td>read from disk</td><td class="tool">verify-child-button.mjs, verify-queue-cards.mjs</td><td><code>readFileSync</code> of a deleted path: both threw <code>ENOENT</code> before a single check ran, so the gate did not fail a check, it failed to exist</td></tr>
+  <tr><td>served as a <code>&lt;link&gt;</code></td><td class="tool">capture-docked-console.mjs, verify-clarify-card-link.mjs, verify-console-multi-block-line.mjs, verify-console-settled-tail.mjs</td><td>the fixture server answered 404 for the only sheet, so the page rendered with NO CSS and every box it measured was an unstyled page's</td></tr>
+  <tr><td>read from git</td><td class="tool">verify-css-split.mjs</td><td>correct by design (it reads the pre-split blob), but it carried its own copy of the sheet parse and the path literal in five places</td></tr>
+  <tr><td>text only</td><td>the other 21</td><td>comments, fixture file lists and <code>public/style.css:NNNN</code> line citations: stale prose pointing at a file that is gone, and at line numbers that no longer mean anything</td></tr>
+</table>
+<p>The 404s are the quiet half of the defect. A gate that cannot load the stylesheet does not go red on a styling question - it measures a page with no rules at all and then reports about it. Measured on the base and on this branch with the same harness:</p>
+<table>
+  <tr><th>tool</th><th>base (the sheet 404s)</th><th>this branch (the sheets load)</th></tr>
+  <tr><td class="tool">capture-docked-console.mjs</td><td><span class="no">11/13</span> the press check reads <code>rgb(0, 0, 0)</code>: no <code>var(--*)</code> token was defined</td><td><span class="ok">13/13</span></td></tr>
+  <tr><td class="tool">verify-console-settled-tail.mjs</td><td><span class="no">1 failed</span> "the docked console draws the child's whole message": <code>max-height none, overflow visible, 0 px scrollable</code></td><td><span class="ok">all checks</span> <code>max-height 230px, overflow auto, 587 px scrollable</code></td></tr>
+</table>
+
+<h2>2. One helper, and why it parses the page</h2>
+<p><code>tools/style-sheets.mjs</code> is the only place that reads the sheet list. Four functions:</p>
+<pre>styleSheetFiles({ root })        ["base.css", "chrome.css", ...]   in load order, all 22
+styleSheetPaths({ root })        the same names as absolute paths
+readStyleSheets({ root })        one string, every sheet in load order, LF newlines
+readStyleSheets({ files })       the same for a caller's own subset
+styleLinkTags({ root, prefix })  the &lt;link&gt; tags a fixture page serves, one per sheet</pre>
+<p>Load order is the reason the list is parsed and not written down. A rule's cascade position is half of what it means to a browser, so a concatenation in any other order is a different stylesheet, and a hand-written list goes stale the first time a surface gains a file. Two properties follow from parsing the page:</p>
+<ul>
+  <li><b>A sheet deleted from disk fails loudly.</b> <code>styleSheetFiles</code> throws when the page links nothing or links a name <code>public/</code> does not hold. That is the one way a "this rule is not in the stylesheet" assertion can lie: reading an empty string passes it.</li>
+  <li><b>A <code>--root</code> build keeps working.</b> The four fixture tools take <code>PANEL_ROOT</code> (a <code>git archive</code> of a base commit, for the before picture). Their pages are built from THAT build's <code>public/index.html</code>, so a pre-split export still links its one file and the before/after pair stays honest.</li>
+</ul>
+<p>The four private copies of the parse are gone with it: <code>test/style-sheets.js</code> now delegates (keeping its 19-sheet subset filter and the two names every test imports), <code>verify-css-split.mjs</code> and <code>css-split-review.mjs</code> call <code>styleSheetFiles</code>, and <code>verify-queue-agents.mjs</code>'s <code>sheetsFromIndex()</code> is deleted.</p>
+<p>One reference to the deleted file survives on purpose, in one place: <code>verify-css-split.mjs</code> reads the pre-split blob out of git to prove the split, so it must name the path. It is spelled as a constant (<code>LEGACY_SHEET = ["public", "style.css"].join("/")</code>) with a comment saying why, so the sweep can still answer nothing while the gate says what it proves. Nothing reads that path from disk anywhere.</p>
+
+<h2>3. The twenty-eight, one by one</h2>
+<p>"base" is what the tool did with the deleted file on <code>334989a8</code>; "now" is what it does on this branch and what running it answered.</p>
+<table>
+  <tr><th>tool</th><th>base</th><th>now</th><th>run</th></tr>
+  <tr><td class="tool">style-sheets.mjs</td><td>-</td><td>new: the helper and a CLI (<code>--text</code>, <code>--json</code>, <code>--root</code>)</td><td><span class="ok">22 sheets, 613,223 chars</span></td></tr>
+  <tr><td class="tool">capture-docked-console.mjs</td><td><code>&lt;link&gt;</code> 404</td><td>styleLinkTags(ROOT)</td><td><span class="ok">13/13</span> (base 11/13)</td></tr>
+  <tr><td class="tool">css-split-review.mjs</td><td>own index.html parse; 2 comments</td><td>styleSheetFiles; names the one panel sheet</td><td><span class="ok">--static: full report</span></td></tr>
+  <tr><td class="tool">measure-console-height-tick.mjs</td><td>comment: <code>.agents-block .job-out</code></td><td>public/board.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-assistant-dock.mjs</td><td>comment: the flex row</td><td>public/assistant.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-assistant-dock-overlap.mjs</td><td>comment: the sticky composer</td><td>public/pipeline.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-assistant-float-header.mjs</td><td>comment: the <code>.as-bar</code> box</td><td>public/assistant-panes.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-assistant-queue-ui.mjs</td><td>two fixture file lists</td><td>public/queue.css</td><td>static (fixture data)</td></tr>
+  <tr><td class="tool">verify-assistant-subtabs.mjs</td><td>comment: the tab row</td><td>public/assistant-panes.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-child-button.mjs</td><td><code>readFileSync</code>: ENOENT, no checks ran</td><td>readStyleSheets()</td><td><span class="warn">23/25</span> - the 2 are pre-existing, section 5</td></tr>
+  <tr><td class="tool">verify-clarify-card-link.mjs</td><td><code>&lt;link&gt;</code> 404</td><td>styleLinkTags(ROOT)</td><td><span class="ok">19/19</span></td></tr>
+  <tr><td class="tool">verify-composer-top.mjs</td><td>comment: the chat spacer</td><td>public/pipeline.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-console-boxes.mjs</td><td>2 comments + a printed line</td><td>public/console.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-console-corner-drag.mjs</td><td>2 comments with line numbers</td><td>the <code>.is-slack</code> rules in public/pipeline.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-console-height.mjs</td><td>comment + 2 cap constants</td><td>public/board.css, public/console.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-console-multi-block-line.mjs</td><td><code>&lt;link&gt;</code> 404</td><td>styleLinkTags(ROOT)</td><td><span class="warn">runs</span> - needs job 6073fb2a, absent here; a substitute job passes the layout checks and fails 3 text checks</td></tr>
+  <tr><td class="tool">verify-console-settled-tail.mjs</td><td><code>&lt;link&gt;</code> 404</td><td>styleLinkTags(ROOT)</td><td><span class="ok">all checks</span> (base 1 failed)</td></tr>
+  <tr><td class="tool">verify-copy-buttons.mjs</td><td>2 comments</td><td>public/console.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-css-split.mjs</td><td>own parse + 5 path literals</td><td>the turnover branch's multiset version (b14a286c), with its parse on the helper and one LEGACY_SHEET constant</td><td><span class="ok">--stream: pass</span> 0 lost, 0 edited, 15 borrowed from chart.css</td></tr>
+  <tr><td class="tool">verify-deliverables-ui.mjs</td><td>comment</td><td>"every sheet the page links"</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-initiative-card-anchor.mjs</td><td>comment: the 1000px container</td><td>public/initiatives.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-initiatives-redesign.mjs</td><td>dash-scan file list</td><td>public/initiatives.css (carries no em or en dash: 0 lines)</td><td>static (fixture data)</td></tr>
+  <tr><td class="tool">verify-initiatives-scroll.mjs</td><td>3 comments with line numbers</td><td>public/assistant-panes.css, public/pipeline.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-pipeline-chip.mjs</td><td>comment</td><td>"the sheets"</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-pipeline-flow-usability.mjs</td><td>comment</td><td>"the sheets"</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-queue-agents.mjs</td><td>own parse + comments + fixture files</td><td>the helper, one read</td><td><span class="ok">71/71</span></td></tr>
+  <tr><td class="tool">verify-queue-cards.mjs</td><td><code>readFileSync</code>: ENOENT; skip fixture written for the old any-running-row rule</td><td>readStyleSheets + a seeded live holder</td><td><span class="warn">47 checks, 7 failed</span> - the 7 are pre-existing, section 5</td></tr>
+  <tr><td class="tool">verify-wave-dot-opacity.mjs</td><td>comment: a line range</td><td>the <code>--tab-*-line</code> tokens in public/initiatives.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">verify-waves-lane.mjs</td><td>comment: the 900px container query</td><td>public/initiatives.css</td><td>static (comment only)</td></tr>
+  <tr><td class="tool">test/style-sheets.js</td><td>its own index.html parse</td><td>delegates to the helper, keeps the 19-sheet filter</td><td><span class="ok">suite: see section 6</span></td></tr>
+</table>
+<p class="small">"static (comment only)" means the edit is prose or fixture data: the tool's code path is unchanged, so it is not re-run here. Every edited <code>.mjs</code> passed <code>node --check</code>.</p>
+<p><b>Two more arrived with the merge.</b> The turnover branch had moved since this branch was cut: a sibling's commit rewrote a comment in <code>tools/verify-console-boxes.mjs</code> (the 1.191.0 split, named by its old path) and added <code>tools/verify-console-fonts.mjs</code>, a new console gate carrying its own copy of the page's sheet parse and the same sentence. Both were converted on the merged tip in the same shape: <code>sheetText</code> is now <code>readStyleSheets</code>, the comment names the sheets, and the two gates run (fonts 347/347; boxes fails "two calls, each with its own fold key" identically before and after, a page error in its own fixture). That makes 29 tools on the merged tip, and the sweep answers nothing there too.</p>
+
+<h2>4. The queue gate: a skip needs a live holder</h2>
+<p>The lane rule (queue row #293) skipped a queued row only when a LIVE job's row claims one of its files (<code>liveRowHolders</code> + <code>laneRefusal</code>, lib/spawn-check.js:170 and :241). <code>verify-queue-cards.mjs</code> seeded one running task with no live run at all, so after that rule landed the SKIPPED note the gate pins could never appear: 6 of the eight route checks passed (the eighth was the <code>readFileSync</code> throw).</p>
+<p>The fixture now carries the fact the rule reads. A fifth task, <code>#5 "Hold the lane on the split sheets"</code>, is a running row whose run id is in the sandbox job store: one record written to <code>&lt;sandbox&gt;/logs/jobs.json</code> before the panel boots, status <code>running</code>, thread <code>seed-thread-holder</code>. The sandbox's gateway is a dead port and the boot reconcile skips a restored run it cannot ask about ("a restored turn stays live and pending"), so the run reads live for the whole gate. Task 1 keeps no run id and stays STALE, which is the pair the gate needed: one stale running row that holds no lane, one live row that does.</p>
+<pre>PASS  …the first running task is stale (no live run behind its threads), so the row has a note to draw
+PASS  …the second running task is LIVE, its run answered by the seeded store: (live)
+PASS  …the queued task is skipped against the live holder, so the row has its reason:
+      files in use by #5 (job seed-run-holder on thread seed-thread-holder, running) - #2 also claims
+      public/assistant.js, so starting it would put two workers in that file. wait for job seed-run-holder
+      to end and land #2, or record an explicit overlap first (queue action allow-overlap, which stores
+      who allowed it and the file).
+PASS  …and the stale row holds no lane: the skip names the live holder, never #1</pre>
+<p>The pane draws running rows first, so the cards are #1, #5, #2, #3, #4: the note assertions are indexed to that order, and the live holder's row is checked for the absence of a note. All twelve checks before the browser half pass.</p>
+
+<h2>5. What is still red, and why it is not this row</h2>
+<p>Two gates are red on this branch for reasons that predate it. Each was measured on the base with only the deleted-file read stubbed, so the numbers are comparable.</p>
+<h3>verify-queue-cards.mjs: seven browser assertions</h3>
+<p>47 checks, 7 failed, all seven after the browser opens: "a surface of its own" (the done card's <code>background: var(--card)</code> equals the group's), "the actions row is the card's last child", "sits at the card's bottom edge", "below the head", "one sub-row per agent, with its thread" (the agent line now leads with <code>project:</code>), "the meta line still names the tree and the files" and "truncates a long file list" (the meta line now reads <code>project agent-worktree-gui</code>; the tree and files moved). On the base, with the <code>readFileSync</code> stubbed so the browser half could run at all, the same seven fail in the same words. They pin the pre-#410 card, and re-pinning them is a card-layout job, not a stylesheet one.</p>
+<h3>verify-css-split.mjs --stream: fixed elsewhere, and taken here</h3>
+<p>Half A compared the current sheets to the pre-split blob as a SEQUENCE, so it read 3,061 old rules against 3,076 and diverged at rule 423 - and any CSS move after the split made it red by construction. The turnover branch already carried the repair (<code>b14a286c</code>, "the css split gate judges a cross-sheet move by the rule multiset"): it compares multisets and accounts for the fifteen rules the 1.194.0 move took out of <code>chart.css</code> into <code>board.css</code>. This branch's file conflicted with that commit at the merge, and the resolution takes the multiset version and changes only its sheet parse (the helper) and its path literal (<code>LEGACY_SHEET</code>). It now passes: 0 lost, 0 edited, 15 borrowed from <code>chart.css</code>, 0 added, and one accepted edit recorded at 1.193.0.</p>
+<h3>verify-child-button.mjs: two JS-half assertions</h3>
+<p>23 of 25 pass. The two failures are "it sends the project, the row's path and the name" and "cancel cuts nothing": <code>cutChildTree</code> (public/app.js:7943) now opens a cut dialog (<code>openCutDialog</code>) instead of POSTing a fixed body, so the gate's regexes describe a handler that no longer exists. The two read <code>public/app.js</code> and never touched the stylesheet, so they fail identically on the base once the missing-file throw is out of the way.</p>
+
+<h2>6. The proof</h2>
+<pre>$ grep -rln 'public/style.css' tools/*.mjs
+$ echo $?
+1
+$ grep -rln 'public/style.css' tools/*.mjs | wc -l
+0
+$ node tools/style-sheets.mjs | wc -l
+22
+$ node tools/style-sheets.mjs --text | wc -c
+613223</pre>
+<p>The suite that reads this stylesheet (<code>test/style-sheets.js</code> and every test file importing it) runs on the same helper and the same filter as before: the 45 files that import it answered <b>506 tests, 506 pass, 0 fail</b> in 4.5 s. <code>npm test</code> over all 466 files was started twice and cancelled at 20 and 36 minutes without a summary; the second run's log reached 3,732 passing tests and 20 failures, and the failures are not this branch's: a sample of four (<code>test/paths.test.js</code>, <code>test/settle-wake.test.js</code>, <code>test/tree-cache.test.js</code>, <code>test/harness.test.js</code>) fail identically on this branch before the merge, and the harness one is pre-existing on the base (tools/verify-queue-agents.mjs declares LIVE GATE and no package.json script runs it). The one thing this page cannot claim is a complete <code>npm test</code> summary.</p>
+
+<h2>7. What is left</h2>
+<ul>
+  <li>Re-pin the seven browser assertions in <code>verify-queue-cards.mjs</code> against the current card (#410's <code>project:branch</code> line, the run chip, the actions row's new place).</li>
+  <li>Re-pin <code>verify-child-button.mjs</code>'s two handler assertions to <code>openCutDialog</code>.</li>
+</ul>
+<p class="small">Numbers in this page were read from the runs quoted in it, on this branch, on 2026-11-28. The base column is <code>334989a8</code> measured the same way, with the deleted-file read stubbed where the throw would otherwise stop the run before its checks.</p>
+</main>
+</body>
+</html>

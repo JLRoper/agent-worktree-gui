@@ -1,6 +1,7 @@
 // HARNESS: LIVE GATE
-// The Queue sub-tab's WINDOW: the newest 20 tasks on open, "Load 50 more" appending 50 per press, the control retiring
-// at the end of the list, and the window surviving a repaint.
+// The Queue sub-tab's WINDOW: the newest 20 FINISHED tasks on open (every queued, running and parked row is always drawn
+// above them - row 443), "Load 50 more" appending 50 per press, the control retiring at the end of the list, the note
+// that says how much is hidden, and the window surviving a repaint.
 //
 //   node tools/verify-assistant-queue-window.mjs
 //
@@ -67,6 +68,9 @@ const DONE = 120;
 const TOTAL = DONE + 1;
 const WINDOW = 20;
 const MORE = 50;
+// The seed's one queued row is OPEN: the window never hides it, so it adds one card above the twenty finished ones.
+const OPEN_ROWS = 1;
+const FIRST_DRAW = WINDOW + OPEN_ROWS;
 const SEED = Array.from({ length: DONE }, (_, i) => ({
   id: i + 1,
   title: `finished task ${i + 1}`,
@@ -204,14 +208,14 @@ try {
   const repaints = () => page.evaluate(() => Number(window.__qrepaints || 0));
 
   console.log("\n== 1. open: the newest 20, with the one control under them ==");
-  await settled(WINDOW);
+  await settled(FIRST_DRAW);
   const firstIds = (await ids()).sort((a, b) => a - b);
-  check("twenty rows on open", firstIds.length, WINDOW);
-  check("and they are the NEWEST twenty ids", firstIds, Array.from({ length: WINDOW }, (_, i) => TOTAL - WINDOW + 1 + i));
+  check("twenty finished rows on open, plus the open one", firstIds.length, FIRST_DRAW);
+  check("and they are the NEWEST twenty finished ids plus the queued row", firstIds, Array.from({ length: FIRST_DRAW }, (_, i) => TOTAL - FIRST_DRAW + 1 + i));
   ok("the newest task is drawn (the queued row)", (await ids()).includes(TOTAL), `ids ${JSON.stringify(firstIds)}`);
   check("the history reads newest first under the active row", (await ids()).slice(0, 3), [TOTAL, TOTAL - 1, TOTAL - 2]);
   check("the control is named for what it appends", await moreText(), `Load ${MORE} more`);
-  check("and says how much is still hidden", await moreNote(), `${TOTAL - WINDOW} older tasks not shown`);
+  check("and says what is drawn against the whole queue", await moreNote(), `showing ${FIRST_DRAW} of ${TOTAL} - ${TOTAL - FIRST_DRAW} older tasks not shown`);
 
   await watchRepaints();
   console.log("\n== 2. a repaint from the page's own tick entry point keeps the window ==");
@@ -230,13 +234,16 @@ try {
   console.log("\n== 3. one press appends fifty ==");
   const beforePressRepaints = await repaints();
   await moreBtn().click();
-  await settled(WINDOW + MORE);
-  check("seventy rows after one press", await rows(), WINDOW + MORE);
+  await settled(FIRST_DRAW + MORE);
+  check("one press appends fifty finished rows", await rows(), FIRST_DRAW + MORE);
   check("the control now offers the next fifty", await moreText(), `Load ${MORE} more`);
-  check("and the note counts what is left", await moreNote(), `${TOTAL - WINDOW - MORE} older tasks not shown`);
+  check("and the note counts what is left", await moreNote(), `showing ${FIRST_DRAW + MORE} of ${TOTAL} - ${TOTAL - FIRST_DRAW - MORE} older tasks not shown`);
   ok("the press rebuilt the pane", (await repaints()) > beforePressRepaints, `${beforePressRepaints} -> ${await repaints()}`);
   check("the rows already on screen keep their place", (await ids()).slice(0, 2), [TOTAL, TOTAL - 1]);
-  check("and the older fifty land under them", (await ids()).slice(-2), [TOTAL - WINDOW - MORE + 2, TOTAL - WINDOW - MORE + 1]);
+  // The finished rows drawn now run from the oldest one this window reaches up to the newest: the open row sits above
+  // them, so the last two ids on screen are the two oldest FINISHED ids.
+  const oldestDone = TOTAL - OPEN_ROWS - (WINDOW + MORE) + 1;
+  check("and the older fifty land under them", (await ids()).slice(-2), [oldestDone + 1, oldestDone]);
   const shots = path.join(ROOT, ".shots");
   mkdirSync(shots, { recursive: true });
   await moreBtn().scrollIntoViewIfNeeded();
@@ -274,13 +281,10 @@ try {
 
   console.log("\n== 5. the control retires at the end of the list ==");
   await moreBtn().click();
-  await settled(WINDOW + MORE + MORE);
-  check("a second press reaches 120", await rows(), WINDOW + MORE + MORE);
-  check("the last press offers the remainder, not a full fifty", await moreText(), "Load 1 more");
-  check("and the note names the one left", await moreNote(), "1 older task not shown");
-  await moreBtn().click();
-  await settled(TOTAL);
-  check("the third press reaches the whole list", await rows(), TOTAL);
+  await settled(FIRST_DRAW + MORE + MORE);
+  check("a second press reaches the whole queue", await rows(), FIRST_DRAW + MORE + MORE);
+  check("and the whole queue is the whole store", await rows(), TOTAL);
+  check("with nothing left to hide there is no note", await moreNote(), "");
   check("the control is gone", await moreBtn().count(), 0);
   await page.evaluate(async () => {
     const s = await (await fetch("/api/state")).json();

@@ -23,7 +23,7 @@
 //              answers) fills the frame with the whole change; with the store empty the same rows draw the cut
 //              row instead
 //   inspected  that the fold is one delegated handler and one attribute (read off public/app.js and
-//              public/style.css), not per-renderer markup
+//              public/console.css), not per-renderer markup
 //
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN, counts a failure and
 // exits non-zero rather than passing on a half that never ran.
@@ -34,6 +34,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
+import { readStyleSheets as sheetText } from "./style-sheets.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -757,13 +758,18 @@ async function browserPhase(pw) {
 }
 
 // ---- what can only be read off the source --------------------------------------------------------
+// The 1.191.0 split moved every rule out of the one panel sheet and into the sheets public/index.html loads in order.
+// A source check that opens the old path answers ENOENT for CSS that IS there, so the sheets are read in the page's
+// own order, through tools/style-sheets.mjs, and joined: a rule the page really loads is found wherever the split
+// put it.
+
 function sourceChecks() {
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
   // The console's renderers moved out of app.js into board/console.js (the board split), so a source check that
   // reads app.js alone answers 0 for code that IS there and reads as a regression nobody made. Read both.
   const board = readFileSync(path.join(ROOT, "public", "board", "console.js"), "utf8");
   const src = `${app}\n${board}`;
-  const css = readFileSync(path.join(ROOT, "public", "style.css"), "utf8");
+  const css = sheetText(ROOT);
   const mod = readFileSync(path.join(ROOT, "public", "core", "console-format.js"), "utf8");
   ok(
     "the fold is one delegated handler on the console, not one per call",
@@ -813,7 +819,7 @@ async function main() {
   console.log("re-derives the diff out of the DOM and is what the swapped pair's read-back has to survive).");
   console.log("WHAT WAS INSPECTED, NOT DRIVEN: that the fold is one delegated handler and one attribute, that the folded");
   console.log("state lives beside the code box's own set, and that the cut row's words and the swapped pair's marker are");
-  console.log("in public/core/console-format.js with their CSS in public/style.css.");
+  console.log("in public/core/console-format.js with their CSS in public/console.css.");
   if (!failures) console.log("CONSOLE-BOXES-OK");
 }
 

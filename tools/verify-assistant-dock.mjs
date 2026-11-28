@@ -5,7 +5,7 @@
 //
 // WHAT THIS GUARDS. The assistant used to be a floating window: `position: fixed`, dragged by its head, resized by
 // eight grabs, maximized and pinned, with its rect remembered in `wm.assistantRect`. It covered the board. It is now
-// a column docked at the right of the board (`public/index.html` puts it in the board's own row, `public/style.css`
+// a column docked at the right of the board (`public/index.html` puts it in the board's own row, `public/assistant.css`
 // makes that row a flex line, `public/assistant.js` owns the width), and the failures this file exists for are the
 // ones a dock can have that a float could not:
 //
