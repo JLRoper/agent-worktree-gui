@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 508: the collision book leaves lib/collisions.js, and every name it exported still comes from that path</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 24px 64px; background: #14161a; color: #d7dbe0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: #f2f5f8; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f2f5f8; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  h3 { font-size: 15px; margin: 22px 0 6px; color: #e6ebf0; }
+  .sub { color: #8b949e; margin: 0 0 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid #242a31; vertical-align: top; }
+  th { color: #9aa4af; font-weight: 600; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { color: #9ecbff; }
+  pre { background: #1b1f25; border: 1px solid #262c34; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #cfd6dd; }
+  .met { color: #7ee787; } .unmet { color: #ff9c94; } .warn { color: #f0c674; }
+  .cite { color: #7d8791; font-size: 12.5px; }
+  .box { background: #1b1f25; border: 1px solid #262c34; border-left: 3px solid #4d7ea8; border-radius: 4px; padding: 12px 14px; margin: 12px 0; }
+  .quote { border-left: 3px solid #3a424c; padding-left: 12px; color: #b3bcc6; margin: 10px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  details { margin: 8px 0; }
+  summary { cursor: pointer; color: #9aa4af; }
+  .foot { margin-top: 40px; color: #7d8791; font-size: 12.5px; border-top: 1px solid #242a31; padding-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 508: the collision book leaves lib/collisions.js, and every name it exported still comes from that path</h1>
+  <p class="sub">Cut two of two for the module-separation report's entry #11 - 1,138 lines moved into lib/collision-book.js behind the 57 names lib/collisions.js has always exported.</p>
+
+  <div class="box">
+    <b>Done.</b> The store half of <code>lib/collisions.js</code> - <code>CollisionBook</code>, <code>countStates</code>,
+    the record-shape readers and the two fold readers, plus the reader-half import the store's <code>history()</code>
+    uses - is now <code>lib/collision-book.js</code>. <code>lib/collisions.js</code> keeps its domain header and the
+    detection re-export block, and re-exports <code>CollisionBook</code> and <code>countStates</code> from the new file,
+    so no import site moved. The module's export set, read off the running module, is the same 57 names before and
+    after, and the two sorted lists diff clean. The moved block is 1,138 lines copied byte for byte, with no differing
+    line inside it. The detector that row 507 moved to <code>lib/collision-detect.js</code> was not touched. No
+    behaviour change, no version bump, no push, no pull request.
+  </div>
+
+  <h2>1. What moved, in line counts, with the command</h2>
+  <table>
+    <tr><th>File</th><th>Before</th><th>After</th><th>What it holds now</th></tr>
+    <tr>
+      <td><code>lib/collisions.js</code></td>
+      <td class="n">1,306</td>
+      <td class="n">136</td>
+      <td>The entry point: lines 1-60 the module's domain header (why a collision is evidence, the three relations, the
+        pair order, the COLLISION line, the absence verdict), 61-70 the paragraph naming the two halves, 72-131 the
+        detection re-export (55 names from <code>./collision-detect.js</code>), and 133-136 the one new re-export of
+        <code>CollisionBook</code> and <code>countStates</code> from <code>./collision-book.js</code>.</td>
+    </tr>
+    <tr>
+      <td><code>lib/collision-book.js</code></td>
+      <td class="n">-</td>
+      <td class="n">1,188</td>
+      <td>The store: a 12-line header (1-12), its imports (14-49: <code>node:fs</code>, <code>node:path</code>, the 26
+        detection names it reads a record with, and <code>clip</code>), and the moved block at 51-1,188 - the
+        reader-half import, <code>historyCore</code>, <code>normSides</code>/<code>normSidesOf</code>,
+        <code>nowIso</code>, <code>oldAbsence</code>, the store marker, <code>speaksToday</code>,
+        <code>foldRecord</code>, <code>export class CollisionBook</code> (173-1,182) and
+        <code>export function countStates</code> (1,184-1,188).</td>
+    </tr>
+    <tr><td>both files</td><td class="n">1,306</td><td class="n">1,324</td><td>+18 lines: the new file's 12-line header, 36-line import block and two blanks (50) plus the entry point's 10-line paragraph, 4-line book re-export and one blank (15), less the 38-line import block and 9-line paragraph the entry point gave up (47).</td></tr>
+  </table>
+<pre>git show e62aee97^:lib/collisions.js | wc -l            # 1306, the turnover head before this cut
+wc -l lib/collisions.js lib/collision-book.js            # 136 lib/collisions.js, 1188 lib/collision-book.js
+git show --numstat --format='' e62aee97                  # 1188 0 lib/collision-book.js; 14 1184 lib/collisions.js</pre>
+  <p class="cite">
+    The arithmetic reconciles: 1,306 = 60 (header) + 9 (the old two-files paragraph) + 38 (the old import block) + 60
+    (the detection re-export comment and block) + 1,138 (the moved block) + 1 blank. The new entry point is 60 + 10
+    (the rewritten paragraph) + 1 + 60 (the re-export block) + 1 + 4 (the book re-export) = 136. The new file is 1,138
+    moved lines + 12 header + 1 blank + 36 imports + 1 blank = 1,188. The commit's diffstat is 1,202 insertions and
+    1,184 deletions, whose net is the +18 above; git reads 122 lines as unchanged context (the 60-line header, the
+    60-line re-export block and two blanks), which is why the deletions are fewer than the 1,170 lines the entry point
+    lost.
+  </p>
+
+  <h2>2. The boundary is this base's, not the row's line numbers</h2>
+  <p>
+    Entry #11 of the module-separation report gives the second cut as lines 1,252-2,335 of a 2,335-line file, and those
+    numbers were true of <code>265e41f9</code>, the base row 507 started from. Row 507 then moved the detector out, so
+    on this base (<code>67371958</code>) the file is 1,306 lines and the store is not at 1,252 any more. The row says
+    to start from what is there, so each end was printed before a line moved.
+  </p>
+  <table>
+    <tr><th>Line</th><th>What is there</th><th>Why it decides the boundary</th></tr>
+    <tr><td><code>265e41f9:1,252</code></td><td><code>// ---- the store ---...</code></td><td>The card's second cut began at this marker on the pre-507 file. Row 507's report reads the same line.</td></tr>
+    <tr><td><code>265e41f9:1,320</code> and <code>:2,329</code></td><td><code>export class CollisionBook {</code> and its closing <code>}</code></td><td>The class span the card gave. On this base the same class is 291-1,300, unchanged in content.</td></tr>
+    <tr><td><code>67371958:169</code></td><td><code>// THE READER'S HALF OF A RECORD ...</code></td><td class="met">The measured start on this base. Everything from here to the end of the file is the store's.</td></tr>
+    <tr><td><code>67371958:1,306</code></td><td><code>}</code> closing <code>countStates</code></td><td class="met">The measured end: the last line of the file.</td></tr>
+    <tr><td><code>67371958:61-69</code></td><td>The two-files paragraph</td><td>Rewritten in place (10 lines), because it said this file keeps the store. It now says this file is the entry point.</td></tr>
+    <tr><td><code>67371958:108-167</code></td><td>The detection re-export comment and block</td><td>Stays, unchanged, and is still 55 names from <code>./collision-detect.js</code>.</td></tr>
+  </table>
+<pre>git show 265e41f9:lib/collisions.js | sed -n '1252p;1320p;2329p'
+git show 67371958:lib/collisions.js | sed -n '169p;1306p'
+git show 67371958:lib/collisions.js | wc -l                 # 1306, not the card's 2335</pre>
+  <div class="box">
+    <b>The row says four private readers; the base carries seven private declarations, and all seven moved.</b>
+    The store region holds <code>historyCore</code> (<code>lib/collision-book.js:57</code>), the
+    <code>normSides</code> WeakMap with <code>normSidesOf</code> (<code>:67-74</code>), <code>nowIso</code>
+    (<code>:75</code>), <code>oldAbsence</code> (<code>:90-103</code>, docblock <code>:81-89</code>),
+    <code>speaksToday</code> (<code>:113-117</code>) and <code>foldRecord</code> (<code>:125-171</code>). Six are
+    functions and one is the cache the first of them reads through. Every one has the store as its only caller -
+    <code>load()</code>, <code>normalizeKeys()</code>, <code>viewsFor()</code>, <code>history()</code> and every stamp
+    the store writes - so moving them was part of moving the book, not a second decision.
+  </div>
+
+  <h2>3. The re-export: 57 names, the same set before and after</h2>
+  <p>
+    <code>lib/collisions.js</code> is now the path and not a half: it declares nothing, and both statements in it are
+    re-exports. The detection block is the same 55 names it has carried since row 507; the book contributes
+    <code>CollisionBook</code> and <code>countStates</code>. The new file exports exactly those two names itself:
+  </p>
+<pre>node -e 'import("./lib/collision-book.js").then(m=>console.log(Object.keys(m).sort().join(", ")))'
+# CollisionBook, countStates
+node -e 'import("./lib/collisions.js").then(m=>console.log(Object.keys(m).sort().join("\n")))' | sort | wc -l
+# 57 before the cut, 57 after it; the two sorted lists diff clean</pre>
+  <details>
+    <summary>The 57 names, as the module reports them</summary>
+    <p><code>COLLISION_FACT_CAP COLLISION_FILES_CAP COLLISION_KEEP COLLISION_LAND_RECHECK_MS COLLISION_NOTE_CAP
+    COLLISION_PASSES COLLISION_PASS_MS COLLISION_RELATION_CAP COLLISION_RESOLVED_KEEP_MS COLLISION_RULES
+    COLLISION_STATES COLLISION_TARGET_CAP COLLISION_VERSION COLLISION_VERSION_CAP CollisionBook TASK_OPEN_STATES
+    TOUCHED_DIR_CAP VERSION_CARRIERS brokenCollisionLines classifyVersionOnly compareVersionText countStates
+    detectCollisions deterministicPick filesUnder filingKey finishedSides isLiveRow isVersionCarrier mayAskReader
+    mergeComparedNothing normCollisionPath owningTaskFor pairKey parseCollisionLines reasonOf relationOfRecord
+    relationSentence reorderSides reportAtOf resolveCollisionTarget resolveCounterpart ruleLabelOf ruleOfRuling
+    settleCollision sideOf sideTaskOf stateOf stoodDownOf targetNamesLiveAgent targetTaskId taskOpen
+    textWithoutVersion touchedOf treeIdentityOf versionInText waitingOf</code></p>
+  </details>
+  <table>
+    <tr><th>Importer</th><th>Names it reads from lib/collisions.js</th><th>Changed?</th></tr>
+    <tr><td><code>server.js:57</code></td><td><code>CollisionBook</code>, <code>filingKey</code>, <code>owningTaskFor</code></td><td class="met">no</td></tr>
+    <tr><td><code>lib/collision-flow.js:40-53</code></td><td>12 names (<code>COLLISION_FACT_CAP</code>, <code>COLLISION_LAND_RECHECK_MS</code>, <code>COLLISION_VERSION_CAP</code>, <code>detectCollisions</code>, <code>finishedSides</code>, <code>isVersionCarrier</code>, <code>mayAskReader</code>, <code>normCollisionPath</code>, <code>pairKey</code>, <code>relationSentence</code>, <code>reportAtOf</code>, <code>settleCollision</code>)</td><td class="met">no</td></tr>
+    <tr><td><code>lib/collision-merge.js:29</code></td><td><code>classifyVersionOnly</code></td><td class="met">no</td></tr>
+    <tr><td><code>lib/jobs.js:36</code></td><td><code>brokenCollisionLines</code>, <code>parseCollisionLines</code>, <code>resolveCollisionTarget</code></td><td class="met">no</td></tr>
+    <tr><td><code>routes/collisions.js:19</code></td><td><code>COLLISION_STATES</code>, <code>stateOf</code></td><td class="met">no</td></tr>
+    <tr><td>6 collision test files</td><td>the same names plus <code>CollisionBook</code></td><td class="met">no</td></tr>
+    <tr><td>5 verify tools</td><td><code>CollisionBook</code>, <code>COLLISION_PASS_MS</code></td><td class="met">no</td></tr>
+  </table>
+  <p class="cite">
+    The test files are <code>test/collisions.test.js</code>, <code>collision-card</code>, <code>collision-count</code>,
+    <code>collision-history</code>, <code>collision-settle</code> and <code>collision-version</code>; the tools are
+    <code>tools/verify-collisions.mjs</code>, <code>verify-collision-absence.mjs</code>,
+    <code>verify-collision-card-fixes.mjs</code>, <code>verify-collision-pairs.mjs</code> and
+    <code>verify-row-chips.mjs</code>.
+  </p>
+
+  <h2>4. The move is a move: the block, hashed on both sides</h2>
+  <p>
+    The 1,138 lines were sliced out of the base blob by content anchor, not retyped: the anchor is the
+    <code>// THE READER'S HALF OF A RECORD</code> line, and the slice runs to the end of the file. Hashed as git stores
+    them (LF):
+  </p>
+<pre>git show 67371958:lib/collisions.js | sed -n '169,1306p' | sha256sum
+# 4ac7cc14186368966d1cf64feede85fe6ab3b5832b3f25cb6005269c60fa6560
+git show e62aee97:lib/collision-book.js | sed -n '51,1188p' | sha256sum
+# 4ac7cc14186368966d1cf64feede85fe6ab3b5832b3f25cb6005269c60fa6560</pre>
+  <p>
+    Same hash, same 1,138 lines, and <code>diff</code> on the two extracts prints nothing: <b>no line inside the moved
+    block differs</b>. The differences are all outside it, and they are these, one by one:
+  </p>
+  <ul>
+    <li><b>Added, the new file's header</b> (12 lines, <code>:1-12</code>): what the book is, that it was split out of
+      <code>lib/collisions.js</code>, that the detection half is <code>lib/collision-detect.js</code>, and which file
+      owns the sweep and the probe.</li>
+    <li><b>Added, the new file's imports</b> (36 lines, <code>:14-49</code>): <code>node:fs</code>,
+      <code>node:path</code>, the 26 detection names the store calls, and <code>clip</code>. The 26 are the same names
+      the base imported at <code>67371958:76-103</code>, to the letter; <code>clip</code> is the one shape both halves
+      write with and was never on this module's export surface, so it is imported and not re-exported.</li>
+    <li><b>Rewritten, the entry point's two-files paragraph</b> (<code>lib/collisions.js:61-70</code>, 10 lines for the
+      old 9): it said <code>This file keeps the store</code> and now says this file is the entry point, naming both
+      halves.</li>
+    <li><b>Added, the book's re-export</b> (<code>lib/collisions.js:133-136</code>, 4 lines, with a blank before it): the two
+      names the entry point still has to answer for.</li>
+    <li><b>Removed, the base imports</b> (<code>67371958:70-107</code>, 38 lines): the same names moved to the file that
+      calls them, and the entry point imports nothing.</li>
+    <li><b>Carried unchanged, one stale citation</b>: <code>lib/collision-book.js:408</code> still says the side order
+      is <code>(lib/collisions.js detectCollisions)</code>. That line was already pointing at a name row 507 had moved;
+      this cut is a move and did not rewrite prose inside the block.</li>
+  </ul>
+
+  <h2>5. What was run, and what it answered</h2>
+  <table>
+    <tr><th>Command</th><th>Answer</th></tr>
+    <tr><td><code>node --check lib/collisions.js</code> and <code>node --check lib/collision-book.js</code></td><td class="met">both parse</td></tr>
+    <tr><td>The export surface before and after: <code>Object.keys</code> of each module, sorted, diffed</td><td class="met">57 names both times, diff clean</td></tr>
+    <tr><td>The seven test files on the turnover head <code>67371958</code>, before any edit</td><td class="met">88 tests, 88 pass, 0 fail</td></tr>
+    <tr><td>The same seven files on this tree, after the cut</td><td class="met">88 tests, 88 pass, 0 fail</td></tr>
+    <tr><td><code>node tools/verify-collisions.mjs</code></td><td class="met">40/40 checks passed</td></tr>
+    <tr><td><code>node tools/verify-collision-absence.mjs</code></td><td class="met">27/27 checks passed</td></tr>
+    <tr><td><code>npm test</code> (the full suite)</td><td class="warn">not run: the row's gate is the focused set, and no pull request is opened</td></tr>
+  </table>
+<pre>node --test test/collisions.test.js test/collision-card.test.js test/collision-count.test.js \
+  test/collision-history.test.js test/collision-settle.test.js test/collision-version.test.js \
+  test/spawn-lane.test.js
+# on 67371958, before the edit: tests 88, pass 88, fail 0
+# on e62aee97, after it:      tests 88, pass 88, fail 0</pre>
+  <p class="cite">
+    Nothing was red, so there is no failure to compare against the head. The seven files are the six that name this
+    module plus <code>test/spawn-lane.test.js</code>, the same set row 507 quoted. <code>npm run test:changed</code>
+    selects most of the suite here because <code>lib/assistant.js</code> imports this module, which is a whole-suite
+    check rather than a one-cut check.
+  </p>
+
+  <h2>6. What this cut did not do</h2>
+  <ul>
+    <li>It did not touch the detector: <code>lib/collision-detect.js</code> is byte for byte what row 507 left at
+      <code>67371958</code>. Its 55 names reach importers through the same re-export block as before.</li>
+    <li>It did not change behaviour: the moved code is the same code, the export set is the same set, and the store's
+      only added lines are a header and imports.</li>
+    <li>It did not bump the version: <code>package.json</code> is 1.197.1, the turnover's number, and this cut bumps
+      nothing. No push, no pull request.</li>
+  </ul>
+
+  <h2>7. Landed: the merge into the turnover, measured before it was made</h2>
+  <p>
+    The cut is merged locally into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> from this row branch,
+    <code>wtgui/row-508-is-the-second-cut-of-lib-fa1eaa</code>. Nothing is pushed and no pull request exists: the
+    turnover is where the work rolls up, and the reader decides when it leaves this machine.
+  </p>
+  <p>
+    The merge brings together the turnover head <code>67371958</code> and this page's own commit, whose parent is the
+    cut <code>e62aee97</code>. Its result was read before the merge rather than after it, so that this page could
+    state it without quoting a commit that contains the page:
+  </p>
+<pre>git merge-tree --write-tree 67371958 e62aee97
+# 1dbdf771ccc1c9ca356337fd3ae8aa1770b510bb
+git rev-parse e62aee97^{tree}
+# 1dbdf771ccc1c9ca356337fd3ae8aa1770b510bb</pre>
+  <p>
+    The merged tree is exactly the cut's tree. That is the strongest form of "no conflict" available here: the merge
+    adds no line that neither side already had, and the seven-file run on the cut tree (88 pass, 0 fail) is the merged
+    tree's count, not an approximation of it. The merge commit itself is the turnover's tip after this run; it is
+    named in the row's final report rather than in this page, because this page is inside it.
+  </p>
+
+  <p class="foot">
+    Base <code>67371958</code> (<code>20261127_2134_TASK-405_row-405-is-the-complete</code>); the cut is
+    <code>e62aee97</code> on <code>wtgui/row-508-is-the-second-cut-of-lib-fa1eaa</code>; merged into the turnover as
+    the merge of <code>67371958</code> and this page's commit; measured 2026-11-28. Every line number in this page is a
+    1-based line in the file named beside it.
+  </p>
+</main>
+</body>
+</html>
