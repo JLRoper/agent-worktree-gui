@@ -333,7 +333,16 @@ async function main() {
     console.log(`sandbox: ${panel.base}`);
     await withBrowser(
       async ({ page, pageErrors }) => {
-        await openPage(page, panel.base, { selector: `pre.job-out` });
+        // The Unattached agents card ships MINIMIZED (row 416: FIXED_DEFAULT_COLLAPSED in public/app.js) and every console
+        // here lives in it. Open it the way a reader does - a press on the card's own head, which records the choice
+        // (`wm.fixedChosen`), so the reload in step 8 finds it open again instead of waiting for a hidden console.
+        await openPage(page, panel.base, { selector: "#agents" });
+        await page.waitForFunction(() => typeof state !== "undefined", null, { timeout: 30_000 });
+        await page.evaluate(() => {
+          if (document.getElementById("agents")?.classList.contains("fixed-collapsed")) {
+            document.querySelector('[data-toggle-fixed="agents"]')?.click();
+          }
+        });
         await page.waitForSelector(`.job[data-thread="${LONG}"] pre.job-out`, { state: "visible", timeout: 20_000 });
         await page.waitForSelector(`.job[data-thread="${SHORT}"] pre.job-out`, { state: "visible", timeout: 20_000 });
         // Let the page finish arriving before anything is measured: the topbar's own status line is painted after the

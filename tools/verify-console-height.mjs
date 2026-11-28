@@ -441,8 +441,16 @@ async function main() {
     console.log(`sandbox: ${panel.base}`);
     await withBrowser(
       async ({ page, pageErrors }) => {
-        await openPage(page, panel.base, { selector: "pre.job-out" });
+        // The Unattached agents card ships MINIMIZED (row 416: FIXED_DEFAULT_COLLAPSED in public/app.js), and one of the
+        // two consoles under test lives in it. Open it the way a reader does - a press on the card's own head, which also
+        // records the choice (`wm.fixedChosen`), so the reload later in this gate finds it open again.
+        await openPage(page, panel.base, { selector: "#agents" });
         await page.waitForFunction(() => typeof state !== "undefined" && state.rows && state.jobs, null, { timeout: 30_000 });
+        await page.evaluate(() => {
+          if (document.getElementById("agents")?.classList.contains("fixed-collapsed")) {
+            document.querySelector('[data-toggle-fixed="agents"]')?.click();
+          }
+        });
         const openRows = () =>
           page.evaluate(() => {
             for (const r of state.rows.values()) {
