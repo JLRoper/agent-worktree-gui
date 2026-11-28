@@ -28,7 +28,7 @@
 <body>
 <main>
   <h1>Row 412: the watchdog names the owning assistant, and delivers to it</h1>
-  <p class="sub">1.193.1 - the owner resolved four ways, one alert id on every copy, and the queuesweep's stale check repaired.</p>
+  <p class="sub">1.194.1 - the owner resolved four ways, one alert id on every copy, and the queuesweep's stale check repaired.</p>
 
   <div class="box">
     The panel still has <b>one</b> sentry, and Assistant #1's page is still its ledger. What changed is that every
@@ -171,7 +171,7 @@
     </tr>
     <tr>
       <td><code>node tools/version.mjs check --base origin/main</code></td>
-      <td><span class="met">ok</span> - branch 1.193.1, origin/main 1.192.0</td>
+      <td><span class="met">ok</span> - branch 1.194.1, origin/main 1.193.0</td>
     </tr>
   </table>
   <p>
@@ -185,11 +185,14 @@
   <h2>Version and landing state</h2>
   <table>
     <tr><th>Fact</th><th>Value</th></tr>
-    <tr><td>Branch version</td><td><code>1.193.1</code>, taken above the base's 1.193.0 and origin/main's 1.192.0</td></tr>
-    <tr><td>Annotated tag</td><td><code>v1.193.1</code> at the bump commit</td></tr>
+    <tr><td>Branch version</td><td><code>1.194.1</code>, taken above the base's 1.194.0 and origin/main's 1.193.0.
+      The base moved twice while this row ran (1.193.0, then 1.194.0), so the branch's first number, 1.193.1, was
+      superseded on the same branch rather than left below the base</td></tr>
+    <tr><td>Annotated tag</td><td><code>v1.194.1</code> at the final bump commit; <code>v1.193.1</code> remains on the
+      earlier bump, so neither number is unanchored</td></tr>
     <tr><td>Branch</td><td><code>wtgui/row-412-is-the-complete-brief-a-watchdog-dfe6da</code></td></tr>
-    <tr><td>Push / PR</td><td>none: the LANDING rule for this tree says the base has not landed, so a remote branch
-      would publish work the reader has not asked to publish</td></tr>
+    <tr><td>Push / PR</td><td>none: the LANDING rule for this tree decides against a push - this tree's branch would
+      be a new branch on the shared remote that nobody asked for. The row's code is in the local merge instead</td></tr>
     <tr><td>Local merge</td><td>into <code>20261127_2134_TASK-405_row-405-is-the-complete</code>, merge commit reported
       on the row card</td></tr>
   </table>
