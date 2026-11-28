@@ -277,12 +277,14 @@ const CHART_COLUMNS = [
     give: 0.5,
     title: "the ring fills up to green as the row becomes due for its next read · the cell beside it is the figure only: \"4s\" while the read is owed, and the lateness in amber once it is past · hover for the sentence, or click the ring to read this worktree now",
   },
-  // THE KIND A CUT RECORDED, in a cell of its own immediately left of the verdict (public/render-projects.js
-  // `kindMarkHtml`). It used to sit INSIDE the verdict cell, before the badge, and the cell clipped the words the
-  // reader needs: the badge is what says ON MAIN or MERGED, and the mark must not be the thing that pushes it out.
-  // The floor is the mark's own box plus the cell's insets - 12px left, 10px right, and the widest mark (a lifted
-  // R with its tick) measured at 22.1px in tools/verify-branch-kind.mjs. 46 is that with the border and a pixel to
-  // spare; the column gives its room up readily (give 1.2) because a one-letter cell reads the same squeezed.
+  // THE KIND A CUT RECORDED, or what an upgraded tree BEHAVES AS, in a cell of its own immediately left of the verdict
+  // (public/render-projects.js `kindMarkHtml`). It used to sit INSIDE the verdict cell, before the badge, and the cell
+  // clipped the words the reader needs: the badge is what says ON MAIN or MERGED, and the mark must not be the thing
+  // that pushes it out.
+  // The floor is the mark's own box plus the cell's insets - 12px left, 10px right. It was measured at 22.1px for the
+  // widest mark that ever existed here (a lifted R carrying its tick, in tools/verify-branch-kind.mjs); every mark is
+  // one letter now, and the floor is left at 46 with the border and a pixel to spare rather than shaving the chart
+  // again. The column gives its room up readily (give 1.2) because a one-letter cell reads the same squeezed.
   //
   // WHAT PAYS FOR IT. At 1440 the chart's floors already fill the card's 1324px, so a floor this size on its own
   // tips `columnPlan` into its scale branch (public/app.js), which shaves about 4% off EVERY column - and the verdict
@@ -295,7 +297,7 @@ const CHART_COLUMNS = [
     min: 46,
     give: 1.2,
     title:
-      "the kind a cut recorded for this tree: T for a turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally), R for a research tree (local only - commits, is copied out and released, never merges or pushes), I for an implementation tree (local only - always a child of its turnover branch, and merges into it). Press R or I to lift that tree's local-only kind; a lifted tree keeps its letter with a tick. An empty cell means no record was written, which is the normal case for a tree cut before the kind rule. The mark lives here rather than in the Verdict cell so the branch status keeps its whole words. Off means the header and the cell are not emitted on any row; the Verdict cell is untouched either way. Switch it off in Settings -> Board -> Chart columns.",
+      "the kind a cut recorded for this tree, or what an upgraded one behaves as: T for a turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally), R for an unlifted research tree (local only - commits, is copied out and released, never merges or pushes), I for an unlifted implementation tree (local only - always a child of its turnover branch, and merges into it). Press R or I to lift that tree's local-only kind; an upgraded tree reads T, because it behaves as a turnover tree, and its tooltip names the kind it was (\"was an implementation tree, upgraded by the reader; it behaves as a turnover tree\"). An empty cell means no record was written, which is the normal case for a tree cut before the kind rule. The mark lives here rather than in the Verdict cell so the branch status keeps its whole words. Off means the header and the cell are not emitted on any row; the Verdict cell is untouched either way. Switch it off in Settings -> Board -> Chart columns.",
   },
   { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
   {

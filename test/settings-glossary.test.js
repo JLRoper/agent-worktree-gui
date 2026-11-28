@@ -4,7 +4,7 @@
 // index, the Repo tab carries what T and R mean and what a lift changes plus the turnover/rules/cleanup chips, and
 // the Board tab carries the board chip. Four facts are the ones a wrong build would lose, and each is asserted as a
 // sentence rather than a word: R is LOCAL ONLY until lifted, the lift goes through POST /api/worktree/kind-lift, a
-// lifted tree keeps its R with a tick, and a lift does not beat a repository's never. The blocks are also checked
+// lifted tree reads T with the kind it was in its tooltip, and a lift does not beat a repository's never. The blocks are also checked
 // for the shape that makes them readable: each follows its heading row, no block is a tab, and the prose carries no
 // long dash that would break its own layout.
 import assert from "node:assert/strict";
@@ -63,8 +63,9 @@ test("the Repo tab explains T, R and I, and what a lift does and does not change
   assert.match(kinds, /never pushes/, "the research tree's push rule is named");
   assert.match(kinds, /merges LOCALLY into that branch/, "and where an implementation tree lands");
   assert.match(kinds, /POST \/api\/worktree\/kind-lift/, "the lift's route is named");
-  assert.match(kinds, /keeps its letter with a tick/, "a lifted tree keeps its kind mark");
-  assert.match(kinds, /The kind stays research or implementation/, "the kind is never rewritten");
+  assert.match(kinds, /reads T, because that is what an upgraded tree now behaves as/, "an upgraded tree's cell names what it behaves as");
+  assert.match(kinds, /tooltip names the kind it was/, "and the tooltip keeps the kind the record holds");
+  assert.match(kinds, /The record keeps saying research or implementation/, "the kind is never rewritten");
   assert.match(kinds, /What a lift does not do/);
   assert.match(kinds, /does not beat a repository's never/, "never outranks a lift");
   assert.match(kinds, /does not skip the branch-name gate/);
