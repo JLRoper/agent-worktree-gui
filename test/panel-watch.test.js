@@ -28,6 +28,7 @@ import {
   normalizeWatchState,
   pruneReported,
   sweepBoard,
+  withOwner,
 } from "../lib/panel-watch.js";
 
 const T0 = Date.parse("2026-11-07T10:00:00.000Z");
@@ -95,7 +96,7 @@ test("a live failed run still alerts, on every pass", () => {
 
   const second = sweepBoard({ jobs: [live], store, state: first.state, now: T0 + 11 * MINUTE });
   assert.equal(second.alerts.length, 1, "and it is named again while it is still failing");
-  assert.match(second.alerts[0], /^FAILED aa11bb22 - the live one$/);
+  assert.match(second.alerts[0], /^FAILED aa11bb22 - the live one \(owner unknown\)$/);
 });
 
 test("a reported id the feed still names is never dropped by id order", () => {
@@ -142,7 +143,21 @@ test("a run still marked running past the window is news while it is true", () =
   const stuck = { id: "ee55ff66", status: "running", title: "a long build", startedAt: "2026-11-07T08:50:00.000Z" };
   const out = sweepBoard({ jobs: [stuck], store: storeOf(stuck.id), state: null, now: T0 });
   assert.equal(out.alerts.length, 1);
-  assert.match(out.alerts[0], /^LONG RUN ee55ff66 - a long build has been running 70 min$/);
+  assert.match(out.alerts[0], /^LONG RUN ee55ff66 - a long build has been running 70 min \(owner unknown\)$/);
+
+  // With the board's resolver, the same run names its owner - and the ITEM carries it too, so the announce can
+  // deliver it without parsing the text.
+  const owned = sweepBoard({
+    jobs: [stuck],
+    store: storeOf(stuck.id),
+    state: null,
+    now: T0,
+    ownerOf: () => "assistant-3",
+  });
+  assert.match(owned.alerts[0], /^LONG RUN ee55ff66 - a long build has been running 70 min \(owner: assistant-3\)$/);
+  assert.deepEqual(owned.items, [
+    { id: "ee55ff66", kind: "longrun", line: owned.alerts[0], owner: "assistant-3", thread: null, runId: null },
+  ]);
 
   const young = { ...stuck, startedAt: "2026-11-07T09:56:00.000Z" };
   assert.equal(sweepBoard({ jobs: [young], store: storeOf(young.id), state: null, now: T0 }).alerts.length, 0);
@@ -150,6 +165,17 @@ test("a run still marked running past the window is news while it is true", () =
   // A record whose end is stamped is not "still running" whatever its status field says.
   const ended = { ...stuck, endedAt: "2026-11-07T09:30:00.000Z" };
   assert.equal(sweepBoard({ jobs: [ended], store: storeOf(ended.id), state: null, now: T0 }).alerts.length, 0);
+});
+
+test("a resolver that throws, or answers nothing, says owner unknown rather than naming Assistant #1", () => {
+  const stuck = { id: "7711aa55", status: "running", title: "a long build", startedAt: "2026-11-07T08:50:00.000Z" };
+  const broken = sweepBoard({ jobs: [stuck], store: storeOf(stuck.id), state: null, now: T0, ownerOf: () => { throw new Error("no queue"); } });
+  assert.match(broken.alerts[0], /\(owner unknown\)$/);
+  const blank = sweepBoard({ jobs: [stuck], store: storeOf(stuck.id), state: null, now: T0, ownerOf: () => "" });
+  assert.match(blank.alerts[0], /\(owner unknown\)$/);
+  // withOwner is the one shape: re-labelling replaces the label instead of stacking a second one.
+  assert.equal(withOwner("LONG RUN abc - a build has been running 70 min (owner unknown)", "assistant-3"), "LONG RUN abc - a build has been running 70 min (owner: assistant-3)");
+  assert.equal(withOwner("LONG RUN abc - a build has been running 70 min (owner: assistant-2)", null), "LONG RUN abc - a build has been running 70 min (owner unknown)");
 });
 
 test("the announce keeps the panel's shape and never carries an em or en dash", () => {

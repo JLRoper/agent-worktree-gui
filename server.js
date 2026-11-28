@@ -5570,6 +5570,32 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // The panel watchdog's OWNER MAP: every run the board shows with the assistant that owns it, so the sweep can
+    // label its lines before it announces them. A read: nothing is written. The announce below re-resolves the
+    // owner anyway, so a caller's map can never decide where an alert goes.
+    if (route === "/api/assistant/watchdog/owners" && req.method === "GET") {
+      try {
+        return sendJson(res, 200, { owners: assistant.watchdogOwners() });
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+    }
+
+    // The panel watchdog's announce. One block of news, delivered to the run's OWNER as well as to the sentry's own
+    // page: the owner is resolved HERE, from the row's queue, the job's thread, the tree's recorded owner or the
+    // run's own stamp - never from the caller's word - and the line is re-labelled with that answer.
+    if (route === "/api/assistant/watchdog" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = await assistant.announceWatchdog(body && body.alerts);
+        return sendJson(res, 202, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        // A busy sentry page is the tool's retry signal: nothing is consumed, and the next pass says it again.
+        return sendJson(res, 409, { error: String((e && e.message) || e) });
+      }
+    }
+
     // A message from the reader. The board digest and the scratchpad are attached to the run's input by
     // the module, so the card shows the sentence the reader typed.
     if (route === "/api/assistant/say" && req.method === "POST") {
