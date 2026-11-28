@@ -1,0 +1,414 @@
+{
+ "at": "2026-11-28T07:03:30.836Z",
+ "stageW": 1304,
+ "data": "three members in two lanes, plus one member per added lane (one from optym-integration-multi)",
+ "runs": [
+  {
+   "option": "O1",
+   "lanes": 3,
+   "stageW": 1304,
+   "waveH": 3226,
+   "laneW": [
+    344,
+    344,
+    344
+   ],
+   "laneRows": 1,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 0,
+     "lines": 75,
+     "overflow": 10
+    },
+    {
+     "id": "446",
+     "titleW": 0,
+     "lines": 95,
+     "overflow": 9
+    },
+    {
+     "id": "445",
+     "titleW": 0,
+     "lines": 85,
+     "overflow": 7
+    },
+    {
+     "id": "448",
+     "titleW": 0,
+     "lines": 71,
+     "overflow": 10
+    }
+   ],
+   "widestTitle": 0,
+   "maxLines": 95,
+   "maxOverflow": 10
+  },
+  {
+   "option": "O1",
+   "lanes": 4,
+   "stageW": 1304,
+   "waveH": 4972,
+   "laneW": [
+    344,
+    344,
+    344,
+    344
+   ],
+   "laneRows": 2,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 0,
+     "lines": 75,
+     "overflow": 10
+    },
+    {
+     "id": "446",
+     "titleW": 0,
+     "lines": 95,
+     "overflow": 9
+    },
+    {
+     "id": "445",
+     "titleW": 0,
+     "lines": 85,
+     "overflow": 7
+    },
+    {
+     "id": "448",
+     "titleW": 0,
+     "lines": 71,
+     "overflow": 10
+    },
+    {
+     "id": "449",
+     "titleW": 0,
+     "lines": 92,
+     "overflow": 9
+    }
+   ],
+   "widestTitle": 0,
+   "maxLines": 95,
+   "maxOverflow": 10
+  },
+  {
+   "option": "O2",
+   "lanes": 4,
+   "stageW": 1304,
+   "waveH": 502,
+   "laneW": [
+    1252,
+    1252,
+    1252,
+    1252
+   ],
+   "laneRows": 4,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "446",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "445",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "448",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "449",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    }
+   ],
+   "widestTitle": 822,
+   "maxLines": 1,
+   "maxOverflow": 0
+  },
+  {
+   "option": "O2",
+   "lanes": 6,
+   "stageW": 1304,
+   "waveH": 658,
+   "laneW": [
+    1252,
+    1252,
+    1252,
+    1252,
+    1252,
+    1252
+   ],
+   "laneRows": 6,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "446",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "445",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "448",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "449",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "450",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "451",
+     "titleW": 822,
+     "lines": 1,
+     "overflow": 0
+    }
+   ],
+   "widestTitle": 822,
+   "maxLines": 1,
+   "maxOverflow": 0
+  },
+  {
+   "option": "O3",
+   "lanes": 4,
+   "stageW": 1304,
+   "waveH": 403,
+   "laneW": [],
+   "laneRows": 0,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "446",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "445",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "448",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "449",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    }
+   ],
+   "widestTitle": 711,
+   "maxLines": 1,
+   "maxOverflow": 0
+  },
+  {
+   "option": "O3",
+   "lanes": 6,
+   "stageW": 1304,
+   "waveH": 493,
+   "laneW": [],
+   "laneRows": 0,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "446",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "445",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "448",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "449",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "450",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    },
+    {
+     "id": "451",
+     "titleW": 711,
+     "lines": 1,
+     "overflow": 0
+    }
+   ],
+   "widestTitle": 711,
+   "maxLines": 1,
+   "maxOverflow": 0
+  },
+  {
+   "option": "O4",
+   "lanes": 4,
+   "stageW": 1304,
+   "waveH": 478,
+   "laneW": [
+    344,
+    344,
+    344,
+    344
+   ],
+   "laneRows": 2,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "446",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "445",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "448",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "449",
+     "titleW": 299,
+     "lines": 3,
+     "overflow": 0
+    }
+   ],
+   "widestTitle": 299,
+   "maxLines": 3,
+   "maxOverflow": 0
+  },
+  {
+   "option": "O4",
+   "lanes": 6,
+   "stageW": 1304,
+   "waveH": 478,
+   "laneW": [
+    344,
+    344,
+    344,
+    344,
+    344,
+    344
+   ],
+   "laneRows": 2,
+   "members": [
+    {
+     "id": "444",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "446",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "445",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "448",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "449",
+     "titleW": 299,
+     "lines": 3,
+     "overflow": 0
+    },
+    {
+     "id": "450",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    },
+    {
+     "id": "451",
+     "titleW": 299,
+     "lines": 2,
+     "overflow": 0
+    }
+   ],
+   "widestTitle": 299,
+   "maxLines": 3,
+   "maxOverflow": 0
+  }
+ ]
+}
