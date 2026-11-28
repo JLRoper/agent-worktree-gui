@@ -25,7 +25,7 @@
 // boxes are measured where they have content.
 //
 //   node tools/verify-board-table-sheet.mjs                  # both widths, captures under docs/reports/board-table-sheet
-//   node tools/verify-board-table-sheet.mjs --old <rev>      # another pre-move revision
+//   node tools/verify-board-table-sheet.mjs --old <rev>      # another pre-move revision (default 895e7282, the cut base)
 //   node tools/verify-board-table-sheet.mjs --out <dir>      # another capture directory
 //   node tools/verify-board-table-sheet.mjs --keep           # keep the export
 //
@@ -47,7 +47,9 @@ const opt = (name, fallback = null) => {
 };
 
 const OUT = path.resolve(opt("--out", path.join(ROOT, "docs", "reports", "board-table-sheet")));
-const OLD = opt("--old", "HEAD");
+// The commit this cut was cut from: the sheet set the move replaced. A default of HEAD would compare
+// the tree to itself once the move is committed, which proves nothing.
+const OLD = opt("--old", "895e7282");
 const KEEP = has("--keep");
 const WIDTHS = [
   { width: 1160, height: 1200, label: "1160" },
