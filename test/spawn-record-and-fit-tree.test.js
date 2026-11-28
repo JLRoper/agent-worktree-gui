@@ -277,12 +277,18 @@ test("a spawn asked to use a dirty or stale-base tree is refused by name, before
 
   assert.equal(p.gw.posts.length, before, "no run was posted");
   assert.equal(p.spawns().length, 0, "and no run record exists");
-  const refused = kinds(p.assistant, "spawn-failed");
+  // A refusal is `spawn-refused` (the same kind a held tree writes), and it raises a CARD - queue row 419: a
+  // refusal the reader cannot see is the absence the row is about.
+  const refused = kinds(p.assistant, "spawn-refused");
   assert.equal(refused.length, 1, `the refusal was journalled: ${JSON.stringify(p.assistant.journal.map((e) => e.kind))}`);
   assert.match(refused[0].text, /cannot take a new worker/);
   assert.match(refused[0].text, /dirty-tree/, "the refusal NAMES the tree");
   assert.match(refused[0].text, /1 uncommitted file/);
   assert.match(refused[0].text, /cut a FRESH tree from current main/);
+  const card = p.assistant.alerts.find((a) => a.rule === "spawn-refused" && a.status === "open");
+  assert.ok(card, "the dirty-tree refusal raised a card");
+  assert.match(card.detail, /1 uncommitted file/, "the card carries the reason");
+  assert.match(card.detail, /commit or discard those files/, "and the remedy");
   assert.equal(p.assistant.spawnIntents.find((x) => x.turnId === "turn-dirty-1")?.outcome, "failed", "the debt is settled, not left owed");
 
   // The same refusal through a direct start (a card press takes this path): it throws, and the sentence is the same.
@@ -304,8 +310,8 @@ test("a spawn asked to use a dirty or stale-base tree is refused by name, before
 
   await p.assistant.harvest(turn("turn-stale-1", `SPAWN IN ${stale} | carry on here`));
   assert.equal(p.gw.posts.length, before, "the stale tree posted nothing either");
-  const second = kinds(p.assistant, "spawn-failed").find((e) => /turn-stale-1|stale-tree/.test(e.text));
-  assert.ok(second, `the stale refusal is a second journal line: ${JSON.stringify(p.assistant.journal.filter((e) => e.kind === "spawn-failed").map((e) => e.text))}`);
+  const second = kinds(p.assistant, "spawn-refused").find((e) => /turn-stale-1|stale-tree/.test(e.text));
+  assert.ok(second, `the stale refusal is a second journal line: ${JSON.stringify(p.assistant.journal.filter((e) => e.kind === "spawn-refused").map((e) => e.text))}`);
   assert.match(second.text, /cannot take a new worker/);
   assert.match(second.text, /stale-tree/, "named, not guessed at");
   assert.match(second.text, new RegExp(`trails main by ${(TRIVIAL_BEHIND + 1).toLocaleString("en-US")} commits`));

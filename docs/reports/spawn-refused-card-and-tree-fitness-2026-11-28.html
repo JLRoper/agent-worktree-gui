@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 419: a refused SPAWN raises a card, and spawn-check measures a named tree</title>
+<style>
+  :root { --ink:#1b1f24; --mute:#5b6673; --line:#d8dee6; --bg:#ffffff; --soft:#f5f7fa; --bad:#b42318; --good:#067647; --warn:#a15c00; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 28px 72px; }
+  h1 { font-size: 27px; line-height:1.2; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; padding-bottom:4px; border-bottom:1px solid var(--line); }
+  h3 { font-size: 15px; margin: 20px 0 6px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--mute); margin: 0 0 18px; }
+  .facts { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap:10px; margin: 18px 0 6px; }
+  .fact { background: var(--soft); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .fact b { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); font-weight:600; }
+  .fact span { font-size:15px; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; font-size: 13px; }
+  code { background: var(--soft); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:#0f1720; color:#e6edf3; padding:12px 14px; border-radius:8px; overflow:auto; white-space:pre-wrap; word-break:break-word; font-size:12.5px; line-height:1.45; }
+  table { border-collapse: collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background: var(--soft); font-weight:600; }
+  .ok { color: var(--good); font-weight:600; }
+  .no { color: var(--bad); font-weight:600; }
+  .note { border-left:3px solid var(--warn); background:#fff8ec; padding:9px 13px; margin:12px 0; }
+  .cite { color: var(--mute); font-size:12.5px; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin: 4px 0; }
+  footer { margin-top: 36px; padding-top: 12px; border-top:1px solid var(--line); color: var(--mute); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>A refused SPAWN raises a card, and spawn-check measures a named tree</h1>
+<p class="sub">Queue row 419. Fix and proof, 2026-11-28. Cut from the turnover branch <span class="mono">20261127_2134_TASK-405_row-405-is-the-complete</span> at <span class="mono">ad76ea45</span>. All line numbers are at the branch head that carries this page. Machine paths are elided on purpose: <span class="mono">&lt;named tree&gt;</span> stands for the directory the line named, because a committed record may not carry this host's folders.</p>
+
+<div class="facts">
+  <div class="fact"><b>Forced refusal</b><span class="no">parked row, card raised</span></div>
+  <div class="fact"><b>Card fields</b><span>rule, reason, remedy, row, line</span></div>
+  <div class="fact"><b>Tree measured</b><span>6 commits ahead, 2 uncommitted</span></div>
+  <div class="fact"><b>Cut and pre-flight</b><span class="ok">one sentence, byte for byte</span></div>
+  <div class="fact"><b>Spawn-check tests</b><span class="ok">12 / 12 pass</span></div>
+  <div class="fact"><b>Card tests</b><span class="ok">5 / 5 pass</span></div>
+</div>
+
+<h2>1. The two absences this closes</h2>
+
+<p>A SPAWN line the panel refuses used to leave one journal entry in a 300-entry ring. The row stayed queued, no thread appeared, and no card existed, so the only evidence was an absence the reader had to notice. Row 401's report measured the consequence: two long SPAWN lines refused into that hole read to the reader as lines that never happened (<code>docs/reports/spawn-line-record-and-tree-fitness-2026-11-28.html</code>, section 2.1).</p>
+
+<p>The pre-flight had the matching hole in the other direction. <code>spawn-check</code> answered <code>ok</code> for a queue row, but its facts about a named tree came from the board's scanned row. A tree the scan had not reached, or whose row was minutes old, answered <span class="mono">{ ok: true, checks: [] }</span> and the cut refused it a beat later. Measured on the live panel at port 7331 (the base build, before this branch): a tree 4 commits ahead of main with 2 uncommitted files answered:</p>
+
+<pre>{ "ok": true, "reason": null, "remedy": null, "checks": [], "treeState": null }</pre>
+
+<p>That is the drift. The cut's own fitness refusal existed (<code>lib/jobs.js</code> <code>tree_unfit</code>) and the pre-flight never asked it.</p>
+
+<h2>2. Proof 1: force a refusal and show the card it raises</h2>
+
+<p>The proof fixture is a real Assistant, a real queue file and the REAL harvest. A row was filed, then parked with the reason "waiting on the QA window", then a turn wrote <code>SPAWN #1 agent-worktree-gui | carry the deploy to QA</code>. The harvest refused it and wrote the card below (<code>lib/assistant.js:2668</code> builds it; the refusal site is <code>lib/assistant.js:7677</code>). The row stayed parked and no job existed.</p>
+
+<pre>{
+ "row": 1,
+ "rowStateAfter": "parked",
+ "card": {
+  "id": "f8a87b06",
+  "key": "spawn-refused|task-1",
+  "rule": "spawn-refused",
+  "severity": "bad",
+  "thread": null,
+  "turnId": "turn-419-refused",
+  "title": "SPAWN refused: SPAWN agent-worktree-gui (line 52 chars)",
+  "detail": "task #1 is parked (waiting on the QA window) - a park is a hold, and a SPAWN is not the thing that releases it - the fix: unpark it first: queue action state queued with a reason, then write the SPAWN",
+  "evidence": [
+   { "label": "reason", "value": "task #1 is parked (waiting on the QA window) - a park is a hold, and a SPAWN is not the thing that releases it" },
+   { "label": "remedy", "value": "unpark it first: queue action state queued with a reason, then write the SPAWN" },
+   { "label": "row", "value": "#1" },
+   { "label": "line", "value": "carry the deploy to QA" },
+   { "label": "what happened", "value": "nothing was cut: no tree, no job and no thread exist for this line" }
+  ],
+  "at": "2026-11-28T11:28:14.229Z",
+  "status": "open",
+  "level": "alert",
+  "code": "task-parked",
+  "taskId": 1,
+  "assistantId": "assistant-1"
+ }
+}</pre>
+
+<p>The card is drawn by the panel's existing alert renderer (<code>public/assistant.js:2753</code>): a red <span class="mono">is-bad</span> card with the rule chip, the title, the detail and one labelled evidence line each. No new UI was needed, and the card has no Start button because there is nothing left to start. It is filed on the assistant whose line was refused (<code>assistant-1</code> here), and <code>state()</code> includes it in the list the page reads.</p>
+
+<h3>One card per row or tree, and it closes itself</h3>
+<p>The key is <code>spawn-refused|task-&lt;id&gt;</code> for a line carrying a row and <code>spawn-refused|&lt;tree&gt;</code> for one carrying a tree (<code>lib/assistant.js:2661</code>). A boot re-reading the turn, or a second line refused for the same row, rewrites the same card instead of stacking another. When the same row or tree is finally carried out, <code>closeSpawnRefusalCard</code> (<code>lib/assistant.js:2710</code>, called at <code>lib/assistant.js:8771</code>) marks it <span class="mono">done</span> and journals <span class="mono">spawn-refused-cleared</span>. A red card left open after the fix reads as a refusal that is still true.</p>
+
+<p>The same path covers every refusal the cut makes: the row check in the harvest and in <code>startSpawn</code> (<code>lib/assistant.js:8652</code>), the held tree (<code>tree_busy</code>) and the unfit tree (<code>tree_unfit</code>) at <code>lib/assistant.js:8718</code>. <code>jobs.create</code> now carries <code>err.reason</code> beside <code>err.remedy</code> (<code>lib/jobs.js:4281</code>, <code>lib/jobs.js:4336</code>) so the card quotes the obstacle and the fix separately, never a whole sentence chopped in half.</p>
+
+<h2>3. Proof 2: a named tree is measured, with its counts quoted</h2>
+
+<p>Two real repositories were used. The first is a scratch repo whose branch <span class="mono">wtgui/proof-ahead-dirty</span> is 6 commits ahead of <span class="mono">main</span> and holds 2 uncommitted files. <code>spawn-check</code> was driven through the real route handler (<code>routes/assistant-spawn-check.js</code>) with a real Assistant over a real <code>Jobs</code> store. The answer:</p>
+
+<pre>{
+ "status": 200,
+ "ok": false,
+ "reason": "the worktree &lt;named tree&gt; cannot take a new worker: 2 uncommitted files (nobody has committed them, and a worker's first add would sweep them up), and its branch wtgui/proof-ahead-dirty carries 6 unlanded commits that main does not have",
+ "remedy": "commit or discard those files, or cut a FRESH tree from current main (write the SPAWN without IN)",
+ "treeState": {
+  "branch": "wtgui/proof-ahead-dirty",
+  "ahead": 6,
+  "dirty": 2,
+  "behind": 0,
+  "mainRef": "main",
+  "read": true,
+  "source": "git",
+  "baseCheckout": false,
+  "holder": null
+ },
+ "checks": [
+  { "check": "tree", "code": "tree_dirty",
+    "reason": "the worktree &lt;named tree&gt; cannot take a new worker: 2 uncommitted files ..., and its branch wtgui/proof-ahead-dirty carries 6 unlanded commits that main does not have",
+    "remedy": "commit or discard those files, or cut a FRESH tree from current main (write the SPAWN without IN)" }
+ ]
+}</pre>
+
+<p>The cut, asked for the same tree through <code>jobs.create</code>, answered the same sentence:</p>
+
+<pre>{ "code": "tree_unfit",
+  "message": "the worktree &lt;named tree&gt; cannot take a new worker: 2 uncommitted files ..., and its branch wtgui/proof-ahead-dirty carries 6 unlanded commits that main does not have. commit or discard those files, or cut a FRESH tree from current main (write the SPAWN without IN).",
+  "reason": "the worktree &lt;named tree&gt; cannot take a new worker: 2 uncommitted files ..., and its branch wtgui/proof-ahead-dirty carries 6 unlanded commits that main does not have",
+  "remedy": "commit or discard those files, or cut a FRESH tree from current main (write the SPAWN without IN)" }</pre>
+
+<h3>What the answer now carries</h3>
+<table>
+  <tr><th>Field</th><th>Meaning</th><th>Read from</th></tr>
+  <tr><td><span class="mono">ahead</span></td><td>commits the tree holds that the project's main does not, counted (<span class="mono">git rev-list --count mainRef..HEAD</span>)</td><td><code>lib/jobs.js:3807</code> <code>treeFitness</code></td></tr>
+  <tr><td><span class="mono">dirty</span></td><td>uncommitted files, counted from <span class="mono">git status --porcelain</span></td><td><code>lib/jobs.js:3807</code></td></tr>
+  <tr><td><span class="mono">behind</span>, <span class="mono">mainRef</span></td><td>how far the tree trails its base, and which ref that was</td><td><code>lib/jobs.js:3807</code></td></tr>
+  <tr><td><span class="mono">holder</span></td><td>the live run standing in the tree, with its job, thread and run id, or <span class="mono">null</span></td><td><code>lib/assistant.js:2858</code> <code>spawnCheck</code></td></tr>
+  <tr><td><span class="mono">read</span>, <span class="mono">source</span></td><td>whether git answered, and whether the facts came from git, the board's scanned row, or nothing</td><td><code>lib/assistant.js:2900</code></td></tr>
+</table>
+
+<p>Three cases are kept apart, deliberately:</p>
+<ul>
+  <li><b>Dirty or stale</b>: a REFUSAL (<span class="mono">tree_dirty</span> / <span class="mono">tree_stale</span>), built by <code>treeFitnessRefusal</code> (<code>lib/spawn-check.js:331</code>), the same function <code>jobs.create</code> throws. The reason quotes the uncommitted file count AND the unlanded commit count.</li>
+  <li><b>Clean but ahead of main</b>: allowed, as the cut allows it, with the count and branch under <span class="mono">tree-unlanded</span>. The test fixture for this case is 7 commits ahead and answers <span class="mono">ok: true</span> with <span class="mono">ahead: 7</span>.</li>
+  <li><b>Held by a live run</b>: refused, naming the job and the thread, and <span class="mono">treeState.holder</span> carries the same run as a fact (<span class="mono">{ id: "job-5962", thread: "t-hold", dead: false }</span> in the test). A run the runs API calls DEAD stays the re-issue case it was, and reports <span class="mono">dead: true</span>.</li>
+</ul>
+
+<p>The project's own checkout is the exception the cut already makes: <code>jobs.create</code> skips the fitness refusal there because its dirt is the reader's, so the pre-flight skips it too and only reports the counts in <span class="mono">treeState</span>. Without that, the route would refuse a line the cut accepts. A directory git cannot answer for (<span class="mono">read: false</span>) falls back to the scanned row, and is never called clean.</p>
+
+<h2>4. Where the change lives</h2>
+
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>lib/assistant.js:2619</code></td><td><code>spawnTaskCheck</code> returns the row check as an object, so a caller has the reason and the remedy separately. <code>spawnTaskRefusal</code> is the same check read as one sentence.</td></tr>
+  <tr><td><code>lib/assistant.js:2668</code></td><td><code>raiseSpawnRefusalCard</code> and <code>closeSpawnRefusalCard</code>: one red alert per row or tree, with reason, remedy, row and line as labelled evidence.</td></tr>
+  <tr><td><code>lib/assistant.js:7677</code>, <code>:8652</code>, <code>:8718</code></td><td>Every refusal site raises the card: the harvest's row check, the cut's row check, and the spawner's <code>tree_busy</code> / <code>tree_unfit</code>.</td></tr>
+  <tr><td><code>lib/assistant.js:2858</code></td><td><code>spawnCheck</code> measures the named tree through <code>jobs.treeFitness</code>, adds the fitness refusal, and returns <span class="mono">treeState</span>.</td></tr>
+  <tr><td><code>lib/jobs.js:3807</code></td><td><code>treeFitness</code> also measures <span class="mono">ahead</span>, <span class="mono">branch</span> and <span class="mono">read</span>. <code>lib/jobs.js:4328</code> passes <span class="mono">ahead</span> and the measured branch into the refusal.</td></tr>
+  <tr><td><code>lib/spawn-check.js:331</code></td><td><code>treeFitnessRefusal</code> quotes the unlanded commit count when a refusal is already happening.</td></tr>
+  <tr><td><code>routes/assistant-spawn-check.js</code></td><td>The response contract documents <span class="mono">treeState</span>; the object passes through the route unchanged.</td></tr>
+  <tr><td><code>docs/using-the-board.md</code></td><td>Two paragraphs: a refused SPAWN is a card, and a named tree is measured with the counts and <span class="mono">treeState</span>.</td></tr>
+  <tr><td><code>test/spawn-check.test.js:269</code></td><td>Ahead-and-dirty tree: <span class="mono">ok: false</span>, counts quoted, the cut's sentence byte for byte.</td></tr>
+  <tr><td><code>test/spawn-check.test.js:307</code></td><td>Clean tree 7 ahead: <span class="mono">ok: true</span>, count quoted, <span class="mono">tree-unlanded</span>.</td></tr>
+  <tr><td><code>test/spawn-busy.test.js:222</code></td><td>The forced refusal's card: rule, severity, title, reason, remedy, row still parked, state visible to the page.</td></tr>
+  <tr><td><code>test/spawn-busy.test.js:242</code></td><td>The card closes when the same tree is finally carried out.</td></tr>
+  <tr><td><code>test/spawn-record-and-fit-tree.test.js:283</code></td><td>The dirty-tree refusal is journalled <span class="mono">spawn-refused</span> and raises a card with the reason and the remedy.</td></tr>
+</table>
+
+<h2>5. What was run, and what it answered</h2>
+
+<table>
+  <tr><th>Run</th><th>Answer</th></tr>
+  <tr><td><span class="mono">node --test test/spawn-check.test.js</span></td><td class="ok">12 tests, 12 pass, 0 fail (23.4 s)</td></tr>
+  <tr><td><span class="mono">node --test test/spawn-busy.test.js</span></td><td class="ok">5 tests, 5 pass, 0 fail (61.0 s)</td></tr>
+  <tr><td><span class="mono">node --test test/spawn-record-and-fit-tree.test.js</span></td><td class="ok">5 tests, 5 pass, 0 fail (83.2 s)</td></tr>
+  <tr><td>spawn-related batch (attachment, boot, cards, from, reuse, row-prelift, stage-landing, watch)</td><td class="ok">37 tests, 37 pass, 0 fail</td></tr>
+  <tr><td>the first batch (check-wiring, queue-link, lane, reuse-policy, fit-tree)</td><td>35 tests, 34 pass, 1 fail: the fit-tree test still expected the old <span class="mono">spawn-failed</span> kind. The test was corrected to the new contract (a refusal is <span class="mono">spawn-refused</span> and raises a card) and the file then passed 5 / 5.</td></tr>
+</table>
+
+<p>A full <span class="mono">npm test</span> was started first and stalled after 95 lines with no summary (the runner alive, no worker growing), so the suite was run the way this repo's own notes prescribe: the 472 test files sorted, split into two halves, each with the same flags (<span class="mono">--test-concurrency=4 --test-timeout=60000</span>). Both halves printed their own tally:</p>
+
+<table>
+  <tr><th>Run</th><th>Answer</th></tr>
+  <tr><td>half A (files 1-236)</td><td><span class="mono">tests 2160, pass 2140, fail 15, cancelled 1, skipped 4</span></td></tr>
+  <tr><td>half B (files 237-472)</td><td><span class="mono">tests 1972, pass 1961, fail 11</span></td></tr>
+</table>
+
+<p>Every failing name in the two halves was attributed, because a suite red is a claim about this branch until it is not:</p>
+<ul>
+  <li>Thirteen names in half A and ten in half B failed identically on a <span class="mono">git archive</span> of the cut base (<span class="mono">ad76ea45</span>) run in a scratch export: the absolute-paths records already on main, the missing gitignored <span class="mono">config.json</span> in a worktree, the harness-pairing and paths rows, the role labels, the initiative/wave routes, and the junctioned <span class="mono">node_modules</span> walk. None touches a spawn file.</li>
+  <li>Three half-A names did not reproduce on the base in that run but passed alone on this branch: the assistant-director queue cadence, the child route under its 60 s cap (it timed out at exactly 60,058 ms in the suite), and the job-settle board read (which also failed once on the base and passed on the second base run - a timing flake on both trees).</li>
+  <li>Half B stalled on <span class="mono">test/waves-route.test.js</span> with a stranded <span class="mono">server.js</span> child; the file passes alone 8 / 8, and this branch does not touch waves.</li>
+</ul>
+
+<p>The proofs above come from this branch's own modules, driven through the real harvest, the real route handler and <code>jobs.create</code>. The live panel was serving the base build when the run started, so nothing here claims a restarted process.</p>
+
+<div class="note">
+<p><b>Holder evidence, from the live panel's own store.</b> Read at the start of this run, the live job store reported job <span class="mono">7188df3e</span> (<span class="mono">running</span>, thread <span class="mono">wtgui-row-419-is-the-complete-brie-b54569</span>, run <span class="mono">run_e508c362584542ff9a422bab998471e6</span>) whose cwd is this worktree. The base build's answer for this tree was <span class="mono">ok: false</span> on that holder and a <span class="mono">tree-unlanded</span> note quoting 155 commits, with <span class="mono">treeState: null</span>. The new answer reports the same holder as a fact and measures 155 commits ahead and 32 behind against <span class="mono">origin/main</span> from git, not from the board row.</p>
+</div>
+
+<h2>6. What this landing does not do</h2>
+<ul>
+  <li>No version bump. The brief forbids it and the repo's version gate is not part of this row.</li>
+  <li>No push, no pull request. The work merges LOCALLY into the turnover branch <span class="mono">20261127_2134_TASK-405_row-405-is-the-complete</span>, which is where this tree's work rolls up.</li>
+  <li>No panel restart. The running panel predates this code; the proofs are from the branch, and the reader decides when the turnover branch lands.</li>
+</ul>
+
+<footer>Queue row 419. Evidence produced by the branch's own modules on 2026-11-28, in this worktree. Relative paths only; the panel's own directory and the scratch directory are elided.</footer>
+
+</main>
+</body>
+</html>

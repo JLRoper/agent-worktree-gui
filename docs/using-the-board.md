@@ -275,6 +275,14 @@ forth). They hold **two trees**, one each:
 runs API for the DEAD verdict, reads the board's verdict for a landed tree and recognises a coder/reviewer pair,
 so the pre-flight and the cut cannot disagree.
 
+A **named tree** is measured directly from git, not read off the board's scanned row (that row can be minutes old,
+or absent for a tree the scan has not reached). The answer carries `treeState`: `ahead` - the commits the tree
+holds that the project's main does not - `dirty` - the files nobody has committed - `behind`, `branch`, `mainRef`,
+`holder` (the live run standing in it, or `null`) and `source` (`git`, `board row`, or `unmeasured`). A dirty tree,
+or one whose base main has left far behind, is REFUSED with the cut's own sentence (`jobs.create`'s `tree_unfit`,
+built by the same `treeFitnessRefusal`), and the reason quotes both counts. A tree that is clean but ahead of main
+is allowed, as the cut allows it, and reported with its commit count and branch under `tree-unlanded`.
+
 ### Attachments
 
 Paste or drop a file into the spawn prompt or any reply box. The file is stored by the panel and a chip appears
@@ -322,6 +330,15 @@ digest; and a turn whose `SPAWN` line produced *neither* a worker nor a card is 
 alerted the same way. Both are rules in **Settings → Per-rule escalation** (`spawn card not clicked`, `lost SPAWN
 line`), so either can be raised to a wake. To clear a card without starting it, open it and press **Discard** —
 that is the only thing that cancels a proposal.
+
+**A refused SPAWN is a card too.** When the panel refuses a `SPAWN` or `SPAWN IN` line before anything is cut -
+the row is missing, finished, parked or on another assistant's queue, or the named tree is held by a live run,
+dirty, or trailing main - it writes `spawn-refused` to the journal **and raises a red card** under that assistant's
+Alerts with rule `spawn-refused`. The card names the line, the reason and the remedy as labelled evidence, and says
+nothing was cut: no tree, no job and no thread exist behind it. There is one card per row or tree, rewritten in
+place when the reason changes, and it closes by itself when the same row or tree is finally carried out. It is not a
+spawn card: it has no Start button, because there is nothing left to start.
+
 
 ---
 
