@@ -28,7 +28,8 @@
 //   6. the refusal: a branch with no record answers the real route with its 404 and the page draws that sentence in
 //      the confirm and the banner - not a silent no-op
 //   7. THE LIFT STILL WORKS FROM THE NEW COLUMN: pressing it writes lifted:true on the record (read back from the FILE
-//      on disk, so a restart keeps it), the row turns into R with a tick in td.kind, and the kind itself is still
+//      on disk, so a restart keeps it), the row turns into T in td.kind - the kind it behaves as - with the research
+//      kind it was left in the tooltip, and the kind itself is still
 //      research
 //   8. the Worktrees tab draws the same pair, and its R is the same button
 //   9. the cut dialog still offers exactly the two kinds from GET /api/branch-kinds, pre-selects NEITHER, and a cut
@@ -277,7 +278,7 @@ try {
   check("the column has its own header, immediately left of Verdict", [research.kindHeader, research.kindBeforeVerdict], ["Kind", 1]);
   check("...as a real button, because an unlifted research tree has something to do", research.markTag, "button");
   ok("...with an accessible name that spells the kind out", /research tree/i.test(research.aria) && /lift/i.test(research.aria), research.aria);
-  ok("...and a title that says when its push is refused and what pressing does", /research refusal/i.test(research.title) && /press to lift/i.test(research.title), research.title);
+  ok("...and a title that says when its push is refused and what pressing does", /never merges or pushes until you lift it/i.test(research.title) && /press to lift/i.test(research.title), research.title);
   ok("the mark is one letter, not a chip with a sentence in it", research.width > 0 && research.width <= 24, `${research.width}px wide, ${research.height}px tall`);
   ok("...inside a column wide enough to draw it whole", research.kindWidth >= Math.ceil(research.width), `${research.width}px mark in a ${research.kindWidth}px cell`);
   ok("the name is still drawn whole beside them", research.nameWhole && research.nameText === "research-probe-aaaa11", `${research.nameText}, ${research.nameWidth}px of ${research.nameCellWidth}px`);
@@ -510,10 +511,12 @@ try {
       }));
       return st;
     },
-    { timeoutMs: 20_000, what: "the research row to draw R with a tick" },
+    { timeoutMs: 20_000, what: "the research row to draw the upgraded T" },
   );
-  ok("the row turns into R with a tick after the lift, still in td.kind", Boolean(liftedUp) && liftedUp.inKind, liftedUp ? `${liftedUp.text}, ${liftedUp.width}px` : "not lifted");
-  ok("... the letter is still R: a lift answers the record, it does not change the kind", liftedUp?.text === "R✓");
+  ok("the row turns into T after the lift, still in td.kind", Boolean(liftedUp) && liftedUp.inKind, liftedUp ? `${liftedUp.text}, ${liftedUp.width}px` : "not lifted");
+  ok("... the cell names what it behaves as: T in the turnover chip, not its old letter", liftedUp?.text === "T" && /turnover/.test(liftedUp?.aria || ""));
+  ok("... and its tooltip says what it was: a research tree, upgraded by the reader, behaving as a turnover tree", /was a research tree, upgraded by the reader; it behaves as a turnover tree/.test(liftedUp?.title || ""), liftedUp?.title);
+  ok("... with no tick left anywhere in the mark", !/✓/.test(liftedUp?.text || ""), liftedUp?.text);
   check("... and the verdict cell never moved", [liftedUp?.verdictMarks, liftedUp?.verdictText], [0, liftedUp?.badgeText]);
   ok("... the question is gone", (await page.locator("tr.row-kind-confirm").count()) === 0);
   ok("a green note says what the lift did", /is lifted/.test(liftNote?.text || "") && /ordinary controls/.test(liftNote?.text || "") && liftNote?.green === true && liftNote?.hidden === false, JSON.stringify(liftNote));

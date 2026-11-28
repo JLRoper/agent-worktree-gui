@@ -12,7 +12,7 @@
 //
 //   1. each block is on the tab that owns it and NOT on the others, and the General index names both tabs;
 //   2. the words that carry the rule are present: what T and R mean, that R is local only and refused until lifted,
-//      the lift's route, that a lifted tree keeps its R with a tick, and what a lift does NOT change;
+//      the lift's route, that a lifted tree reads T because it behaves as a turnover tree, and what a lift does NOT change;
 //   3. no block overflows its own box horizontally at either width, and its prose is at least 12 px - a block that
 //      clips a route is a block a reader cannot follow;
 //   4. the strip still switches: every one of the fourteen tabs selects, exactly one panel is drawn, and the
@@ -81,7 +81,7 @@ const WIDTHS = [
 // one owner, or the reader finds two half-answers that can drift.
 const BLOCKS = [
   { id: "settings-glossary-index", tab: "general", notOn: ["repo", "board"], say: [/Settings > Repo/, /Settings > Board/, /turnover child/, /research tree/, /lift/i] },
-  { id: "settings-glossary-kinds", tab: "repo", notOn: ["general", "board"], say: [/turnover child/, /research tree/, /LOCAL ONLY/, /local only/, /POST \/api\/worktree\/kind-lift/, /keeps its R with a tick/, /does not beat a repository's never/] },
+  { id: "settings-glossary-kinds", tab: "repo", notOn: ["general", "board"], say: [/turnover child/, /research tree/, /LOCAL ONLY/, /local only/, /POST \/api\/worktree\/kind-lift/, /reads T, because that is what an upgraded tree now behaves as/, /does not beat a repository's never/] },
   { id: "settings-glossary-chips", tab: "repo", notOn: ["general", "board"], say: [/turnover:/, /rules:/, /cleanup:/, /removes nothing/, /merges the branches that still hold work/, /locked tree/] },
   { id: "settings-glossary-board-chip", tab: "board", notOn: ["general", "repo"], say: [/\.agentboard/, /PID/, /stale count/] },
 ];
