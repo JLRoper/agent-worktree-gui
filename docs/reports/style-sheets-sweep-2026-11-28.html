@@ -102,7 +102,7 @@ styleLinkTags({ root, prefix })  the &lt;link&gt; tags a fixture page serves, on
   <tr><td class="tool">verify-console-multi-block-line.mjs</td><td><code>&lt;link&gt;</code> 404</td><td>styleLinkTags(ROOT)</td><td><span class="warn">runs</span> - needs job 6073fb2a, absent here; a substitute job passes the layout checks and fails 3 text checks</td></tr>
   <tr><td class="tool">verify-console-settled-tail.mjs</td><td><code>&lt;link&gt;</code> 404</td><td>styleLinkTags(ROOT)</td><td><span class="ok">all checks</span> (base 1 failed)</td></tr>
   <tr><td class="tool">verify-copy-buttons.mjs</td><td>2 comments</td><td>public/console.css</td><td>static (comment only)</td></tr>
-  <tr><td class="tool">verify-css-split.mjs</td><td>own parse + 5 path literals</td><td>styleSheetFiles + one LEGACY_SHEET constant</td><td><span class="warn">--stream: same verdict as base</span> (section 5)</td></tr>
+  <tr><td class="tool">verify-css-split.mjs</td><td>own parse + 5 path literals</td><td>the turnover branch's multiset version (b14a286c), with its parse on the helper and one LEGACY_SHEET constant</td><td><span class="ok">--stream: pass</span> 0 lost, 0 edited, 15 borrowed from chart.css</td></tr>
   <tr><td class="tool">verify-deliverables-ui.mjs</td><td>comment</td><td>"every sheet the page links"</td><td>static (comment only)</td></tr>
   <tr><td class="tool">verify-initiative-card-anchor.mjs</td><td>comment: the 1000px container</td><td>public/initiatives.css</td><td>static (comment only)</td></tr>
   <tr><td class="tool">verify-initiatives-redesign.mjs</td><td>dash-scan file list</td><td>public/initiatives.css (carries no em or en dash: 0 lines)</td><td>static (fixture data)</td></tr>
@@ -131,11 +131,11 @@ PASS  …and the stale row holds no lane: the skip names the live holder, never 
 <p>The pane draws running rows first, so the cards are #1, #5, #2, #3, #4: the note assertions are indexed to that order, and the live holder's row is checked for the absence of a note. All twelve checks before the browser half pass.</p>
 
 <h2>5. What is still red, and why it is not this row</h2>
-<p>Three gates are red on this branch for reasons that predate it. Each was measured on the base with only the deleted-file read stubbed, so the numbers are comparable.</p>
+<p>Two gates are red on this branch for reasons that predate it. Each was measured on the base with only the deleted-file read stubbed, so the numbers are comparable.</p>
 <h3>verify-queue-cards.mjs: seven browser assertions</h3>
 <p>47 checks, 7 failed, all seven after the browser opens: "a surface of its own" (the done card's <code>background: var(--card)</code> equals the group's), "the actions row is the card's last child", "sits at the card's bottom edge", "below the head", "one sub-row per agent, with its thread" (the agent line now leads with <code>project:</code>), "the meta line still names the tree and the files" and "truncates a long file list" (the meta line now reads <code>project agent-worktree-gui</code>; the tree and files moved). On the base, with the <code>readFileSync</code> stubbed so the browser half could run at all, the same seven fail in the same words. They pin the pre-#410 card, and re-pinning them is a card-layout job, not a stylesheet one.</p>
-<h3>verify-css-split.mjs --stream</h3>
-<p>The half-A comparison reads the last commit that holds the pre-split blob and compares the CURRENT sheets to it rule for rule: 3,061 old rules against 3,076 now, first divergence at rule 423. Any CSS change after the split makes that comparison red by construction, and CSS has changed several times since (1.191.0's cut dialog and board table, 1.194.0). The base answers exactly the same two numbers with the same first divergence, so this branch changes nothing about it. Repairing it needs a decision (compare against the split commit's own sheets, or pin a baseline file), which is why it is reported rather than guessed at.</p>
+<h3>verify-css-split.mjs --stream: fixed elsewhere, and taken here</h3>
+<p>Half A compared the current sheets to the pre-split blob as a SEQUENCE, so it read 3,061 old rules against 3,076 and diverged at rule 423 - and any CSS move after the split made it red by construction. The turnover branch already carried the repair (<code>b14a286c</code>, "the css split gate judges a cross-sheet move by the rule multiset"): it compares multisets and accounts for the fifteen rules the 1.194.0 move took out of <code>chart.css</code> into <code>board.css</code>. This branch's file conflicted with that commit at the merge, and the resolution takes the multiset version and changes only its sheet parse (the helper) and its path literal (<code>LEGACY_SHEET</code>). It now passes: 0 lost, 0 edited, 15 borrowed from <code>chart.css</code>, 0 added, and one accepted edit recorded at 1.193.0.</p>
 <h3>verify-child-button.mjs: two JS-half assertions</h3>
 <p>23 of 25 pass. The two failures are "it sends the project, the row's path and the name" and "cancel cuts nothing": <code>cutChildTree</code> (public/app.js:7943) now opens a cut dialog (<code>openCutDialog</code>) instead of POSTing a fixed body, so the gate's regexes describe a handler that no longer exists. The two read <code>public/app.js</code> and never touched the stylesheet, so they fail identically on the base once the missing-file throw is out of the way.</p>
 
@@ -154,7 +154,6 @@ $ node tools/style-sheets.mjs --text | wc -c
 <h2>7. What is left</h2>
 <ul>
   <li>Re-pin the seven browser assertions in <code>verify-queue-cards.mjs</code> against the current card (#410's <code>project:branch</code> line, the run chip, the actions row's new place).</li>
-  <li>Decide what <code>verify-css-split.mjs --stream</code> should compare against now that CSS legitimately moves after the split.</li>
   <li>Re-pin <code>verify-child-button.mjs</code>'s two handler assertions to <code>openCutDialog</code>.</li>
 </ul>
 <p class="small">Numbers in this page were read from the runs quoted in it, on this branch, on 2026-11-28. The base column is <code>334989a8</code> measured the same way, with the deleted-file read stubbed where the throw would otherwise stop the run before its checks.</p>
