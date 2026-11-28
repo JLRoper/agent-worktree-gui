@@ -6,7 +6,7 @@
 // board while its PR was MERGED, and `tools/merged-branches.mjs` printed "nothing shows it landed" for it.
 //
 // THE FIX (lib/project.js). Three names are tried, cheapest-to-be-wrong first: the branch as it is now, the remote
-// ref its upstream tracks (`branchUpstreams`, one `git for-each-ref` per project), and the six-hex tag.
+// ref its upstream tracks (`branchLocals`, one `git for-each-ref` per project), and the six-hex tag.
 //
 // THE TRAP THIS SCRIPT EXISTS FOR. A tag identifies the TREE, not the work: an agent that changes branch INSIDE one
 // worktree — the follow-up cut off main in the same tree, which no rename can be told apart from — would otherwise
@@ -20,7 +20,7 @@
 // WHAT IS DRIVEN
 //   driven   the shipped grouping and lookup (`buildPrIndex` + `prFor`): the rename, the branch switch, the
 //            upstream route, ambiguity, a non-hex suffix, a legacy bare-Map index
-//   driven   REAL git (a scratch repo with a real worktree): `branchUpstreams` read from actual refs, a rename that
+//   driven   REAL git (a scratch repo with a real worktree): `branchLocals` read from actual refs, a rename that
 //            keeps the tag, a commit on top after the merge, and `git switch -c` to a new branch in the same tree
 //   driven   the REAL PR list and this REAL checkout, read-only (`gh pr list` + git): the row for this very
 //            worktree resolves to its merged PR, by upstream and (upstream unset) by tag, and the upstream is
@@ -38,7 +38,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildPrIndex, prFor, prIndex, branchUpstreams } from "../lib/project.js";
+import { buildPrIndex, prFor, prIndex, branchLocals } from "../lib/project.js";
 import { tagOf } from "../lib/tree-names.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -219,7 +219,7 @@ const tip7 = workTip.slice(0, 7);
 
 // The panel renames the branch after the thread slug, keeping the tag.
 git(tree, ["branch", "-m", "wtgui/new-name-1a2b3c"]);
-const afterRename = await branchUpstreams({ path: tree });
+const afterRename = (await branchLocals({ path: tree })).upstreams;
 check("the branch rename kept the tag", git(tree, ["rev-parse", "--abbrev-ref", "HEAD"]).out, "wtgui/new-name-1a2b3c");
 check(
   "the upstream is read from real refs, with its remote prefix taken off",
@@ -230,7 +230,7 @@ check("the renamed branch resolves through that upstream", prFor(scratchPr, "wtg
 
 // No upstream at all: the tag is the only route left, and the tip is what makes it safe.
 git(tree, ["branch", "--unset-upstream"]);
-const noUpstream = await branchUpstreams({ path: tree });
+const noUpstream = (await branchLocals({ path: tree })).upstreams;
 check("git reports no upstream once it is unset", noUpstream.has("wtgui/new-name-1a2b3c"), false);
 check("the renamed branch resolves by its tag alone", prFor(scratchPr, "wtgui/new-name-1a2b3c", { tip: tip7 })?.matched, "tag");
 
@@ -244,7 +244,7 @@ check("a branch that kept committing after the merge is not given that PR", prFo
 // THE SCENARIO: the agent changes branch inside the same worktree — a follow-up cut off main, same tag.
 git(tree, ["switch", "-q", "-c", "wtgui/follow-up-1a2b3c", "main"]);
 git(tree, ["branch", "--unset-upstream"]);
-const switched = await branchUpstreams({ path: tree });
+const switched = (await branchLocals({ path: tree })).upstreams;
 const switchedTip = git(tree, ["rev-parse", "--short=7", "HEAD"]).out;
 check("the switch landed on a new branch in the same tree, tag and all", git(tree, ["rev-parse", "--abbrev-ref", "HEAD"]).out, "wtgui/follow-up-1a2b3c");
 check("the new branch has no upstream of its own", switched.has("wtgui/follow-up-1a2b3c"), false);
@@ -259,7 +259,7 @@ if (!isWorktree) {
   console.log("\n3. the real PR list and this checkout (read-only: gh pr list + git reads)");
   const project = { name: PROJECT_NAME, path: MAIN, remote: "github", mainBranch: "main", prRepo: "JLRoper/agent-worktree-gui" };
   const liveIndex = await prIndex(project, 0);
-  const ups = await branchUpstreams(project);
+  const ups = (await branchLocals(project)).upstreams;
   let tagRows = 0;
   let here = null;
   let tagTree = null;
