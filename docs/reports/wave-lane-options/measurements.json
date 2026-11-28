@@ -1,0 +1,799 @@
+{
+ "at": "2026-11-28T06:35:24.196Z",
+ "root": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/report-only-row-nothing-lands-no-public-c7afbf",
+ "home": "C:/Users/roper/AppData/Local/Temp/wag/689111db/fixture",
+ "report": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/report-only-row-nothing-lands-no-public-c7afbf/docs/reports/initiatives-wave-lane-options-2026-11-28.html",
+ "version": "1.195.0",
+ "widths": {
+  "widePanel": 1384,
+  "narrowPanel": 900,
+  "wideStage": 1304,
+  "narrowStage": 804
+ },
+ "panel": {
+  "wide": {
+   "hostW": 1382,
+   "paneW": 1364,
+   "waveColumnW": 1304,
+   "wave": {
+    "x": 86,
+    "y": 745,
+    "w": 1280,
+    "h": 413
+   },
+   "waveH": 413,
+   "waveOverflow": 0,
+   "layout": "lanes side by side",
+   "lanes": [
+    {
+     "name": "public/index.html",
+     "w": 521,
+     "x": 99,
+     "top": 818
+    },
+    {
+     "name": "unlaned",
+     "w": 521,
+     "x": 628,
+     "top": 818
+    }
+   ],
+   "members": [
+    {
+     "id": "444",
+     "titleW": 93,
+     "titleH": 104,
+     "lineHeight": 17.3,
+     "lines": 6,
+     "charsPerLine": 15,
+     "textChars": 93,
+     "overflow": 0,
+     "memberH": 112,
+     "display": "grid"
+    },
+    {
+     "id": "446",
+     "titleW": 93,
+     "titleH": 121,
+     "lineHeight": 17.3,
+     "lines": 7,
+     "charsPerLine": 15,
+     "textChars": 114,
+     "overflow": 0,
+     "memberH": 129,
+     "display": "grid"
+    },
+    {
+     "id": "445",
+     "titleW": 93,
+     "titleH": 121,
+     "lineHeight": 17.3,
+     "lines": 7,
+     "charsPerLine": 15,
+     "textChars": 99,
+     "overflow": 0,
+     "memberH": 129,
+     "display": "grid"
+    }
+   ],
+   "closedTitleW": 853,
+   "waveCount": 2
+  },
+  "narrow": {
+   "hostW": 882,
+   "paneW": 864,
+   "waveColumnW": 804,
+   "wave": {
+    "x": 86,
+    "y": 695,
+    "w": 780,
+    "h": 413
+   },
+   "waveH": 413,
+   "waveOverflow": 0,
+   "layout": "lanes stacked",
+   "lanes": [
+    {
+     "name": "public/index.html",
+     "w": 754,
+     "x": 99,
+     "top": 768
+    },
+    {
+     "name": "unlaned",
+     "w": 754,
+     "x": 99,
+     "top": 909
+    }
+   ],
+   "members": [
+    {
+     "id": "444",
+     "titleW": 418,
+     "titleH": 35,
+     "lineHeight": 17.3,
+     "lines": 2,
+     "charsPerLine": 67,
+     "textChars": 93,
+     "overflow": 0,
+     "memberH": 43,
+     "display": "flex"
+    },
+    {
+     "id": "446",
+     "titleW": 419,
+     "titleH": 35,
+     "lineHeight": 17.3,
+     "lines": 2,
+     "charsPerLine": 68,
+     "textChars": 114,
+     "overflow": 0,
+     "memberH": 43,
+     "display": "flex"
+    },
+    {
+     "id": "445",
+     "titleW": 419,
+     "titleH": 35,
+     "lineHeight": 17.3,
+     "lines": 2,
+     "charsPerLine": 68,
+     "textChars": 99,
+     "overflow": 0,
+     "memberH": 43,
+     "display": "flex"
+    }
+   ],
+   "closedTitleW": 457,
+   "waveCount": 2
+  }
+ },
+ "stages": {
+  "wide": {
+   "O1": {
+    "hostW": null,
+    "paneW": 1302,
+    "waveColumnW": 1302,
+    "wave": {
+     "x": 134,
+     "y": 4563,
+     "w": 1278,
+     "h": 418
+    },
+    "waveH": 418,
+    "waveOverflow": 0,
+    "layout": "lane-grid",
+    "lanes": [
+     {
+      "name": "public/index.html",
+      "w": 520,
+      "x": 147,
+      "top": 4628
+     },
+     {
+      "name": "unlaned",
+      "w": 520,
+      "x": 675,
+      "top": 4628
+     }
+    ],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 90,
+      "titleH": 126,
+      "lineHeight": 18,
+      "lines": 7,
+      "charsPerLine": 14,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 134,
+      "display": "grid"
+     },
+     {
+      "id": "446",
+      "titleW": 90,
+      "titleH": 126,
+      "lineHeight": 18,
+      "lines": 7,
+      "charsPerLine": 14,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 134,
+      "display": "grid"
+     },
+     {
+      "id": "445",
+      "titleW": 90,
+      "titleH": 126,
+      "lineHeight": 18,
+      "lines": 7,
+      "charsPerLine": 14,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 134,
+      "display": "grid"
+     }
+    ],
+    "closedTitleW": 849,
+    "waveCount": 2
+   },
+   "O2": {
+    "hostW": null,
+    "paneW": 1302,
+    "waveColumnW": 1302,
+    "wave": {
+     "x": 134,
+     "y": 2718,
+     "w": 1278,
+     "h": 346
+    },
+    "waveH": 346,
+    "waveOverflow": 0,
+    "layout": "bands",
+    "lanes": [
+     {
+      "name": "public/index.html",
+      "w": 1252,
+      "x": 147,
+      "top": 2783
+     },
+     {
+      "name": "unlaned",
+      "w": 1252,
+      "x": 147,
+      "top": 2893
+     }
+    ],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 822,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 127,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 28,
+      "display": "grid"
+     },
+     {
+      "id": "446",
+      "titleW": 822,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 127,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 28,
+      "display": "grid"
+     },
+     {
+      "id": "445",
+      "titleW": 822,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 127,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 28,
+      "display": "grid"
+     }
+    ],
+    "closedTitleW": 849,
+    "waveCount": 2
+   },
+   "O3": {
+    "hostW": null,
+    "paneW": 1302,
+    "waveColumnW": 1302,
+    "wave": {
+     "x": 134,
+     "y": 2637,
+     "w": 1278,
+     "h": 295
+    },
+    "waveH": 295,
+    "waveOverflow": 0,
+    "layout": "table",
+    "lanes": [],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 711,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 110,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 27,
+      "display": "grid"
+     },
+     {
+      "id": "446",
+      "titleW": 711,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 110,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 27,
+      "display": "grid"
+     },
+     {
+      "id": "445",
+      "titleW": 711,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 110,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 26,
+      "display": "grid"
+     }
+    ],
+    "closedTitleW": 711,
+    "waveCount": 2
+   },
+   "O4": {
+    "hostW": null,
+    "paneW": 1302,
+    "waveColumnW": 1302,
+    "wave": {
+     "x": 134,
+     "y": 2624,
+     "w": 1278,
+     "h": 288
+    },
+    "waveH": 288,
+    "waveOverflow": 0,
+    "layout": "lane-grid",
+    "lanes": [
+     {
+      "name": "public/index.html",
+      "w": 520,
+      "x": 147,
+      "top": 2689
+     },
+     {
+      "name": "unlaned",
+      "w": 520,
+      "x": 675,
+      "top": 2689
+     }
+    ],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 475,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 73,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 69,
+      "display": "block"
+     },
+     {
+      "id": "446",
+      "titleW": 475,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 73,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 69,
+      "display": "block"
+     },
+     {
+      "id": "445",
+      "titleW": 475,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 73,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 69,
+      "display": "block"
+     }
+    ],
+    "closedTitleW": 1234,
+    "waveCount": 2
+   },
+   "O5": {
+    "hostW": null,
+    "paneW": 1302,
+    "waveColumnW": 1302,
+    "wave": {
+     "x": 134,
+     "y": 2690,
+     "w": 1278,
+     "h": 329
+    },
+    "waveH": 329,
+    "waveOverflow": 0,
+    "layout": "matrix",
+    "lanes": [],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 595,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 92,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 53,
+      "display": "block"
+     },
+     {
+      "id": "445",
+      "titleW": 595,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 92,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 53,
+      "display": "block"
+     },
+     {
+      "id": "446",
+      "titleW": 595,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 92,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 53,
+      "display": "block"
+     }
+    ],
+    "closedTitleW": 1216,
+    "waveCount": 2
+   }
+  },
+  "narrow": {
+   "O1": {
+    "hostW": null,
+    "paneW": 802,
+    "waveColumnW": 802,
+    "wave": {
+     "x": 134,
+     "y": -9170,
+     "w": 778,
+     "h": 392
+    },
+    "waveH": 392,
+    "waveOverflow": 0,
+    "layout": "lane-grid",
+    "lanes": [
+     {
+      "name": "public/index.html",
+      "w": 752,
+      "x": 147,
+      "top": -9105
+     },
+     {
+      "name": "unlaned",
+      "w": 752,
+      "x": 147,
+      "top": -8963
+     }
+    ],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 406,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 63,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 44,
+      "display": "flex"
+     },
+     {
+      "id": "446",
+      "titleW": 407,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 63,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 44,
+      "display": "flex"
+     },
+     {
+      "id": "445",
+      "titleW": 407,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 63,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 44,
+      "display": "flex"
+     }
+    ],
+    "closedTitleW": 445,
+    "waveCount": 2
+   },
+   "O2": {
+    "hostW": null,
+    "paneW": 802,
+    "waveColumnW": 802,
+    "wave": {
+     "x": 134,
+     "y": 2705,
+     "w": 778,
+     "h": 394
+    },
+    "waveH": 394,
+    "waveOverflow": 0,
+    "layout": "bands",
+    "lanes": [
+     {
+      "name": "public/index.html",
+      "w": 752,
+      "x": 147,
+      "top": 2770
+     },
+     {
+      "name": "unlaned",
+      "w": 752,
+      "x": 147,
+      "top": 2912
+     }
+    ],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 322,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 50,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 44,
+      "display": "grid"
+     },
+     {
+      "id": "446",
+      "titleW": 322,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 50,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 44,
+      "display": "grid"
+     },
+     {
+      "id": "445",
+      "titleW": 322,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 50,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 44,
+      "display": "grid"
+     }
+    ],
+    "closedTitleW": 349,
+    "waveCount": 2
+   },
+   "O3": {
+    "hostW": null,
+    "paneW": 802,
+    "waveColumnW": 802,
+    "wave": {
+     "x": 134,
+     "y": 2669,
+     "w": 778,
+     "h": 421
+    },
+    "waveH": 421,
+    "waveOverflow": 0,
+    "layout": "table",
+    "lanes": [],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 211,
+      "titleH": 54,
+      "lineHeight": 18,
+      "lines": 3,
+      "charsPerLine": 33,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 63,
+      "display": "grid"
+     },
+     {
+      "id": "446",
+      "titleW": 211,
+      "titleH": 72,
+      "lineHeight": 18,
+      "lines": 4,
+      "charsPerLine": 33,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 81,
+      "display": "grid"
+     },
+     {
+      "id": "445",
+      "titleW": 211,
+      "titleH": 54,
+      "lineHeight": 18,
+      "lines": 3,
+      "charsPerLine": 33,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 62,
+      "display": "grid"
+     }
+    ],
+    "closedTitleW": 211,
+    "waveCount": 2
+   },
+   "O4": {
+    "hostW": null,
+    "paneW": 802,
+    "waveColumnW": 802,
+    "wave": {
+     "x": 134,
+     "y": 2695,
+     "w": 778,
+     "h": 413
+    },
+    "waveH": 413,
+    "waveOverflow": 0,
+    "layout": "lane-grid",
+    "lanes": [
+     {
+      "name": "public/index.html",
+      "w": 752,
+      "x": 147,
+      "top": 2760
+     },
+     {
+      "name": "unlaned",
+      "w": 752,
+      "x": 147,
+      "top": 2916
+     }
+    ],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 707,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 109,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 51,
+      "display": "block"
+     },
+     {
+      "id": "446",
+      "titleW": 707,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 109,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 51,
+      "display": "block"
+     },
+     {
+      "id": "445",
+      "titleW": 707,
+      "titleH": 18,
+      "lineHeight": 18,
+      "lines": 1,
+      "charsPerLine": 109,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 51,
+      "display": "block"
+     }
+    ],
+    "closedTitleW": 734,
+    "waveCount": 2
+   },
+   "O5": {
+    "hostW": null,
+    "paneW": 802,
+    "waveColumnW": 802,
+    "wave": {
+     "x": 134,
+     "y": 2753,
+     "w": 778,
+     "h": 365
+    },
+    "waveH": 365,
+    "waveOverflow": 0,
+    "layout": "matrix",
+    "lanes": [],
+    "members": [
+     {
+      "id": "444",
+      "titleW": 345,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 53,
+      "textChars": 93,
+      "overflow": 0,
+      "memberH": 71,
+      "display": "block"
+     },
+     {
+      "id": "445",
+      "titleW": 345,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 53,
+      "textChars": 99,
+      "overflow": 0,
+      "memberH": 71,
+      "display": "block"
+     },
+     {
+      "id": "446",
+      "titleW": 345,
+      "titleH": 36,
+      "lineHeight": 18,
+      "lines": 2,
+      "charsPerLine": 53,
+      "textChars": 114,
+      "overflow": 0,
+      "memberH": 71,
+      "display": "block"
+     }
+    ],
+    "closedTitleW": 716,
+    "waveCount": 2
+   }
+  }
+ },
+ "live": {
+  "before": {
+   "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       30056",
+   "pid": 30056
+  },
+  "after": {
+   "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       30056",
+   "pid": 30056
+  },
+  "witness": {
+   "same": true
+  },
+  "untouched": true
+ }
+}
