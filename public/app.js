@@ -19238,6 +19238,19 @@ function maintenanceProcessLine(processes) {
   return `${sandboxText} · ${testText} · ${orphanText}`;
 }
 
+// The Processes heading's unit is the census in three numbers; the sentence beneath it is the full one
+// (`maintenanceProcessLine`). An absent array reads "not read", never 0 — zero is a fact and silence is not.
+function maintenanceProcessHeadline(processes) {
+  if (!processes || typeof processes !== "object") return "not read";
+  const count = (value) => (Array.isArray(value) ? value.length : null);
+  const parts = [
+    [count(processes.sandboxPanels), "panel", "panels"],
+    [count(processes.testRunners), "runner", "runners"],
+    [count(processes.orphanPids), "orphan", "orphans"],
+  ].map(([n, one, many]) => (n === null ? null : `${n} ${n === 1 ? one : many}`));
+  return parts.filter(Boolean).join(" · ") || "not read";
+}
+
 function maintenanceResultHtml(target) {
   const held = MAINTENANCE_RESULTS.get(target);
   return held
@@ -19292,7 +19305,9 @@ function paintMaintenance(error = null) {
   if (census) {
     census.textContent = error && !data ? "process census not read" : maintenanceProcessLine(data && data.processes);
   }
-  if (summary) summary.textContent = data ? `${targets.length} target${targets.length === 1 ? "" : "s"}` : "not read";
+  // The unit in the Processes heading carries that row's own census — the heading used to read "Processes" over the
+  // TARGET count ("3 targets"), which belonged to no row in particular.
+  if (summary) summary.textContent = data ? maintenanceProcessHeadline(data.processes) : "not read";
 }
 
 async function loadMaintenance() {

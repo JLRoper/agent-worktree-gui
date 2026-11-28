@@ -160,7 +160,7 @@ test("a GET renders each target and the read-only census", async () => {
   assert.match(census, /2 sandbox panels · oldest 1h 2m/);
   assert.match(census, /1 test runner/);
   assert.match(census, /0 orphan panels/);
-  assert.equal(doc.getElementById("maintenance-processes-summary").textContent, "3 targets");
+  assert.equal(doc.getElementById("maintenance-processes-summary").textContent, "2 panels · 1 runner · 0 orphans", "the Processes heading carries the census, not the target count");
 });
 
 test("Preview posts a dry run and Clean posts the real one", async () => {
@@ -186,7 +186,7 @@ test("Preview posts a dry run and Clean posts the real one", async () => {
   assert.match(api.results.get("scratch").text, /removed 40 files · 1\.0 MB/);
   assert.doesNotMatch(api.results.get("scratch").text, /entries remain/, "nothing is left after the second press");
   await until("the post-clean re-read", () => calls.gets >= 2);
-  assert.equal(doc.getElementById("maintenance-processes-summary").textContent, "3 targets", "the list survived the re-read");
+  assert.equal(doc.getElementById("maintenance-processes-summary").textContent, "2 panels · 1 runner · 0 orphans", "the list survived the re-read");
 });
 
 test("a refusal is shown as the reason the server gave, and a failed GET keeps the last list", async () => {
