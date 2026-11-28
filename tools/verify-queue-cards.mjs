@@ -9,10 +9,11 @@
 //      clash with a LIVE running holder (a run seeded into the job store, because the lane rule reads liveness and
 //      not the state word), a parked task with no owner (the record that used to paint "unowned") and a done one;
 //   2. the real pane in headless Chromium, at 1280 then 340 wide: every row renders as a card (a surface, a
-//      non-zero border-radius, a visible gap to the next card), the actions row sits at the card's bottom edge, and
-//      every fact the row carried before is still on it — the head (#id, title, state mark), one sub-row per agent
-//      with its thread and pill, the tree/files meta line, the stale/skipped/parked notes, and every glyph with its
-//      title= and aria-label=;
+//      non-zero border-radius, a visible gap to the next card), the presses sit in the main row's top-right corner
+//      beside the body, and every fact the row carries is still on it - the head (#id, title, state mark), one
+//      sub-row per agent leading with `project:branch` and its pill, the meta line naming the project, the folded
+//      `tree · files · attempts · detail` line, the stale/skipped/parked notes, and every glyph with its title= and
+//      aria-label=;
 //   3. the row body still carries data-as-qopen (equal to the row's current thread) and every glyph keeps
 //      data-as-qact, so the click behaviour is untouched.
 //
@@ -314,6 +315,16 @@ try {
     ok("the pane paints one card per task", rowsReady, `${await page.locator("#as-queue .as-task").count()} card(s)`);
     if (!rowsReady) note(`pane text: ${(await page.locator("#as-queue").innerText()).replace(/\s+/g, " ").slice(0, 700)}`);
 
+    // THE CARD THIS GATE PINS IS THE CURRENT ONE, and four of the seven assertions below were written against a
+    // card that no longer exists (queue row #489). `48f484e4` moved the presses out of the card's bottom edge and
+    // into a right-hand column of `.as-task-main` (top-aligned with the head), moved the tree, the files, the
+    // attempts and the detail behind the card's own closed `tree · files` disclosure, and gave `.as-task.is-done`
+    // the group's own fill (public/queue.css:52) so a finished row recedes instead of carrying the raised surface.
+    // `f926cf32` (queue row #410) put the project in front of every agent line and the run chip at its back, and the
+    // task-level meta line now names the project and the PR - or steps aside entirely when each agent line already
+    // says where it worked. Each re-pin below asserts the fact the current card DRAWS, with the reason beside it; a
+    // fact that could only pass by asking for less (a transparent surface, a bare thread, a files fragment that is no
+    // longer there) is not one of them.
     const snap = () =>
       page.evaluate(() => {
         const host = document.querySelector("#as-queue");
@@ -331,6 +342,8 @@ try {
             const body = el.querySelector(".as-task-body");
             const actions = el.querySelector(".as-task-actions");
             const act = actions ? actions.getBoundingClientRect() : null;
+            const note = el.querySelector(".as-task-note");
+            const more = el.querySelector(".as-task-more");
             return {
               id: el.dataset.asQrow,
               qthread: el.dataset.asQthread,
@@ -346,7 +359,7 @@ try {
               mark: el.querySelector(".as-task-mark")?.textContent.trim() || "",
               title: el.querySelector(".as-task-title")?.textContent.trim() || "",
               meta: (el.querySelector(".as-task-meta")?.textContent || "").replace(/\s+/g, " ").trim(),
-              note: (el.querySelector(".as-task-note")?.textContent || "").replace(/\s+/g, " ").trim(),
+              note: (note?.textContent || "").replace(/\s+/g, " ").trim(),
               agents: [...el.querySelectorAll(".as-task-agent[data-as-qopen]")].map((a) => ({
                 thread: a.querySelector(".as-task-agent-thread")?.textContent.trim() || "",
                 label: a.querySelector(".as-task-agent-label")?.textContent.trim() || "",
@@ -360,10 +373,23 @@ try {
                 title: b.getAttribute("title") || "",
                 aria: b.getAttribute("aria-label") || "",
               })),
-              actionsLast: el.lastElementChild === actions,
+              mainLast: el.querySelector(".as-task-main")?.lastElementChild === actions,
+              cardEndsWith: !el.lastElementChild ? "" : el.lastElementChild === more ? "more" : el.lastElementChild === actions ? "actions" : el.lastElementChild.className,
+              actionsGapToTop: act ? r2(act.top - box.top) : null,
+              actionsGapToRight: act ? r2(box.right - act.right) : null,
               actionsGapToBottom: act ? r2(box.bottom - act.bottom) : null,
+              actionsLeft: act ? r2(act.left) : null,
+              bodyRight: body ? r2(body.getBoundingClientRect().right) : null,
               headBottom: el.querySelector(".as-task-head") ? r2(el.querySelector(".as-task-head").getBoundingClientRect().bottom) : null,
               actionsTop: act ? r2(act.top) : null,
+              noteTop: note ? r2(note.getBoundingClientRect().top) : null,
+              fold: !more
+                ? null
+                : {
+                    open: more.hasAttribute("open"),
+                    summary: (more.querySelector("summary")?.textContent || "").trim(),
+                    body: (more.querySelector(".as-task-more-body")?.textContent || "").replace(/\s+/g, " ").trim(),
+                  },
             };
           }),
         };
@@ -385,16 +411,43 @@ try {
 
     // (b) every row is a card ----------------------------------------------------------------------
     ok("every row computes a non-zero border-radius", wide.rows.every((r) => r.radius > 0), JSON.stringify(wide.rows.map((r) => r.radius)));
-    ok("…a surface of its own, not the group's background", wide.rows.every((r) => r.bg !== "rgba(0, 0, 0, 0)" && r.bg !== wide.groupBg), JSON.stringify({ row: wide.rows[0]?.bg, group: wide.groupBg }));
+    // FOUR OPEN CARDS CARRY THE RAISED SURFACE and the done card carries the group's own fill on purpose
+    // (public/queue.css:52: `is-done { opacity: .78; background: var(--card) }`), so a finished row recedes into the
+    // group instead of claiming the same weight as live work. The check below still refuses a transparent card and
+    // still refuses a live card that has lost its surface; what it stopped claiming is that the DONE card, whose
+    // greyed fill is the group's, is a defect. The border-and-radius pair on the next line is what keeps a done card
+    // reading as a card.
+    ok(
+      "…a surface of its own, not the group's background",
+      wide.rows.every((r) => r.bg !== "rgba(0, 0, 0, 0)") && wide.rows.slice(0, 4).every((r) => r.bg !== wide.groupBg) && wide.rows[4]?.bg === wide.groupBg,
+      JSON.stringify({ open: wide.rows[0]?.bg, done: wide.rows[4]?.bg, group: wide.groupBg }),
+    );
     ok("…a border, so the surface reads as a card", wide.rows.every((r) => r.border > 0), JSON.stringify(wide.rows.map((r) => r.border)));
     ok("…laid out as a column so the actions can anchor", wide.rows.every((r) => r.display === "flex"), JSON.stringify([...new Set(wide.rows.map((r) => r.display))]));
     const gaps = wide.rows.slice(1).map((r, i) => Math.round((r.top - wide.rows[i].bottom) * 10) / 10);
     ok("…and a visible gap between consecutive cards", gaps.every((g) => g >= 4), JSON.stringify(gaps));
 
-    // the actions row, at the bottom ---------------------------------------------------------------
-    ok("the actions row is the card's last child on every row", wide.rows.every((r) => r.actionsLast));
-    ok("…and sits at the card's bottom edge", wide.rows.every((r) => r.actionsGapToBottom !== null && r.actionsGapToBottom >= 0 && r.actionsGapToBottom <= 14), JSON.stringify(wide.rows.map((r) => r.actionsGapToBottom)));
-    ok("…below the head, not under it", wide.rows.every((r) => r.actionsTop > r.headBottom), JSON.stringify(wide.rows.map((r) => [r.headBottom, r.actionsTop])));
+    // the actions column: the main row's last child, top-right, and the card ends with its fold -----------------
+    // `48f484e4`: `.as-task-main` is a flex row of the body and the presses, and a card that carries a tree or a
+    // file list ends with its `tree · files` disclosure. So the presses are asserted where they now live - last in
+    // the main row, level with the head, right of the body - and the card's own last child is asserted to be the
+    // fold when there is one (and the main row when the row has nothing to fold), so an actions row that drifts back
+    // to the card's bottom edge, or a fold that disappears from under it, fails rather than passes.
+    ok(
+      "the actions row is the main row's last child, never the card's, which ends with its fold",
+      wide.rows.every((r) => r.mainLast && (r.fold ? r.cardEndsWith === "more" : r.cardEndsWith === "as-task-main")),
+      JSON.stringify(wide.rows.map((r) => [r.mainLast, r.cardEndsWith, r.fold ? r.fold.summary : "no fold"])),
+    );
+    ok(
+      "…and sits in the card's top-right corner",
+      wide.rows.every((r) => r.actionsGapToTop !== null && r.actionsGapToTop >= 0 && r.actionsGapToTop <= 14 && r.actionsGapToRight !== null && r.actionsGapToRight >= 0 && r.actionsGapToRight <= 14),
+      JSON.stringify(wide.rows.map((r) => [r.actionsGapToTop, r.actionsGapToRight])),
+    );
+    ok(
+      "…right of the body and above the note, never under it",
+      wide.rows.every((r) => r.actionsLeft >= r.bodyRight && r.actionsTop <= r.headBottom && (r.noteTop === null || r.actionsTop < r.noteTop)),
+      JSON.stringify(wide.rows.map((r) => [r.bodyRight, r.actionsLeft, r.actionsTop, r.headBottom, r.noteTop])),
+    );
 
     // the facts the row carried before -------------------------------------------------------------
     check("the head still carries #id, title and the state mark", wide.rows.map((r) => [r.headId, r.mark]), [
@@ -404,8 +457,12 @@ try {
       ["#3", "⏸"],
       ["#4", "✓"],
     ]);
-    check("one sub-row per agent, with its thread", wide.rows.map((r) => r.agents.map((a) => a.thread)), [
-      ["seed-thread-before", "seed-thread-live"],
+    // EACH AGENT LINE LEADS WITH `project:branch` (`f926cf32`, queue row #410). Only #1 names a worktree, so only
+    // its threads carry the project; #2..#5 hold no tree and draw the bare thread, because a guessed project reads
+    // exactly like a fact (public/queue-cards.js:506). The line still ends with its pill and its run chip - the
+    // chip's own order is pinned by tools/verify-queue-agents.mjs, which is green at 71/71.
+    check("one sub-row per agent, leading with project:branch", wide.rows.map((r) => r.agents.map((a) => a.thread)), [
+      ["agent-worktree-gui:seed-thread-before", "agent-worktree-gui:seed-thread-live"],
       ["seed-thread-holder"],
       ["seed-thread-queued"],
       ["seed-thread-parked"],
@@ -413,8 +470,26 @@ try {
     ]);
     ok("…each agent wearing a pill with a word and the card's own class", wide.rows.every((r) => r.agents.length && r.agents.every((a) => a.pill && /\bpill\b/.test(a.pillClass))), JSON.stringify(wide.rows.map((r) => r.agents.map((a) => [a.pill, a.pillClass]))));
     ok("no row fell back to the no-agent placeholder", wide.rows.every((r) => !r.placeholder));
-    ok("the meta line still names the tree and the files", /tree .*queue-cards-seed/.test(wide.rows[0]?.meta || "") && /files public\/assistant\.js, public\/queue\.css/.test(wide.rows[0]?.meta || ""), wide.rows[0]?.meta);
-    ok("…and truncates a long file list rather than growing the card", /… · /.test(wide.rows[0]?.meta || ""), wide.rows[0]?.meta);
+    // THE META LINE NAMES WHERE THE WORK IS NOW, and the tree and the files moved into the card's own closed fold
+    // (`48f484e4`). #1 is the only seeded row that names a worktree, so its meta line is `project agent-worktree-gui`
+    // exactly; the other four name no project and draw no meta line at all. The fold is read for the facts that left
+    // the meta line, so nothing this gate used to prove has been dropped - it is asserted one element lower.
+    const foldBody = wide.rows[0]?.fold?.body || "";
+    const filesWant = `${TASKS[0].files.slice(0, 4).join(", ")}…`;
+    ok(
+      "the meta line names the project, and the tree and the files live in the fold",
+      wide.rows[0]?.meta === "project agent-worktree-gui" &&
+        wide.rows.every((r) => !/\btree\b|\bfiles\b/.test(r.meta)) &&
+        wide.rows[0]?.fold?.summary === "tree · files · attempts · detail" &&
+        foldBody.includes(`tree ${TASKS[0].worktree}`) &&
+        foldBody.includes(`files ${filesWant}`),
+      JSON.stringify({ meta: wide.rows[0]?.meta, summary: wide.rows[0]?.fold?.summary, body: foldBody.slice(0, 170) }),
+    );
+    ok(
+      "…and truncates a long file list rather than growing the card",
+      !/package\.json/.test(foldBody) && wide.rows.every((r) => r.fold === null || r.fold.open === false),
+      JSON.stringify({ files: foldBody.match(/files [^·]*/)?.[0], closed: wide.rows.map((r) => r.fold?.open ?? "no fold") }),
+    );
     ok("the running row says STALE with its why", /^STALE — that thread has no live run/.test(wide.rows[0]?.note || ""), wide.rows[0]?.note);
     ok("the live holder row draws no stale or skipped note", !wide.rows[1]?.note, wide.rows[1]?.note || "(none)");
     ok("the queued row says SKIPPED with the clash", /^SKIPPED — files in use by #5/.test(wide.rows[2]?.note || ""), wide.rows[2]?.note);
