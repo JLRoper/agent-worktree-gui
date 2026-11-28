@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 631: the 15-path staged reversal in the turnover worktree, audited and cleared</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 40px 64px; background: #14161a; color: #d9dee7;
+         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 24px; margin: 0 0 6px; color: #f2f5fa; letter-spacing: .2px; }
+  h2 { font-size: 17px; margin: 34px 0 10px; color: #f2f5fa; border-bottom: 1px solid #2a2f38;
+       padding-bottom: 6px; }
+  p, li { max-width: 1060px; }
+  .sub { color: #8d97a6; margin: 0 0 24px; font-size: 13px; }
+  code, .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  .mono { color: #b9e6c1; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #262b33;
+           vertical-align: top; }
+  th { color: #9fb0c6; font-weight: 600; background: #1a1e24; position: sticky; top: 0; }
+  tr:hover td { background: #191d23; }
+  .ok { color: #7fd18b; font-weight: 600; }
+  .dup { color: #d8b46a; }
+  .note { border-left: 3px solid #4b7dbd; background: #1a2029; padding: 12px 16px;
+          margin: 16px 0; border-radius: 0 4px 4px 0; }
+  .warn { border-left-color: #c98a3a; background: #241f18; }
+  pre { background: #101317; border: 1px solid #262b33; border-radius: 4px;
+        padding: 12px 14px; overflow-x: auto; font-size: 12.5px; color: #c6d3e2; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px;
+          background: #23303f; color: #9fc3ea; }
+  .small { font-size: 12.5px; color: #93a0b1; }
+  td.id { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<h1>Row 631: the 15-path staged reversal in the turnover worktree</h1>
+<p class="sub">Audit of <span class="mono">.worktrees/20261127_2134_TASK-405_row-405-is-the-complete</span>,
+head <span class="mono">a7ac20b1</span>, read and cleared 2026-11-28 between 09:32 and 09:50 -05:00.
+No commit was made in that worktree; stash@{0} was not touched.</p>
+
+<h2>1. What the brief reported, and what I saw first</h2>
+<p>At 09:32 the worktree's porcelain list held exactly 15 paths and the index held the diff the brief
+described:</p>
+<pre>D  docs/reports/lane-every-claimed-file-2026-11-28.html
+D  docs/reports/spawn-refused-card-and-tree-fitness-2026-11-28.html
+M  docs/using-the-board.md
+M  lib/assistant.js
+M  lib/assistant/queue.js
+M  lib/jobs.js
+M  lib/spawn-check.js
+M  public/board/queue-row.js
+M  routes/assistant-spawn-check.js
+M  test/assistant-queue-ui.test.js
+M  test/queue-holds.test.js
+M  test/spawn-busy.test.js
+M  test/spawn-check.test.js
+M  test/spawn-lane.test.js
+M  test/spawn-record-and-fit-tree.test.js
+
+15 files changed, 92 insertions(+), 1053 deletions(-)</pre>
+<p>The head was <span class="mono">a7ac20b1f762ee52f9f98ff09ccd2b869a3163bf</span> then and it is the
+same head now. The net effect staged was a removal of 961 lines, including the deletion of row 419's
+and row 483's report pages and the reversal of the lane work that had landed at
+<span class="mono">fdf81395</span>.</p>
+
+<h2>2. The index was cleared under me, by a reset I did not run</h2>
+<div class="note warn">
+<p>Between my first read (15 staged paths) and my second read, the worktree was reset. The evidence:</p>
+<ul>
+  <li>The 15 paths were rewritten at <span class="mono">2026-11-28 09:32:49.98</span> (file mtimes), and the
+      worktree index at <span class="mono">09:32:51.40</span>.</li>
+  <li><span class="mono">logs/HEAD</span> for the worktree gained, as its last entry,
+      <span class="mono">a7ac20b1 a7ac20b1 ... reset: moving to HEAD</span>, and the file's mtime is 09:32.</li>
+  <li>My second read at <span class="mono">09:33:21</span> returned an empty porcelain list and no staged diff.
+      The head had not moved: still <span class="mono">a7ac20b1</span>.</li>
+  <li>A process scan at <span class="mono">09:36</span> found no git or node process in that worktree other
+      than the scan's own shell, so the actor had already finished and cannot be named from here.</li>
+</ul>
+<p>I did not run that reset, and the report does not claim the clearing as my own action. What I did was
+verify that it lost nothing unique: every blob the staging held is an ancestor state (section 3), and the
+two paths it deleted are present at HEAD with their own blobs (section 4). A hard reset of that index
+therefore destroyed no content that history did not already carry.</p>
+</div>
+
+<h2>3. What the staged diff actually was, reconstructed</h2>
+<p>The live index was gone before it could be read, so the staged diff was reconstructed from the records
+the earlier runs left, then checked against the observed totals. Three scratch copies of the same
+9-file revert patch exist from 07:31, 08:54 and 08:57, byte-identical:</p>
+<pre>sha256  0383e2fa9ca71744bfd606f25b7468882bd248278bc4bf9c27e5ba2ef192114d
+size    65061 bytes, 917 lines, 9 files, 40 insertions(+), 619 deletions(-)
+paths   docs/reports/spawn-refused-card-and-tree-fitness-2026-11-28.html (deleted)
+        docs/using-the-board.md, lib/assistant.js, lib/jobs.js, lib/spawn-check.js,
+        routes/assistant-spawn-check.js, test/spawn-busy.test.js, test/spawn-check.test.js,
+        test/spawn-record-and-fit-tree.test.js</pre>
+<p>That patch is the 05:01 revert of the row 419 work, the same revert row 446 parked in stash@{0}. The
+15-path staging was larger than it: the extra 6 paths and 52 insertions / 434 deletions are exactly the
+reverse of <span class="mono">fdf81395</span> (7 files, 214+/52-, two of them shared with the 05:01 patch)
+plus the 220-line deletion of the lane report. Composed in a throwaway index, from HEAD:</p>
+<pre>export GIT_INDEX_FILE=$SCRATCH/composed.idx
+git read-tree HEAD
+git diff fdf81395^ fdf81395 | git apply --cached -R
+git apply --cached &lt;the 05:01 patch&gt;
+git update-index --force-remove docs/reports/lane-every-claimed-file-2026-11-28.html
+git diff --cached --stat</pre>
+<p>The composed index printed <span class="mono">15 files changed, 92 insertions(+), 1053 deletions(-)</span>
+with the same per-file counts as the observed stat (lib/assistant.js 30+/221-, lib/assistant/queue.js
+41+/79-, lib/spawn-check.js 3+/17-, test/spawn-lane.test.js 1+/80-, and so on). The arithmetic is exact:
+40 + 52 + 0 = 92 insertions, 619 + 214 + 220 = 1053 deletions. The composition also confirms the base:
+<span class="mono">fdf81395^:lib/assistant.js</span> is the 05:01 patch's own old side
+(<span class="mono">7b40bb04</span>), and <span class="mono">fdf81395:lib/assistant.js</span> is HEAD's
+(<span class="mono">e8e7a965</span>), so the two reversals stack without residue.</p>
+
+<h2>4. All 15 paths, compared against the turnover head</h2>
+<p>For each path: the blob at HEAD before I started, the blob the staging held (reconstructed), and the
+ancestor that blob comes from. A staged blob that equals an ancestor's blob is a pure reversal, not a
+change the head is missing. The two staged deletions are marked as such; both files exist at HEAD.</p>
+<table>
+<thead><tr><th>#</th><th>path</th><th>HEAD blob</th><th>staged blob</th><th>equals ancestor</th><th>verdict</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>docs/reports/lane-every-claimed-file-2026-11-28.html</td><td class="id">e60ed239</td><td class="id">deleted</td><td>file present at HEAD</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>2</td><td>docs/reports/spawn-refused-card-and-tree-fitness-2026-11-28.html</td><td class="id">0775394e</td><td class="id">deleted</td><td>file present at HEAD</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>3</td><td>docs/using-the-board.md</td><td class="id">e4e17e5f</td><td class="id">ab45cd4d</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>4</td><td>lib/assistant.js</td><td class="id">e8e7a965</td><td class="id">4f52f20e</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>5</td><td>lib/assistant/queue.js</td><td class="id">cadf2f70</td><td class="id">a93c3796</td><td>fdf81395^ and ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>6</td><td>lib/jobs.js</td><td class="id">8832e74c</td><td class="id">1551ebaf</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>7</td><td>lib/spawn-check.js</td><td class="id">79b23d51</td><td class="id">9467e7f9</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>8</td><td>public/board/queue-row.js</td><td class="id">5c074326</td><td class="id">b273cdc9</td><td>fdf81395^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>9</td><td>routes/assistant-spawn-check.js</td><td class="id">e7c151c0</td><td class="id">e225fdc9</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>10</td><td>test/assistant-queue-ui.test.js</td><td class="id">6a6ba00b</td><td class="id">03141faf</td><td>fdf81395^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>11</td><td>test/queue-holds.test.js</td><td class="id">d951af08</td><td class="id">af3ac554</td><td>fdf81395^ and ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>12</td><td>test/spawn-busy.test.js</td><td class="id">d7dbc349</td><td class="id">84f628fa</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>13</td><td>test/spawn-check.test.js</td><td class="id">243a878d</td><td class="id">c6651c64</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>14</td><td>test/spawn-lane.test.js</td><td class="id">1fbc6d4d</td><td class="id">fa3ade2a</td><td>fdf81395^ and ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+<tr><td>15</td><td>test/spawn-record-and-fit-tree.test.js</td><td class="id">49819a15</td><td class="id">63818904</td><td>ce2df64c^</td><td class="dup">duplicate reversal, dropped</td></tr>
+</tbody>
+</table>
+<p><strong>Kept: nothing.</strong> No path carried a change the head is missing. Every staged blob is a
+state an ancestor already had, so the whole set was one duplicate reversal of landed work: row 419's
+<a class="mono">ce2df64c</a>, row 483's <a class="mono">fdf81395</a>, and the two report pages. The
+reversal would have reverted all of it if anything had committed there, which is why it was dangerous
+rather than untidy.</p>
+
+<h2>5. The state proof, after the clear</h2>
+<p>Read at 09:33 and re-read after every step below; head never moved.</p>
+<table>
+<thead><tr><th>check</th><th>command</th><th>answer</th></tr></thead>
+<tbody>
+<tr><td>working tree clean</td><td class="mono">git status --porcelain</td><td class="ok">0 lines</td></tr>
+<tr><td>index empty</td><td class="mono">git diff --cached --name-only</td><td class="ok">0 paths</td></tr>
+<tr><td>staged diff</td><td class="mono">git diff --cached --stat</td><td class="ok">empty</td></tr>
+<tr><td>head unchanged</td><td class="mono">git rev-parse HEAD</td><td class="ok">a7ac20b1f762ee52f9f98ff09ccd2b869a3163bf</td></tr>
+<tr><td>stash untouched</td><td class="mono">git rev-parse stash@{0}</td><td class="ok">0637c416bcf0c847dd1f48c9f94c63a8dc0b5b66</td></tr>
+</tbody>
+</table>
+<p>For each of the 15 paths, <span class="mono">HEAD:path</span>, <span class="mono">git hash-object
+path</span> and the index blob are the same object. The ids, in the order of the table above:</p>
+<pre>e60ed239cddda2e8d24935e4732cd1a56856b50a  docs/reports/lane-every-claimed-file-2026-11-28.html
+0775394e1416e8c6d0b8514bb8b0f7f4848f5e06  docs/reports/spawn-refused-card-and-tree-fitness-2026-11-28.html
+e4e17e5f38bbaa8612e96909b2f4ef1bc5e1b8fc  docs/using-the-board.md
+e8e7a9654c2d177a707a97218c792b8fcb3c99e2  lib/assistant.js
+cadf2f709dbf84bec3f04b8c1510e585196ec46d  lib/assistant/queue.js
+8832e74cf3294e7ada01479237c77238de71e117  lib/jobs.js
+79b23d515b7c8e0cee840c8d46e1eaa5ae570c03  lib/spawn-check.js
+5c0743260ac04061573a9ac57d5fb5b5c724370d  public/board/queue-row.js
+e7c151c0da677b02ffdfd22e41f94cea0fe294d3  routes/assistant-spawn-check.js
+6a6ba00bdf8e87e5cb926297897028f53b8acb79  test/assistant-queue-ui.test.js
+d951af0851b59ff021862bce92ac4f94c249ba75  test/queue-holds.test.js
+d7dbc3494c63120f491de1a56493234c41350442  test/spawn-busy.test.js
+243a878d5ecc9bee0d957fb01d5ef4b2abf104fa  test/spawn-check.test.js
+1fbc6d4de0daa1e5c3dd1570606459f6bc057736  test/spawn-lane.test.js
+49819a1552e56c024d09918e03d1bda192e9d5b5  test/spawn-record-and-fit-tree.test.js</pre>
+<p>Those are the blobs the head carried before the audit began, and they are the blobs it carries now.
+stash@{0} is still the row 446 entry created at 05:02:21, whose own diff is a different revert
+(15 files, 305 insertions(+), 763 deletions(-)); it was listed and left in place, never applied or dropped.</p>
+
+<h2>6. The merge, and what was not done</h2>
+<p>This tree's code was already in the turnover before this run: <span class="mono">4f3633be</span> is an
+ancestor of <span class="mono">a7ac20b1</span> and the merge that landed it is
+<span class="mono">e873ddb0</span> ("merge: wtgui/row-491-is-the-complete-brief-implement-8844bc"). This
+page is the only commit this run adds to the branch; it was merged into
+<span class="mono">20261127_2134_TASK-405_row-405-is-the-complete</span> with
+<span class="mono">git merge --no-ff</span> from that worktree, which was clean at the time. The merge commit
+is the child of <span class="mono">a7ac20b1</span> and of this page's commit; its id cannot be written into
+the page it carries, so it is reported on the queue row.</p>
+<p>Nothing was pushed. The turnover branch has not landed, so no remote ref was created or moved for this
+tree's branch: <span class="mono">git ls-remote --heads origin</span> lists the turnover ref at
+<span class="mono">d1fcadab</span> and no ref for
+<span class="mono">wtgui/row-491-is-the-complete-brief-implement-8844bc</span>, before and after the merge.
+The turnover branch is left where it is, local, for the reader to land.</p>
+
+<h2>7. Reproduce</h2>
+<pre>cd C:/ProjectDevelopment/agent-worktree-gui/.worktrees/20261127_2134_TASK-405_row-405-is-the-complete
+git status --porcelain                  # expect 0 lines
+git diff --cached --name-only           # expect 0 paths
+git rev-parse HEAD                      # expect a7ac20b1f762ee52f9f98ff09ccd2b869a3163bf
+git rev-parse stash@{0}                 # expect 0637c416bcf0c847dd1f48c9f94c63a8dc0b5b66
+git cat-file -e e8e7a9654c2d177a707a97218c792b8fcb3c99e2   # the head's lib/assistant.js</pre>
+
+<p class="small">Citations: the reset is recorded in
+<span class="mono">.git/worktrees/20261127_2134_TASK-405_row-405-is-the-complete/logs/HEAD</span>, last
+entry. The staged blob ids in section 4 come from the composed index built by the commands quoted in
+section 3, where <span class="mono">fdf81395</span> is "fix(queue): a lane covers every claimed file, not the
+row's head file" and <span class="mono">ce2df64c</span> is "fix(spawn): a refused SPAWN raises a card, and
+spawn-check measures a named tree". Blob ids are abbreviated to 8 characters in the table and quoted in full
+in section 5.</p>
+
+</body>
+</html>
