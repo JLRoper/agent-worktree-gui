@@ -27,7 +27,6 @@ import { maskSource } from "./child-process-audit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, "..");
-const TEST_DIR = path.join(ROOT, "test");
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -35,6 +34,10 @@ const valueOf = (flag, fallback = null) => {
   const i = args.indexOf(flag);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
+// `--root` measures another checkout (a `git archive` of the base, say), so a batch's "before" is the same counting
+// rules run on the bytes it started from rather than a remembered number.
+const TREE = valueOf("--root", ROOT);
+const TEST_DIR = path.join(TREE, "test");
 
 function matchingParen(masked, open) {
   let depth = 0;
@@ -93,7 +96,7 @@ const importsBoot = (source) => {
 };
 
 export function auditFile(file) {
-  const rel = path.relative(ROOT, file).replace(/\\/g, "/");
+  const rel = path.relative(TREE, file).replace(/\\/g, "/");
   const source = readFileSync(file, "utf8");
   const masked = maskSource(source);
   const kit = importsBoot(source);
@@ -146,11 +149,11 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}` || proce
   if (has("--json")) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    console.log(`panel-boot-audit  ${report.files} test files boot a panel`);
-    console.log(`  ${report.gapFiles} call startPanel/boot more often than they register a per-test stop hook`);
-    console.log(`  ${report.kitFiles} are on boot() (the registry nets every one of their panels)`);
-    console.log(`  ${report.exposed.length} exposed: not on boot(), and a throw can strand a child`);
-    console.log(`  ${report.boots} panel boots, ${report.hooks} per-test stop hooks\n`);
+    const tail = report.rows.filter((row) => !row.kit && row.gap <= 0).length;
+    console.log(`panel-boot-audit  ${report.files} test files boot a panel (${report.boots} panel boots, ${report.hooks} per-test stop hooks)`);
+    console.log(`  ${report.kitFiles} are on boot(): the registry nets every one of their panels`);
+    console.log(`  ${report.exposed.length} exposed: not on boot(), and they call startPanel more often than they register a per-test stop hook`);
+    console.log(`  ${tail} more are not on boot(), but each registers at least as many per-test hooks as boots (the tail, ranked after these)\n`);
     console.log("  gap  boots  hooks  kit  file");
     const limit = Number(valueOf("--limit", "0")) || report.rows.length;
     for (const row of report.rows.slice(0, limit)) {
@@ -158,8 +161,8 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}` || proce
     }
   }
   if (has("--fail") && report.exposed.length > 0) {
-    console.error(`\nFAIL  ${report.exposed.length} panel-booting file(s) not on boot(): ${report.exposed.map((row) => row.file).join(", ")}`);
+    console.error(`\nFAIL  ${report.exposed.length} exposed panel-booting file(s) not on boot(): ${report.exposed.map((row) => row.file).join(", ")}`);
     process.exit(1);
   }
-  if (has("--fail")) console.log(`\nPASS  every panel-booting test file on boot() (${report.kitFiles}/${report.files})`);
+  if (has("--fail")) console.log(`\nPASS  no panel-booting file is exposed (${report.kitFiles} of ${report.files} on boot(), ${report.exposed.length} with a gap off it)`);
 }

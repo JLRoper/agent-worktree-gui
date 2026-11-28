@@ -18,7 +18,10 @@
 //
 //   node tools/panel-boot-proof.mjs test/chart-columns.test.js
 //   node tools/panel-boot-proof.mjs test/chart-columns.test.js --before
-//   node tools/panel-boot-proof.mjs test/chart-columns.test.js --timeout 300 --keep
+//   node tools/panel-boot-proof.mjs test/chart-columns.test.js --timeout 900 --keep
+//
+// The cap defaults to ten minutes because the slowest file in the suite takes about four on this machine; a cap that
+// sits under a file's own runtime reports the net as broken when the file was merely slow.
 import { spawn } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -184,7 +187,7 @@ async function main() {
 
   const copy = path.join(ROOT, "test", `.panel-boot-proof-${stem}.test.js`);
   writeFileSync(copy, body, "utf8");
-  const timeoutMs = Number(valueOf("--timeout", "240")) * 1000;
+  const timeoutMs = Number(valueOf("--timeout", "600")) * 1000;
   console.log(`panel-boot-proof  ${path.relative(ROOT, file).replace(/\\/g, "/")}`);
   console.log(`  copy: ${path.relative(ROOT, copy).replace(/\\/g, "/")}`);
   for (const note of notes) console.log(`  ${note}`);
