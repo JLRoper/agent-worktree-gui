@@ -20,8 +20,9 @@
 // must measure the same as it did before: one line, natural width, meta beside it.
 //
 // WHAT IS MEASURED, off rendered boxes rather than off the source (the renderer is the page's own code, sliced
-// out of public/queue-cards.js exactly as test/assistant-queue-ui.test.js slices it, and the stylesheet is
-// public/style.css as it ships):
+// out of public/queue-cards.js exactly as test/assistant-queue-ui.test.js slices it, and the stylesheets are the
+// ones public/index.html links, read out of that file in its own order, because public/style.css is now the
+// per-surface sheets the split landed):
 //
 //   two threads    the two .as-task-agent boxes share one left edge and one full width; their top offsets are
 //                  a whole line apart; the meta text starts on the line below the second agent.
@@ -29,9 +30,12 @@
 //   one thread     unchanged: one agent box, natural width (not stretched), on the facts block's own top, with
 //                  the meta text still sharing its line.
 //   pipeline       the chip is a block of its own under the facts line, a sibling of it, never inside it.
-//   provenance     each agent line carries the project and the landed verdict of the tree THAT thread ran in, read
-//                  back through the queue's own `threadTrees`/`decorateTasks` path; a thread with no recorded tree
-//                  draws nothing, and the task-level meta line steps aside when the agent lines carry it.
+//   provenance     each agent line leads with the project of the tree THAT thread ran in and carries that tree's
+//                  landed verdict, read back through the queue's own `threadTrees`/`decorateTasks` path; a thread
+//                  with no recorded tree falls back to the task's project for the label and draws no sentence.
+//   project line   #410: every agent line's first text is `project:branch` and no `project <name>` fragment is left
+//                  on a row; on a card that names a live run the blue chip is the row's LAST element and its left
+//                  edge is strictly right of the session status chip's right edge. Both rects are reported.
 //   compact card   the Initiatives pane's single-thread line is one line and has no wrapper of its own.
 //
 // The page is synthetic on purpose (no panel, no queue file, no port): the card markup comes from the shipped
@@ -112,6 +116,11 @@ const PROV_B = THREAD("prov-b");
 const PROV_NONE = THREAD("prov-none");
 const TREE_A = `${PROJECT}/.worktrees/queue-card-agents-371`;
 const TREE_B = `poc-guidelines/.worktrees/poc-guidelines-cut-4f11aa`;
+// #410's photographed card: a failed first agent, a live second one that names its run, and a landing sentence. The
+// run chip only draws on a row that NAMES a run, so this fixture carries `runId`/`runBy` the way the live board does.
+const LIVE_A = THREAD("live-a");
+const LIVE_B = THREAD("live-b");
+const LIVE_TREE = `${PROJECT}/.worktrees/queue-card-agents-376`;
 
 const task = (id, threads, extra = {}) => ({
   id,
@@ -133,6 +142,7 @@ const ROWS = [
   ...[371, 372, 373, 374].map((id) => ({ path: `${PROJECT}/.worktrees/queue-card-agents-${id}`, project: PROJECT, verdict: "NO COMMITS" })),
   { path: TREE_A, project: PROJECT, verdict: "UNMERGED (2 commits)", branchKind: "research", branchKindLabel: "research tree" },
   { path: TREE_B, project: "poc-guidelines", verdict: "MERGED (3 commits)", pr: { number: 373, state: "OPEN" }, branchKind: "turnover", branchKindLabel: "turnover branch" },
+  { path: LIVE_TREE, project: PROJECT, verdict: "UNMERGED (4 commits)", branchKind: "implementation", branchKindLabel: "implementation tree" },
 ];
 
 const jobsFor = (threads, statuses) => new Map(threads.map((th, i) => [th, { status: statuses[i] || "running" }]));
@@ -153,11 +163,29 @@ const FIXTURES = {
     }),
     jobs: jobsFor([PROV_A, PROV_B, PROV_NONE], ["done", "running", "failed"]),
   },
+  // #410's card: the second thread is the current one and the row names its live run, so the blue chip draws there,
+  // after the RUNNING pill. The first thread failed on its own thread and carries no run chip at all.
+  live: {
+    task: task(376, [LIVE_A, LIVE_B], {
+      runId: "f38c67e93fa4433d8c3",
+      runBy: "run",
+      runStatus: "running",
+      threadTrees: { [LIVE_B]: { path: LIVE_TREE, project: PROJECT } },
+    }),
+    jobs: jobsFor([LIVE_A, LIVE_B], ["failed", "running"]),
+  },
 };
 
 // ---- the page: the shipped stylesheets, the shipped markup, nothing else --------------------------------------
-// The order public/index.html loads them, because that order is the cascade the page really paints.
-const SHEETS = ["style.css", "chart.css", "core/pipeline-card.css", "core/task-card.css"];
+// THE SHEETS THE PAGE LINKS, in the order public/index.html links them: a rule's cascade position is half of what
+// this gate measures, and public/style.css split into these per-surface sheets, so a hand-written list is a list
+// that goes stale. Reading it out of index.html is the same read test/style-sheets.js makes, and a sheet deleted
+// from the page fails here loudly instead of being measured with the previous file.
+function sheetsFromIndex() {
+  const html = readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
+  return [...html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"]+\.css)"/g)].map((m) => m[1]);
+}
+const SHEETS = sheetsFromIndex();
 
 function pageHtml(renderer, decorated) {
   const css = SHEETS.map((rel) => readFileSync(path.join(ROOT, "public", rel), "utf8")).join("\n");
@@ -179,8 +207,8 @@ function pageHtml(renderer, decorated) {
   #inits { width: 760px; }
 </style></head>
 <body>
-  <div id="qpane" class="as-group as-qpane">${card("two")}${card("three")}${card("one")}${card("provenance")}</div>
-  <div id="qpane-narrow" class="as-group as-qpane">${card("two")}</div>
+  <div id="qpane" class="as-group as-qpane">${card("two")}${card("three")}${card("one")}${card("provenance")}${card("live")}</div>
+  <div id="qpane-narrow" class="as-group as-qpane">${card("two")}${card("live")}</div>
   <div id="as-initiatives"><div class="init-tasks" id="inits">${card("compact")}</div></div>
 </body></html>`;
 }
@@ -215,11 +243,32 @@ function measureInPage() {
       // The per-agent provenance sentence, if this line carries one, and the band it draws in.
       const whereEl = el.querySelector(".as-task-agent-where");
       const whereRect = whereEl ? whereEl.getBoundingClientRect() : null;
+      // THE LINE'S FIRST TEXT, and what the whole row reads. The branch is now labelled `project:branch`, so the
+      // thread element is what says the line starts with the project; `rowText` is what proves the late
+      // `project <name>` fragment is gone from the row a reader scans.
+      const threadEl = el.querySelector(".as-task-agent-thread");
+      const runEl = el.querySelector(".as-task-agent-run");
+      const runRect = runEl ? runEl.getBoundingClientRect() : null;
+      const pillRect = pill ? pill.getBoundingClientRect() : null;
       return {
         ...rect(el),
         contentWidth,
         pillGap,
         pillText: pill ? pill.textContent.trim() : "",
+        pillLeft: pillRect ? pillRect.left : null,
+        pillRight: pillRect ? pillRect.right : null,
+        thread: threadEl ? threadEl.textContent.trim() : null,
+        rowText: el.textContent.replace(/\s+/g, " ").trim(),
+        run: runEl
+          ? {
+              text: runEl.textContent.trim(),
+              ...rect(runEl),
+              // The gap the ask is about: the run chip's left edge against the session chip's right edge. Positive
+              // means the run chip sits to the RIGHT of the chip, which is the whole claim.
+              gapAfterPill: pillRect ? runRect.left - pillRect.right : null,
+              isLastChild: el.lastElementChild === runEl,
+            }
+          : null,
         where: whereEl ? whereEl.textContent.trim() : null,
         whereTop: whereRect ? whereRect.top : null,
         whereBottom: whereRect ? whereRect.bottom : null,
@@ -263,7 +312,9 @@ function measureInPage() {
     three: read("#qpane", '[data-as-qrow="372"]'),
     one: read("#qpane", '[data-as-qrow="373"]'),
     provenance: read("#qpane", '[data-as-qrow="375"]'),
+    live: read("#qpane", '[data-as-qrow="376"]'),
     narrow: read("#qpane-narrow", '[data-as-qrow="371"]'),
+    narrowLive: read("#qpane-narrow", '[data-as-qrow="376"]'),
     compact: read("#as-initiatives", '[data-as-qrow="374"]'),
   };
 }
@@ -379,14 +430,19 @@ await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
   if (prov.agents.length === 3) {
     const [a, b, c] = prov.agents;
     check(
-      /project agent-worktree-gui/.test(a.where || "") && /UNMERGED \(2 commits\)/.test(a.where || ""),
-      "the first agent's line names its own project and landing",
-      JSON.stringify(a.where),
+      /^agent-worktree-gui:/.test(a.thread || "") && /UNMERGED \(2 commits\)/.test(a.where || "") && !/project /i.test(a.where || ""),
+      "the first agent's line leads with its own project and keeps only the landing in the sentence",
+      JSON.stringify({ thread: a.thread, where: a.where }),
     );
     check(
-      /project poc-guidelines/.test(b.where || "") && /MERGED \(3 commits\)/.test(b.where || "") && /PR #373 open/.test(b.where || ""),
-      "the second agent's line names ITS project, its landing and its PR",
-      JSON.stringify(b.where),
+      /^poc-guidelines:/.test(b.thread || "") && /MERGED \(3 commits\)/.test(b.where || "") && /PR #373 open/.test(b.where || ""),
+      "the second agent's line leads with ITS project, and the sentence keeps its landing and its PR",
+      JSON.stringify({ thread: b.thread, where: b.where }),
+    );
+    check(
+      /^agent-worktree-gui:/.test(c.thread || ""),
+      "an agent whose tree was never recorded still leads with the task's own project",
+      JSON.stringify(c.thread),
     );
     check(Boolean(a.where) && a.where !== b.where, "the two agent lines do not repeat one project");
     check(c.where === null, "an agent whose tree was never recorded draws nothing extra", JSON.stringify(c.where));
@@ -396,6 +452,68 @@ await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
     check(a.whereTop !== null && a.whereTop >= a.top - 0.5 && a.whereTop < a.bottom, "the sentence draws on the agent's own line", a.whereTop === null ? "no sentence" : `${round(a.whereTop)} in ${round(a.top)}-${round(a.bottom)}`);
     check(Boolean(prov.pipeline) && prov.pipeline.top >= prov.facts.bottom - 0.5, "the pipeline row stays below the facts block", prov.pipeline ? `pipeline top ${round(prov.pipeline.top)}, facts bottom ${round(prov.facts.bottom)}` : "no pipeline");
   }
+
+  // ---- #410: the line leads with `<project>:<branch>`, and the run chip trails the session chip -----------------
+  //
+  // TWO CLAIMS, BOTH OFF RENDERED BOXES AND TEXT:
+  //   1. the agent line's first text is `agent-worktree-gui:<branch>` - the thread code now carries the project and a
+  //      colon, not a bare slug - and no `project <name>` fragment survives anywhere on the row;
+  //   2. the blue run chip is the row's LAST element, its left edge strictly right of the session status chip's right
+  //      edge, on a card that names a live run (the chip only draws where a run does).
+  const live = measured.live;
+  check(live.agents.length === 2, "#410 card: two agents, the second on a live run", `${live.agents.length}`);
+  if (live.agents.length === 2) {
+    const [a, b] = live.agents;
+    check(a.thread === `${PROJECT}:${LIVE_A}` && b.thread === `${PROJECT}:${LIVE_B}`, "#410: each agent line's first text is project:branch", JSON.stringify([a.thread, b.thread]));
+    check(/^agent-worktree-gui:/.test(a.thread || "") && /^agent-worktree-gui:/.test(b.thread || ""), "#410: both lines match ^agent-worktree-gui:", JSON.stringify([a.thread, b.thread]));
+    check(!/\bproject\s/i.test(a.rowText || "") && !/\bproject\s/i.test(b.rowText || ""), "#410: no `project ` fragment is left on an agent row", JSON.stringify([a.rowText, b.rowText]));
+    check(b.where === "UNMERGED (4 commits)", "#410: the landing sentence keeps the verdict and loses the project", JSON.stringify(b.where));
+    check(Boolean(b.pillRight), "#410: the live row carries a session status chip", JSON.stringify(b.pillText));
+    check(Boolean(b.run), "#410: the live row draws its run chip");
+    if (b.run && b.pillRight != null) {
+      check(b.run.text === "f38c67e93fa4433d8c3", "#410: the chip carries the run id", JSON.stringify(b.run.text));
+      check(b.run.left > b.pillRight, "#410: the run chip's left edge is past the session chip's right edge", `run left ${round(b.run.left)} > chip right ${round(b.pillRight)}`);
+      check(b.run.isLastChild, "#410: the run chip is the row's last element", b.run.isLastChild ? "last" : "not last");
+      check(b.run.top >= b.top - 0.5 && b.run.bottom <= b.bottom + 0.5, "#410: the chip stays on the agent's line", `chip ${round(b.run.top)}-${round(b.run.bottom)} in row ${round(b.top)}-${round(b.bottom)}`);
+      note(
+        `#410 rects (${WIDE} px): session chip ${round(b.pillLeft)}-${round(b.pillRight)}, run chip ${round(b.run.left)}-${round(b.run.right)}, ` +
+          `gap ${round(b.run.gapAfterPill)} px, both on top ${round(b.top)}; row text ${JSON.stringify(b.rowText)}`,
+      );
+    }
+    check(a.run === null, "#410: an agent on another thread draws no run chip", a.run ? "a chip drew" : "none");
+    const narrowLive = measured.narrowLive;
+    if (narrowLive?.agents.length === 2 && narrowLive.agents[1].run) {
+      const nb = narrowLive.agents[1];
+      check(
+        nb.run.left > nb.pillRight && nb.run.isLastChild,
+        "#410: the order holds in the narrow pane too",
+        `run left ${round(nb.run.left)} vs chip right ${round(nb.pillRight)}, ${round(nb.run.gapAfterPill)} px apart`,
+      );
+      note(`#410 rects (${NARROW} px): session chip ${round(nb.pillLeft)}-${round(nb.pillRight)}, run chip ${round(nb.run.left)}-${round(nb.run.right)}, gap ${round(nb.run.gapAfterPill)} px`);
+    } else {
+      check(false, "#410: the narrow pane draws the live card's chip", "no run chip at narrow width");
+    }
+  }
+
+  // Every agent row on every FULL card, not only the photographed one: the project leads and is never repeated as a
+  // `project ` fragment. The project NAME differs per row (the provenance card carries two), so this sweep only
+  // holds the shape `<name>:<branch>`; the exact names are pinned above. The compact card is deliberately out: it
+  // draws its own single inline `<span class="as-task-agent">` in the Initiatives pane, with no landing sentence and
+  // no run chip, and that line is unchanged by this ask.
+  const allAgentRows = Object.entries(measured)
+    .filter(([name]) => name !== "compact")
+    .flatMap(([name, c]) => (c ? c.agents.map((a) => ({ name, a })) : []));
+  check(allAgentRows.length > 0, "#410: the sweep has agent rows to read", `${allAgentRows.length}`);
+  check(
+    allAgentRows.every(({ a }) => /^[A-Za-z0-9._-]+:/.test(a.thread || "")),
+    "#410: every agent line in every fixture leads with `<project>:`",
+    allAgentRows.map(({ name, a }) => `${name}=${JSON.stringify(a.thread)}`).join(" "),
+  );
+  check(
+    allAgentRows.every(({ a }) => !/\bproject\s/i.test(a.rowText || "")),
+    "#410: no agent row in any fixture carries a `project ` fragment",
+    allAgentRows.filter(({ a }) => /\bproject\s/i.test(a.rowText || "")).map(({ name }) => name).join(" ") || "clean",
+  );
 
   // ---- a third agent stacks too -----------------------------------------------------------------------------
   check(three.agents.length === 3, "three threads draw three agent rows", `${three.agents.length}`);
@@ -459,6 +577,7 @@ await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
       ["three-agents", "#qpane .as-task:nth-child(2)"],
       ["one-agent", "#qpane .as-task:nth-child(3)"],
       ["provenance", "#qpane .as-task:nth-child(4)"],
+      ["live", "#qpane .as-task:nth-child(5)"],
       ["compact", "#inits .as-task"],
     ]) {
       const el = await page.$(sel);

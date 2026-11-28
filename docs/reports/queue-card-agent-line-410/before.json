@@ -1,0 +1,833 @@
+{
+  "cases": {
+    "two": {
+      "card": {
+        "left": 11,
+        "right": 1149,
+        "top": 10,
+        "bottom": 125.359375,
+        "width": 1138,
+        "height": 115.359375
+      },
+      "facts": {
+        "left": 38,
+        "right": 1014,
+        "top": 35.9375,
+        "bottom": 85.203125,
+        "width": 976,
+        "height": 49.265625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 35.9375,
+          "bottom": 51.4375,
+          "width": 976,
+          "height": 15.5,
+          "contentWidth": 260.40625,
+          "pillGap": 4,
+          "pillText": "exited↻",
+          "pillLeft": 240.4375,
+          "pillRight": 300.40625,
+          "thread": "wtgui-queue-card-agent-one-7b3e42",
+          "rowText": "○ wtgui-queue-card-agent-one-7b3e42 exited↻",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        },
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 53.4375,
+          "bottom": 69.203125,
+          "width": 976,
+          "height": 15.765625,
+          "contentWidth": 315.734375,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 298.234375,
+          "pillRight": 355.734375,
+          "thread": "wtgui-queue-card-agent-two-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-two-7b3e42 guessing running",
+          "run": {
+            "text": "guessing",
+            "left": 240.4375,
+            "right": 294.234375,
+            "top": 53.4375,
+            "bottom": 69.203125,
+            "width": 53.796875,
+            "height": 15.765625,
+            "gapAfterPill": -115.296875,
+            "isLastChild": false
+          },
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        }
+      ],
+      "meta": {
+        "left": 38,
+        "right": 287.484375,
+        "top": 71.203125,
+        "bottom": 85.203125,
+        "width": 249.484375,
+        "height": 14
+      },
+      "pipeline": {
+        "left": 38,
+        "right": 1014,
+        "top": 88.203125,
+        "bottom": 104.59375,
+        "width": 976,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "project agent-worktree-gui · PR UNMERGED (2 commits)",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 2
+      }
+    },
+    "three": {
+      "card": {
+        "left": 11,
+        "right": 1149,
+        "top": 131.359375,
+        "bottom": 264.21875,
+        "width": 1138,
+        "height": 132.859375
+      },
+      "facts": {
+        "left": 38,
+        "right": 1014,
+        "top": 157.296875,
+        "bottom": 224.0625,
+        "width": 976,
+        "height": 66.765625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 157.296875,
+          "bottom": 172.796875,
+          "width": 976,
+          "height": 15.5,
+          "contentWidth": 260.40625,
+          "pillGap": 4,
+          "pillText": "exited↻",
+          "pillLeft": 240.4375,
+          "pillRight": 300.40625,
+          "thread": "wtgui-queue-card-agent-one-7b3e42",
+          "rowText": "○ wtgui-queue-card-agent-one-7b3e42 exited↻",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        },
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 174.796875,
+          "bottom": 190.296875,
+          "width": 976,
+          "height": 15.5,
+          "contentWidth": 257.9375,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 240.4375,
+          "pillRight": 297.9375,
+          "thread": "wtgui-queue-card-agent-two-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-two-7b3e42 running",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        },
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 192.296875,
+          "bottom": 208.0625,
+          "width": 976,
+          "height": 15.765625,
+          "contentWidth": 330.125,
+          "pillGap": 4,
+          "pillText": "complete",
+          "pillLeft": 309.234375,
+          "pillRight": 370.125,
+          "thread": "wtgui-queue-card-agent-three-7b3e42",
+          "rowText": "✓ wtgui-queue-card-agent-three-7b3e42 guessing complete",
+          "run": {
+            "text": "guessing",
+            "left": 251.4375,
+            "right": 305.234375,
+            "top": 192.296875,
+            "bottom": 208.0625,
+            "width": 53.796875,
+            "height": 15.765625,
+            "gapAfterPill": -118.6875,
+            "isLastChild": false
+          },
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        }
+      ],
+      "meta": {
+        "left": 38,
+        "right": 241.859375,
+        "top": 210.0625,
+        "bottom": 224.0625,
+        "width": 203.859375,
+        "height": 14
+      },
+      "pipeline": {
+        "left": 38,
+        "right": 1014,
+        "top": 227.0625,
+        "bottom": 243.453125,
+        "width": 976,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "project agent-worktree-gui · PR NO COMMITS",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 3
+      }
+    },
+    "one": {
+      "card": {
+        "left": 11,
+        "right": 1149,
+        "top": 270.21875,
+        "bottom": 352.078125,
+        "width": 1138,
+        "height": 81.859375
+      },
+      "facts": {
+        "left": 38,
+        "right": 1014,
+        "top": 296.15625,
+        "bottom": 311.921875,
+        "width": 976,
+        "height": 15.765625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 358.734375,
+          "top": 296.15625,
+          "bottom": 311.921875,
+          "width": 320.734375,
+          "height": 15.765625,
+          "contentWidth": 315.734375,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 298.234375,
+          "pillRight": 355.734375,
+          "thread": "wtgui-queue-card-agent-one-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-one-7b3e42 guessing running",
+          "run": {
+            "text": "guessing",
+            "left": 240.4375,
+            "right": 294.234375,
+            "top": 296.15625,
+            "bottom": 311.921875,
+            "width": 53.796875,
+            "height": 15.765625,
+            "gapAfterPill": -115.296875,
+            "isLastChild": false
+          },
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        }
+      ],
+      "meta": {
+        "left": 366.734375,
+        "right": 570.59375,
+        "top": 297.03125,
+        "bottom": 311.03125,
+        "width": 203.859375,
+        "height": 14
+      },
+      "pipeline": {
+        "left": 38,
+        "right": 1014,
+        "top": 314.921875,
+        "bottom": 331.3125,
+        "width": 976,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "project agent-worktree-gui · PR NO COMMITS",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 1
+      }
+    },
+    "provenance": {
+      "card": {
+        "left": 11,
+        "right": 1149,
+        "top": 358.078125,
+        "bottom": 474.9375,
+        "width": 1138,
+        "height": 116.859375
+      },
+      "facts": {
+        "left": 38,
+        "right": 1014,
+        "top": 384.015625,
+        "bottom": 434.78125,
+        "width": 976,
+        "height": 50.765625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 384.015625,
+          "bottom": 399.515625,
+          "width": 976,
+          "height": 15.5,
+          "contentWidth": 505.234375,
+          "pillGap": 4,
+          "pillText": "complete",
+          "pillLeft": 484.34375,
+          "pillRight": 545.234375,
+          "thread": "wtgui-queue-card-agent-prov-a-7b3e42",
+          "rowText": "✓ wtgui-queue-card-agent-prov-a-7b3e42 project agent-worktree-gui · UNMERGED (2 commits) complete",
+          "run": null,
+          "where": "project agent-worktree-gui · UNMERGED (2 commits)",
+          "whereTop": 384.875,
+          "whereBottom": 398.640625
+        },
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 401.515625,
+          "bottom": 417.015625,
+          "width": 976,
+          "height": 15.5,
+          "contentWidth": 534.53125,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 517.03125,
+          "pillRight": 574.53125,
+          "thread": "wtgui-queue-card-agent-prov-b-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-prov-b-7b3e42 project poc-guidelines · MERGED (3 commits) · PR #373 open running",
+          "run": null,
+          "where": "project poc-guidelines · MERGED (3 commits) · PR #373 open",
+          "whereTop": 402.375,
+          "whereBottom": 416.140625
+        },
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 419.015625,
+          "bottom": 434.78125,
+          "width": 976,
+          "height": 15.765625,
+          "contentWidth": 346.765625,
+          "pillGap": 4,
+          "pillText": "exited↻",
+          "pillLeft": 326.796875,
+          "pillRight": 386.765625,
+          "thread": "wtgui-queue-card-agent-prov-none-7b3e42",
+          "rowText": "○ wtgui-queue-card-agent-prov-none-7b3e42 guessing exited↻",
+          "run": {
+            "text": "guessing",
+            "left": 269,
+            "right": 322.796875,
+            "top": 419.015625,
+            "bottom": 434.78125,
+            "width": 53.796875,
+            "height": 15.765625,
+            "gapAfterPill": -117.765625,
+            "isLastChild": false
+          },
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        }
+      ],
+      "meta": null,
+      "pipeline": {
+        "left": 38,
+        "right": 1014,
+        "top": 437.78125,
+        "bottom": 454.171875,
+        "width": 976,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 3
+      }
+    },
+    "live": {
+      "card": {
+        "left": 11,
+        "right": 1149,
+        "top": 480.9375,
+        "bottom": 580.296875,
+        "width": 1138,
+        "height": 99.359375
+      },
+      "facts": {
+        "left": 38,
+        "right": 1014,
+        "top": 506.875,
+        "bottom": 540.140625,
+        "width": 976,
+        "height": 33.265625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 506.875,
+          "bottom": 522.375,
+          "width": 976,
+          "height": 15.5,
+          "contentWidth": 276.90625,
+          "pillGap": 4,
+          "pillText": "exited↻",
+          "pillLeft": 256.9375,
+          "pillRight": 316.90625,
+          "thread": "wtgui-queue-card-agent-live-a-7b3e42",
+          "rowText": "○ wtgui-queue-card-agent-live-a-7b3e42 exited↻",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        },
+        {
+          "left": 38,
+          "right": 1014,
+          "top": 524.375,
+          "bottom": 540.140625,
+          "width": 976,
+          "height": 15.765625,
+          "contentWidth": 617.09375,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 599.59375,
+          "pillRight": 657.09375,
+          "thread": "wtgui-queue-card-agent-live-b-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-live-b-7b3e42 f38c67e93fa4433d8c3 project agent-worktree-gui · UNMERGED (4 commits) running",
+          "run": {
+            "text": "f38c67e93fa4433d8c3",
+            "left": 256.9375,
+            "right": 368.1875,
+            "top": 524.375,
+            "bottom": 540.140625,
+            "width": 111.25,
+            "height": 15.765625,
+            "gapAfterPill": -400.15625,
+            "isLastChild": false
+          },
+          "where": "project agent-worktree-gui · UNMERGED (4 commits)",
+          "whereTop": 525.375,
+          "whereBottom": 539.140625
+        }
+      ],
+      "meta": null,
+      "pipeline": {
+        "left": 38,
+        "right": 1014,
+        "top": 543.140625,
+        "bottom": 559.53125,
+        "width": 976,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 2
+      }
+    },
+    "narrow": {
+      "card": {
+        "left": 11,
+        "right": 409,
+        "top": 615.296875,
+        "bottom": 744.65625,
+        "width": 398,
+        "height": 129.359375
+      },
+      "facts": {
+        "left": 38,
+        "right": 274,
+        "top": 641.234375,
+        "bottom": 704.5,
+        "width": 236,
+        "height": 63.265625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 274,
+          "top": 641.234375,
+          "bottom": 656.734375,
+          "width": 236,
+          "height": 15.5,
+          "contentWidth": 231,
+          "pillGap": 4,
+          "pillText": "exited↻",
+          "pillLeft": 211.03125,
+          "pillRight": 271,
+          "thread": "wtgui-queue-card-agent-one-7b3e42",
+          "rowText": "○ wtgui-queue-card-agent-one-7b3e42 exited↻",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        },
+        {
+          "left": 38,
+          "right": 274,
+          "top": 658.734375,
+          "bottom": 674.5,
+          "width": 236,
+          "height": 15.765625,
+          "contentWidth": 231,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 213.5,
+          "pillRight": 271,
+          "thread": "wtgui-queue-card-agent-two-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-two-7b3e42 guessing running",
+          "run": {
+            "text": "guessing",
+            "left": 155.703125,
+            "right": 209.5,
+            "top": 658.734375,
+            "bottom": 674.5,
+            "width": 53.796875,
+            "height": 15.765625,
+            "gapAfterPill": -115.296875,
+            "isLastChild": false
+          },
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        }
+      ],
+      "meta": {
+        "left": 38,
+        "right": 274,
+        "top": 676.5,
+        "bottom": 704.5,
+        "width": 236,
+        "height": 28
+      },
+      "pipeline": {
+        "left": 38,
+        "right": 274,
+        "top": 707.5,
+        "bottom": 723.890625,
+        "width": 236,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "project agent-worktree-gui · PR UNMERGED (2 commits)",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 2
+      }
+    },
+    "narrowLive": {
+      "card": {
+        "left": 11,
+        "right": 409,
+        "top": 750.65625,
+        "bottom": 850.015625,
+        "width": 398,
+        "height": 99.359375
+      },
+      "facts": {
+        "left": 38,
+        "right": 274,
+        "top": 776.59375,
+        "bottom": 809.859375,
+        "width": 236,
+        "height": 33.265625
+      },
+      "agents": [
+        {
+          "left": 38,
+          "right": 274,
+          "top": 776.59375,
+          "bottom": 792.09375,
+          "width": 236,
+          "height": 15.5,
+          "contentWidth": 231,
+          "pillGap": 4,
+          "pillText": "exited↻",
+          "pillLeft": 211.03125,
+          "pillRight": 271,
+          "thread": "wtgui-queue-card-agent-live-a-7b3e42",
+          "rowText": "○ wtgui-queue-card-agent-live-a-7b3e42 exited↻",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        },
+        {
+          "left": 38,
+          "right": 274,
+          "top": 794.09375,
+          "bottom": 809.859375,
+          "width": 236,
+          "height": 15.765625,
+          "contentWidth": 231,
+          "pillGap": 4,
+          "pillText": "running",
+          "pillLeft": 213.5,
+          "pillRight": 271,
+          "thread": "wtgui-queue-card-agent-live-b-7b3e42",
+          "rowText": "● wtgui-queue-card-agent-live-b-7b3e42 f38c67e93fa4433d8c3 project agent-worktree-gui · UNMERGED (4 commits) running",
+          "run": {
+            "text": "f38c67e93fa4433d8c3",
+            "left": 75.5625,
+            "right": 186.8125,
+            "top": 794.09375,
+            "bottom": 809.859375,
+            "width": 111.25,
+            "height": 15.765625,
+            "gapAfterPill": -195.4375,
+            "isLastChild": false
+          },
+          "where": "project agent-worktree-gui · UNMERGED (4 commits)",
+          "whereTop": 795.09375,
+          "whereBottom": 808.859375
+        }
+      ],
+      "meta": null,
+      "pipeline": {
+        "left": 38,
+        "right": 274,
+        "top": 812.859375,
+        "bottom": 829.25,
+        "width": 236,
+        "height": 16.390625,
+        "parentIsBody": true,
+        "afterFacts": true,
+        "kids": [
+          {
+            "cls": "as-task-pipeline",
+            "h": 16.390625,
+            "w": 104.5625
+          }
+        ]
+      },
+      "pipelineInFacts": false,
+      "pipelineText": "assistant decides⇢",
+      "when": null,
+      "metaText": "",
+      "block": {
+        "shell": false,
+        "parentIsFacts": true,
+        "isFacts": false,
+        "display": "flex",
+        "direction": "column",
+        "marginLeft": "0px",
+        "marginTop": "0px",
+        "gap": "2px",
+        "count": 2
+      }
+    },
+    "compact": {
+      "card": {
+        "left": 23,
+        "right": 766,
+        "top": 879.015625,
+        "bottom": 928.171875,
+        "width": 743,
+        "height": 49.15625
+      },
+      "facts": {
+        "left": 51,
+        "right": 757,
+        "top": 908.40625,
+        "bottom": 922.171875,
+        "width": 706,
+        "height": 13.765625
+      },
+      "agents": [
+        {
+          "left": 51,
+          "right": 223.375,
+          "top": 908.40625,
+          "bottom": 922.171875,
+          "width": 172.375,
+          "height": 13.765625,
+          "contentWidth": 172.375,
+          "pillGap": null,
+          "pillText": "",
+          "pillLeft": null,
+          "pillRight": null,
+          "thread": "wtgui-queue-card-agent-one-7b3e42",
+          "rowText": "wtgui-queue-card-agent-one-7b3e42",
+          "run": null,
+          "where": null,
+          "whereTop": null,
+          "whereBottom": null
+        }
+      ],
+      "meta": null,
+      "pipeline": null,
+      "pipelineInFacts": false,
+      "pipelineText": "",
+      "when": {
+        "left": 684.484375,
+        "right": 757,
+        "top": 908.40625,
+        "bottom": 922.171875,
+        "width": 72.515625,
+        "height": 13.765625
+      },
+      "metaText": "",
+      "block": {
+        "shell": true,
+        "parentIsFacts": false,
+        "isFacts": true,
+        "display": "flex",
+        "direction": "row",
+        "marginLeft": "19px",
+        "marginTop": "2px",
+        "gap": "0px 8px",
+        "count": 1
+      }
+    }
+  },
+  "notes": [
+    "two: 2 agent row(s), facts 976 px wide, tops 25.94 / 43.44 px from the card top, lefts 38 / 38",
+    "three: 3 agent row(s), facts 976 px wide, tops 25.94 / 43.44 / 60.94 px from the card top, lefts 38 / 38 / 38",
+    "one: 1 agent row(s), facts 976 px wide, tops 25.94 px from the card top, lefts 38",
+    "provenance: 3 agent row(s), facts 976 px wide, tops 25.94 / 43.44 / 60.94 px from the card top, lefts 38 / 38 / 38",
+    "live: 2 agent row(s), facts 976 px wide, tops 25.94 / 43.44 px from the card top, lefts 38 / 38",
+    "narrow: 2 agent row(s), facts 236 px wide, tops 25.94 / 43.44 px from the card top, lefts 38 / 38",
+    "narrowLive: 2 agent row(s), facts 236 px wide, tops 25.94 / 43.44 px from the card top, lefts 38 / 38",
+    "compact: 1 agent row(s), facts 706 px wide, tops 29.39 px from the card top, lefts 51",
+    "#410 rects (1160 px): session chip 599.59-657.09, run chip 256.94-368.19, gap -400.16 px, both on top 524.38; row text \"● wtgui-queue-card-agent-live-b-7b3e42 f38c67e93fa4433d8c3 project agent-worktree-gui · UNMERGED (4 commits) running\"",
+    "#410 rects (420 px): session chip 213.5-271, run chip 75.56-186.81, gap -195.44 px"
+  ]
+}
