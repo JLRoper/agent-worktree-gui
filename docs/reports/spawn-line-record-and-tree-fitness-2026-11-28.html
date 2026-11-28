@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 401: a SPAWN line that leaves no record, and a spawn that starts in an unfit tree</title>
+<style>
+  :root { --ink:#1b1f24; --mute:#5b6673; --line:#d8dee6; --bg:#ffffff; --soft:#f5f7fa; --bad:#b42318; --good:#067647; --warn:#a15c00; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 28px 72px; }
+  h1 { font-size: 27px; line-height:1.2; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; padding-bottom:4px; border-bottom:1px solid var(--line); }
+  h3 { font-size: 15px; margin: 20px 0 6px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--mute); margin: 0 0 18px; }
+  .facts { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap:10px; margin: 18px 0 6px; }
+  .fact { background: var(--soft); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .fact b { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); font-weight:600; }
+  .fact span { font-size:15px; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; font-size: 13px; }
+  code { background: var(--soft); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:#0f1720; color:#e6edf3; padding:12px 14px; border-radius:8px; overflow:auto; font-size:12.5px; line-height:1.45; }
+  table { border-collapse: collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background: var(--soft); font-weight:600; }
+  .ok { color: var(--good); font-weight:600; }
+  .no { color: var(--bad); font-weight:600; }
+  .note { border-left:3px solid var(--warn); background:#fff8ec; padding:9px 13px; margin:12px 0; }
+  .cite { color: var(--mute); font-size:12.5px; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin: 4px 0; }
+  footer { margin-top: 36px; padding-top: 12px; border-top:1px solid var(--line); color: var(--mute); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>A SPAWN line that leaves no record, and a spawn that starts in an unfit tree</h1>
+<p class="sub">Queue row 401. Research and fix, 2026-11-28. Base <span class="mono">main db287788</span> (1.191.0); this branch carries 1.192.0. All line numbers are at the branch head that carries this page.</p>
+
+<div class="facts">
+  <div class="fact"><b>Longest dropped line</b><span>2,987 chars (turn 5201acfb)</span></div>
+  <div class="fact"><b>Second dropped line</b><span>2,245 chars (turn d4ffae65)</span></div>
+  <div class="fact"><b>Both spawn intents</b><span class="no">outcome "skipped"</span></div>
+  <div class="fact"><b>Command audit</b><span class="no">off by default</span></div>
+  <div class="fact"><b>Journal cap</b><span>300 entries (a ring)</span></div>
+  <div class="fact"><b>Stale tree reused</b><span>row-677, dirty 3, base 7a8227c5</span></div>
+</div>
+
+<h2>1. The three data points, measured</h2>
+
+<p>All three are read from this machine's live panel store (jobs.json, assistant.json and assistant-3/queue.json), not inferred from the transcript.</p>
+
+<table>
+  <tr><th>Point</th><th>What the store says</th></tr>
+  <tr>
+    <td>1. Long SPAWN for row #396</td>
+    <td>Turn <span class="mono">5201acfb</span> (thread panel-assistant-3, ended 2026-11-27T23:42:15Z) holds the line at 2,987 characters in one <span class="mono">text</span> record. Its spawn intent reads <span class="mono">outcome: "skipped"</span>, taskId 396, prompt clipped to 240 in the intent record. No job exists for that turn.</td>
+  </tr>
+  <tr>
+    <td>2. Long SPAWN for row #395</td>
+    <td>Turn <span class="mono">d4ffae65</span> (ended 22:47:51Z) holds a 2,245-character line. Its intent also reads <span class="mono">"skipped"</span>, taskId 395. No job for that turn; the same rows were re-issued by a later turn (da300562) and cut then.</td>
+  </tr>
+  <tr>
+    <td>3. Short SPAWN in a weeks-old tree</td>
+    <td>Job <span class="mono">4cb4764a</span>: <span class="mono">existing: true</span>, cwd <span class="mono">.worktrees/row-677-detail-is-in-the-queue-file-f1cbe5</span>, tree base 036e1e79, dirty 3, and <span class="mono">origin.reused = { path: row-677 tree, branch: wtgui/row-677-..., shared: ["detail","queue","row"] }</span>. The branch's merge-base with main is 7a8227c5, from weeks earlier. Cancelled by the reader at 01:54:10Z.</td>
+  </tr>
+</table>
+
+<h2>2. Why a long SPAWN line can be dropped with no record</h2>
+
+<p>It is not a length limit in the parser. Both stored lines were replayed through the REAL parser at the branch head's parent: each returns exactly one spawn action. The 2,987-character line yields a 2,000-character prompt ending in an ellipsis; the 2,245-character line yields 1,518 characters, uncut. So the grammar read both lines, and the drop happened after the parse.</p>
+
+<pre>- 5201acfb  prose len 4699  spawn 1  target "agent-worktree-gui" taskId 396  prompt len 2000  tail "...pus..."
+- d4ffae65  prose len 4697  spawn 1  target "agent-worktree-gui" taskId 395  prompt len 1518  tail "...do not land."</pre>
+
+<p>Four separate holes made that drop invisible, and one of them made it likely:</p>
+
+<h3>2.1 The only per-line record is a journal line in a 300-entry ring</h3>
+<p>A started SPAWN writes <span class="mono">spawned</span>; a refused one writes <span class="mono">spawn-refused</span>, <span class="mono">spawn-skipped</span>, <span class="mono">spawn-failed</span> or <span class="mono">spawn-draft</span>. None of those raises a card. The journal is capped at 300 entries (<span class="mono">lib/assistant/config.js:290</span>, trimmed in <span class="mono">lib/assistant.js:4328</span>), and when this row was filed its oldest entry was <span class="mono">2026-11-27T23:58:18Z</span> - after both turns had ended. The record existed; it had rolled out. From the reader's chair that is "no journal line".</p>
+
+<h3>2.2 The record that catches an unread line is switched off by default</h3>
+<p>The command audit journals an unparsed command and raises a red card for a parsed line nobody carried out, but <span class="mono">auditMode()</span> answers <span class="mono">"off"</span> unless the reader changes the setting (<span class="mono">lib/assistant.js:7559</span>), and <span class="mono">openAudit</span> returns null in that mode. The live store's <span class="mono">commandAudits</span> array is empty. So on the panel as it ships, a SPAWN line that parses to nothing leaves no card and no <span class="mono">command-unparsed</span> line.</p>
+
+<h3>2.3 The spawn watchdog only re-read turns on Assistant #1's thread</h3>
+<p><span class="mono">checkSpawns</span> re-reads finished turns to find a SPAWN the harvest missed, and it filtered on <span class="mono">j.thread === ASSISTANT_THREAD</span>. Both dropped lines were Assistant #3's turns (<span class="mono">panel-assistant-3</span>), so the one pass that would have found them never looked.</p>
+
+<h3>2.4 A spawner that returns nothing was silent, and a long brief lost its tail</h3>
+<p>In the spawn loop, a spawner that resolved with no job and no card hit <span class="mono">if (!j?.id) return;</span>: the line settled as if carried out, and no journal line said otherwise. Separately, the parser clipped every SPAWN brief at 2,000 characters (<span class="mono">clip(sp[2], 2000)</span>), which silently cut the acceptance half off the 2,987-character line - measured above as the prompt ending in an ellipsis.</p>
+
+<div class="note">
+<b>What settled them "skipped".</b> The spawn intent is written before the line runs, and exactly two code paths settle it <span class="mono">"skipped"</span>: the queue-row refusal and the spawn switch being off. The spawn switch was <span class="mono">auto</span> on Assistant #3 (<span class="mono">assistants/assistant-3/settings.json</span>), so the reachable path is the row refusal, which does write <span class="mono">spawn-refused</span>. That line is therefore the record that rolled out of the ring in 2.1. The exact refusal sentence is not recoverable from the store; what is recoverable is that the line was parsed, that the panel decided against it, and that the decision was written only into a rolling journal with nothing on the board.
+</div>
+
+<h2>3. Why a spawn can pick an existing stale tree instead of cutting</h2>
+
+<p>There is an explicit reuse recommendation, and it is where the short line went: <span class="mono">lib/spawn-reuse.js</span> <span class="mono">reuseDecision</span>, called from <span class="mono">lib/features/spawn.js</span> before a plain SPAWN cuts. Its rule is "an UNFINISHED tree whose task words overlap this one", and <span class="mono">unfinishedTree</span> counts a tree as unfinished when it has commits of its own, uncommitted files, or a live run. A dirty tree is therefore a candidate by definition. The fit of the tree to take a NEW worker - is it clean, has main left its base behind - was never asked.</p>
+
+<p>For the #400 line the overlap was three words the two rows happen to share: the tree's directory is <span class="mono">row-677-detail-is-in-the-queue-file</span> and the brief says "Row #400 in my queue is the complete brief ... detail ... queue". The job record preserves the decision: <span class="mono">origin.reused.shared = ["detail","queue","row"]</span>. The tree was 0 commits ahead of its own base, 3 files dirty, and its base was weeks behind main - which is exactly the state <span class="mono">unfinishedTree</span> reads as "worth reusing".</p>
+
+<p>The second half of the same trap is the base ref: a project that names a turnover branch was cut from it unconditionally (<span class="mono">makeWorktree</span>, <span class="mono">turnoverStartRefOf</span>), even when the branch had already landed and main had moved on. That is how children end up on a dead branch.</p>
+
+<h2>4. The fix</h2>
+
+<table>
+  <tr><th>Acceptance</th><th>Change</th><th>Where</th></tr>
+  <tr>
+    <td rowspan="5">(a) every SPAWN line leaves a journal line: started, refused, or unparsed with its reason and length</td>
+    <td>The parser returns <span class="mono">unparsed</span> for a SPAWN-looking line it cannot read, with the line, its length and one of four reasons (no pipe, no target, no brief, no match).</td>
+    <td class="mono">lib/assistant/actions.js:38, :42, :219</td>
+  </tr>
+  <tr>
+    <td>The harvest journals that unconditionally as <span class="mono">spawn-unparsed</span>, and journals the turn's own count as <span class="mono">spawn-lines</span> ("N read - P parsed, U unparsed"). Not gated on <span class="mono">commandAudit</span>.</td>
+    <td class="mono">lib/assistant.js:6727, :6752, :6780</td>
+  </tr>
+  <tr>
+    <td>Every SPAWN record carries the line's length: <span class="mono">what</span> in the spawn loop, and the started line.</td>
+    <td class="mono">lib/assistant.js:7207, :8375</td>
+  </tr>
+  <tr>
+    <td>A spawner that returns no run and no card is written down as <span class="mono">spawn-no-run</span> instead of settling as carried out.</td>
+    <td class="mono">lib/assistant.js:7333</td>
+  </tr>
+  <tr>
+    <td>The spawn watchdog re-reads every assistant's thread, not just #1's, and journals <span class="mono">spawn-owed</span> for a line it is the first to record.</td>
+    <td class="mono">lib/assistant.js:7946</td>
+  </tr>
+  <tr>
+    <td>Long lines</td>
+    <td>The brief cap rises from 2,000 to 20,000 characters; a brief that still hits it is journalled as <span class="mono">spawn-clipped</span> with both lengths.</td>
+    <td class="mono">lib/assistant/actions.js:33, :144; lib/assistant.js:6762</td>
+  </tr>
+  <tr>
+    <td rowspan="4">(b) a spawn refuses a dirty or stale-base tree by name; a plain SPAWN cuts fresh</td>
+    <td><span class="mono">treeFitnessRefusal</span>: uncommitted files, or a base more than <span class="mono">TRIVIAL_BEHIND</span> (50) commits behind main, refuses and names the tree and the fix.</td>
+    <td class="mono">lib/spawn-check.js:57, :327</td>
+  </tr>
+  <tr>
+    <td><span class="mono">treeFitness</span> measures both with git (porcelain count, <span class="mono">rev-list --count HEAD..origin/main</span>), and <span class="mono">jobs.create</span> refuses a named existing tree before a record or a run exists. Left alone on purpose: a disruption re-issue, a reply, a run the panel resumes into a known tree (<span class="mono">resumeDir</span>: a reply, or a clarify answer that asked for a fresh session - that tree is dirty with its own work), and the project's own checkout.</td>
+    <td class="mono">lib/jobs.js:3752, :4243</td>
+  </tr>
+  <tr>
+    <td>The reuse recommendation measures every candidate and SKIPS an unfit tree, naming it on the card, so a plain SPAWN cuts fresh.</td>
+    <td class="mono">lib/spawn-reuse.js:148, :190; lib/features/spawn.js:270, :296</td>
+  </tr>
+  <tr>
+    <td>A landed turnover branch is no longer a container: <span class="mono">merge-base --is-ancestor</span> AND a non-zero <span class="mono">rev-list --count &lt;branch&gt;..main</span> (a container cut this morning sits AT main's tip and must keep its children), the cut starts from main, and the skip is logged.</td>
+    <td class="mono">lib/jobs.js:2668, :3279, :3287</td>
+  </tr>
+</table>
+
+<h2>5. The proofs</h2>
+
+<p><span class="mono">test/spawn-record-and-fit-tree.test.js</span> drives the REAL parser, harvest, spawner, <span class="mono">Jobs.create</span>/<span class="mono">makeWorktree</span> and real scratch repositories through a stub gateway that only counts what it was asked to start.</p>
+
+<table>
+  <tr><th>Test</th><th>What it asserts</th></tr>
+  <tr><td>1. a SPAWN line over 2,000 characters cuts a worker, is journalled, and the brief arrives whole</td><td>2,600+ character line cuts one run in a tree of the project; the run's input carries the END marker of the brief; <span class="mono">spawned</span> names "(line N chars)"; <span class="mono">spawn-lines</span> reads "1 SPAWN line read - 1 parsed, 0 unparsed".</td></tr>
+  <tr><td>2. a malformed SPAWN line journals its refusal with the reason and its length, even with the command audit off</td><td>Audit off (the shipped default); <span class="mono">spawn-unparsed</span> names the turn, the length, "no pipe" and the line; the count line says "0 parsed, 1 unparsed"; nothing started; a second shape (no brief after the pipe) gets its own reason.</td></tr>
+  <tr><td>3. a spawn asked to use a dirty or stale-base tree is refused by name, before anything runs</td><td>A real worktree with one uncommitted file and a clean worktree 51 commits behind main both refuse through the harvest (<span class="mono">spawn-failed</span>, tree named, counts named, remedy named) and through a direct start; nothing is posted; a fresh cut still works.</td></tr>
+  <tr><td>4. a plain SPAWN on a project whose turnover branch has landed cuts from main, not from the dead branch</td><td>Feature branch merged into main with a merge commit; the cut's HEAD equals main's tip, not the branch tip; the parent book records main at that sha; the cut logs the branch it skipped.</td></tr>
+  <tr><td>5. a plain SPAWN does not reuse an overlapping tree that is dirty</td><td>A strong word overlap with a dirty tree still cuts a fresh tree; the card says "reuse was NOT used for 1 unfinished tree", names it and its uncommitted files; the origin carries no reuse.</td></tr>
+</table>
+
+<h3>Runs</h3>
+<ul>
+  <li><span class="mono">node --test test/spawn-record-and-fit-tree.test.js</span>: 5 tests, 5 pass, 0 fail.</li>
+  <li><span class="mono">node --test</span> over the twelve spawn files (spawn-busy, spawn-cards, spawn-check, spawn-check-wiring, spawn-from, spawn-lane, spawn-queue-link, spawn-record-and-fit-tree, spawn-reuse, spawn-row-prelift, spawn-stage-landing, spawn-watch), re-run at the final head: 71 tests, 70 pass, 1 file-level flake (<span class="mono">spawn-check-wiring</span>, a load-time socket race under three-way concurrency) that passes 2 of 2 on its own.</li>
+  <li><span class="mono">node --test</span> over worktree-brief, worktree-lifecycle, worktree-naming, branch-policy, brief-follows-the-policy, turnover-base, turnover-ask-holds-row, task-pipeline-assign, pipeline-stage-trees, re-run at the final head: 73 tests, 73 pass, 0 fail.</li>
+  <li><span class="mono">node --test test/command-audit.test.js</span>: 6 pass, 0 fail (the existing "a SPAWN that started no run is unactioned" behaviour is kept: the line stays unaccounted for the audit, and the new <span class="mono">spawn-no-run</span> line is the unconditional record).</li>
+</ul>
+
+<h3>The full suite, and what it caught in this branch</h3>
+<p>The suite ran in two halves (<span class="mono">node --test --test-concurrency=4 --test-timeout=60000</span>), because one run over every file stalls on this host. Half A reached <b>1,775 passing and 14 failing</b> in 13 minutes and then stalled on <span class="mono">test/land-pr.test.js</span> and <span class="mono">test/pipeline-assembly.test.js</span> with no summary block, so those are counted lines rather than a reporter's block. Each failing file was run on its own, and the failing NAMES were compared with a <span class="mono">git archive</span> export of <span class="mono">main db287788</span>:</p>
+<ul>
+  <li><b>8 names plus the <span class="mono">test/gateway-permissions.test.js</span> file fail identically at main</b> (the worktree reads a gitignored <span class="mono">config.json</span>, plus the settings route, the initiative tier route, the harness pairing, the junction walk and the json chunk write). Not this branch's.</li>
+  <li><b>3 names pass alone at the branch head</b> (<span class="mono">assistant-to-replay</span>, <span class="mono">assistant-digest</span>, <span class="mono">assistant-director</span>): load flakes under four sibling suites, not regressions.</li>
+  <li><b>2 were this branch's own, and the suite caught them.</b> A turnover container cut this morning stands AT main's tip, so <span class="mono">merge-base --is-ancestor</span> alone called a fresh container "landed" and cut its child from main (<span class="mono">test/branch-kind.test.js</span>); and a clarify answer asking for a fresh session resumes into the tree its own work dirtied, which the fitness gate refused (<span class="mono">test/clarify-answer-reuse.test.js</span>). Both were fixed (main must have MOVED PAST the branch; <span class="mono">resumeDir</span> is excluded from the gate) and the two files re-run <b>14 of 14</b>.</li>
+</ul>
+
+<p><b>Half B (m to z, 231 files)</b> ran in chunks, because one 78-file chunk over this host's slow worktree files stalls: a 78-file chunk gave <b>493 passing, 11 failing</b> and then hit its cap on the <span class="mono">test/rebase-route.test.js</span> file; the remaining 153 files in 26-file sub-chunks gave <b>203/202/1, 195/193/2, 188/187/0 and 191/187/3</b> (tests/pass/fail), with two sub-chunks hitting the cap and no tally; the 52 slowest files re-run in groups of 13 gave <b>149/147/2, 106/106/0, 120/115/5</b> and one group with no tally. Every failing name was then run on its own at the branch head, and the four that do not clear are the same four that fail at main: <span class="mono">test/tree-cache.test.js</span> (1), <span class="mono">test/scan-upstream.test.js</span> (1), <span class="mono">test/worktree-assistant.test.js</span> (3) and <span class="mono">test/push-permissions.test.js</span> (the file). The rest were load flakes: 8 to 33 s git tests that a chunk's cap kills, or sweep tests that pass alone (for example <span class="mono">test/wave-evidence.test.js</span>, <span class="mono">test/waves-lanes-join.test.js</span> and <span class="mono">test/worktree-release.test.js</span> are 60 of 60 together, and the two <span class="mono">task-pipeline</span> files pass alone).</p>
+
+<p><b>Why the sweep is conservation rather than a green block:</b> the suite on this host does not produce one. Four sibling worktrees' suites were running at the same time, one file per slow test file, and this host stalls on the same handful of files in every runner. The tallies above are counted lines and per-chunk reporter blocks, each failure attributed against <span class="mono">main</span> or against a run on its own, which is what the row asked for: evidence that this branch did not make anything worse, not a claim that the repo is green.</p>
+
+<h2>6. Not changed, and why</h2>
+<ul>
+  <li>A refused SPAWN still raises no card; it is a journal line plus the digest. The row asked for a record, and a card per refused line would be noise. Making the digest line louder is a separate change.</li>
+  <li>The pre-flight route <span class="mono">GET /api/assistant/spawn-check</span> reads the queue, the job store and the scanned rows only; it does not run git. The fitness refusal is measured at the cut, where git is. A pre-flight field for "this tree is dirty" is a follow-up.</li>
+  <li>The stale threshold (50 commits) is a judgement written in one place, <span class="mono">TRIVIAL_BEHIND</span>. It clears same-day drift on a board that lands 20+ commits a day and still catches every weeks-old tree.</li>
+  <li>The parser still collapses whitespace in a brief (<span class="mono">clip</span>). A brief written on one line is unaffected; a multi-line brief is still flattened, as before.</li>
+</ul>
+
+<footer>Row 401, agent-worktree-gui. Evidence read from the live store on 2026-11-28; every claim in sections 1 to 3 is a store read or a replay through the real parser, and every change in section 4 is exercised by section 5's tests.</footer>
+
+</main>
+</body>
+</html>

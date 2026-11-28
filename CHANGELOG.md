@@ -4,16 +4,75 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.190.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.191.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-773 releases from v0.1.0 (2026-10-20) to v1.190.0 (2026-11-27), 2737 commits between the tags. Every release is anchored by an
+777 releases from v0.1.0 (2026-10-20) to v1.191.3 (2026-11-27), 2750 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.191.3 — 2026-11-27 · 4 commits
+
+[`d54bd9b`](https://github.com/JLRoper/agent-worktree-gui/commit/d54bd9bdb37c5c454535acad2433c94c97fbc809) · [compare v1.191.2...v1.191.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.191.2...v1.191.3)
+
+### Fixed
+
+- fix(search): the popover places and drags in layout px, so page zoom cannot slide it ([`2cb7344`](https://github.com/JLRoper/agent-worktree-gui/commit/2cb734447629a50ea15eb726ba5aac8832e02da2))
+
+### Docs & tests
+
+- docs: render the changelog - 776 releases ([`1933da6`](https://github.com/JLRoper/agent-worktree-gui/commit/1933da6689902b1c457d03c2820c9c8495d6251d))
+- test(search): pin the popover's zoom conversion at 110% in the unit test ([`0b02ec7`](https://github.com/JLRoper/agent-worktree-gui/commit/0b02ec70b965c372f313a6ec607a34741cf29b05))
+
+### Other
+
+- chore: 1.191.3 - the version this landing carries ([`d54bd9b`](https://github.com/JLRoper/agent-worktree-gui/commit/d54bd9bdb37c5c454535acad2433c94c97fbc809))
+
+## v1.191.2 — 2026-11-27 · 5 commits
+
+[`69c9ce1`](https://github.com/JLRoper/agent-worktree-gui/commit/69c9ce1ca9b3e156953d0ace204b1cbe59b0c4e9) · [compare v1.191.1...v1.191.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.191.1...v1.191.2)
+
+### Fixed
+
+- fix(boot): skip the tree-names sweep where no worktree exists, and read the locals maps in one for-each-ref ([`437ff0c`](https://github.com/JLRoper/agent-worktree-gui/commit/437ff0ce4184816d606ff8a0c3a7cc0fa087b5a9))
+- fix(perf): a boot's job delta repaints the board once, not once per card ([`63b7430`](https://github.com/JLRoper/agent-worktree-gui/commit/63b74301782dd38b7773fbf089d9ee4d1e529f19))
+- fix(settings): the Skills tab's read is memoised, so a page load does not re-walk every root ([`a18bc2d`](https://github.com/JLRoper/agent-worktree-gui/commit/a18bc2dbb08c2ed5ee36213ea4146ee7b949de07))
+
+### Docs & tests
+
+- test: the settle proof waits on its own clock, not the prime's ([`bcb27ed`](https://github.com/JLRoper/agent-worktree-gui/commit/bcb27eda622df820c79ab15d27f4b35360b2a7c9))
+
+### Other
+
+- chore: 1.191.2 - the version this landing carries ([`69c9ce1`](https://github.com/JLRoper/agent-worktree-gui/commit/69c9ce1ca9b3e156953d0ace204b1cbe59b0c4e9))
+
+## v1.191.1 — 2026-11-27 · 2 commits
+
+[`14bddc9`](https://github.com/JLRoper/agent-worktree-gui/commit/14bddc9fd0f9119f324702082069013020adb401) · [compare v1.191.0...v1.191.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.191.0...v1.191.1)
+
+### Fixed
+
+- fix: a settled run reads done on /api/state, and the turn head says done ([`d64f21d`](https://github.com/JLRoper/agent-worktree-gui/commit/d64f21d86717fb6b14313fd2e5c912b27e17cbcd))
+
+### Other
+
+- chore: 1.191.1 - the version this landing carries ([`14bddc9`](https://github.com/JLRoper/agent-worktree-gui/commit/14bddc9fd0f9119f324702082069013020adb401))
+
+## v1.191.0 — 2026-11-27 · 2 commits
+
+[`db28778`](https://github.com/JLRoper/agent-worktree-gui/commit/db287788d601342a2ac46f0c364281cd2ba85deb) · [compare v1.190.0...v1.191.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.190.0...v1.191.0)
+
+### Docs & tests
+
+- docs: render the changelog - 773 releases ([`71ac71b`](https://github.com/JLRoper/agent-worktree-gui/commit/71ac71b963aa326538d897c5d76e1de652c261c1))
+
+### Other
+
+- public/style.css splits into 19 per-surface sheets, every rule verbatim (#940) ([`db28778`](https://github.com/JLRoper/agent-worktree-gui/commit/db287788d601342a2ac46f0c364281cd2ba85deb))
 
 ## v1.190.0 — 2026-11-27 · 3 commits
 

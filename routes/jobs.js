@@ -26,6 +26,11 @@
 // imports no HTTP layer and defines none of sendJson, readBody or authorised, so a test can drive a route with a
 // recorder and the wire bytes are the ones lib/http/respond.js writes.
 //
+// `jobsChanged` is the ONE path a job status change takes to the board (server.js `broadcastJobs`): it drops the
+// cached snapshot text in the same breath as the frame, so a route here can never announce a settled card while
+// /api/state still serves the running one. It defaults to `broadcast` only so a test can drive this file with the
+// one seam it already had.
+//
 // Every path is an exact compare - the mount table's prefix test is only what decides whether this file is asked at
 // all - and a path or method this file does not answer falls through (`return false`) to the rest of server.js's
 // chain, which is where the unmatched method answered before the cut, so `POST /api/jobs` is still the chain's own
@@ -43,7 +48,7 @@ const { PARKED: STEER_PARKED, PAST_BOUNDARY: STEER_PAST_BOUNDARY, GONE: STEER_GO
 /** The prefix every path below sits under, and the row the mount table in server.js matches on. */
 export const JOBS_PATH = "/api/jobs";
 
-export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gonePointers, sendJson, readBody, authorised, resolveAttach = null } = {}) {
+export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, jobsChanged = broadcast, gonePointers, sendJson, readBody, authorised, resolveAttach = null } = {}) {
   if (!jobs) throw new Error("createJobsRoutes needs the Jobs store");
   if (typeof sendJson !== "function" || typeof readBody !== "function" || typeof authorised !== "function") {
     throw new Error("createJobsRoutes needs sendJson, readBody and authorised from the server's transport");
@@ -205,7 +210,7 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
       // detach: the agent goes back to the unattached workspace.
       if (body.detach === true || !target) {
         const r = jobs.setOwner(thread, null);
-        broadcast({ type: "jobs", jobs: jobs.list() });
+        jobsChanged();
         sendJson(res, 200, { ok: true, ownerPath: null, turns: r.turns, jobs: jobs.list() });
         return true;
       }
@@ -247,7 +252,7 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
         return true;
       }
       const r = jobs.setOwner(thread, target);
-      broadcast({ type: "jobs", jobs: jobs.list() });
+      jobsChanged();
       sendJson(res, 200, { ok: true, ownerPath: r.ownerPath, asked, redirectedFrom, turns: r.turns, jobs: jobs.list() });
       return true;
     }
@@ -293,12 +298,12 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
           sendJson(res, 409, { error: `a turn is still running in this agent - cancel it first`, running: r.running });
           return true;
         }
-        broadcast({ type: "jobs", jobs: jobs.list() });
+        jobsChanged();
         sendJson(res, 200, { ok: true, removed: r.removed, jobs: jobs.list() });
         return true;
       }
       jobs.clearFinished();
-      broadcast({ type: "jobs", jobs: jobs.list() });
+      jobsChanged();
       sendJson(res, 200, { ok: true, jobs: jobs.list() });
       return true;
     }

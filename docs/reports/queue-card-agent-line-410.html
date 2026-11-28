@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>#410 - the queue card's agent line: project:branch, and the run chip at the end</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 40px 64px; background: #16181c; color: #d7dce2; font: 14px/1.55 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 21px; margin: 0 0 4px; color: #f0f3f6; font-weight: 650; }
+  h2 { font-size: 15px; margin: 34px 0 10px; color: #f0f3f6; font-weight: 600; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  .sub { color: #8d97a3; font-size: 13px; margin-bottom: 26px; }
+  code, .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { background: #1e232a; border: 1px solid #2b323b; border-radius: 4px; padding: 1px 5px; color: #b9c7d6; }
+  .claim { background: #1a1f26; border-left: 3px solid #4a7fb0; padding: 12px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .claim b { color: #dfe7ef; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #262c34; vertical-align: top; }
+  th { color: #9aa5b1; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { font-family: "Cascadia Mono", Consolas, monospace; white-space: nowrap; }
+  td.mono { overflow-wrap: anywhere; }
+  .pass { color: #7ee787; } .fail { color: #f0877f; }
+  .shots { display: flex; gap: 18px; flex-wrap: wrap; margin: 14px 0 4px; }
+  .shot { flex: 1 1 460px; }
+  .shot img { width: 100%; border: 1px solid #2b323b; border-radius: 5px; display: block; }
+  .cap { color: #8d97a3; font-size: 12px; margin-top: 6px; }
+  .note { background: #1d1a14; border: 1px solid #3c3320; border-radius: 5px; padding: 10px 14px; color: #d9c99a; font-size: 13px; }
+  ul { margin: 8px 0; padding-left: 22px; } li { margin: 3px 0; }
+  pre { background: #12151a; border: 1px solid #262c34; border-radius: 5px; padding: 12px 14px; overflow-x: auto; font-size: 12px; line-height: 1.5; color: #b9c7d6; }
+</style>
+</head>
+<body>
+
+<h1>#410 - the agent line leads with <span class="mono">project:branch</span>, and the run chip ends the row</h1>
+<div class="sub">agent-worktree-gui, branch <span class="mono">wtgui/queue-card-every-agent-on-its-own-line-71b771</span>, version 1.193.0, 2026-11-27.
+Reader's screenshot: the #401 card in Assistant #3's Queue tab. Measured with the shipped renderer and the shipped per-surface stylesheets in Chromium.</div>
+
+<div class="claim">
+<b>The ask, in the reader's own order.</b> The agent line must START with the project name and a colon, then the branch
+(<span class="mono">agent-worktree-gui:wtgui-row-401-...</span>), and the late <span class="mono">project agent-worktree-gui</span>
+fragment must be dropped entirely, the word included. The blue run chip moves to the very end of the row, directly right of
+the agent session status chip, so the row ends <span class="mono">... UNMERGED (4 commits) RUNNING run f38c67e...</span>.
+Nothing else about the card changes.
+</div>
+
+<h2>Before and after, on a card with a live run</h2>
+<div class="shots">
+  <div class="shot">
+    <img src="queue-card-agent-line-410/before/live.png" alt="before: bare branch, run chip third, project fragment late">
+    <div class="cap">Before: <span class="mono">wtgui-...live-b-7b3e42 | f38c67e93fa4433d8c3 | project agent-worktree-gui &middot; UNMERGED (4 commits) | RUNNING</span></div>
+  </div>
+  <div class="shot">
+    <img src="queue-card-agent-line-410/after/live.png" alt="after: project:branch first, run chip last">
+    <div class="cap">After: <span class="mono">agent-worktree-gui:wtgui-...live-b-7b3e42 | UNMERGED (4 commits) | RUNNING | f38c67e93fa4433d8c3</span></div>
+  </div>
+</div>
+
+<h2>The measured boxes</h2>
+<p>Two rects per card, read by <code>getBoundingClientRect()</code> in the page: the session status chip
+(<code>span.pill.pill-running</code>, word "running") and the blue run chip (<code>span.as-task-agent-run</code>). The claim is
+<code>run.left &gt; pill.right</code>. The gap is the 4 px row gap. Same numbers in both panes, because the order is DOM
+order and not a width-dependent CSS <code>order</code>.</p>
+<table>
+  <tr><th>Card</th><th>Session chip (left-right)</th><th>Run chip (left-right)</th><th>Gap</th><th>run.left &gt; pill.right</th></tr>
+  <tr><td>Before, 1160 px</td><td class="num">599.59 - 657.09</td><td class="num">256.94 - 368.19</td><td class="num fail">-400.16</td><td class="fail">no</td></tr>
+  <tr><td>After, 1160 px</td><td class="num">467.84 - 525.34</td><td class="num">529.34 - 640.59</td><td class="num pass">+4.00</td><td class="pass">yes</td></tr>
+  <tr><td>Before, 420 px</td><td class="num">213.50 - 271.00</td><td class="num">75.56 - 186.81</td><td class="num fail">-195.44</td><td class="fail">no</td></tr>
+  <tr><td>After, 420 px</td><td class="num">98.25 - 155.75</td><td class="num">159.75 - 271.00</td><td class="num pass">+4.00</td><td class="pass">yes</td></tr>
+</table>
+<p class="cap">Both chips sit on the same line in every case (row 524.38 - 540.14 px from the page top at 1160 px). The run chip is also the
+row's last element (<code>el.lastElementChild === runEl</code>), so nothing can be drawn after the run id.</p>
+
+<h2>The text, before and after</h2>
+<table>
+  <tr><th>Row</th><th>Reads</th></tr>
+  <tr><td>Before, live agent</td><td class="mono">&#9679; wtgui-queue-card-agent-live-b-7b3e42 f38c67e93fa4433d8c3 project agent-worktree-gui &middot; UNMERGED (4 commits) running</td></tr>
+  <tr><td>After, live agent</td><td class="mono">&#9679; agent-worktree-gui:wtgui-queue-card-agent-live-b-7b3e42 UNMERGED (4 commits) running f38c67e93fa4433d8c3</td></tr>
+  <tr><td>After, earlier agent</td><td class="mono">&#9675; agent-worktree-gui:wtgui-queue-card-agent-live-a-7b3e42 exited &#8635;</td></tr>
+  <tr><td>After, a second project</td><td class="mono">&#9679; poc-guidelines:wtgui-queue-card-agent-prov-b-7b3e42 MERGED (3 commits) &middot; PR #373 open running</td></tr>
+</table>
+<p class="cap">The project is read once, first. No agent row in any of the six fixtures carries a <code>project </code> fragment
+(the gate checks <code>/\bproject\s/i</code> over every row's text).</p>
+
+<h2>Where it changed</h2>
+<table>
+  <tr><th>Site</th><th>Change</th></tr>
+  <tr><td><code>public/queue-cards.js:468</code></td><td><code>queueAgentWhere</code> no longer pushes <code>project ${where.project}</code>. The sentence keeps the landing verdict and the PR, and returns nothing when the tree had no verdict to give.</td></tr>
+  <tr><td><code>public/queue-cards.js:495-496</code></td><td>The line's label is <code>project:thread</code>. The thread's own recorded tree wins (<code>where.project</code>), because two agents on one card can be in two projects; a thread the queue never recorded a tree for falls back to the task's own project (<code>queueProjectName</code>). With no project anywhere the line keeps its bare thread rather than guessing.</td></tr>
+  <tr><td><code>public/queue-cards.js:530-536</code></td><td>The row's DOM order is now mark, <code>project:branch</code>, run title, landing, session chip, run chip. The run chip markup was moved, not duplicated. The <code>code</code> element also carries the whole label in <code>title=</code>, because the element still truncates.</td></tr>
+  <tr><td><code>public/queue.css:88-94</code></td><td>The queue pane's thread cap goes 210 px to 320 px: the label now holds the project as well, and at 210 px the branch was cut to a dozen characters. The code still truncates with its own ellipsis.</td></tr>
+  <tr><td><code>tools/verify-queue-agents.mjs:456</code></td><td>The browser gate gained the #410 block: text and rects on a card that names a live run, at 1160 and 420 px, plus a sweep over every full card for the <code>project:</code> shape and the absent fragment.</td></tr>
+  <tr><td><code>test/assistant-queue-ui.test.js:477</code></td><td>A DOM-order test over the sliced renderer: the first text of each line, the sentence, and the run chip as the row's last element.</td></tr>
+</table>
+
+<h2>What did not change</h2>
+<ul>
+  <li>The state dot still leads, and the run title stays in its slot after the branch.</li>
+  <li>The agent rows still stack one per line, left-equal, with the meta line on its own row after them (the previous landing's checks all still pass).</li>
+  <li>The pipeline chip is still a row of its own under the facts block.</li>
+  <li>The Initiatives pane's compact card is untouched: it draws its own single inline thread span, with no landing sentence and no run chip.</li>
+  <li>The narrow pane (420 px) keeps the order and still stacks; the thread shrinks instead of pushing the chips off the row.</li>
+</ul>
+
+<h2>The gate, actually run</h2>
+<pre>node tools/verify-queue-agents.mjs
+...
+#410 rects (1160 px): session chip 467.84-525.34, run chip 529.34-640.59, gap 4 px, both on top 524.38;
+  row text "&#9679; agent-worktree-gui:wtgui-queue-card-agent-live-b-7b3e42 UNMERGED (4 commits) running f38c67e93fa4433d8c3"
+#410 rects (420 px): session chip 98.25-155.75, run chip 159.75-271, gap 4 px
+
+71/71 checks passed</pre>
+<p>Against a <code>git archive</code> of the base commit, with the same gate and the same fixtures, the #410 checks fail exactly
+as the reader saw them (59/71):</p>
+<pre>FAIL  #410: both lines match ^agent-worktree-gui:  ["wtgui-...-live-a", "wtgui-...-live-b"]
+FAIL  #410: no `project ` fragment is left on an agent row  "... f38c67e93fa4433d8c3 project agent-worktree-gui &middot; UNMERGED (4 commits) running"
+FAIL  #410: the run chip's left edge is past the session chip's right edge  run left 256.94 &gt; chip right 657.09
+FAIL  #410: the run chip is the row's last element  not last
+      #410 rects (1160 px): session chip 599.59-657.09, run chip 256.94-368.19, gap -400.16 px
+59/71 checks passed</pre>
+<p class="cap">The ledger of every box is beside the pictures: <code>after.json</code> and <code>before.json</code> in this folder.
+The shots are the gate's own <code>--shots</code> output, one PNG per fixture.</p>
+
+<h2>One repair the gate needed first</h2>
+<div class="note">The per-surface stylesheet split deleted <code>public/style.css</code>, and this gate still read that file by name,
+so it crashed with ENOENT on the base commit before it could measure anything. It now reads the sheet list out of
+<code>public/index.html</code> in link order, the same read <code>test/style-sheets.js</code> makes. Without that, no #410
+claim could be measured at all.</div>
+
+</body>
+</html>

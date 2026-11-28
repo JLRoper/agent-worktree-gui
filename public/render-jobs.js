@@ -917,7 +917,50 @@ function paintAgentBadges() {
   }
 }
 
-function updateJob(j, { scroll = false } = {}) {
+// ---- the delta's batch: ONE repaint for a burst of moved cards --------------------------------------------------
+//
+// A `delta` frame (lib/snapshot-delta.js) carries every card that moved, and the page applies each one through
+// updateJob - the right path for a single `job` frame: one card, repainted where it stands. A BOOT or a reconnect
+// delivers the WHOLE job list in one delta, and the per-card path then repaints the page once per card:
+// renderConversation falls back to renderJobs() for a card whose row is collapsed, repaintAgentState walks every row
+// and every project, and paintAgentBadges queries one `tr.row[data-key]` per row - on a board of 190 projects /
+// ~400 rows that is ~80 (in the profile: 160) full passes over a 30k-node document inside one task.
+//
+// Measured on the seeded sandbox (2026-11-27, this branch): worst cold-load long task 15.7s, of which 13.4s was
+// querySelector/querySelectorAll self time inside exactly these passes (the CDP profile attributes them to
+// paintAgentBadges, repaintAgentState, refreshChips and paintRowChips, all called from updateJob's loop over the
+// delta's jobs). The batch defers only the GLOBAL repaints - the list rebuild, the per-row/per-project sweeps, the
+// landings - and runs them once at the flush; a card that IS on the page is still repainted in place by the same
+// code the single-job frame goes through, and a card that is not gets no repaint of its own at all, because the
+// flush's one rebuild draws it. Nothing here changes what is drawn, only how many times the identical work runs.
+const jobsBatch = { active: false, listRender: false, projects: new Set(), landings: [] };
+
+// The flush, run by the frame that applied the batch (public/settings.js applyJobDelta). One step does what the
+// per-card calls used to sprinkle through the loop: the unattached list once, each owner row once, and the
+// clarifications/approvals that arrived with the batch AFTER the cards that draw them are in the page.
+function flushJobBatch() {
+  if (!jobsBatch.active) return;
+  jobsBatch.active = false;
+  const { listRender, projects, landings } = jobsBatch;
+  jobsBatch.listRender = false;
+  jobsBatch.projects = new Set();
+  jobsBatch.landings = [];
+  if (listRender) renderJobs();
+  for (const want of projects) {
+    const row = [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === want);
+    if (!row) continue;
+    renderProjectRows(row.project);
+    refreshChips(row.project);
+  }
+  for (const { kind, id, requestId } of landings) {
+    if (kind === "question") {
+      if (typeof landClarifyQuestion === "function") landClarifyQuestion(id, requestId);
+    } else if (typeof landApprovalBlock === "function") landApprovalBlock(id, requestId);
+  }
+}
+
+function updateJob(j, { scroll = false, batch = false } = {}) {
+  jobsBatch.active = jobsBatch.active || batch;
   const prev = state.jobs.get(j.id);
   const statusChanged = !prev || prev.status !== j.status;
   // A question that has just arrived is a stop, not a line of output: the card can be pages down a long board, and
@@ -957,20 +1000,35 @@ function updateJob(j, { scroll = false } = {}) {
     flushTypeStream(j.id);
     marchEnd(j.id);
   }
-  renderConversation(j.thread || j.id, { scroll });
+  // One card, repainted where it stands — unless this call is part of a BATCH (the delta frame's whole-list apply,
+  // see applyJobDelta): a card that is on the page is still repainted in place by the same code, and a card that is
+  // NOT gets no repaint of its own at all, because the batch's flush rebuilds the list once instead. The per-card
+  // fallback used to run renderJobs() (and with it paintAgentBadges over every row) once per card — the measured
+  // cold-load freeze this file's batch comment describes.
+  if (batch) {
+    const threadId = j.thread || j.id;
+    if (document.querySelector(`.job[data-thread="${CSS.escape(threadId)}"]`) || assistantSessionFor(threadId)) renderConversation(threadId, { scroll });
+    else jobsBatch.listRender = true;
+  } else {
+    renderConversation(j.thread || j.id, { scroll });
+  }
   if (askedNow) {
-    // After the repaint, so the box that is landed on is the one this frame drew. The assistant's own card is in the
-    // float (its body is the scroller there), and the page-level helper reads whichever host holds it.
-    if (typeof landClarifyQuestion === "function") landClarifyQuestion(j.thread || j.id, j.question?.requestId || "");
+    // After the repaint, so the box that is landed on is the one this frame drew. In a batch that repaint may be the
+    // flush's list rebuild, so the landing is queued to it; the assistant's own card is in the float (its body is the
+    // scroller there), and the page-level helper reads whichever host holds it.
+    if (batch) jobsBatch.landings.push({ kind: "question", id: j.thread || j.id, requestId: j.question?.requestId || "" });
+    else if (typeof landClarifyQuestion === "function") landClarifyQuestion(j.thread || j.id, j.question?.requestId || "");
   }
   if (approvalAskedNow) {
     // The same landing, after the same repaint: an approval the reader never scrolled to is a turn that times out
     // while the amber box sits below the fold (row #286).
-    if (typeof landApprovalBlock === "function") landApprovalBlock(j.id, j.approval?.requestId || "");
+    if (batch) jobsBatch.landings.push({ kind: "approval", id: j.id, requestId: j.approval?.requestId || "" });
+    else if (typeof landApprovalBlock === "function") landApprovalBlock(j.id, j.approval?.requestId || "");
   }
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged || approvalChanged) {
-    repaintAgentState();
+    // repaintAgentState walks every row and every project; a batch runs it once, from the flush.
+    if (!batch) repaintAgentState();
     // A queued reply goes out as soon as this thread has nothing running any more.
     const t = j.thread || j.id;
     if (!threadBusy(t)) void drainReplyQueue(t);
@@ -980,19 +1038,27 @@ function updateJob(j, { scroll = false } = {}) {
   // tree appearing, an attach), instead of leaving the card where it was until the next snapshot.
   if (ownerChanged) {
     invalidatePanelMap();
-    scheduleRenderJobs();
-    for (const from of new Set([prevOwner, j.ownerPath || null].filter(Boolean))) {
-      const want = normPath(from).toLowerCase();
-      const row = [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === want);
-      if (!row) continue;
-      renderProjectRows(row.project);
-      refreshChips(row.project);
+    if (batch) {
+      // The row repaints and the list rebuild are the flush's; reorderProjects and the hot bolt ride the flush's
+      // repaintAgentState, so neither runs once per moved card.
+      for (const from of new Set([prevOwner, j.ownerPath || null].filter(Boolean))) jobsBatch.projects.add(normPath(from).toLowerCase());
+      jobsBatch.listRender = true;
+    } else {
+      scheduleRenderJobs();
+      for (const from of new Set([prevOwner, j.ownerPath || null].filter(Boolean))) {
+        const want = normPath(from).toLowerCase();
+        const row = [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === want);
+        if (!row) continue;
+        renderProjectRows(row.project);
+        refreshChips(row.project);
+      }
+      reorderProjects();
     }
-    reorderProjects();
   }
   // …and the HOT AGENTS bolt, which is the same list read the other way: a turn starting makes it appear, a turn
-  // ending takes it away, and neither should wait for the next tick.
-  paintHotButton();
+  // ending takes it away, and neither should wait for the next tick. (In a batch the flush's repaintAgentState
+  // repaints it once.)
+  if (!batch) paintHotButton();
 }
 
 // What the card actually draws. If none of this changed, the DOM does not need rebuilding — and
