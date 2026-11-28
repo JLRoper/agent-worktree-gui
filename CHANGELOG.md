@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.196.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.196.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-785 releases from v0.1.0 (2026-10-20) to v1.196.1 (2026-11-28), 2810 commits between the tags. Every release is anchored by an
+786 releases from v0.1.0 (2026-10-20) to v1.196.2 (2026-11-28), 2817 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version on main; `npm run verify:version-tags` fails when a
 bump has no tag, or when a version tag names a commit main never carried.
+
+## v1.196.2 — 2026-11-28 · 7 commits
+
+[`e79baeb`](https://github.com/JLRoper/agent-worktree-gui/commit/e79baebbbae380b127d5d3f878578f370fa27c19) · [compare v1.196.1...v1.196.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.196.1...v1.196.2)
+
+### Fixed
+
+- fix(memory): bound SSE client buffering and attribution caches; report heap ([`96c81d0`](https://github.com/JLRoper/agent-worktree-gui/commit/96c81d0605734d92764f7957bfc655ba0d04d5aa))
+
+### Docs & tests
+
+- docs(reports): the sweep page says which suite numbers it can and cannot claim ([`caf6753`](https://github.com/JLRoper/agent-worktree-gui/commit/caf6753ee4fc1a865642cf9a8c2aab1a2fad30d4))
+- docs(reports): the sweep page names the version its own cut carries, and the one above it ([`76f6304`](https://github.com/JLRoper/agent-worktree-gui/commit/76f630495978727400eb2185591b093cad8f438b))
+- docs(reports): the lane count changes the verdict - O3 holds at four lanes, O1 collapses at three ([`4720561`](https://github.com/JLRoper/agent-worktree-gui/commit/4720561a47322b4dec41623969360348b87b2495))
+- docs: render the changelog - 785 releases ([`2338e54`](https://github.com/JLRoper/agent-worktree-gui/commit/2338e54f56baaa6100e976f7071784f872a7f7b2))
+
+### Other
+
+- Re-pin the queue card and the cut dialog, and record what absolute-paths refused ([`b97cba3`](https://github.com/JLRoper/agent-worktree-gui/commit/b97cba3f470e4328e6e8302e39cd80887f096075))
+- chore: 1.196.2 - the version this landing carries ([`e79baeb`](https://github.com/JLRoper/agent-worktree-gui/commit/e79baebbbae380b127d5d3f878578f370fa27c19))
 
 ## v1.196.1 — 2026-11-28 · 28 commits
 
