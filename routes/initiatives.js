@@ -54,6 +54,15 @@
 // THE STORE IS REFUSED, NOT REPAIRED. Every write answers 409 with lib/initiatives.js's own sentence when the file
 // exists and cannot be read, and that check runs BEFORE a question is parked: a card whose answer could only fail is
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
+//
+// THE WAVE STORE IS THE AUTHORITY ON A WAVE, AND THIS TAB'S READ IS A MEMO OF A JOIN. GET /api/waves folds the wave
+// store on every request; GET /api/initiatives answers a document kept for a moment and rebuilt behind the reader
+// (cachedView). The memo is therefore served only while it was built against the wave store's current file, status and
+// `mtimeMs:size` stamp, and while the member rows that can open or close a wave are unchanged: two callers cannot get
+// two answers about whether a wave exists, is open, or has become unreadable. When the store moves, this read waits for
+// a fresh fold rather than answering a lane the waves route would contradict. Everything else in the join (the board
+// rows behind a gate's evidence, the queue rows that name no wave) keeps the memo's small window: those are reads of
+// the world, not of the store, and the wave records they decorate are the same ones both routes fold.
 import { DESCRIPTION_MAX, NOTE_LABEL_MAX, NOTE_TEXT_MAX, NOTE_URL_MAX, NOTES_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 // The board's tag registry: its store's view, the caps the tab prints and the id a card carries. The read joins the two
 // stores by id here (and only here), so a card never stores a word the registry could have renamed.
@@ -542,6 +551,36 @@ export function createInitiativesRoutes({
     );
   };
 
+  // THE WAVE STORE'S KEY: the wave facts a memoised document was built against. The tab's read is a memo (cachedView)
+  // and the waves route's read is live, and the two must never answer differently about a wave. The store's identity -
+  // its file, whether it can be read, and its `mtimeMs:size` stamp - is the authority, so a document folded against
+  // another store state is not an answer to this read. The member rows are in the key for the same reason: a wave's
+  // open or closed state is folded from the tasks that name it, and a queue write is not a wave write, so nothing else
+  // would notice one. Only rows that NAME a wave are in it: an unrelated task's churn costs no rebuild.
+  const waveStoreKey = () => {
+    if (!waves || typeof waves.statusOf !== "function") return "no-wave-store";
+    const status = waves.statusOf();
+    const stamp = typeof waves.stampOf === "function" ? waves.stampOf() : null;
+    const members = [];
+    for (const rec of Array.isArray(assistant?.assistants) ? assistant.assistants : []) {
+      let queue = null;
+      try {
+        queue = typeof assistant?.queueView === "function" ? assistant.queueView(rec.id) : null;
+      } catch {
+        queue = null; // a queue that cannot be read is no wave fact; its own pane reports the error
+      }
+      for (const task of Array.isArray(queue?.tasks) ? queue.tasks : []) {
+        const waveId = String(task?.waveId ?? "").trim();
+        if (!waveId) continue;
+        members.push(
+          `${rec.id}:${task?.id ?? ""}:${waveId}:${String(task?.state || "")}:${task?.worktree ? "tree" : "no-tree"}:${JSON.stringify(task?.abandoned ?? null)}`,
+        );
+      }
+    }
+    members.sort();
+    return JSON.stringify([status.file, status.found, status.readable, stamp, members]);
+  };
+
   // THE READ ANSWERS AT ONCE AND REBUILDS BEHIND THE READER. The join is the tab's whole document but the expensive
   // part of it is the wave gate evidence (PR reads and landing judgements per member, lib/wave-evidence.js), which
   // measured 25-52s on 2026-11-23 while the panel walked the fleet - longer than the client's 12s timeout, so the tab
@@ -549,7 +588,13 @@ export function createInitiativesRoutes({
   // therefore kept (in memory and on disk beside the store): a read returns it immediately and a stale one schedules a
   // rebuild for the next read. A write still drops it and answers with a fresh build, so a change is never read back
   // from a cache built before it.
-  let viewCache = loadViewCache(); // { at, doc }
+  //
+  // THE MEMO CARRIES THE WAVE KEY IT WAS BUILT AGAINST (waveStoreKey). A read whose key does not match is answered by
+  // a build, not by the memo: the waves route answers the store on every request, and a memo built against a different
+  // store - a wave created, edited, removed, or a file that became unreadable - is exactly the pair of answers this
+  // row exists to make impossible. The cost is one blocking fold after a wave change, which is the read that would
+  // otherwise have shown a wave the other route says is there.
+  let viewCache = loadViewCache(); // { at, doc, key }
   let building = null;
   const VIEW_STALE_MS = 2000;
 
@@ -565,7 +610,12 @@ export function createInitiativesRoutes({
     if (!file || !existsSync(file)) return null;
     try {
       const raw = JSON.parse(readFileSync(file, "utf8"));
-      if (raw && raw.doc && Array.isArray(raw.doc.initiatives)) return { at: Number(raw.at) || 0, doc: raw.doc };
+      // A document written before the key existed cannot say which wave store it was built from, so it is loaded with
+      // no key and the first read after this version rebuilds instead of answering it. It is rewritten with a key at
+      // the end of that build, so the restart's fast answer is lost only once.
+      if (raw && raw.doc && Array.isArray(raw.doc.initiatives)) {
+        return { at: Number(raw.at) || 0, doc: raw.doc, key: typeof raw.key === "string" ? raw.key : null };
+      }
     } catch {
       /* a corrupt cache is no cache */
     }
@@ -582,13 +632,16 @@ export function createInitiativesRoutes({
       /* the cache is an optimisation; the read still answers */
     }
   }
-  function rebuildView() {
+  // ONE BUILD, TAKEN AGAINST ONE KEY. The document is folded live and kept only when the wave store (and the member
+  // rows in the key) did not move while it was being folded: a document that cannot say which store it was built from
+  // is not cached, so the next read rebuilds rather than answering a lane nobody can vouch for.
+  function rebuildView(key = waveStoreKey()) {
     if (building) return building;
     building = (async () => {
       try {
         const doc = await view();
-        viewCache = { at: Date.now(), doc };
-        saveViewCache(viewCache);
+        viewCache = waveStoreKey() === key ? { at: Date.now(), doc, key } : null;
+        if (viewCache) saveViewCache(viewCache);
         return doc;
       } finally {
         building = null;
@@ -604,15 +657,29 @@ export function createInitiativesRoutes({
       viewCache = null;
       return view();
     }
+    // THE WAVE STORE DECIDES WHETHER THIS MEMO IS AN ANSWER. GET /api/waves reads the store on every request; this
+    // document is a memo, so it is served only while it was built against the store's current file, status and stamp.
+    // When the store has moved the read waits for a fresh build rather than answering a lane the waves route would
+    // contradict - the difference is a wave that exists and a tab that says it does not, or a store that is unreadable
+    // and a tab that says it is fine.
+    const key = waveStoreKey();
+    if (viewCache && viewCache.key !== key) viewCache = null;
     if (viewCache) {
       if (Date.now() - viewCache.at > VIEW_STALE_MS && !building) {
-        void rebuildView().catch(() => {
+        void rebuildView(key).catch(() => {
           /* the next read retries; this one already has a document to answer with */
         });
       }
       return viewCache.doc;
     }
-    return rebuildView();
+    // A build already in flight was taken against whatever key it was started with. Wait for it, then answer only if
+    // the document it left behind is this key's; otherwise fold again. One extra fold after a racing change is cheaper
+    // than an answer the waves route disagrees with.
+    if (building) {
+      await building.catch(() => null);
+      if (viewCache && viewCache.key === key) return viewCache.doc;
+    }
+    return rebuildView(key);
   };
   const dropView = () => {
     viewCache = null;
