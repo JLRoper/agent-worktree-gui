@@ -71,7 +71,7 @@ import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER
 import { WAVE_GATE_CHOICES, taskWithOwner, waveEvidenceNeeds, waveFileExistsPaths, waveIsOpen, waveLane, waveMemberOpen } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
-import { currentThread } from "../lib/assistant/queue.js";
+import { currentThread, readQueueFile } from "../lib/assistant/queue.js";
 // The read's cache is a file beside the store (see cachedView): the tab's first read after a restart must not wait on
 // the evidence join.
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -564,8 +564,13 @@ export function createInitiativesRoutes({
     const members = [];
     for (const rec of Array.isArray(assistant?.assistants) ? assistant.assistants : []) {
       let queue = null;
+      // THE QUEUE FILE, NOT THE DECORATED VIEW. `queueView` builds a queue context (every job summarised, every row
+      // indexed) and this key is computed on every tab read; the key needs only the row's own fields, and
+      // `readQueueFile` answers from its stat cache when nothing moved. Decoration adds the row and the run verdict, it
+      // never rewrites `state`, `waveId`, `worktree` or the named abandonment.
       try {
-        queue = typeof assistant?.queueView === "function" ? assistant.queueView(rec.id) : null;
+        const file = typeof assistant?.queuePathOf === "function" ? assistant.queuePathOf(rec) : null;
+        queue = file ? readQueueFile(file) : null;
       } catch {
         queue = null; // a queue that cannot be read is no wave fact; its own pane reports the error
       }
