@@ -343,3 +343,56 @@ test("the branch's own pre-landing anchor is held, not refused", async (t) => {
   assert.equal(r.code, 0, `${r.out}${r.err}`);
   assert.match(r.out, /PASS/);
 });
+
+// A gate that fails every landing with the same historical findings is not a signal. A pin names ONE finding by
+// kind, number and commit, prints it with its reason, and stops only that finding failing; a pin whose finding is
+// gone fails the gate itself, so the file can never hide the next defect of the same shape. These cases drive the
+// real tool against a bare origin, because the pin file's default path, the exit codes and the JSON are the
+// contract a landing reads.
+test("a pin stops its own finding failing and no other, and a pin left naming nothing fails", async (t) => {
+  const { dir, shas } = await remoteFixture(t, ["0.1.0", "0.2.0", "0.3.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", shas[0], "-m", "v0.1.0"]);
+  git(dir, ["push", "origin", "--tags"]);
+  const pins = path.join(dir, "pins.json");
+  const pin = {
+    kind: "missing",
+    version: "0.2.0",
+    sha: shas[1],
+    reason: "the fixture's 0.2.0 shipped on main with no tag and is waiting on a tag write",
+  };
+
+  // A pin file named on the command line is a claim that it exists; a gate that shrugged would judge fewer
+  // findings than it printed.
+  const absent = tool(GATE, ["--ref", "main", "--pins", pins], dir);
+  assert.equal(absent.code, 2, `${absent.out}${absent.err}`);
+  assert.match(absent.err, /pins\.json: cannot be read/);
+
+  await writeFile(pins, JSON.stringify({ pins: [pin] }), "utf8");
+  const one = tool(GATE, ["--ref", "main", "--pins", pins], dir);
+  assert.equal(one.code, 1, `${one.out}${one.err}`);
+  assert.match(one.out, /pinned\s+v0\.2\.0 is not tagged/, "the pinned finding is still computed and still printed");
+  assert.match(one.out, /why: the fixture's 0\.2\.0 shipped on main/);
+  assert.match(one.out, /missing\s+v0\.3\.0 is not tagged/, "the neighbour the pin does not name still fails");
+  assert.match(one.out, /FAIL - 1 finding .*1 pinned by name and not counted here/);
+
+  const json = JSON.parse(tool(GATE, ["--ref", "main", "--pins", pins, "--json"], dir).out);
+  assert.deepEqual(json.findings.map((f) => f.version), ["0.3.0"], "findings is what fails");
+  assert.deepEqual(json.pinned.map((f) => f.version), ["0.2.0"], "and the pinned one is reported beside it");
+  assert.equal(json.ok, false);
+  assert.equal(json.pins.count, 1);
+
+  // Repair the anchor the pin described: the finding is gone, so the pin names nothing and the gate refuses it
+  // rather than quietly keeping a permission nobody needs any more.
+  git(dir, ["tag", "-a", "v0.2.0", shas[1], "-m", "v0.2.0"]);
+  git(dir, ["tag", "-a", "v0.3.0", shas[2], "-m", "v0.3.0"]);
+  git(dir, ["push", "origin", "--tags"]);
+  const stale = tool(GATE, ["--ref", "main", "--pins", pins], dir);
+  assert.equal(stale.code, 1, `${stale.out}${stale.err}`);
+  assert.match(stale.out, /stale-pin\s+missing v0\.2\.0 at [0-9a-f]{10} is pinned in .*pins\.json and no finding matches it any more/);
+  assert.match(stale.out, /FAIL - 1 finding .*\(0 unpinned, 1 stale pin\)/);
+
+  await writeFile(pins, JSON.stringify({ pins: [] }), "utf8");
+  const green = tool(GATE, ["--ref", "main", "--pins", pins], dir);
+  assert.equal(green.code, 0, `${green.out}${green.err}`);
+  assert.match(green.out, /PASS/);
+});

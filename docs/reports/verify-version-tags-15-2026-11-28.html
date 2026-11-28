@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 470: the fifteen version-tag findings on main, classified, and the gate that stops repeating them</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  table.grid { table-layout:fixed; }
+  table.grid th, table.grid td { overflow-wrap:anywhere; }
+  table.grid th { overflow-wrap:normal; }
+  .verdict-real { color:var(--no); font-weight:600; }
+  .verdict-shape { color:var(--dim); font-weight:600; }
+  .verdict-artifact { color:#7a5c00; font-weight:600; }
+  .wrap { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 470: the fifteen version-tag findings on main, classified</h1>
+<p class="sub">agent-worktree-gui 1.197.0, branch <code>wtgui/row-470-is-the-complete-brief-verify-7776fa</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. Measured against <code>main</code> at <code>2338e54f56baaa6100e976f7071784f872a7f7b2</code> on 2026-11-28; the branch's own line was measured at its tip, <code>96e5b974</code>. Every sha below resolves in this worktree.</p>
+
+<h2>1. The verdict</h2>
+<div class="note">
+<p><strong>Eleven of the fifteen findings were real defects</strong> (seven tags on commits main never carried, four released numbers with no tag at all). <strong>Three are a by-design release shape</strong> (a patch landed on an older line, so the number goes backwards on purpose). <strong>One was a gate artifact</strong> (v1.76.12, where the walk compared this commit with a sibling lane's bump instead of its own patch) and it is fixed in the gate, not pinned.</p>
+<p><code>main</code> now reads <span class="ok">PASS</span>: 0 unpinned findings and 14 pinned by name, each printed with its reason on every run. No check was deleted and no finding was silenced: the backwards check was corrected to read each commit's own patch, the eleven real ones carry the exact tag write that repairs them, and a pin that stops naming a finding fails the gate.</p>
+</div>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#470</dd>
+  <dt>the gate</dt><dd>node tools/verify-version-tags.mjs (npm run verify:version-tags)</dd>
+  <dt>before, at main</dt><dd>FAIL - 15 findings across 785 version bumps</dd>
+  <dt>after, at main</dt><dd class="ok">PASS - 0 findings, 14 pinned by name</dd>
+  <dt>real defects</dt><dd>11 - 7 wrong-commit, 4 missing</dd>
+  <dt>by design</dt><dd>3 - backwards, a hotfix on an older line</dd>
+  <dt>gate artifact</dt><dd>1 - v1.76.12, fixed in the check</dd>
+  <dt>the pins</dt><dd>tools/version-tags-pins.json, 14 entries, each with a reason</dd>
+  <dt>version bump</dt><dd>none</dd>
+  <dt>push / PR</dt><dd>none - the merge is local, into the turnover branch</dd>
+  <dt>tests</dt><dd>test/release-tags.test.js 18 pass; test/version-tags.test.js 15 pass</dd>
+</dl>
+
+<h2>2. Before: the gate's own output at main</h2>
+<p>This is the reading the brief names. Fifteen findings, spanning v1.76.22 (row 5) through v1.191.0 (row 15), all on a branch nobody had touched in this run:</p>
+<pre>version-tags: 785 version bumps in package.json&#x27;s history (v0.1.0 .. v1.196.1), 774 tagged and annotated at the commit that first declared them as origin publishes them, against main at 2338e54f56
+  47 tags name a version main does not carry yet, each at a commit whose package.json declares it and that no branch still holds (a fossil of a rewritten history, not a claim somebody can land): v1.121.1@7a5f7e14, v1.126.1@a4dc4a6b, v1.135.0@ad76c560, v1.155.4@ea099873, v1.155.7@0d35a9a7, v1.157.8@8cc6c03b, and 41 more
+  backwards    package.json goes backwards: 1.76.13 -&gt; 1.76.12 at f4cdd0d759
+  backwards    package.json goes backwards: 1.79.0 -&gt; 1.78.0 at bf4b57b0d7
+  backwards    package.json goes backwards: 1.170.0 -&gt; 1.169.9 at ff9f02f850
+  backwards    package.json goes backwards: 1.171.0 -&gt; 1.170.5 at 9641ef62dd
+  wrong-commit v1.76.22 points at 3fc0f3660f on origin, but 1.76.22 first appeared at a129ffdc7f - and 3fc0f3660f is not an ancestor of main (held by origin/wtgui/fix-the-injection-data-loss-in-agent-0401ab)
+  wrong-commit v1.76.23 points at 445ef5aa62 on origin, but 1.76.23 first appeared at e1ed843c86 - and 445ef5aa62 is not an ancestor of main (held by origin/wtgui/reconcile-a-restart-killed-turn-on-any-4d407b)
+  missing      v1.82.2 is not tagged - first declared at 87291111c8 (2026-11-11) Resolve a clarify card&#x27;s relative file link against the asking turn&#x27;s tree
+  wrong-commit v1.91.2 points at 8c1e7e7286 on origin, but 1.91.2 first appeared at 89a1ad34ab - and 8c1e7e7286 is not an ancestor of main (held by wtgui/fix-the-assistant-output-clipping-that-e5bf4a)
+  wrong-commit v1.92.4 points at 13c03f42d8 on origin, but 1.92.4 first appeared at 8fdbf46312 - and 13c03f42d8 is not an ancestor of main (held by wtgui/take-the-three-pipeline-ledger-defects-ac5f76)
+  wrong-commit v1.142.2 points at 38bd89d4bf on origin, but 1.142.2 first appeared at f66432cc13 - and 38bd89d4bf is not an ancestor of main (held by origin/wtgui/two-fixes-to-the-collision-card-in-this-6093c5)
+  wrong-commit v1.169.9 points at 9fff99366b on origin, but 1.169.9 first appeared at ff9f02f850 - and 9fff99366b is not an ancestor of main (no branch holds it)
+  wrong-commit v1.170.5 points at 488da3d1e2 on origin, but 1.170.5 first appeared at 9641ef62dd - and 488da3d1e2 is not an ancestor of main (no branch holds it)
+  missing      v1.173.2 is not tagged - first declared at 7a8227c53e (2026-11-24) chore: 1.173.2 - the version this landing carries
+  missing      v1.189.0 is not tagged - first declared at 623f386458 (2026-11-27) Land the turnover branch 20261127_1422_TASK-371_build-the-initiative-tag (1.189.0) (#937) (this checkout&#x27;s v1.189.0 at 63ca119a15 is not on origin: git push origin v1.189.0)
+  missing      v1.191.0 is not tagged - first declared at db287788d6 (2026-11-27) public/style.css splits into 19 per-surface sheets, every rule verbatim (#940)
+
+  Tag the commit that declared each number - annotated, with the version as its message:
+    git tag -a v1.82.2 87291111c8 -m &quot;v1.82.2&quot;
+  then re-render the changelog with npm run changelog and push the tags with git push origin --tags.
+
+FAIL - 15 findings across 785 version bumps</pre>
+
+<h2>3. What each of the fifteen was</h2>
+<p>The table is the reconciliation: one row per finding the gate printed, the tag and the commit it points at, the commit and changelog line that should cover it, and the verdict. "Real" means a tag main's reader cannot follow, or a released number with no anchor. "Shape" means the history really has that transition and the number shipped anyway. "Artifact" means the gate's comparison was wrong, not the history.</p>
+<div class="wrap">
+<table class="grid">
+<colgroup><col style="width:4%"><col style="width:15%"><col style="width:29%"><col style="width:25%"><col style="width:27%"></colgroup>
+<thead><tr><th>#</th><th>finding</th><th>the tag and what it points at</th><th>main's side: commit and changelog line</th><th>verdict, and what happened</th></tr></thead>
+<tbody>
+<tr>
+  <td class="n">1</td>
+  <td class="n">backwards<br>v1.76.12</td>
+  <td>v1.76.12 tag at f4cdd0d759, annotated, on main. Its own patch reads 1.76.11 -&gt; 1.76.12.</td>
+  <td>f4cdd0d759 <code>perf: the store-atomic reader reads a buffer</code>; CHANGELOG.md:4374 (<code>compare v1.76.11...v1.76.12</code>)</td>
+  <td><span class="verdict-artifact">GATE ARTIFACT</span><br>Fixed in the gate. The walk listed the 1.76.13 bump first (authored 26 s earlier) and read 1.76.13 -&gt; 1.76.12, but main&#x27;s first-parent chain reads 1.76.11 -&gt; 1.76.12 -&gt; 1.76.13.</td>
+</tr>
+<tr>
+  <td class="n">2</td>
+  <td class="n">backwards<br>v1.78.0</td>
+  <td>v1.78.0 tag at bf4b57b0d7, annotated, on main. Its own patch reads 1.79.0 -&gt; 1.78.0.</td>
+  <td>bf4b57b0d7 <code>feat: the update chip expands into the releases a reload would pick up</code>; CHANGELOG.md:4126 (<code>compare v1.79.0...v1.78.0</code>)</td>
+  <td><span class="verdict-shape">BY DESIGN</span><br>Pinned. A patch on the 1.78 line landed after 1.79.0; the number, the tag and the section agree.</td>
+</tr>
+<tr>
+  <td class="n">3</td>
+  <td class="n">backwards<br>v1.169.9</td>
+  <td>v1.169.9 tag at 9fff99366b, annotated, NOT on main. Its own patch reads 1.170.0 -&gt; 1.169.9.</td>
+  <td>ff9f02f850 <code>perf(scan): one context per project, not one per row</code>; CHANGELOG.md:675 (<code>compare v1.170.0...v1.169.9</code>)</td>
+  <td><span class="verdict-shape">BY DESIGN</span><br>Pinned. A hotfix on the 1.169 line landed after 1.170.0. Its tag is the separate wrong-commit finding, pinned with its repair.</td>
+</tr>
+<tr>
+  <td class="n">4</td>
+  <td class="n">backwards<br>v1.170.5</td>
+  <td>v1.170.5 tag at 488da3d1e2, annotated, NOT on main. Its own patch reads 1.171.0 -&gt; 1.170.5.</td>
+  <td>9641ef62dd <code>perf(queue): one job/row summary per read, not one per assistant</code>; CHANGELOG.md:635 (<code>compare v1.171.0...v1.170.5</code>)</td>
+  <td><span class="verdict-shape">BY DESIGN</span><br>Pinned. Same shape as v1.169.9: a hotfix on the 1.170 line landed after 1.171.0.</td>
+</tr>
+<tr>
+  <td class="n">5</td>
+  <td class="n">wrong-commit<br>v1.76.22</td>
+  <td>v1.76.22 peels to 3fc0f3660f: the branch&#x27;s pre-merge copy of the bump commit, tree identical to main&#x27;s, held by <code>origin/wtgui/fix-the-injection-data-loss-in-agent-0401ab</code>.</td>
+  <td>a129ffdc7f <code>chore: 1.76.22 - the version this landing carries</code>; CHANGELOG.md:4231 (<code>compare v1.76.21...v1.76.22</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.76.22 a129ffdc7f ... &amp;&amp; git push --force origin v1.76.22</code>.</td>
+</tr>
+<tr>
+  <td class="n">6</td>
+  <td class="n">wrong-commit<br>v1.76.23</td>
+  <td>v1.76.23 peels to 445ef5aa62: the same shape, tree identical to main&#x27;s, held by <code>origin/wtgui/reconcile-a-restart-killed-turn-on-any-4d407b</code>.</td>
+  <td>e1ed843c86 <code>chore: 1.76.23 - the version this landing carries</code>; CHANGELOG.md:4219 (<code>compare v1.76.22...v1.76.23</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.76.23 e1ed843c86 ... &amp;&amp; git push --force origin v1.76.23</code>.</td>
+</tr>
+<tr>
+  <td class="n">7</td>
+  <td class="n">missing<br>v1.82.2</td>
+  <td>No v1.82.2 on origin and none in this checkout: <code>git ls-remote --tags origin refs/tags/v1.82.2</code> is empty.</td>
+  <td>87291111c8 <code>Resolve a clarify card&#x27;s relative file link against the asking turn&#x27;s tree</code>; CHANGELOG.md:3716 (<code>compare v1.82.1...v1.82.2</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -a v1.82.2 87291111c8 ... &amp;&amp; git push origin v1.82.2</code>.</td>
+</tr>
+<tr>
+  <td class="n">8</td>
+  <td class="n">wrong-commit<br>v1.91.2</td>
+  <td>v1.91.2 peels to 8c1e7e7286: an identical-tree pre-merge copy, and no branch holds that commit any more (a fossil).</td>
+  <td>89a1ad34ab <code>chore: 1.91.2 - the version this landing carries</code>; CHANGELOG.md:3265 (<code>compare v1.91.1...v1.91.2</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.91.2 89a1ad34ab ... &amp;&amp; git push --force origin v1.91.2</code>.</td>
+</tr>
+<tr>
+  <td class="n">9</td>
+  <td class="n">wrong-commit<br>v1.92.4</td>
+  <td>v1.92.4 peels to 13c03f42d8: the same fossil shape, identical tree, no branch holds it.</td>
+  <td>8fdbf46312 <code>chore: 1.92.4 - the version this landing carries</code>; CHANGELOG.md:3196 (<code>compare v1.92.3...v1.92.4</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.92.4 8fdbf46312 ... &amp;&amp; git push --force origin v1.92.4</code>.</td>
+</tr>
+<tr>
+  <td class="n">10</td>
+  <td class="n">wrong-commit<br>v1.142.2</td>
+  <td>v1.142.2 peels to 38bd89d4bf, a branch bump commit whose tree is NOT what landed: <code>git diff --stat</code> against main&#x27;s commit shows public/core/row-chips.js and test/row-chips.test.js, 23 lines. Held by <code>origin/wtgui/two-fixes-to-the-collision-card-in-this-6093c5</code>.</td>
+  <td>f66432cc13 <code>Resolve a collision card&#x27;s counterpart, and retire a report its landing has passed (#816)</code>; CHANGELOG.md:1954 (<code>compare v1.142.1...v1.142.2</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.142.2 f66432cc13 ... &amp;&amp; git push --force origin v1.142.2</code>.</td>
+</tr>
+<tr>
+  <td class="n">11</td>
+  <td class="n">wrong-commit<br>v1.169.9</td>
+  <td>v1.169.9 peels to 9fff99366b, the hotfix branch&#x27;s pre-rebase copy: its parent package.json reads 1.169.7 while main&#x27;s commit has parent 1.170.0. No branch holds it.</td>
+  <td>ff9f02f850 <code>perf(scan): one context per project, not one per row</code>; CHANGELOG.md:675</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.169.9 ff9f02f850 ... &amp;&amp; git push --force origin v1.169.9</code>.</td>
+</tr>
+<tr>
+  <td class="n">12</td>
+  <td class="n">wrong-commit<br>v1.170.5</td>
+  <td>v1.170.5 peels to 488da3d1e2, the same pre-rebase shape (tag parent 1.170.3, main&#x27;s parent 1.171.0). No branch holds it.</td>
+  <td>9641ef62dd <code>perf(queue): one job/row summary per read, not one per assistant</code>; CHANGELOG.md:635</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.170.5 9641ef62dd ... &amp;&amp; git push --force origin v1.170.5</code>.</td>
+</tr>
+<tr>
+  <td class="n">13</td>
+  <td class="n">missing<br>v1.173.2</td>
+  <td>No v1.173.2 on origin and none in this checkout.</td>
+  <td>7a8227c53e <code>chore: 1.173.2 - the version this landing carries</code>; CHANGELOG.md:538 (<code>compare v1.173.1...v1.173.2</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -a v1.173.2 7a8227c53e ... &amp;&amp; git push origin v1.173.2</code>.</td>
+</tr>
+<tr>
+  <td class="n">14</td>
+  <td class="n">missing<br>v1.189.0</td>
+  <td>The only tag is this checkout&#x27;s v1.189.0 at 63ca119a15, the pre-landing twin the turnover branch <code>origin/20261127_1422_TASK-371_build-the-initiative-tag</code> still holds (identical tree). Origin publishes none.</td>
+  <td>623f386458 <code>Land the turnover branch 20261127_1422_TASK-371_build-the-initiative-tag (1.189.0) (#937)</code>; CHANGELOG.md:228 (<code>compare v1.182.0...v1.189.0</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -f -a v1.189.0 623f386458 ... &amp;&amp; git push --force origin v1.189.0</code>.</td>
+</tr>
+<tr>
+  <td class="n">15</td>
+  <td class="n">missing<br>v1.191.0</td>
+  <td>No v1.191.0 on origin and none in this checkout.</td>
+  <td>db287788d6 <code>public/style.css splits into 19 per-surface sheets, every rule verbatim (#940)</code>; CHANGELOG.md:191 (<code>compare v1.190.0...v1.191.0</code>)</td>
+  <td><span class="verdict-real">REAL</span><br>Pinned with the repair <code>git tag -a v1.191.0 db287788d6 ... &amp;&amp; git push origin v1.191.0</code>.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="small">4 backwards, 7 wrong-commit, 4 missing; 11 real, 3 by design, 1 gate artifact. Counts are computed from the rows above, not typed.</p>
+
+<h2>4. The eleven real ones, and the evidence for each shape</h2>
+
+<h3>4.1 Seven tags on a commit main never carried</h3>
+<p>A landing that is a rebase or a squash re-creates the branch's bump commit with a new sha. When the tag is not moved with it, origin's tag names the branch's copy. The gate reports it as <code>wrong-commit</code>, and a reader of main cannot open the commit the tag names. The seven split three ways:</p>
+<ul>
+  <li><strong>Four identical-tree copies</strong> - v1.76.22 (3fc0f3660f), v1.76.23 (445ef5aa62), v1.91.2 (8c1e7e7286), v1.92.4 (13c03f42d8). <code>git rev-parse &lt;tag&gt;^{tree}</code> equals the tree of main's commit in every one, so the released content is the same and only the anchor is wrong. The first two are still held by a branch on origin; the last two are fossils.</li>
+  <li><strong>One copy whose tree differs</strong> - v1.142.2 at 38bd89d4bf. Its tree is not what main landed: the merged commit also carries public/core/row-chips.js and test/row-chips.test.js. The tag names a state that was never released, which is worse than a duplicate.</li>
+  <li><strong>Two pre-rebase hotfix copies</strong> - v1.169.9 (9fff99366b) and v1.170.5 (488da3d1e2). Their parents read 1.169.7 and 1.170.3; main's declaring commits have parents 1.170.0 and 1.171.0. The rebase moved the release onto the main line and left the tag on the branch's copy, which no branch holds any more.</li>
+</ul>
+<p>Evidence for the last shape, from the tree:</p>
+<pre>$ git show 9fff99366b^:package.json | grep version
+  "version": "1.169.7",
+$ git show ff9f02f850^:package.json | grep version
+  "version": "1.170.0",
+$ git diff --stat 38bd89d4bf f66432cc13
+ public/core/row-chips.js | 13 ++++++++++++-
+ test/row-chips.test.js   | 11 +++++++++++
+ 2 files changed, 23 insertions(+), 1 deletion(-)</pre>
+
+<h3>4.2 Four released numbers with no tag at all</h3>
+<p>v1.82.2, v1.173.2, v1.189.0 and v1.191.0 each first appear in main's walk, each has a changelog section, and origin publishes no tag for any of them. v1.189.0 has a tag in this checkout only, on the pre-landing twin the turnover branch still holds, so it is not even the right commit. The check is the one the gate exists for, and these are the findings that make the case for a repair pass rather than a rule change:</p>
+<pre>$ git ls-remote --tags origin refs/tags/v1.82.2 refs/tags/v1.173.2 refs/tags/v1.189.0 refs/tags/v1.191.0
+(no output: none of the four exists on origin)
+$ git tag -l v1.189.0
+v1.189.0        # at 63ca119a15, the pre-landing twin; main's commit is 623f386458</pre>
+
+<h2>5. The three by-design decreases</h2>
+<p>None of these is an unanchored number. Each is a patch landed on a line that main had already passed, and main's first-parent chain shows the number going down and then the next landing taking the line forward again. The changelog renders each as its own release with a working compare link, and the tag (where the tag is right) is at the commit that declared the number. The check stays in the gate, so a future decrease is still a failure; the three are pinned because the history cannot be rewritten and should not be hidden.</p>
+<pre>$ git log --first-parent -p --format=%H main -- package.json   # versions in first-parent order
+  1.79.0   b36532d344  chore: 1.79.0 - the version this landing carries
+  1.78.0   bf4b57b0d7  feat: the update chip expands into the releases a reload would pick up
+  1.80.0   548f8a6eda  chore: 1.80.0 - the version this landing carries
+  ...
+  1.170.0  a9153308ce  chore: 1.170.0 - the version this landing carries
+  1.169.9  ff9f02f850  perf(scan): one context per project, not one per row
+  1.170.3  ecc44f5ab4  perf(scan): one context per project, not one per row
+  1.171.0  cffb0af83d  chore: 1.171.0 - the version this landing carries
+  1.170.5  9641ef62dd  perf(queue): one job/row summary per read, not one per assistant
+  1.171.3  7cbf463214  chore: 1.171.2 - the version this landing carries</pre>
+<p>The changelog agrees, which is the second half of the evidence:</p>
+<ul>
+  <li><code>CHANGELOG.md:4126</code> - <code>## v1.78.0</code>, <code>compare v1.79.0...v1.78.0</code>;</li>
+  <li><code>CHANGELOG.md:675</code> - <code>## v1.169.9</code>, <code>compare v1.170.0...v1.169.9</code>;</li>
+  <li><code>CHANGELOG.md:635</code> - <code>## v1.170.5</code>, <code>compare v1.171.0...v1.170.5</code>.</li>
+</ul>
+
+<h2>6. The artifact: v1.76.12, and why it was the gate's fault</h2>
+<p>Two lanes bumped from the same <code>1.76.11</code> within 26 seconds. The 1.76.13 bump commit was authored first (09:51:13), the 1.76.12 commit second (09:51:39), and the 1.76.13 branch was merged after both (<code>de0ba1e7af</code>, 09:56:15, reading 1.76.13 on both sides). The walk is <code>git log</code> in commit-date order, so it listed 1.76.13 and then 1.76.12 and compared them - but no commit ever replaced a higher number with a lower one, and main's first-parent chain reads 1.76.11, 1.76.12, 1.76.13 in that order.</p>
+<pre>$ git log -1 --format='%h %ci %s' 897dc66dbee
+897dc66d 2026-11-09 09:51:13 -0500 chore: 1.76.13 - the version this landing carries
+$ git log -1 --format='%h %ci %s' f4cdd0d759
+f4cdd0d7 2026-11-09 09:51:39 -0500 perf: the store-atomic reader reads a buffer, so the gate holds 580 reads a second
+$ git show de0ba1e7af^1:package.json | grep version ; git show de0ba1e7af^2:package.json | grep version
+  "version": "1.76.12",
+  "version": "1.76.13",
+$ git show de0ba1e7af:package.json | grep version
+  "version": "1.76.13",</pre>
+<p>The fix is in the walk, not in a tolerance: <code>tools/release-history.mjs:62</code> now records BOTH sides of the version line (<code>read</code> is the value the commit's patch replaced, <code>written</code> the value it wrote), and <code>tools/verify-version-tags.mjs:87</code> compares those two. A commit whose patch genuinely replaces a higher number with a lower one is still a finding, and a commit whose diff shows no replaced line still falls back to the ordered neighbour, so nothing was dropped: <code>test/release-tags.test.js:185</code> drives all three cases. The same correction removed six identical walk artifacts from this branch's own read (1.191.3, 1.192.0, 1.193.0, 1.194.0, 1.194.4, 1.196.1), each of whose own patches goes up.</p>
+
+<h2>7. The mechanism: a pin names one finding, and a stale pin fails</h2>
+<p><code>tools/version-tags-pins.json:1</code> holds 14 pins: 3 <code>backwards</code>, 7 <code>wrong-commit</code>, 4 <code>missing</code>. Each pin is a finding's identity (kind, version, the commit the finding is about, and for a wrong anchor the commit the tag points at), a written <code>reason</code>, and, for the eleven real ones, the <code>repair</code> command. Three properties make it a named exception rather than a silencer, and each is a test:</p>
+<ul>
+  <li><strong>It is still computed and still printed.</strong> The gate prints every pinned finding with its <code>why:</code> and its <code>repair:</code>, and the count is on the gate's own lines. <code>tools/verify-version-tags.mjs:589</code> is the block; the JSON carries <code>pinned</code> and <code>stalePins</code> beside <code>findings</code>.</li>
+  <li><strong>It covers one finding and no other.</strong> The identity includes the tag's commit for a wrong anchor, so a tag moved onto a different wrong commit is a new finding. <code>tools/verify-version-tags.mjs:386</code>; the unit case is in <code>test/release-tags.test.js</code>.</li>
+  <li><strong>A pin that names nothing fails.</strong> Repair an anchor and its pin must go in the same commit; until it does, the gate prints <code>stale-pin ... no finding matches it any more</code> and exits 1. <code>tools/verify-version-tags.mjs:631</code>; the end-to-end case is <code>test/version-tags.test.js:352</code>, which also proves the missing <code>--pins</code> file is exit 2 rather than a silent pass.</li>
+</ul>
+<p>The pin file is validated, not trusted: a bad kind, a short sha, a reason that says nothing, a wrong-commit pin without its tag commit, or a duplicate identity is a problem line and exit 2 (<code>tools/verify-version-tags.mjs:319</code>). The disposition this writes down for each finding is the one <code>docs/versioning.md:73</code> already names for an off-main tag: re-point it at the commit main carries, or delete it and name the branch that held it.</p>
+
+<h2>8. After: the gate's own output at main</h2>
+<p>Same command, same ref, same origin. The fourteen remaining findings are printed, each with its reason; the exit code is 0 because every unpinned finding is gone:</p>
+<pre>version-tags: 785 version bumps in package.json&#x27;s history (v0.1.0 .. v1.196.1), 774 tagged and annotated at the commit that first declared them as origin publishes them, against main at 2338e54f56
+  47 tags name a version main does not carry yet, each at a commit whose package.json declares it and that no branch still holds (a fossil of a rewritten history, not a claim somebody can land): v1.121.1@7a5f7e14, v1.126.1@a4dc4a6b, v1.135.0@ad76c560, v1.155.4@ea099873, v1.155.7@0d35a9a7, v1.157.8@8cc6c03b, and 41 more
+  14 historical findings are pinned by name in tools/version-tags-pins.json: each is listed with the reason it is not a defect, or the tag write it waits on. A pin that names no finding fails this gate.
+  pinned       package.json goes backwards: 1.79.0 -&gt; 1.78.0 at bf4b57b0d7
+               why: A patch on the 1.78 line landed after main already read 1.79.0: the commit&#x27;s own patch replaces 1.79.0 with 1.78.0, its annotated tag v1.78.0 is at that commit on main, and CHANGELOG.md renders the section with &quot;compare v1.79.0...v1.78.0&quot;. The decrease is the release shape - the number, its tag and its changelog section all agree, so nothing here is unanchored. The check stays so a future decrease is still visible.
+  pinned       package.json goes backwards: 1.170.0 -&gt; 1.169.9 at ff9f02f850
+               why: A hotfix to the 1.169 line landed after main read 1.170.0: the commit&#x27;s own patch replaces 1.170.0 with 1.169.9 and CHANGELOG.md renders &quot;compare v1.170.0...v1.169.9&quot;. The number shipped and has its section; the tag for it is the separate wrong-commit finding v1.169.9, pinned below with its repair. The decrease itself is the release shape, not a defect.
+  pinned       package.json goes backwards: 1.171.0 -&gt; 1.170.5 at 9641ef62dd
+               why: A hotfix to the 1.170 line landed after main read 1.171.0: the commit&#x27;s own patch replaces 1.171.0 with 1.170.5 and CHANGELOG.md renders &quot;compare v1.171.0...v1.170.5&quot;. Same shape as v1.169.9 (one release train, one evening). The tag for this number is pinned below with its repair.
+  pinned       v1.76.22 points at 3fc0f3660f on origin, but 1.76.22 first appeared at a129ffdc7f - and 3fc0f3660f is not an ancestor of main (held by origin/wtgui/fix-the-injection-data-loss-in-agent-0401ab)
+               why: The tag is on the branch&#x27;s pre-merge copy of the bump commit: its tree is identical to main&#x27;s a129ffdc7f, but that copy is not on main, and origin/wtgui/fix-the-injection-data-loss-in-agent-0401ab still holds it. Real anchor defect - a reader of main cannot open the commit the tag names. Needs a tag write, which this run may not do.
+               repair: git tag -f -a v1.76.22 a129ffdc7f -m &quot;v1.76.22&quot; &amp;&amp; git push --force origin v1.76.22
+  pinned       v1.76.23 points at 445ef5aa62 on origin, but 1.76.23 first appeared at e1ed843c86 - and 445ef5aa62 is not an ancestor of main (held by origin/wtgui/reconcile-a-restart-killed-turn-on-any-4d407b)
+               why: Same shape as v1.76.22: the tag is on the branch&#x27;s pre-merge copy of the bump commit (identical tree, not on main), still held by origin/wtgui/reconcile-a-restart-killed-turn-on-any-4d407b. Real anchor defect, waiting on a tag write.
+               repair: git tag -f -a v1.76.23 e1ed843c86 -m &quot;v1.76.23&quot; &amp;&amp; git push --force origin v1.76.23
+  pinned       v1.82.2 is not tagged - first declared at 87291111c8 (2026-11-11) Resolve a clarify card&#x27;s relative file link against the asking turn&#x27;s tree
+               why: main first declared 1.82.2 at 87291111c8 and neither origin nor this checkout has a v1.82.2 tag; CHANGELOG.md carries its section. Real: a released number with no anchor at all. Waiting on a tag write.
+               repair: git tag -a v1.82.2 87291111c8 -m &quot;v1.82.2&quot; &amp;&amp; git push origin v1.82.2
+  pinned       v1.91.2 points at 8c1e7e7286 on origin, but 1.91.2 first appeared at 89a1ad34ab - and 8c1e7e7286 is not an ancestor of main (held by wtgui/fix-the-assistant-output-clipping-that-e5bf4a)
+               why: The tag is on the branch&#x27;s pre-merge copy of the bump commit (identical tree to main&#x27;s 89a1ad34ab, but not on main) and no branch holds that commit any more, so it is a fossil. Real anchor defect: the tag names a commit nobody can open, from main or from a branch.
+               repair: git tag -f -a v1.91.2 89a1ad34ab -m &quot;v1.91.2&quot; &amp;&amp; git push --force origin v1.91.2
+  pinned       v1.92.4 points at 13c03f42d8 on origin, but 1.92.4 first appeared at 8fdbf46312 - and 13c03f42d8 is not an ancestor of main (held by wtgui/take-the-three-pipeline-ledger-defects-ac5f76)
+               why: Same shape as v1.91.2: the tag is on a pre-merge copy of the bump commit (identical tree to 8fdbf46312 on main) and no branch holds that commit any more. Real anchor defect, waiting on a tag write.
+               repair: git tag -f -a v1.92.4 8fdbf46312 -m &quot;v1.92.4&quot; &amp;&amp; git push --force origin v1.92.4
+  pinned       v1.142.2 points at 38bd89d4bf on origin, but 1.142.2 first appeared at f66432cc13 - and 38bd89d4bf is not an ancestor of main (held by origin/wtgui/two-fixes-to-the-collision-card-in-this-6093c5)
+               why: The tag is on the branch&#x27;s own bump commit, and that tree is NOT what main landed: the merged commit also carried public/core/row-chips.js and test/row-chips.test.js (23 lines), and origin/wtgui/two-fixes-to-the-collision-card-in-this-6093c5 still holds it. Real: the tag names a state that was never released, not merely a duplicate of the released one.
+               repair: git tag -f -a v1.142.2 f66432cc13 -m &quot;v1.142.2&quot; &amp;&amp; git push --force origin v1.142.2
+  pinned       v1.169.9 points at 9fff99366b on origin, but 1.169.9 first appeared at ff9f02f850 - and 9fff99366b is not an ancestor of main (no branch holds it)
+               why: The tag is on the hotfix branch&#x27;s pre-rebase copy: its parent package.json reads 1.169.7 while main&#x27;s declaring commit ff9f02f850 has parent 1.170.0, and no branch holds it any more. Real: the pre-rebase commit is not the release main made.
+               repair: git tag -f -a v1.169.9 ff9f02f850 -m &quot;v1.169.9&quot; &amp;&amp; git push --force origin v1.169.9
+  pinned       v1.170.5 points at 488da3d1e2 on origin, but 1.170.5 first appeared at 9641ef62dd - and 488da3d1e2 is not an ancestor of main (no branch holds it)
+               why: The tag is on the hotfix branch&#x27;s pre-rebase copy (parent package.json reads 1.170.3; main&#x27;s declaring commit 9641ef62dd has parent 1.171.0) and no branch holds it. Real, the same shape as v1.169.9.
+               repair: git tag -f -a v1.170.5 9641ef62dd -m &quot;v1.170.5&quot; &amp;&amp; git push --force origin v1.170.5
+  pinned       v1.173.2 is not tagged - first declared at 7a8227c53e (2026-11-24) chore: 1.173.2 - the version this landing carries
+               why: main first declared 1.173.2 at 7a8227c53e and no v1.173.2 exists on origin or in this checkout; CHANGELOG.md carries its section. Real: a released number with no anchor. Waiting on a tag write.
+               repair: git tag -a v1.173.2 7a8227c53e -m &quot;v1.173.2&quot; &amp;&amp; git push origin v1.173.2
+  pinned       v1.189.0 is not tagged - first declared at 623f386458 (2026-11-27) Land the turnover branch 20261127_1422_TASK-371_build-the-initiative-tag (1.189.0) (#937) (this checkout&#x27;s v1.189.0 at 63ca119a15 is not on origin: git push origin v1.189.0)
+               why: main landed 1.189.0 at 623f386458; the only tag is this checkout&#x27;s v1.189.0 at 63ca119a15, the pre-landing twin the turnover branch origin/20261127_1422_TASK-371_build-the-initiative-tag still holds, and origin publishes none. Real: the tag was written on the branch and never moved or pushed.
+               repair: git tag -f -a v1.189.0 623f386458 -m &quot;v1.189.0&quot; &amp;&amp; git push --force origin v1.189.0
+  pinned       v1.191.0 is not tagged - first declared at db287788d6 (2026-11-27) public/style.css splits into 19 per-surface sheets, every rule verbatim (#940)
+               why: main first declared 1.191.0 at db287788d6 (the CSS split landing, #940) and no v1.191.0 exists on origin or in this checkout; CHANGELOG.md carries its section. Real: a released number with no anchor. Waiting on a tag write.
+               repair: git tag -a v1.191.0 db287788d6 -m &quot;v1.191.0&quot; &amp;&amp; git push origin v1.191.0
+
+  every bump carries an annotated tag at its own commit on origin, every tag names a commit main carries, and no v&lt;version&gt; tag points elsewhere
+  14 historical findings are pinned by name in tools/version-tags-pins.json and printed above - nothing unpinned remains, and a pin that stops naming a finding will fail this gate
+PASS</pre>
+
+<h2>9. What a read from this tree's HEAD still says, and why it is not the same question</h2>
+<p>This worktree is a turnover branch, and a turnover branch is a parallel release line: it was cut from main at <code>349c13dd</code>, carries 169 commits main does not have and lacks 32 main has. It has spent ten numbers of its own. Those ten are the only findings a HEAD read still carries, and none of them is one of the fifteen:</p>
+<div class="wrap">
+<table class="grid">
+<colgroup><col style="width:16%"><col style="width:10%"><col style="width:18%"><col style="width:56%"></colgroup>
+<thead><tr><th>kind</th><th>version</th><th>this branch's commit</th><th>why it is this line's own state</th></tr></thead>
+<tbody>
+<tr><td class="n">wrong-commit</td><td class="n">v1.192.0</td><td class="n">1823d2e31e</td><td>origin&#x27;s tag names main&#x27;s own 1.192.0 at 00fa30b0cc</td></tr>
+<tr><td class="n">wrong-commit</td><td class="n">v1.193.0</td><td class="n">56f062cd9b</td><td>origin&#x27;s tag names main&#x27;s own 1.193.0 at bad07428d0</td></tr>
+<tr><td class="n">missing</td><td class="n">v1.193.1</td><td class="n">4379fc2feb</td><td>declared only on this line; no tag anywhere</td></tr>
+<tr><td class="n">wrong-commit</td><td class="n">v1.194.0</td><td class="n">b8cbdfac75</td><td>origin&#x27;s tag names main&#x27;s own 1.194.0 at 0217ca168c</td></tr>
+<tr><td class="n">missing</td><td class="n">v1.194.1</td><td class="n">0370f78f1d</td><td>declared only on this line; a checkout tag at the same commit, never pushed</td></tr>
+<tr><td class="n">wrong-commit</td><td class="n">v1.195.0</td><td class="n">08b33f85b3</td><td>origin&#x27;s tag names main&#x27;s own 1.195.0 at 77e0db8ab4</td></tr>
+<tr><td class="n">missing</td><td class="n">v1.195.1</td><td class="n">b5c4ac7009</td><td>declared only on this line; a checkout tag at the same commit, never pushed</td></tr>
+<tr><td class="n">wrong-commit</td><td class="n">v1.196.1</td><td class="n">17ae02c3b9</td><td>origin&#x27;s tag names main&#x27;s own 1.196.1 at fb1db3bcbd</td></tr>
+<tr><td class="n">missing</td><td class="n">v1.196.2</td><td class="n">a6d564a675</td><td>declared only on this line; no tag anywhere</td></tr>
+<tr><td class="n">missing</td><td class="n">v1.197.0</td><td class="n">c7f5ec733b</td><td>declared only on this line; no tag anywhere</td></tr>
+</tbody>
+</table>
+</div>
+<p>They are deliberately not pinned. A pin describes history, and these are live: they resolve when this line lands and its landings re-anchor the numbers on main. Pinning them would make the gate green today and then fail as stale pins the moment the line lands, and it would hide a real collision in between. The green read is the release branch's - <code>--ref main</code>, the read a landing is judged by - and that is the one quoted above:</p>
+<pre>$ node tools/verify-version-tags.mjs --limit 0            # at this tree's HEAD, before
+FAIL - 31 findings across 790 version bumps
+$ node tools/verify-version-tags.mjs --limit 0            # at this tree's HEAD, after
+FAIL - 10 findings across 790 version bumps, 14 pinned by name and not counted here
+$ node tools/verify-version-tags.mjs --ref main --limit 0  # the release branch, after
+PASS</pre>
+
+<h2>10. What this does not do</h2>
+<div class="note">
+<ul>
+  <li><strong>No tag was created, moved or deleted, and nothing was pushed.</strong> The eleven real defects still need the tag writes listed in the pin file; this run may not do them (no push, no PR), so each is named with the command that settles it.</li>
+  <li><strong>No version bump and no changelog render.</strong> Nothing here is a release.</li>
+  <li><strong>The 47 fossil tags stay notes.</strong> They name versions main does not carry, at commits no branch holds, and the gate reports them as a count of history, not as findings. Deleting them is a cleanup row's job.</li>
+  <li><strong>HEAD is not green, and is not claimed to be.</strong> The ten findings above are this branch's own unlanded line; the fifteen the brief asked about are gone (1 fixed, 14 pinned) at both reads.</li>
+  <li><strong>The three backwards pins have no expiry.</strong> They describe a release shape the team keeps using. If the policy changes to "never move an older line", they must be deleted and a landing that does it must fail.</li>
+</ul>
+</div>
+
+<h2>11. Tests, and what they answered</h2>
+<pre>$ node --test test/release-tags.test.js
+ok - 18 tests, 18 pass, 0 fail    # the walk, the backwards rule on both sides, the pin identity, the pin file's validation
+$ node --test test/version-tags.test.js
+ok - 15 tests, 15 pass, 0 fail    # the throwaway-repo cases: a pin passes its own finding, a neighbour still fails,
+                                  # a stale pin fails, a missing --pins file is exit 2, and --json carries pinned/stalePins
+$ node --test test/land.test.js test/version-claim.test.js
+ok - 19 tests, 19 pass, 0 fail    # the landing tools and the claim path still read the gate the same way
+$ node --test test/merge-prompt.test.js
+1 pre-existing failure            # "a worker following the prompt's order ..." - the render refuses an off-main
+                                  # tag in its own fixture; it fails identically on the pristine tree at 96e5b974,
+                                  # so this change neither causes it nor touches it</pre>
+
+<h2>12. The decision this leaves</h2>
+<p>One command per real defect, and then eleven pins can be deleted in one commit. In order:</p>
+<ul>
+  <li><strong>Apply the eleven tag writes</strong> from <code>tools/version-tags-pins.json</code> (each pin's <code>repair</code> is the exact command). Re-read <code>npm run verify:version-tags -- --ref main</code>: it should print 3 pinned and PASS.</li>
+  <li><strong>Delete the eleven repaired pins</strong> in the commit that records the repair, so the gate cannot carry a permission for a finding that no longer exists.</li>
+  <li><strong>Keep the three <code>backwards</code> pins</strong> unless the release policy changes; they are the one class here that is not a defect.</li>
+  <li><strong>Leave the 47 fossils and the ten branch-line findings alone</strong> until their own rows: one is a cleanup, the other resolves at the landing.</li>
+</ul>
+<p class="small">Method: every number above was read in this worktree with the commands shown, against main at 2338e54f56baaa6100e976f7071784f872a7f7b2 and origin's live tag namespace on 2026-11-28. The before and after blocks are the gate's own stdout, captured from the pristine tool and the changed tool; the pins themselves were generated from the before read, and the generator refused to write unless every pin matched a finding.</p>
+</main>
+</body>
+</html>

@@ -35,20 +35,36 @@
 //   stale-local   (warning, exit 0) this checkout's v<version> ref disagrees with origin's. The gate judged
 //                 origin; the next `git fetch --tags --force` refreshes the checkout. Not an anchor defect:
 //                 reporting it as wrong-commit is what hid six correct anchors behind a stale clone.
-// A version that goes BACKWARDS in history is reported too: the tag would still exist, but no reader could
-// order the two.
+//   backwards     a commit's own patch replaces a higher version with a lower one (the version its patch REMOVED
+//                 is compared with the one it wrote, when the walk recorded both; the ordered walk's neighbour is
+//                 only the fallback). A number that goes backwards exists in the file's history and its tag may be
+//                 right, but no reader could order the two releases - a hotfix to an older line is the honest
+//                 shape, and the finding names it so a future decrease is still visible.
+//
+// PINS. A gate that fails every landing with the same historical findings is not a signal: a worker cannot tell
+// the defect it caused from the ones history already carried. A finding named in tools/version-tags-pins.json -
+// by kind, version, commit and, for a wrong anchor, the tag's own commit, with a written reason - is still
+// computed and still printed with that reason on every run; it simply does not fail the gate. A pin that names no
+// finding any more is itself a failure (a stale pin: the anchor was repaired, so the pin must go), so the file can
+// only ever name history and can never hide a new defect. This is not a deleted check and not a silence: the
+// number of pinned findings is on the gate's own line, every one is listed by name below the findings, and a
+// finding that is not pinned still exits 1 exactly as before.
 //
 //   node tools/verify-version-tags.mjs                 check HEAD
 //   node tools/verify-version-tags.mjs --ref <ref>     check another ref (a tag, a commit, origin/main)
 //   node tools/verify-version-tags.mjs --main <ref>    the release branch a tag must be an ancestor of (main)
 //   node tools/verify-version-tags.mjs --json          one JSON object on stdout
 //   node tools/verify-version-tags.mjs --limit <n>     how many findings to print (default 40; 0 = all)
+//   node tools/verify-version-tags.mjs --pins <file>   read a different pin file (a fixture's own; a missing one
+//                                                      given on the command line is exit 2, not a silent pass)
 //
-// Exit codes: 0 every bump is tagged and every tag is right; 1 at least one finding; 2 the check could not run
-// (including an origin that is configured but unreadable, or a main that cannot be read - a gate that cannot see
-// the remote or the release branch says so).
+// Exit codes: 0 every unpinned bump is tagged and agrees with origin, and every pin names a live finding; 1 at
+// least one finding that is not pinned, or a pin that names nothing; 2 the check could not run (including an
+// origin that is configured but unreadable, a main that cannot be read, or a pin file that does not parse - a
+// gate that cannot see the remote, the release branch or its own pins says so rather than passing).
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { branchesHolding, offMainTags, parseVersionTag, readReleaseHistory, readVersionAtCommit, repoRoot } from "./release-history.mjs";
@@ -64,15 +80,23 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
   const findings = [];
   let previous = null;
   for (const v of transitions) {
-    if (previous) {
-      const [a, b] = [previous.version.split(".").map(Number), v.version.split(".").map(Number)];
+    // This commit's OWN transition, when the walk recorded the line its patch replaced: across a merge the
+    // ordered walk's neighbour is a sibling lane, not this commit's parent. v1.76.12 was reported as a decrease
+    // because the 1.76.13 bump commit (897dc66d, 09:51:13) was authored 26 seconds before this one (09:51:39) on
+    // a lane cut from the same 1.76.11, so the walk listed it first - while this commit's own patch reads
+    // 1.76.11 -> 1.76.12 and main's first-parent chain reads 1.76.11 -> 1.76.12 -> 1.76.13. The neighbour stays
+    // the fallback for a commit whose patch shows no replaced line.
+    const before = v.read != null ? v.read : previous ? previous.version : null;
+    if (before) {
+      const [a, b] = [before.split(".").map(Number), v.version.split(".").map(Number)];
       const backwards = b[0] < a[0] || (b[0] === a[0] && (b[1] < a[1] || (b[1] === a[1] && b[2] < a[2])));
       if (backwards) {
         findings.push({
           kind: "backwards",
           version: v.version,
           sha: v.sha,
-          message: `package.json goes backwards: ${previous.version} -> ${v.version} at ${v.sha.slice(0, 10)}`,
+          from: before,
+          message: `package.json goes backwards: ${before} -> ${v.version} at ${v.sha.slice(0, 10)}`,
         });
       }
     }
@@ -269,15 +293,137 @@ function hasCommit(root, sha) {
   }
 }
 
+// ---------- the pins: history that is named once, not silenced ----------
+//
+// The gate fails a landing for every finding the history carries, which is the right rule and a useless signal:
+// fourteen findings on `main` before this file existed meant a worker could not tell the defect it caused from
+// the ones already there. A pin is a WRITTEN decision about one finding - its kind, its number, the commit it is
+// about, and (for a wrong anchor) the commit the tag points at, plus the reason. It never removes the finding
+// from the computation or from the output; it keeps that one finding from failing the gate, and a pin that names
+// no finding any more fails the gate itself, so the file can only describe history and can never hide a new
+// defect behind a broad rule. The dispositions it records are the ones docs/versioning.md already names: a real
+// anchor defect waiting on a tag write (with the command in `repair`), or a shape this history really has (a
+// hotfix landed on an older line) which the gate reports and the team has decided is not a defect.
+export const PINS_FILE = "tools/version-tags-pins.json";
+export const PIN_KINDS = ["backwards", "missing", "wrong-commit", "lightweight", "orphan-tag", "off-main"];
+
+// A finding's identity. `sha` is the commit the finding is about (the declaring commit for missing,
+// wrong-commit and backwards; the tagged commit for lightweight, orphan-tag and off-main). A wrong anchor also
+// names the commit the tag resolved to, so a tag moved onto a different wrong commit is a NEW finding rather
+// than the pinned one riding along.
+export function findingIdentity(f) {
+  const tagCommit = f.kind === "wrong-commit" ? String(f.tagCommit || "") : "";
+  return [f.kind, f.version, f.sha, tagCommit].join("|");
+}
+
+// The file, validated rather than trusted. Every problem is named with its index, and a caller that finds any
+// problem must exit 2: a gate that cannot read its own pins would judge fewer findings than it printed.
+export function parsePins(text, { file = PINS_FILE } = {}) {
+  const problems = [];
+  let parsed;
+  try {
+    parsed = JSON.parse(String(text).replace(/^\uFEFF/, ""));
+  } catch (e) {
+    return { pins: [], problems: [`${file}: not JSON - ${e.message}`] };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { pins: [], problems: [`${file}: the file must be one JSON object with a "pins" array`] };
+  }
+  if (!Array.isArray(parsed.pins)) return { pins: [], problems: [`${file}: "pins" must be an array`] };
+  const seen = new Set();
+  const pins = [];
+  parsed.pins.forEach((p, i) => {
+    const at = `${file}: pins[${i}]`;
+    if (!p || typeof p !== "object" || Array.isArray(p)) {
+      problems.push(`${at} is not an object`);
+      return;
+    }
+    const kind = String(p.kind || "");
+    if (!PIN_KINDS.includes(kind)) {
+      problems.push(`${at}: kind "${kind}" is not one of ${PIN_KINDS.join(", ")}`);
+      return;
+    }
+    if (!/^\d+\.\d+\.\d+$/.test(String(p.version || ""))) {
+      problems.push(`${at}: version must read <major>.<minor>.<patch>`);
+      return;
+    }
+    if (!/^[0-9a-f]{40}$/.test(String(p.sha || ""))) {
+      problems.push(`${at}: sha must be the full 40-character commit the finding is about`);
+      return;
+    }
+    if (kind === "wrong-commit" && !/^[0-9a-f]{40}$/.test(String(p.tagCommit || ""))) {
+      problems.push(`${at}: a wrong-commit pin must name the tagCommit it read, or a tag moved to another wrong commit would ride the same pin`);
+      return;
+    }
+    const reason = String(p.reason || "").trim();
+    if (reason.length < 24) {
+      problems.push(`${at}: reason must say what the finding is and why it is pinned (one sentence at least)`);
+      return;
+    }
+    const pin = {
+      kind,
+      version: String(p.version),
+      sha: String(p.sha),
+      tagCommit: kind === "wrong-commit" ? String(p.tagCommit) : "",
+      reason,
+      repair: p.repair ? String(p.repair) : null,
+    };
+    const id = findingIdentity(pin);
+    if (seen.has(id)) {
+      problems.push(`${at}: a second pin for the same finding (${id})`);
+      return;
+    }
+    seen.add(id);
+    pins.push(pin);
+  });
+  // A file with any problem yields NO pins at all, not the subset that happened to parse: a caller that judges
+  // with half a pin file would pass findings it printed, and the one invariant worth enforcing here is that the
+  // gate and the file agree or nothing is judged.
+  return { pins: problems.length ? [] : pins, problems, note: parsed.note ? String(parsed.note) : null };
+}
+
+// Split what the gate computed into the findings a pin names (printed with their reason, not failing) and the
+// ones nobody has named. A pin with no finding left is `stale`: the anchor it described was repaired, or the
+// finding changed shape, and keeping it would hide the next finding that looks the same.
+export function applyPins(findings, pins) {
+  const byId = new Map(pins.map((p) => [findingIdentity(p), p]));
+  const pinned = [];
+  const live = [];
+  for (const f of findings) {
+    const pin = byId.get(findingIdentity(f));
+    if (pin) pinned.push({ ...f, reason: pin.reason, repair: pin.repair });
+    else live.push(f);
+  }
+  const used = new Set(pinned.map((p) => findingIdentity(p)));
+  return { live, pinned, stale: pins.filter((p) => !used.has(findingIdentity(p))) };
+}
+
+// The default file is optional - a fixture repository has no pins and nothing to pin - but a file named on the
+// command line is a claim that it exists, so a missing one is a problem rather than an empty pin set.
+export function readPins(root, file = PINS_FILE, { required = false } = {}) {
+  const at = path.isAbsolute(file) ? file : path.join(root, file);
+  let text;
+  try {
+    text = readFileSync(at, "utf8");
+  } catch (e) {
+    if (e.code === "ENOENT" && !required) return { pins: [], problems: [], missing: true };
+    return { pins: [], problems: [`${file}: cannot be read - ${e.message}`] };
+  }
+  return { ...parsePins(text, { file }), missing: false };
+}
+
 function parseArgs(argv) {
-  const opt = { ref: "HEAD", main: "main", json: false, limit: 40 };
+  const opt = { ref: "HEAD", main: "main", json: false, limit: 40, pins: PINS_FILE, pinsGiven: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--ref") opt.ref = String(argv[(i += 1)] || "HEAD");
     else if (a === "--main") opt.main = String(argv[(i += 1)] || "main");
     else if (a === "--json") opt.json = true;
     else if (a === "--limit") opt.limit = Math.max(0, Number(argv[(i += 1)]) || 0);
-    else if (a === "--help" || a === "-h") opt.help = true;
+    else if (a === "--pins") {
+      opt.pins = String(argv[(i += 1)] || "");
+      opt.pinsGiven = true;
+    } else if (a === "--help" || a === "-h") opt.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
   return opt;
@@ -292,8 +438,11 @@ function main(argv) {
     return 2;
   }
   if (opt.help) {
-    console.log("node tools/verify-version-tags.mjs [--ref <ref>] [--json] [--limit <n>]");
-    console.log("  fails when a version bump in package.json's history has no annotated tag at its commit on origin.");
+    console.log("node tools/verify-version-tags.mjs [--ref <ref>] [--main <ref>] [--json] [--limit <n>] [--pins <file>]");
+    console.log("  fails when a version bump in package.json's history has no annotated tag at its commit on origin,");
+    console.log("  when a tag points at another commit, or when a number goes backwards - unless that exact finding is");
+    console.log(`  pinned by name in ${PINS_FILE}, which is printed with its reason and does not fail. A pin that names`);
+    console.log("  no finding any more (a stale pin) fails, so the file can never hide a new defect.");
     return 0;
   }
 
@@ -366,6 +515,16 @@ function main(argv) {
   const first = versions[0];
   const last = versions[versions.length - 1];
 
+  // Read the pins before printing anything: a file that does not parse is exit 2, because the gate would
+  // otherwise print findings it had silently stopped counting.
+  const pinsRead = readPins(root, opt.pins, { required: opt.pinsGiven });
+  if (pinsRead.problems.length) {
+    for (const p of pinsRead.problems) console.error(`version-tags: ${p}`);
+    console.error("version-tags: the pin file could not be read, so nothing was judged");
+    return 2;
+  }
+  const { live, pinned, stale } = applyPins(findings, pinsRead.pins);
+
   if (opt.json) {
     console.log(JSON.stringify({
       ref: history.ref,
@@ -375,14 +534,17 @@ function main(argv) {
       versions: versions.length,
       from: first ? first.version : null,
       to: last ? last.version : null,
-      findings,
+      findings: live,
+      pinned,
+      stalePins: stale,
+      pins: { file: opt.pins, present: !pinsRead.missing, count: pinsRead.pins.length },
       staleLocal,
       offMain: offMain.map((t) => ({ name: t.name, commit: t.commit, release: t.release, branches: t.branches })),
       held: held.map((t) => ({ name: t.name, version: t.version, commit: t.commit })),
       unread: unreadTags.map((t) => ({ name: t.name, commit: t.commit })),
-      ok: findings.length === 0,
+      ok: live.length === 0 && stale.length === 0,
     }, null, 2));
-    return findings.length ? 1 : 0;
+    return live.length || stale.length ? 1 : 0;
   }
 
   const tagged = judged.filter((v) => v.tag && v.tag.commit === v.sha && v.tag.annotated).length;
@@ -424,12 +586,35 @@ function main(argv) {
     for (const s of shown) console.log(`  ${s.kind.padEnd(12)} ${s.message}`);
     if (shown.length < staleLocal.length) console.log(`  ... and ${staleLocal.length - shown.length} more (--limit 0 prints all)`);
   }
-  if (findings.length) {
-    const shown = opt.limit ? findings.slice(0, opt.limit) : findings;
-    for (const f of shown) console.log(`  ${f.kind.padEnd(12)} ${f.message}`);
-    if (shown.length < findings.length) console.log(`  ... and ${findings.length - shown.length} more (--limit 0 prints all)`);
+  // The history that is named rather than silenced. Every pinned finding is printed with the reason a reader can
+  // disagree with, and the count is here so a green gate never reads as "nothing was found".
+  if (pinned.length) {
+    console.log(
+      `  ${pinned.length} historical finding${pinned.length === 1 ? "" : "s"} ${pinned.length === 1 ? "is" : "are"} pinned by name in ${opt.pins}: ` +
+        "each is listed with the reason it is not a defect, or the tag write it waits on. A pin that names no finding fails this gate.",
+    );
+    for (const p of pinned) {
+      console.log(`  ${"pinned".padEnd(12)} ${p.message}`);
+      console.log(`  ${"".padEnd(12)} why: ${p.reason}`);
+      if (p.repair) console.log(`  ${"".padEnd(12)} repair: ${p.repair}`);
+    }
     console.log("");
-    const missing = findings.filter((f) => f.kind === "missing");
+  }
+  if (stale.length) {
+    for (const p of stale) {
+      console.log(
+        `  ${"stale-pin".padEnd(12)} ${p.kind} v${p.version} at ${p.sha.slice(0, 10)} is pinned in ${opt.pins} and no finding matches it any more - ` +
+          "remove the pin (the anchor it described was repaired) or correct its kind, commit or tag commit",
+      );
+    }
+    console.log("");
+  }
+  if (live.length) {
+    const shown = opt.limit ? live.slice(0, opt.limit) : live;
+    for (const f of shown) console.log(`  ${f.kind.padEnd(12)} ${f.message}`);
+    if (shown.length < live.length) console.log(`  ... and ${live.length - shown.length} more (--limit 0 prints all)`);
+    console.log("");
+    const missing = live.filter((f) => f.kind === "missing");
     if (missing.length) {
       console.log("  Tag the commit that declared each number - annotated, with the version as its message:");
       console.log(`    git tag -a v${missing[0].version} ${missing[0].sha.slice(0, 10)} -m "v${missing[0].version}"`);
@@ -442,13 +627,28 @@ function main(argv) {
       console.log("    git push origin :refs/tags/<tag> && git tag -d <tag>   # and name the branch that held it");
       console.log("");
     }
-    console.log(`FAIL - ${findings.length} finding${findings.length === 1 ? "" : "s"} across ${versions.length} version bumps`);
+  }
+  // A stale pin fails on its own: it is a permission for a finding that no longer exists, and leaving it would
+  // hand the same permission to the next finding of that shape.
+  const fails = live.length + stale.length;
+  if (fails) {
+    console.log(
+      `FAIL - ${fails} finding${fails === 1 ? "" : "s"} across ${versions.length} version bumps` +
+        (stale.length ? ` (${live.length} unpinned, ${stale.length} stale pin${stale.length === 1 ? "" : "s"})` : "") +
+        (pinned.length ? `, ${pinned.length} pinned by name and not counted here` : ""),
+    );
     return 1;
   }
   console.log(
     (tagSource === "origin" ? "  every bump carries an annotated tag at its own commit on origin" : "  every bump carries an annotated tag at its own commit") +
       `, every tag names a commit ${history.main.ref} carries, and no v<version> tag points elsewhere`,
   );
+  if (pinned.length) {
+    console.log(
+      `  ${pinned.length} historical finding${pinned.length === 1 ? "" : "s"} ${pinned.length === 1 ? "is" : "are"} pinned by name in ${opt.pins} and printed above - ` +
+        "nothing unpinned remains, and a pin that stops naming a finding will fail this gate",
+    );
+  }
   console.log("PASS");
   return 0;
 }

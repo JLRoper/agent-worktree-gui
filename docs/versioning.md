@@ -12,8 +12,10 @@ changelog and `npm run changelog:check` fails when it is stale.
 A version number is anchored by an annotated tag, `v<version>`, at the commit on `main` that first declared it,
 and `CHANGELOG.md` is rendered from the commits between consecutive tags — so the two cannot describe different
 history. The gate is `npm run verify:version-tags`: it walks `git log -p --follow -- package.json` and fails when
-a bump has no tag at its commit, when the tag points at another commit, when it is lightweight, or when it names
-a version `package.json` never held.
+a bump has no tag at its commit, when the tag points at another commit, when it is lightweight, when it names
+a version `package.json` never held, or when a commit's own patch replaces a higher version with a lower one -
+unless that exact finding is pinned by name in `tools/version-tags-pins.json` (see "Findings that are pinned by
+name" below).
 
 **A tag is an anchor only where `main` carries its commit.** A tag is a repository-wide claim, and a reader of
 `main` can only follow a commit `main` took, so a version tag that names a commit `main` never carried is refused
@@ -67,6 +69,50 @@ A bump that reached `main` without its tag is repaired by one idempotent pass:
 It tags every version in `package.json`'s history that has none, at the commit the walk says first declared it,
 and sends only the tags it created. An already-anchored version is counted and skipped, so a second run creates
 nothing and exits 0 — it never duplicates a tag, and it will not rewrite a pushed one.
+
+## Findings that are pinned by name
+
+A gate's value is the difference between what it read today and what it read yesterday. `main` carried fourteen
+findings before this file existed - three numbers that went backwards, seven tags on commits `main` never
+carried, four releases with no tag at all - and every landing read the same fourteen beside its own damage. A
+reader could not tell them apart, so the gate stopped being a signal.
+
+`tools/version-tags-pins.json` names those findings once. A pin is one finding's identity (kind, number, the
+commit the finding is about and, for a wrong anchor, the commit the tag points at), a written reason, and, where
+the finding is a real defect, the exact tag write that repairs it. The gate still computes every finding and still
+prints every pinned one with its reason on every run; a pin only keeps that one finding out of the exit code.
+Three rules keep it honest:
+
+- **Nothing is dropped.** The pinned findings are printed under the findings, each with its reason, and the count
+  is on the gate's own lines (`14 historical findings are pinned by name ... and printed above`), so a green gate
+  never reads as "nothing was found".
+- **A pin covers exactly one finding.** A tag moved onto a different wrong commit, a different declaring commit,
+  or an event that no longer happens is a new fact, not the pinned one. That is why a wrong anchor's identity
+  includes the commit the tag points at.
+- **A stale pin fails.** When a repair lands the finding goes, and the pin must be deleted with it. The gate
+  reports `stale-pin ... no finding matches it any more` and exits 1, so the file can describe history but can
+  never hand a permission to the next defect of the same shape.
+
+The pins fall into three groups, and each pin's `reason` says which one it is:
+
+| class | pins | what they are |
+| --- | --- | --- |
+| `backwards` | 3 | a patch release landed on an older line: v1.78.0 after v1.79.0, v1.169.9 after v1.170.0, v1.170.5 after v1.171.0. The number went out as a patch on that line and its changelog section agrees (`compare v1.79.0...v1.78.0`); where the tag for it is also wrong that is the separate `wrong-commit` finding below. |
+| `wrong-commit` | 7 | real: the tag names a commit `main` never carried. Four are identical-tree pre-merge copies (the landing re-created the commit and never moved the tag), one (v1.142.2) is a copy whose tree differs from what landed, and two (v1.169.9, v1.170.5) are pre-rebase hotfix copies. Each pin carries the `git tag -f -a ... && git push --force ...` that repairs it. |
+| `missing` | 4 | real: v1.82.2, v1.173.2, v1.189.0 and v1.191.0 shipped on `main` with no published tag (v1.189.0 exists only in a checkout, on the pre-landing twin). Each pin carries the `git tag -a ... && git push ...` that repairs it. |
+
+The eleven real ones are waiting on a remote tag write and nothing else; when one lands, its pin goes in the
+commit that records the repair. The three `backwards` pins are history that cannot be rewritten and should not be
+hidden: the check stays, and a future decrease is still a failure. A finding that is not pinned exits 1 exactly as
+it did before.
+
+    node tools/verify-version-tags.mjs                 # HEAD; a fixture with no pins file has no pins
+    node tools/verify-version-tags.mjs --ref main      # the release branch, the read a landing is judged by
+    node tools/verify-version-tags.mjs --pins <file>   # another file; a missing one is exit 2, not a pass
+
+The full classification of the fifteen findings this file was written for - each one's tag, commit, changelog
+line and verdict, with the gate's output before and after - is
+`docs/reports/verify-version-tags-15-2026-11-28.html`.
 
 ## The changelog lands at the merged tip, in the landing's own last step
 
@@ -198,7 +244,7 @@ Nothing new for a user and nothing broken for anyone:
 | `node tools/version.mjs suggest` | reads the branch's commits (and its PR's title and body, when `gh` has them) against the base and prints the level it reads from the conventional-commit prefixes, with a reason per commit. It says so when a prefix is missing instead of guessing. **Advice — it writes nothing.** |
 | `node tools/version.mjs check` | the pipeline's gate: it compares the number the branch would push (HEAD's `package.json`) with the number at the base ref's **current tip** (`origin/main`'s tree — never the merge-base, never this checkout's own file) and exits non-zero unless the branch is strictly above it. Two states are refused: the number unchanged while the branch carries commits to land, and the number **behind** a base that has moved (a branch cut before main bumped carries main's old number, and that is not a bump). It prints what it compared — branch version, base ref, base version — on **both** outcomes, so silence is never a pass. It exits 0 for a branch above the base, and for a branch with no commits of its own at the base's number (main itself). It refuses when it cannot resolve a base or read either version, rather than passing. It never writes. |
 | `node tools/version.mjs apply <patch\|minor\|major>` | writes the new version to `package.json` — the one place it lives — and prints old and new. Run by the landing agent, deliberately; never by `check` and never by a hook. |
-| `node tools/verify-version-tags.mjs` | the anchor's gate: walks `git log -p --follow -- package.json` and fails when a version that first appeared at a commit has no annotated `v<version>` tag there, when the tag points at another commit, when it is lightweight, or when it names a version `package.json` never held. `npm run verify:version-tags`. It exits 2, never a vacuous pass, when the walk comes back empty. |
+| `node tools/verify-version-tags.mjs` | the anchor's gate: walks `git log -p --follow -- package.json` and fails when a version that first appeared at a commit has no annotated `v<version>` tag there, when the tag points at another commit, when it is lightweight, when it names a version `package.json` never held, or when a commit's patch replaces a higher version with a lower one. A finding named in `tools/version-tags-pins.json` is still printed with its reason and does not fail; a pin that names no finding does. `npm run verify:version-tags`. It exits 2, never a vacuous pass, when the walk comes back empty or the pin file does not parse. |
 | `node tools/changelog.mjs` | renders `CHANGELOG.md` from the commits between consecutive tags, newest first, grouped by the conventional-commit prefix. The render is **incremental**: the sections the file already carries are kept byte for byte and only the releases above them are rendered, because a render of every tag in this history runs past the 600 second command cap a landing runs under. `--full` rebuilds every release from the first tag; `--since v<version>` prints only what came after the build a tab is running; `--check` fails when the file is stale. `npm run changelog`, `npm run changelog:check`. |
 | `node tools/land.mjs` | **the landing's last step**, run on the base branch after the merge: re-renders the changelog from the base's own history (the shas the merge made) — forward from the sections the file already carries, so the step finishes — commits only `CHANGELOG.md` as a docs commit, moves the release's tag onto the commit the base's history first declares the number at, pushes the base and the tag, and proves itself by re-rendering. `--check` renders in memory and exits 1 when the base is stale or a section names a sha the base lacks (writes nothing, no tag moved); `--render` writes the file only, for a branch preview; `--full` rebuilds every release. Refuses on a branch, a dirty tree, or a base that moved. Idempotent: a second run commits nothing, moves no tag, and leaves the tree clean. `npm run land`, `npm run land:check`. |
 | `node tools/release-tag.mjs` | the anchor's **move**, as a step the landing runs: reads the version from the ref's tree, asks the same walk `verify-version-tags` judges which commit first declared it, and creates or moves the annotated tag there and pushes it (`--force` only when origin already carries the ref). Judged against `origin`'s tags, parsed by the gate's own parser; a tag already right is left alone, so a second run is a no-op. `--no-push` anchors in the checkout only; `--dry-run` writes nothing. Called by `tools/land.mjs` and `tools/land-pr.mjs` after a rebase merge, so the tag a re-created commit orphaned is moved without a hand step. |
