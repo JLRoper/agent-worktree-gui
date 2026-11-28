@@ -222,6 +222,10 @@ import { PIPELINES_PATH, createPipelinesRoutes } from "./routes/pipelines.js";
 // the stores and this file's own setters stay here and travel in; the transport helpers come from
 // lib/http/respond.js, as they do for every other row.
 import { SETTINGS_PATH, createSettingsRoutes } from "./routes/settings.js";
+// The Settings -> General "Storage & cleanup" surface (routes/maintenance.js): the panel's own scratch folder, its
+// abandoned atomic-write temp files and its rotated server logs, plus a READ-ONLY process census. The paths come from
+// this file's own config (dataDir/stateDir/logsDir/jobsFile) and the keep list from the registry and the checkout.
+import { MAINTENANCE_PATH, createMaintenanceRoutes } from "./routes/maintenance.js";
 // Importing a studio export into that bundle: an APPEND by pipeline id, refusing a duplicate id by name. The write side
 // of the loader, mounted with the two reads because all three answer about the one file.
 import { createPipelineBundleImportRoutes } from "./lib/pipeline-bundle-import.js";
@@ -2430,6 +2434,23 @@ async function readWaveEvidence({ tasks = [], rowFor = () => null, paths = [], c
 }
 
 const PREFIX_MOUNTS = [
+  // Storage & cleanup (routes/maintenance.js): the one read beside the Settings tab, and the one bounded clean. Its
+  // keep list is the same one the existing Clean scratch button uses — this checkout, the config's folder, the panel's
+  // own state, its working folder, the scan roots and every project — asked per request because the registry moves.
+  {
+    prefix: MAINTENANCE_PATH,
+    handles: createMaintenanceRoutes({
+      getConfig: () => config,
+      jobs,
+      registry,
+      here: HERE,
+      configDir: CONFIG_DIR,
+      sendJson,
+      readBody,
+      authorised,
+      log,
+    }),
+  },
   // The per-assistant task queue (routes/assistant-queue.js). The factory takes the Assistant, which owns each queue's
   // file and its read-modify-write, and the transport helpers this file already imports.
   { prefix: QUEUE_PATH, handles: createQueueRoutes({ assistant, config, sendJson, readBody, authorised }) },
