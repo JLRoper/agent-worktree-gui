@@ -31,7 +31,7 @@ import {
   stopPid,
   waitForPidGone,
 } from "../lib/port-holder.js";
-import { startPanel, readSource, waitFor } from "../tools/panel-testkit.mjs";
+import { boot, readSource, waitFor } from "../tools/panel-testkit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // The one switch a failing-first proof needs: point this at an older lib/panel-restart.cjs (extracted with
@@ -110,7 +110,7 @@ async function listenerPids(port) {
 // ---- the three restarts ------------------------------------------------------------------------------
 
 test("a graceful bounce waits only its flush window, stops the panel, and the replacement serves the port", async () => {
-  const old = await startPanel({ keep: true });
+  const old = await boot({ keep: true });
   const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir, graceful: true });
   let replacement = 0;
   try {
@@ -139,7 +139,7 @@ test("with no graceful shutdown asked for, a bounce takes the port at once inste
   //
   // "Takes the port" is the moment the old holder is gone - the replacement's own boot (a server.js start) is
   // seconds on any machine and is not what this boundary is about.
-  const old = await startPanel({ keep: true });
+  const old = await boot({ keep: true });
   const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir, env: { HERMES_PANEL_RESTART_WAIT_MS: "" } });
   let replacement = 0;
   let goneAt = null;
@@ -169,7 +169,7 @@ test("with no graceful shutdown asked for, a bounce takes the port at once inste
 });
 
 test("a stray server.js on the port is stopped even when the pid the helper waited for is already gone", async () => {
-  const stray = await startPanel({ keep: true });
+  const stray = await boot({ keep: true });
   const dead = await gonePid();
   const helper = runHelper({ parentPid: dead, port: stray.port, dir: stray.dir });
   let replacement = 0;
@@ -190,7 +190,7 @@ test("a stray server.js on the port is stopped even when the pid the helper wait
 });
 
 test("a port nothing holds is the quiet path: no kill, and the replacement answers", async () => {
-  const panel = await startPanel({ keep: true });
+  const panel = await boot({ keep: true });
   const { port, pid, dir, base } = panel;
   // The panel exits normally, as the one that asked for the bounce does; the helper is then started with its
   // pid, exactly as the restart would.

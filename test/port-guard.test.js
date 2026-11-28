@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { portAnswers, portHolder, probeHosts, refusalLine } from "../lib/port-guard.js";
-import { freePort, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, freePort } from "../tools/panel-testkit.mjs";
 
 // A bare TCP listener: answers the connect, says nothing (as a second panel, or any other program, would to a probe).
 function listen(port, host = "127.0.0.1") {
@@ -63,7 +63,7 @@ test("a panel configured for 0.0.0.0 refuses a port something already answers on
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-port-guard-"));
   try {
     await assert.rejects(
-      startPanel({ dir, port, config: { host: "0.0.0.0" }, env: { PANEL_PORT_WAIT_MS: "300" } }),
+      boot({ dir, port, config: { host: "0.0.0.0" }, env: { PANEL_PORT_WAIT_MS: "300" } }),
       (e) => {
         assert.match(e.message, /exited before it was ready \(\{"code":1/, "the boot stopped itself, exit code 1");
         assert.match(e.message, new RegExp(`REFUSING to start: 127\\.0\\.0\\.1:${port} already answers`), "and said why");
@@ -78,7 +78,7 @@ test("a panel configured for 0.0.0.0 refuses a port something already answers on
 });
 
 test("a free port boots as before (control)", async () => {
-  const panel = await startPanel({ env: { PANEL_PORT_WAIT_MS: "8000" } });
+  const panel = await boot({ env: { PANEL_PORT_WAIT_MS: "8000" } });
   try {
     assert.equal((await fetch(`${panel.base}/api/health`)).ok, true);
   } finally {
@@ -90,7 +90,7 @@ test("a replacement waits for a predecessor still letting go of the port, instea
   const port = await freePort();
   const srv = await listen(port, "127.0.0.1");
   setTimeout(() => void close(srv), 600); // the outgoing panel releases the port a moment after the new one starts
-  const panel = await startPanel({ port, env: { PANEL_PORT_WAIT_MS: "8000" } });
+  const panel = await boot({ port, env: { PANEL_PORT_WAIT_MS: "8000" } });
   try {
     const r = await fetch(`${panel.base}/api/health`);
     assert.equal(r.ok, true, "the replacement came up on the port its predecessor left");

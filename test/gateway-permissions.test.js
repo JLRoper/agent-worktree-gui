@@ -20,7 +20,7 @@ import {
   remoteWritesSource,
 } from "../lib/gateway-permissions.js";
 import { policyFrom } from "../lib/remote-writes.js";
-import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, ROOT } from "../tools/panel-testkit.mjs";
 
 const lineOf = (text, needle, from = 0) => {
   const lines = String(text).split("\n");
@@ -379,7 +379,7 @@ const readPolicyRoute = async (panel) =>
 test("a panel booted on PANEL_CONFIG reports that config's remoteBranchPolicy", async () => {
   // A value the checkout's file does not carry, so the payload itself says which file was read.
   const distinctive = ["deny", "allow"].find((policy) => policy !== checkoutPolicy);
-  const panel = await startPanel({
+  const panel = await boot({
     config: { assistant: { enabled: false }, remoteBranchPolicy: distinctive, projects: [] },
   });
   try {
@@ -401,7 +401,7 @@ test("a panel booted on PANEL_CONFIG reports that config's remoteBranchPolicy", 
 
 test("the checkout's policy is never shown to a panel booted on its own config.json", async () => {
   const distinctive = ["deny", "allow"].find((policy) => policy !== checkoutPolicy);
-  const panel = await startPanel({
+  const panel = await boot({
     config: { assistant: { enabled: false }, remoteBranchPolicy: distinctive, projects: [] },
   });
   try {
