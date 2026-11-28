@@ -247,3 +247,30 @@ thead th,
 .update-chip .uc-ver { flex: none; font: 10px var(--mono); color: var(--amber); }
 .update-chip .uc-line { color: var(--dim); font-size: 11px; line-height: 1.35; }
 .update-chip .uc-empty:not(:empty) { margin-top: 7px; color: var(--dimmer); font-size: 11px; }
+
+/* ---- the page footer and the clipboard flash, moved out of public/boardchips.css and chart.css ---
+   Both are page chrome: `.foot` closes the page under the board, and `.copy-flash` is the fixed
+   "copied" popup the clipboard module shows over any cell. */
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px 26px;
+  color: var(--dimmer);
+  font-size: 11.5px;
+  border-top: 1px solid var(--line);
+}
+.foot code { background: #20242c; padding: 1px 5px; border-radius: 4px; color: var(--dim); }
+
+/* The clipboard's "copied" flash (public/core/copy-full-value.js). A highlight on a name or a branch IS the copy,
+   so the write has to be said out loud or it looks like nothing happened. Fixed, so a repainted row cannot carry it,
+   and pointer-events:none, so it can never be the target of the next click or drag: the reader's next gesture lands
+   on the cell underneath. The module sets left/top under the cell it answered and removes the node after 1.1s; the
+   animation is only the fade, and `both` keeps it visible from the first frame. */
+.copy-flash { position: fixed; z-index: 90; pointer-events: none; user-select: none; padding: 2px 7px 3px;
+  border: 1px solid #1f4a2a; border-radius: 4px; background: var(--green-bg); color: #b7f7c1;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; white-space: nowrap;
+  animation: copy-flash 1.1s ease-out both; }
+@keyframes copy-flash { 0% { opacity: 0; transform: translateY(-2px); } 12% { opacity: 1; transform: none; }
+  72% { opacity: 1; } 100% { opacity: 0; transform: translateY(2px); } }
