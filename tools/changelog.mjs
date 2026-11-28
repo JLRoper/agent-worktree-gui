@@ -10,12 +10,23 @@
 //   node tools/changelog.mjs                    rewrite CHANGELOG.md at the repository root
 //   node tools/changelog.mjs --check            exit 1 when the file on disk is not what the history renders
 //                                               (writes nothing; the CI-shaped use)
-//   node tools/changelog.mjs --since v0.80.0    print only the releases after v0.80.0 — "my build vs now"
+//   node tools/changelog.mjs --since v0.80.0    print only the releases after v0.80.0 - "my build vs now"
 //   node tools/changelog.mjs --out <path>       write somewhere else
-//   node tools/changelog.mjs --no-links         plain text, no commit or compare links — the deliberate opt-out for
+//   node tools/changelog.mjs --no-links         plain text, no commit or compare links - the deliberate opt-out for
 //                                               a mirror this tool can find no GitHub remote on
 //   node tools/changelog.mjs --full             rebuild every release from the first tag, ignoring what the file
 //                                               already carries (see below)
+//   node tools/changelog.mjs --ref <ref>        render from another ref (default HEAD): a branch's release line is
+//                                               not main's, and its own bump must not become a section
+//   node tools/changelog.mjs --main <ref>       the branch a release tag must be an ancestor of (default main)
+//
+// A RELEASE TAG MUST NAME A COMMIT MAIN CARRIES. The render writes one section per release, each naming the commit
+// that first declared the number, and it refuses when a version tag for a section it is about to write points at a
+// commit main never carried: the section would link a sha no reader of main can open, and the header's own claim
+// ("anchored at the commit that first declared it on main") would be false. The check is on the sections this run
+// writes and nothing else - a kept section is the file's own business and the gate's, and another branch's unlanded
+// bump is not this render's claim - so a render of main is never blocked by a neighbour's draft. The tag, its
+// commit and the branch holding it are named, so the repair is one `git tag -f` or one delete.
 //
 // THE RENDER IS INCREMENTAL, BECAUSE A FULL ONE DOES NOT FINISH INSIDE A LANDING. A section costs one
 // `git log <previous-tag>..<tag>` subprocess, and this repository has hundreds of releases: the full walk ran to
@@ -53,7 +64,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { compareVersions, readReleaseHistory, repoRoot } from "./release-history.mjs";
+import { branchesHolding, compareVersions, readReleaseHistory, repoRoot } from "./release-history.mjs";
 import { foreignCommit, loadScope, sectionNamesForeignProject } from "./changelog-scope.mjs";
 
 // The order a reader scans a release in: what is new, what was fixed, what got faster, what moved, what is
@@ -248,8 +259,8 @@ function renderHeader({ newest, oldest, releaseCount, commitCount }) {
   lines.push(
     `${releaseCount} releases from v${oldest.version} (${oldest.date}) to v${newest.version} (${newest.date}), ` +
       `${commitCount} commits between the tags. Every release is anchored by an`,
-    "annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump",
-    "has no tag.",
+    "annotated tag at the commit that first declared its version on main; `npm run verify:version-tags` fails when a",
+    "bump has no tag, or when a version tag names a commit main never carried.",
     "",
   );
   return lines;
@@ -386,6 +397,28 @@ export class NoGithubRemoteError extends Error {
   }
 }
 
+// The other refusal: a version tag for a release this render is about to write, whose commit main never carried.
+// The section would link a sha no reader of main can open, and the header's own claim ("anchored at the commit
+// that first declared it") would be false the moment it was committed. Like the remote refusal it is a typed
+// error, because tools/land.mjs renders through the same function and must stop rather than write it.
+export class OffMainAnchorError extends Error {
+  constructor(tags = []) {
+    const one = (t) => {
+      const held = t.branches && t.branches.length ? `held by ${t.branches.join(", ")}` : "no branch holds it";
+      return `${t.name} at ${String(t.commit).slice(0, 10)} (${held})`;
+    };
+    const shown = tags.slice(0, 6).map(one).join("; ");
+    super(
+      `refused - ${tags.length} version tag${tags.length === 1 ? "" : "s"} name${tags.length === 1 ? "s" : ""} a commit ` +
+        `main never carried, so the section would link a sha no reader of main can open: ${shown}` +
+        (tags.length > 6 ? `, and ${tags.length - 6} more` : "") +
+        ". Re-point each tag at the commit main carries, or delete it and name the branch that held it. Nothing was rendered.",
+    );
+    this.name = "OffMainAnchorError";
+    this.tags = tags;
+  }
+}
+
 // One render, from one ref, for both this CLI and tools/land.mjs: the landing's last step has to write byte for
 // byte what `npm run changelog` writes, or the two disagree about the same history. Returns null when the walk
 // comes back empty, so the caller refuses instead of rendering a changelog of nothing, and THROWS a
@@ -397,20 +430,36 @@ export class NoGithubRemoteError extends Error {
 // carries (the note at the top of this file says why), and the seed is always the repository's own CHANGELOG.md —
 // never `--out`: the versions are read from the file the repository carries, and a render written elsewhere must
 // still start where that file reaches.
-export function renderRepo({ root = process.cwd(), ref = "HEAD", links = true, full = false } = {}) {
-  const history = readReleaseHistory({ root, ref });
+export function renderRepo({ root = process.cwd(), ref = "HEAD", mainRef = "main", links = true, full = false } = {}) {
+  const history = readReleaseHistory({ root, ref, mainRef });
   if (!history.versions.length) return null;
   const found = resolveGithubRemote(root);
+
+  // WHAT THIS RENDER IS ABOUT TO CLAIM. A section the render writes names the first-declaration commit, and a tag
+  // main never carried says the number was released from a commit no reader of main can open, so the section would
+  // link a sha main cannot follow and the header's claim would be false. The check is on the releases this run
+  // WRITES and nothing else: a kept section is the file's own business and the gate's, and a version tag for
+  // another branch's unlanded bump is not this render's claim at all (a render of main must not be blocked by a
+  // neighbour's draft). That is why this runs after the walk and not as a scan of every tag in the repository.
+  const refuseUnlanded = (written) => {
+    const off = written.filter((r) => r.tag && r.tag.onMain === false && !r.tag.ownTopAnchor);
+    if (!off.length) return;
+    throw new OffMainAnchorError(
+      off.map((r) => ({ ...r.tag, version: r.version, branches: branchesHolding(root, r.tag.commit) })),
+    );
+  };
+
   if (links && !found.url) throw new NoGithubRemoteError(found.remotes);
   const repoUrl = links ? found.url : null;
   const common = { repoUrl, remote: links ? found.remote : null, remotes: found.remotes };
   const scope = loadScope(root);
   const listAll = (from, to) => listCommits(root, from, to);
 
-  const carried = full ? null : readChangelog(path.join(root, "CHANGELOG.md"));
   // `--no-links` is an opt-out about the FILE, not only about the releases this run adds: a section kept from a
-  // linked file would keep its links, so a linked file is not a seed for a link-less render.
-  const seed = !links && carried && carried.sections.some((s) => /\]\(https?:\/\//.test(s.text)) ? null : carried;
+  // linked file would keep its links, so a linked file is not a seed for a link-less render. `--full` seeds from
+  // nothing on purpose: it rebuilds every section from the walk.
+  const carried = readChangelog(path.join(root, "CHANGELOG.md"));
+  const seed = full ? null : !links && carried && carried.sections.some((s) => /\]\(https?:\/\//.test(s.text)) ? null : carried;
   if (seed && seed.sections.length) {
     const reachable = reachableShas(root, ref);
     // Keep only sections naming a commit this ref carries. A section naming a sha the ref never had is a branch
@@ -430,6 +479,7 @@ export function renderRepo({ root = process.cwd(), ref = "HEAD", links = true, f
     const startIndex = history.versions.findIndex((v) => named.has(v.version));
     if (startIndex >= 0) {
       const releases = collectReleases(history.versions, listAll, { startIndex, skip: (v) => kept.has(v.version), scope });
+      refuseUnlanded(releases.filter((r) => !kept.has(r.version)));
       const forward = renderChangelogForward({ releases, sections: keepable, repoUrl });
       return {
         ...common,
@@ -445,6 +495,7 @@ export function renderRepo({ root = process.cwd(), ref = "HEAD", links = true, f
     }
   }
   const releases = collectReleases(history.versions, listAll, { scope });
+  refuseUnlanded(releases);
   return {
     ...common,
     scope,
@@ -506,13 +557,15 @@ function listCommits(root, from, to) {
 }
 
 function parseArgs(argv) {
-  const opt = { out: "CHANGELOG.md", check: false, since: null, links: true, full: false, help: false };
+  const opt = { out: "CHANGELOG.md", check: false, since: null, links: true, full: false, ref: "HEAD", main: "main", help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--check") opt.check = true;
     else if (a === "--full") opt.full = true;
     else if (a === "--out") opt.out = String(argv[(i += 1)] || "");
     else if (a === "--since") opt.since = String(argv[(i += 1)] || "");
+    else if (a === "--ref") opt.ref = String(argv[(i += 1)] || "HEAD");
+    else if (a === "--main") opt.main = String(argv[(i += 1)] || "main");
     else if (a === "--no-links") opt.links = false;
     else if (a === "--help" || a === "-h") opt.help = true;
     else throw new Error(`unknown argument: ${a}`);
@@ -529,25 +582,35 @@ function main(argv) {
     return 2;
   }
   if (opt.help) {
-    console.log("node tools/changelog.mjs [--check] [--since <version>] [--out <path>] [--no-links] [--full]");
+    console.log("node tools/changelog.mjs [--check] [--since <version>] [--out <path>] [--no-links] [--full] [--ref <ref>] [--main <ref>]");
     console.log("  renders CHANGELOG.md from the commits between consecutive v<version> tags.");
     console.log("  By default the render is INCREMENTAL: the sections CHANGELOG.md already carries are kept byte for");
     console.log("  byte and only the releases above them are rendered, which is what lets a post-merge render finish.");
     console.log("  --full        rebuild every release from the first tag (minutes on a history this size)");
+    console.log("  --ref <ref>   render from another ref (default HEAD); a branch's release line is not main's");
+    console.log("  --main <ref>  the branch a release tag must be an ancestor of (default main)");
     console.log("  The commit and compare links come from this clone's first GitHub remote (origin wins).");
-    console.log("  A clone carrying no GitHub remote is REFUSED — the file would be link-less and --check could");
+    console.log("  A clone carrying no GitHub remote is REFUSED - the file would be link-less and --check could");
     console.log("  never agree with it. `--no-links` writes that file deliberately.");
+    console.log("  A version tag for a release the render would write, naming a commit main never carried, is");
+    console.log("  REFUSED too: the section would link a sha no reader of main can open.");
     return 0;
   }
 
   const root = repoRoot(process.cwd());
   let rendered;
   try {
-    rendered = renderRepo({ root, ref: "HEAD", links: opt.links, full: opt.full || Boolean(opt.since) });
+    rendered = renderRepo({ root, ref: opt.ref, mainRef: opt.main, links: opt.links, full: opt.full || Boolean(opt.since) });
   } catch (e) {
-    if (!(e instanceof NoGithubRemoteError)) throw e;
-    console.error(`changelog: ${e.message}`);
-    return 2;
+    if (e instanceof NoGithubRemoteError) {
+      console.error(`changelog: ${e.message}`);
+      return 2;
+    }
+    if (e instanceof OffMainAnchorError) {
+      console.error(`changelog: ${e.message}`);
+      return 1; // a finding about the tags, not a tool that could not run
+    }
+    throw e;
   }
   if (!rendered) {
     console.error("changelog: package.json's history came back empty — refusing to render a changelog of nothing");

@@ -13,11 +13,31 @@ A version number is anchored by an annotated tag, `v<version>`, at the commit on
 and `CHANGELOG.md` is rendered from the commits between consecutive tags — so the two cannot describe different
 history. The gate is `npm run verify:version-tags`: it walks `git log -p --follow -- package.json` and fails when
 a bump has no tag at its commit, when the tag points at another commit, when it is lightweight, or when it names
-a version `package.json` never held. That last test reads `package.json` at the commit the tag names: a tag on a
-branch that has not landed yet, whose own commit declares the number, is **held** — the branch carries the tag so
-the gate can read it, and the landing moves it onto the commit `main` carries — so it is reported as a note, not
-a failure. Only a tag whose own commit does not declare the number is an orphan; retiring it (a deliberate
-`git push origin :refs/tags/<tag>` once its row is closed) is the disposition.
+a version `package.json` never held.
+
+**A tag is an anchor only where `main` carries its commit.** A tag is a repository-wide claim, and a reader of
+`main` can only follow a commit `main` took, so a version tag that names a commit `main` never carried is refused
+as `off-main` - the finding names the tag, its commit and the branch still holding it. Two shapes stay notes
+rather than failures, because neither is a claim somebody can settle by landing: a tag no branch holds at all (a
+fossil of a rewritten history; deleting it is a cleanup row's job, not every landing's), and the branch's own
+newest bump, tagged on the commit that declared it (the pre-landing anchor `node tools/version.mjs apply` writes -
+the branch carries it so the gate can read it, and the landing moves it onto the commit `main` carries).
+
+The two honest dispositions for an off-main tag, both named in the finding:
+
+    git tag -f -a v1.191.1 <commit main carries> -m "v1.191.1" && git push --force origin v1.191.1   # re-point
+    git push origin :refs/tags/v1.193.1 && git tag -d v1.193.1                                      # delete
+
+Re-pointing is for a number `main` does carry, at the commit that first declared it on `main`; deleting is for a
+number `main` never carried, and the branch the tag came from is named in the commit that records the repair. An
+orphan tag whose own commit does not declare the number at all (`orphan-tag`) is retired the same way, once its
+row is closed.
+
+`npm run changelog` refuses on the same rule, scoped to the sections it is about to write: a version tag for a
+release above the file's newest section, whose commit `main` never carried, stops the render before anything is
+written, with the tag, its commit and its branch in the message. The scope matters - a kept section is the file's
+own business and the gate's, and another branch's unlanded bump is not this render's claim, so a render of `main`
+is never blocked by a neighbour's draft tag.
 
 A rebase merge re-creates the branch's commits on `main` with new shas, so the anchor has to move with them.
 `node tools/version.mjs apply <level>` does the anchoring itself: on a clean tree it writes the number, commits it as
