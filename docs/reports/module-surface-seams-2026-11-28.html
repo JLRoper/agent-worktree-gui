@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Module seams: every public/ module and the CSS surface that owns it - row 447</title>
+<style>
+  :root { --bg: #0d1117; --panel: #151b24; --line: #26303d; --ink: #e6edf3; --dim: #9aa7b4; --dimmer: #6b7684;
+          --green: #3fb950; --red: #f85149; --amber: #d29922; --violet: #a371f7; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 22px 60px; background: var(--bg); color: var(--ink);
+         font: 14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 25px; letter-spacing: -.01em; }
+  h2 { margin: 34px 0 10px; font-size: 17px; padding-top: 10px; border-top: 1px solid var(--line); }
+  h3 { margin: 20px 0 6px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { color: #cfd8e3; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: #1c222c; padding: 1px 5px; border-radius: 4px; color: #c9d6e4; }
+  .sub { color: var(--dim); font-size: 13px; }
+  .verdict { margin: 16px 0 6px; padding: 14px 16px; background: var(--panel);
+             border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 8px; }
+  .verdict b { color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .ok { color: var(--green); }
+  .bad { color: var(--red); }
+  .warn { color: var(--amber); }
+  .note { background: #161d27; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  .note h4 { margin: 0 0 4px; font-size: 13px; color: #fff; }
+  .scroll { overflow-x: auto; }
+  ul.tight { margin: 6px 0; padding-left: 20px; }
+  ul.tight li { margin: 3px 0; }
+  .kv { display: grid; grid-template-columns: 210px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  .rank { margin: 14px 0; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .rank h4 { margin: 0 0 4px; font-size: 14px; color: #fff; }
+  .rank .meta { color: var(--dim); font-size: 12.5px; margin-bottom: 6px; }
+  @media (max-width: 760px) { .kv { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Every front-end module, and the sheet that owns its rules</h1>
+<p class="sub">Row 447. Tree <code>row-444-is-the-complete-brief-the-board-9e1458</code>, branch
+<code>wtgui/row-444-is-the-complete-brief-the-board-9e1458</code>, measured on 2026-11-28 at
+<code>24275290</code> - the turnover branch merged into this tree first, so every number is the tree as it
+stands after today's cuts, not before them. Research only: no front-end file, no sheet and no version was
+changed by this row.</p>
+
+<div class="verdict">
+<b>The split has converged for the modules that were cut; it has not for the three producers that were never cut.</b>
+41 of the 80 producers own at least one rule, and 24 of those 41 own
+<b>every</b> rule in one sheet. Of the 3,392 rule blocks in the twenty sheets, 2,779
+(81.9%) can be attributed to exactly one module by the structural class in their selector.
+The rules that sit outside their module's owner sheet number <b>786</b>, and 561 of them
+(71.4%) belong to just three producers: <code>public/assistant.js</code> (290),
+<code>public/index.html</code> (163) and <code>public/app.js</code> (108).
+Everything else is a handful: the next seven modules together account for 207 rules.
+</div>
+
+<h2>1. What was measured, and how</h2>
+<p>The brief's tree was measured as it stands, not as it was remembered. Three numbers differ from the brief's snapshot and
+the measured value is used everywhere below:</p>
+<div class="kv">
+  <div>public/app.js</div><div><b>11,270 lines</b> at <code>24275290</code> (the brief said 11,189; the turnover branch moved 81 lines after the brief was written)</div>
+  <div>sheets</div><div><b>20</b>, 9,364 lines, 3,392 rule blocks, 3,647 selector entries, 43 keyframe steps</div>
+  <div>modules</div><div><b>79</b> JS files under <code>public/</code> (top level, <code>board/</code>, <code>core/</code>), 65,125 lines, plus <code>public/index.html</code> (1,831 lines) as the static-markup producer</div>
+  <div>the four named shells</div><div><code>queue-cards.js</code> 71 lines, <code>render-jobs.js</code> 55, <code>render-projects.js</code> 68, <code>board/console.js</code> 85 - all four write <b>no class token</b> now; their surfaces live in the cut files (section 4)</div>
+</div>
+
+<div class="note">
+<h4>The tree moved while this row measured</h4>
+<p>Two commits landed after the first run: <code>fdf81395</code> (the queue lane fix, authored in this tree at 08:56)
+changed <code>public/board/queue-row.js</code> by 10 lines, and the catch-up merge <code>24275290</code> brought the
+turnover branch's 14 later commits. The tool was run before and after both, and the totals, the sheet table and all
+80 producer rows are identical between the two runs, because neither commit changed a class token in a
+<code>public/</code> module. Every number below is the second run, at <code>24275290</code>.</p>
+</div>
+
+<p><b>The method, in one paragraph.</b> A module's DOM is found by the class tokens its source <i>writes</i>:
+<code>class="..."</code> values, <code>className</code> assignments, <code>classList.add/remove/toggle</code> arguments and
+<code>setAttribute("class", ...)</code>. The reader strips comments first, and it walks template literals with a scanner rather
+than a regex, so a state class chosen inside an expression (<code>class="init-card${open ? "" : " is-titlecard"}"</code>)
+counts and <code>const cls = `badge ${...}`</code> is resolved one level. A token written by exactly one producer is that
+producer's <b>private</b> token. A rule is that producer's rule when the <b>first class in one of its selector entries</b>
+is one of its private tokens - the structural class, not every token, so <code>.as-task.is-done</code> stays the task card's
+rule even though the <code>is-done</code> modifier is written by someone else. The sheet with the most private rules is the
+module's <b>owner</b>; every other sheet with at least one is a surface the module <b>spans</b>.</p>
+
+<div class="note">
+<h4>What the method cannot see</h4>
+<p>A class built from a value the tool cannot resolve is counted as <i>dynamic</i>, never guessed. The class set is read from
+source, not from a running page, so a class that only the server or a test fixture writes is invisible, and a class a module
+writes but never renders still counts. The page was not booted for this row: the browser proof that the sheets themselves
+render is <code>docs/reports/css-split-review-2026-11-28.html</code> (dead selectors measured against a fixture), and this
+report does not restate it. The tool is committed and the command is in section 10, so every number here can be re-read.</p>
+</div>
+
+<h2>2. The twenty sheets, and how much of each is attributable</h2>
+<p>"One" is a rule whose structural class exactly one module writes; "none" is a rule that names no class, a class several
+modules write, or a class no producer writes. The last column is the reverse map: the module that owns the most private
+rules in that sheet.</p>
+<div class="scroll">
+<table>
+<tr><th>sheet</th><th>surface, as the sheet's header states it</th><th class="num">lines</th><th class="num">rules</th><th class="num">selectors</th><th class="num">one module</th><th class="num">none</th><th>top module</th></tr>
+<tr><td><code>public/base.css</code></td><td>tokens and resets</td><td class="num">97</td><td class="num">13</td><td class="num">16</td><td class="num">0</td><td class="num">13</td><td><span class="sub">shared by design, no owner</span></td></tr>
+<tr><td><code>public/chrome.css</code></td><td>header and status strip</td><td class="num">289</td><td class="num">63</td><td class="num">72</td><td class="num">38</td><td class="num">24</td><td><code>public/index.html</code> 20</td></tr>
+<tr><td><code>public/settings.css</code></td><td>Settings drawer and its dialogs</td><td class="num">450</td><td class="num">300</td><td class="num">312</td><td class="num">253</td><td class="num">47</td><td><code>public/index.html</code> 135</td></tr>
+<tr><td><code>public/board-table.css</code></td><td>the board table: boxes, rows, cells, chips, agent cards</td><td class="num">2,410</td><td class="num">806</td><td class="num">882</td><td class="num">624</td><td class="num">181</td><td><code>public/board-scaffold.js</code> 358</td></tr>
+<tr><td><code>public/console.css</code></td><td>the console card: frame, output body, reply composer</td><td class="num">1,132</td><td class="num">361</td><td class="num">391</td><td class="num">300</td><td class="num">59</td><td><code>public/core/console-format.js</code> 55</td></tr>
+<tr><td><code>public/console-head.css</code></td><td>the console head and its controls</td><td class="num">172</td><td class="num">64</td><td class="num">69</td><td class="num">59</td><td class="num">5</td><td><code>public/board/conversation.js</code> 52</td></tr>
+<tr><td><code>public/console-turns.css</code></td><td>the console's turn rows and their readouts</td><td class="num">90</td><td class="num">35</td><td class="num">35</td><td class="num">31</td><td class="num">4</td><td><code>public/turns.js</code> 17</td></tr>
+<tr><td><code>public/model-menu.css</code></td><td>the model picker popup</td><td class="num">53</td><td class="num">29</td><td class="num">30</td><td class="num">19</td><td class="num">10</td><td><code>public/core/model-menu.js</code> 17</td></tr>
+<tr><td><code>public/overlays.css</code></td><td>deliverables, pasted chips, approval and question cards, ghost turns</td><td class="num">615</td><td class="num">255</td><td class="num">265</td><td class="num">208</td><td class="num">47</td><td><code>public/deliverables.js</code> 50</td></tr>
+<tr><td><code>public/utilities.css</code></td><td>the shared type and status utilities (.mono, .dim, .name, ...)</td><td class="num">35</td><td class="num">8</td><td class="num">8</td><td class="num">3</td><td class="num">5</td><td><span class="sub">shared by design, no owner</span></td></tr>
+<tr><td><code>public/assistant.css</code></td><td>the assistant entry, spawn strip and float shell</td><td class="num">364</td><td class="num">111</td><td class="num">125</td><td class="num">94</td><td class="num">17</td><td><code>public/index.html</code> 47</td></tr>
+<tr><td><code>public/feedback.css</code></td><td>the header's Clarify, Collisions and Permissions popovers</td><td class="num">670</td><td class="num">216</td><td class="num">225</td><td class="num">139</td><td class="num">77</td><td><code>public/permissions-history.js</code> 62</td></tr>
+<tr><td><code>public/assistant-panes.css</code></td><td>the assistant float's tabs, panes, search and settings</td><td class="num">240</td><td class="num">126</td><td class="num">133</td><td class="num">91</td><td class="num">35</td><td><code>public/assistant.js</code> 67</td></tr>
+<tr><td><code>public/initiatives.css</code></td><td>the Initiatives tab</td><td class="num">1,561</td><td class="num">436</td><td class="num">473</td><td class="num">406</td><td class="num">30</td><td><code>public/assistant.js</code> 272</td></tr>
+<tr><td><code>public/panes.css</code></td><td>the assistant's Worktrees and Bridge sub-tabs</td><td class="num">184</td><td class="num">120</td><td class="num">126</td><td class="num">104</td><td class="num">16</td><td><code>public/assistant.js</code> 70</td></tr>
+<tr><td><code>public/queue.css</code></td><td>the queue cards and the assistant queue pane</td><td class="num">138</td><td class="num">76</td><td class="num">83</td><td class="num">76</td><td class="num">0</td><td><code>public/board/queue-detail.js</code> 67</td></tr>
+<tr><td><code>public/pipeline.css</code></td><td>the pipeline window, messages and flow</td><td class="num">542</td><td class="num">259</td><td class="num">282</td><td class="num">230</td><td class="num">27</td><td><code>public/assistant.js</code> 92</td></tr>
+<tr><td><code>public/chart.css</code></td><td>the worktree chart's age column and legend</td><td class="num">199</td><td class="num">47</td><td class="num">49</td><td class="num">37</td><td class="num">10</td><td><code>public/board/project-order.js</code> 22</td></tr>
+<tr><td><code>public/core/pipeline-card.css</code></td><td>one mermaid pipeline card</td><td class="num">72</td><td class="num">51</td><td class="num">55</td><td class="num">51</td><td class="num">0</td><td><code>public/core/pipeline-mermaid.js</code> 51</td></tr>
+<tr><td><code>public/core/task-card.css</code></td><td>the queue card's compact mode</td><td class="num">51</td><td class="num">16</td><td class="num">16</td><td class="num">16</td><td class="num">0</td><td><code>public/board/queue-detail.js</code> 13</td></tr>
+</table>
+</div>
+<p class="sub">Totals: 9,364 sheet lines, 3,392 rules, 3,647 selectors.
+The two sheets with 100% attribution are the two the split already made single-purpose: <code>core/pipeline-card.css</code>
+(51 rules, all <code>.pm-card</code>) and
+<code>core/task-card.css</code> (16 rules, all
+<code>.as-task.is-compact</code>).</p>
+
+<h2>3. The map: every module, its owner, and the sheets it also writes for</h2>
+<p>The 41 modules that own at least one rule, sorted by cohesion (worst first). "Owner rules" is the count in
+the owner sheet; "all its rules" is the sum across every sheet. A module at 100% has no seam left to cut.</p>
+<div class="scroll">
+<table>
+<tr><th>module</th><th class="num">lines</th><th class="num">tokens</th><th class="num">private</th><th>owner sheet</th><th class="num">owner rules</th><th class="num">all its rules</th><th class="num">cohesion</th><th>other sheets (private rules)</th></tr>
+<tr><td><code>public/app.js</code></td><td class="num">11,270</td><td class="num">176</td><td class="num">109</td><td><code>settings.css</code></td><td class="num">67</td><td class="num">175</td><td class="num">38.3%</td><td>console.css 43, overlays.css 26, board-table.css 23, console-turns.css 8, console-head.css 4, model-menu.css 2, chrome.css 2</td></tr>
+<tr><td><code>public/board/conversation.js</code></td><td class="num">1,007</td><td class="num">80</td><td class="num">55</td><td><code>console.css</code></td><td class="num">54</td><td class="num">132</td><td class="num">40.9%</td><td>console-head.css 52, overlays.css 13, board-table.css 5, console-turns.css 3, feedback.css 3, chrome.css 2</td></tr>
+<tr><td><code>public/index.html</code></td><td class="num">1,831</td><td class="num">172</td><td class="num">120</td><td><code>settings.css</code></td><td class="num">135</td><td class="num">298</td><td class="num">45.3%</td><td>assistant.css 47, board-table.css 30, feedback.css 24, assistant-panes.css 23, chrome.css 20, pipeline.css 11, overlays.css 8</td></tr>
+<tr><td><code>public/assistant.js</code></td><td class="num">9,622</td><td class="num">357</td><td class="num">310</td><td><code>initiatives.css</code></td><td class="num">272</td><td class="num">562</td><td class="num">48.4%</td><td>pipeline.css 92, panes.css 70, assistant-panes.css 67, assistant.css 45, queue.css 9, console.css 3, core/task-card.css 3, chrome.css 1</td></tr>
+<tr><td><code>public/board/queue-detail.js</code></td><td class="num">635</td><td class="num">58</td><td class="num">41</td><td><code>queue.css</code></td><td class="num">67</td><td class="num">118</td><td class="num">56.8%</td><td>panes.css 32, core/task-card.css 13, pipeline.css 6</td></tr>
+<tr><td><code>public/board/approvals.js</code></td><td class="num">994</td><td class="num">62</td><td class="num">45</td><td><code>board-table.css</code></td><td class="num">51</td><td class="num">81</td><td class="num">63.0%</td><td>overlays.css 30</td></tr>
+<tr><td><code>public/turns.js</code></td><td class="num">469</td><td class="num">21</td><td class="num">17</td><td><code>console-turns.css</code></td><td class="num">17</td><td class="num">27</td><td class="num">63.0%</td><td>console.css 6, console-head.css 3, assistant.css 1</td></tr>
+<tr><td><code>public/board/project-order.js</code></td><td class="num">524</td><td class="num">56</td><td class="num">26</td><td><code>board-table.css</code></td><td class="num">49</td><td class="num">71</td><td class="num">69.0%</td><td>chart.css 22</td></tr>
+<tr><td><code>public/settings.js</code></td><td class="num">877</td><td class="num">17</td><td class="num">7</td><td><code>overlays.css</code></td><td class="num">9</td><td class="num">12</td><td class="num">75.0%</td><td>board-table.css 3</td></tr>
+<tr><td><code>public/board/stream-body.js</code></td><td class="num">277</td><td class="num">11</td><td class="num">7</td><td><code>console.css</code></td><td class="num">26</td><td class="num">32</td><td class="num">81.3%</td><td>console-turns.css 3, assistant.css 1, feedback.css 1, assistant-panes.css 1</td></tr>
+<tr><td><code>public/settings-window.js</code></td><td class="num">3,918</td><td class="num">79</td><td class="num">63</td><td><code>settings.css</code></td><td class="num">51</td><td class="num">61</td><td class="num">83.6%</td><td>pipeline.css 10</td></tr>
+<tr><td><code>public/core/console-markdown.js</code></td><td class="num">732</td><td class="num">22</td><td class="num">18</td><td><code>console.css</code></td><td class="num">20</td><td class="num">23</td><td class="num">87.0%</td><td>overlays.css 3</td></tr>
+<tr><td><code>public/core/command-summary.js</code></td><td class="num">1,058</td><td class="num">13</td><td class="num">12</td><td><code>overlays.css</code></td><td class="num">23</td><td class="num">25</td><td class="num">92.0%</td><td>board-table.css 2</td></tr>
+<tr><td><code>public/board/project-row.js</code></td><td class="num">842</td><td class="num">55</td><td class="num">35</td><td><code>board-table.css</code></td><td class="num">59</td><td class="num">62</td><td class="num">95.2%</td><td>utilities.css 3</td></tr>
+<tr><td><code>public/board/console-stream.js</code></td><td class="num">1,669</td><td class="num">25</td><td class="num">15</td><td><code>console.css</code></td><td class="num">24</td><td class="num">25</td><td class="num">96.0%</td><td>pipeline.css 1</td></tr>
+<tr><td><code>public/deliverables.js</code></td><td class="num">1,063</td><td class="num">34</td><td class="num">31</td><td><code>overlays.css</code></td><td class="num">50</td><td class="num">52</td><td class="num">96.2%</td><td>chrome.css 2</td></tr>
+<tr><td><code>public/board-scaffold.js</code></td><td class="num">3,128</td><td class="num">244</td><td class="num">208</td><td><code>board-table.css</code></td><td class="num">358</td><td class="num">362</td><td class="num">98.9%</td><td>console.css 4</td></tr>
+<tr><td><code>public/core/waves-lane.js</code></td><td class="num">833</td><td class="num">82</td><td class="num">69</td><td><code>initiatives.css</code></td><td class="num">134</td><td class="num">134</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/pipeline-flow.js</code></td><td class="num">875</td><td class="num">26</td><td class="num">25</td><td><code>pipeline.css</code></td><td class="num">71</td><td class="num">71</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/permissions-history.js</code></td><td class="num">804</td><td class="num">47</td><td class="num">35</td><td><code>feedback.css</code></td><td class="num">62</td><td class="num">62</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/core/console-format.js</code></td><td class="num">828</td><td class="num">31</td><td class="num">26</td><td><code>console.css</code></td><td class="num">55</td><td class="num">55</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/core/pipeline-mermaid.js</code></td><td class="num">796</td><td class="num">21</td><td class="num">18</td><td><code>core/pipeline-card.css</code></td><td class="num">51</td><td class="num">51</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/collision-history.js</code></td><td class="num">799</td><td class="num">55</td><td class="num">31</td><td><code>feedback.css</code></td><td class="num">49</td><td class="num">49</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/console-tools.js</code></td><td class="num">559</td><td class="num">39</td><td class="num">29</td><td><code>console.css</code></td><td class="num">47</td><td class="num">47</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/pipeline-modal.js</code></td><td class="num">851</td><td class="num">26</td><td class="num">23</td><td><code>pipeline.css</code></td><td class="num">43</td><td class="num">43</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/merge.js</code></td><td class="num">652</td><td class="num">32</td><td class="num">24</td><td><code>board-table.css</code></td><td class="num">34</td><td class="num">34</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/replies.js</code></td><td class="num">1,037</td><td class="num">19</td><td class="num">16</td><td><code>overlays.css</code></td><td class="num">25</td><td class="num">25</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/core/model-menu.js</code></td><td class="num">412</td><td class="num">21</td><td class="num">13</td><td><code>model-menu.css</code></td><td class="num">17</td><td class="num">17</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/worktrees.js</code></td><td class="num">809</td><td class="num">28</td><td class="num">18</td><td><code>overlays.css</code></td><td class="num">14</td><td class="num">14</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/core/update-check.js</code></td><td class="num">410</td><td class="num">10</td><td class="num">9</td><td><code>chrome.css</code></td><td class="num">13</td><td class="num">13</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/spawn.js</code></td><td class="num">875</td><td class="num">11</td><td class="num">6</td><td><code>board-table.css</code></td><td class="num">10</td><td class="num">10</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/console-rows.js</code></td><td class="num">1,428</td><td class="num">16</td><td class="num">8</td><td><code>console.css</code></td><td class="num">8</td><td class="num">8</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/row-order.js</code></td><td class="num">869</td><td class="num">15</td><td class="num">8</td><td><code>chart.css</code></td><td class="num">8</td><td class="num">8</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/paste-chips.js</code></td><td class="num">1,192</td><td class="num">6</td><td class="num">5</td><td><code>overlays.css</code></td><td class="num">7</td><td class="num">7</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/charts.js</code></td><td class="num">735</td><td class="num">6</td><td class="num">2</td><td><code>chart.css</code></td><td class="num">7</td><td class="num">7</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/core/assistant-command.js</code></td><td class="num">413</td><td class="num">8</td><td class="num">7</td><td><code>console.css</code></td><td class="num">6</td><td class="num">6</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/attachments.js</code></td><td class="num">193</td><td class="num">4</td><td class="num">3</td><td><code>console.css</code></td><td class="num">6</td><td class="num">6</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/core/console-grip.js</code></td><td class="num">408</td><td class="num">2</td><td class="num">1</td><td><code>console.css</code></td><td class="num">2</td><td class="num">2</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/columns.js</code></td><td class="num">306</td><td class="num">1</td><td class="num">1</td><td><code>board-table.css</code></td><td class="num">2</td><td class="num">2</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/queue-row.js</code></td><td class="num">587</td><td class="num">15</td><td class="num">6</td><td><code>panes.css</code></td><td class="num">1</td><td class="num">1</td><td class="num">100.0%</td><td>-</td></tr>
+<tr><td><code>public/board/queue-drag.js</code></td><td class="num">266</td><td class="num">2</td><td class="num">1</td><td><code>panes.css</code></td><td class="num">1</td><td class="num">1</td><td class="num">100.0%</td><td>-</td></tr>
+</table>
+</div>
+
+<h3>The 39 producers with no rule of their own</h3>
+<p>These are not failures of the map. They are behaviour-only modules, entry points left after a cut, and modules whose whole
+class vocabulary is shared with a sibling. Each one is still part of a surface; it just does not own a rule in it.</p>
+<div class="scroll">
+<table>
+<tr><th>module</th><th class="num">lines</th><th class="num">tokens</th><th class="num">shared</th><th>why it owns no rule</th></tr>
+<tr><td><code>public/board/anchor.js</code></td><td class="num">1,086</td><td class="num">1</td><td>1 shared</td><td>all 1 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/clarify-history.js</code></td><td class="num">987</td><td class="num">51</td><td>23 shared</td><td>all 51 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/board/job-line.js</code></td><td class="num">827</td><td class="num">5</td><td>4 shared</td><td>all 5 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/core/type-stream.js</code></td><td class="num">776</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/search-popover.js</code></td><td class="num">530</td><td class="num">10</td><td>5 shared</td><td>all 10 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/pipeline-map.js</code></td><td class="num">461</td><td class="num">5</td><td>2 shared</td><td>all 5 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/core/initiative-fold.js</code></td><td class="num">416</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/pipeline-import.js</code></td><td class="num">404</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/collision-history.js</code></td><td class="num">332</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/copy-full-value.js</code></td><td class="num">325</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/sse.js</code></td><td class="num">320</td><td class="num">2</td><td>2 shared</td><td>all 2 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/core/dom-format.js</code></td><td class="num">289</td><td class="num">2</td><td>1 shared</td><td>all 2 of its class tokens are shared with another module</td></tr>
+<tr><td><code>public/core/cleanup-drop-all.js</code></td><td class="num">286</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/turn-fold.js</code></td><td class="num">234</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/row-chips.js</code></td><td class="num">216</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/dom.js</code></td><td class="num">211</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/permissions-history.js</code></td><td class="num">200</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/perf-log.js</code></td><td class="num">200</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/stream-merge.js</code></td><td class="num">196</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/clarify-history.js</code></td><td class="num">177</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/transport.js</code></td><td class="num">144</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/review-lane.js</code></td><td class="num">143</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/search-items.js</code></td><td class="num">137</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/hot-mark.js</code></td><td class="num">103</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/search-scroll.js</code></td><td class="num">101</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/deliver-kinds.js</code></td><td class="num">94</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/theme-hue.js</code></td><td class="num">89</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/search-count.js</code></td><td class="num">87</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/board/console.js</code></td><td class="num">85</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/turn-search.js</code></td><td class="num">85</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/steerable.js</code></td><td class="num">82</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/branch-link.js</code></td><td class="num">78</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/active-button.js</code></td><td class="num">72</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/queue-cards.js</code></td><td class="num">71</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/render-projects.js</code></td><td class="num">68</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/hot-agent-list.js</code></td><td class="num">63</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/render-jobs.js</code></td><td class="num">55</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/search-dismiss.js</code></td><td class="num">43</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+<tr><td><code>public/core/liveness.js</code></td><td class="num">30</td><td class="num">0</td><td>-</td><td>writes no class token (behaviour or entry point)</td></tr>
+</table>
+</div>
+<p class="sub">The four entry points the brief names are four of these rows: <code>queue-cards.js</code> 71
+lines, <code>render-projects.js</code> 68, <code>render-jobs.js</code> 55, <code>board/console.js</code> 85 - all header and
+wiring, 0 class tokens. Their surfaces are the cut files named in section 4.</p>
+
+<h2>4. Where the seams already agree</h2>
+<p><b>24 modules hold every one of their rules in a single sheet.</b> Sixteen of them own at least eight rules, which
+is where the agreement is more than a one-rule coincidence:</p>
+<div class="scroll">
+<table>
+<tr><th>module</th><th class="num">lines</th><th class="num">rules</th><th>owner sheet</th></tr>
+<tr><td><code>public/core/waves-lane.js</code></td><td class="num">833</td><td class="num">134</td><td><code>initiatives.css</code></td></tr>
+<tr><td><code>public/pipeline-flow.js</code></td><td class="num">875</td><td class="num">71</td><td><code>pipeline.css</code></td></tr>
+<tr><td><code>public/permissions-history.js</code></td><td class="num">804</td><td class="num">62</td><td><code>feedback.css</code></td></tr>
+<tr><td><code>public/core/console-format.js</code></td><td class="num">828</td><td class="num">55</td><td><code>console.css</code></td></tr>
+<tr><td><code>public/core/pipeline-mermaid.js</code></td><td class="num">796</td><td class="num">51</td><td><code>core/pipeline-card.css</code></td></tr>
+<tr><td><code>public/collision-history.js</code></td><td class="num">799</td><td class="num">49</td><td><code>feedback.css</code></td></tr>
+<tr><td><code>public/board/console-tools.js</code></td><td class="num">559</td><td class="num">47</td><td><code>console.css</code></td></tr>
+<tr><td><code>public/pipeline-modal.js</code></td><td class="num">851</td><td class="num">43</td><td><code>pipeline.css</code></td></tr>
+<tr><td><code>public/board/merge.js</code></td><td class="num">652</td><td class="num">34</td><td><code>board-table.css</code></td></tr>
+<tr><td><code>public/board/replies.js</code></td><td class="num">1,037</td><td class="num">25</td><td><code>overlays.css</code></td></tr>
+<tr><td><code>public/core/model-menu.js</code></td><td class="num">412</td><td class="num">17</td><td><code>model-menu.css</code></td></tr>
+<tr><td><code>public/board/worktrees.js</code></td><td class="num">809</td><td class="num">14</td><td><code>overlays.css</code></td></tr>
+<tr><td><code>public/core/update-check.js</code></td><td class="num">410</td><td class="num">13</td><td><code>chrome.css</code></td></tr>
+<tr><td><code>public/board/spawn.js</code></td><td class="num">875</td><td class="num">10</td><td><code>board-table.css</code></td></tr>
+<tr><td><code>public/board/console-rows.js</code></td><td class="num">1,428</td><td class="num">8</td><td><code>console.css</code></td></tr>
+<tr><td><code>public/board/row-order.js</code></td><td class="num">869</td><td class="num">8</td><td><code>chart.css</code></td></tr>
+</table>
+</div>
+<p>Five more are at 90% or better, and each of their remainders is one to four rules:</p>
+<div class="scroll">
+<table>
+<tr><th>module</th><th class="num">lines</th><th class="num">rules</th><th class="num">cohesion</th><th>remainder</th></tr>
+<tr><td><code>public/board-scaffold.js</code></td><td class="num">3,128</td><td class="num">362</td><td class="num">98.9%</td><td><code>console.css</code> 4</td></tr>
+<tr><td><code>public/board/project-row.js</code></td><td class="num">842</td><td class="num">62</td><td class="num">95.2%</td><td><code>utilities.css</code> 3</td></tr>
+<tr><td><code>public/deliverables.js</code></td><td class="num">1,063</td><td class="num">52</td><td class="num">96.2%</td><td><code>chrome.css</code> 2</td></tr>
+<tr><td><code>public/board/console-stream.js</code></td><td class="num">1,669</td><td class="num">25</td><td class="num">96.0%</td><td><code>pipeline.css</code> 1</td></tr>
+<tr><td><code>public/core/command-summary.js</code></td><td class="num">1,058</td><td class="num">25</td><td class="num">92.0%</td><td><code>board-table.css</code> 2</td></tr>
+</table>
+</div>
+<p>The board's own module is the strongest large example: <code>public/board-scaffold.js</code> writes 244 class tokens, 208 of them private, and owns 358 of its 362 rules in <code>board-table.css</code> (98.9%), with four rules in <code>console.css</code> left over. The same holds for the two sheet-per-component modules: <code>core/waves-lane.js</code> is 100% in <code>initiatives.css</code> (134 rules), and <code>pipeline-flow.js</code> is 100% in <code>pipeline.css</code> (71 rules).</p>
+
+<h3>The four named cuts, measured</h3>
+<p>The brief asks for the modules "as they stand after today's cuts", and the four it names are now shells. This table is the
+proof, with the children that carry the surface:</p>
+<div class="scroll">
+<table>
+<tr><th>shell</th><th class="num">lines</th><th>children (lines)</th><th>owner sheets of the children</th></tr>
+<tr><td><code>public/queue-cards.js</code></td><td class="num">71</td><td><code>board/queue-row.js</code> 586, <code>board/queue-drag.js</code> 266, <code>board/queue-detail.js</code> 634</td><td>queue.css 67, panes.css 32, core/task-card.css 13, pipeline.css 6</td></tr>
+<tr><td><code>public/render-jobs.js</code></td><td class="num">55</td><td><code>board/stream-body.js</code> 277, <code>board/conversation.js</code> 1,007</td><td>console.css 54, console-head.css 52, overlays.css 13</td></tr>
+<tr><td><code>public/render-projects.js</code></td><td class="num">68</td><td><code>board/project-order.js</code> 524, <code>board/project-row.js</code> 842, <code>board/row-order.js</code> 869</td><td>board-table.css 49, chart.css 22, utilities.css 3</td></tr>
+<tr><td><code>public/board/console.js</code></td><td class="num">85</td><td><code>board/console-stream.js</code> 1,669, <code>board/console-rows.js</code> 1,428, <code>board/console-tools.js</code> 559, <code>board/job-line.js</code> 827</td><td>console.css 47, console-head.css 2, pipeline.css 1</td></tr>
+</table>
+</div>
+
+<h2>5. Where a module spans more than one surface</h2>
+<p>Ranked by private rules outside the owner sheet. The "lines naming it" count is a lower bound on the code a cut would
+have to move: source lines that name a class whose rule lives in that sheet (comments stripped, shared tokens excluded), not
+the size of the functions those lines sit in. A line can name a class rooted in more than one sheet, so the counts in one row
+can repeat across sheets and are not additive.</p>
+<div class="scroll">
+<table>
+<tr><th>module</th><th class="num">lines</th><th>owner</th><th class="num">outside</th><th>sheets it spans (private rules, lines naming a class rooted there)</th></tr>
+<tr><td><code>public/assistant.js</code></td><td class="num">9,622</td><td><code>initiatives.css</code> 272</td><td class="num">290</td><td><code>pipeline.css</code> 92 (72L)<br /><code>panes.css</code> 70 (36L)<br /><code>assistant-panes.css</code> 67 (81L)<br /><code>assistant.css</code> 45 (50L)<br /><code>queue.css</code> 9 (3L)<br /><code>console.css</code> 3 (3L)<br /><code>core/task-card.css</code> 3 (2L)<br /><code>chrome.css</code> 1 (1L)</td></tr>
+<tr><td><code>public/index.html</code></td><td class="num">1,831</td><td><code>settings.css</code> 135</td><td class="num">163</td><td><code>assistant.css</code> 47 (21L)<br /><code>board-table.css</code> 30 (5L)<br /><code>feedback.css</code> 24 (6L)<br /><code>assistant-panes.css</code> 23 (9L)<br /><code>chrome.css</code> 20 (49L)<br /><code>pipeline.css</code> 11 (5L)<br /><code>overlays.css</code> 8 (1L)</td></tr>
+<tr><td><code>public/app.js</code></td><td class="num">11,270</td><td><code>settings.css</code> 67</td><td class="num">108</td><td><code>console.css</code> 43 (18L)<br /><code>overlays.css</code> 26 (16L)<br /><code>board-table.css</code> 23 (7L)<br /><code>console-turns.css</code> 8 (2L)<br /><code>console-head.css</code> 4 (3L)<br /><code>model-menu.css</code> 2 (2L)<br /><code>chrome.css</code> 2 (2L)</td></tr>
+<tr><td><code>public/board/conversation.js</code></td><td class="num">1,007</td><td><code>console.css</code> 54</td><td class="num">78</td><td><code>console-head.css</code> 52 (16L)<br /><code>overlays.css</code> 13 (11L)<br /><code>board-table.css</code> 5 (4L)<br /><code>console-turns.css</code> 3 (3L)<br /><code>feedback.css</code> 3 (4L)<br /><code>chrome.css</code> 2 (5L)</td></tr>
+<tr><td><code>public/board/queue-detail.js</code></td><td class="num">635</td><td><code>queue.css</code> 67</td><td class="num">51</td><td><code>panes.css</code> 32 (20L)<br /><code>core/task-card.css</code> 13 (2L)<br /><code>pipeline.css</code> 6 (2L)</td></tr>
+<tr><td><code>public/board/approvals.js</code></td><td class="num">994</td><td><code>board-table.css</code> 51</td><td class="num">30</td><td><code>overlays.css</code> 30 (31L)</td></tr>
+<tr><td><code>public/board/project-order.js</code></td><td class="num">524</td><td><code>board-table.css</code> 49</td><td class="num">22</td><td><code>chart.css</code> 22 (6L)</td></tr>
+<tr><td><code>public/settings-window.js</code></td><td class="num">3,918</td><td><code>settings.css</code> 51</td><td class="num">10</td><td><code>pipeline.css</code> 10 (11L)</td></tr>
+<tr><td><code>public/turns.js</code></td><td class="num">469</td><td><code>console-turns.css</code> 17</td><td class="num">10</td><td><code>console.css</code> 6 (7L)<br /><code>console-head.css</code> 3 (1L)<br /><code>assistant.css</code> 1 (1L)</td></tr>
+<tr><td><code>public/board/stream-body.js</code></td><td class="num">277</td><td><code>console.css</code> 26</td><td class="num">6</td><td><code>console-turns.css</code> 3 (32L)<br /><code>assistant.css</code> 1 (32L)<br /><code>feedback.css</code> 1 (32L)<br /><code>assistant-panes.css</code> 1 (32L)</td></tr>
+<tr><td><code>public/board-scaffold.js</code></td><td class="num">3,128</td><td><code>board-table.css</code> 358</td><td class="num">4</td><td><code>console.css</code> 4 (1L)</td></tr>
+<tr><td><code>public/board/project-row.js</code></td><td class="num">842</td><td><code>board-table.css</code> 59</td><td class="num">3</td><td><code>utilities.css</code> 3 (63L)</td></tr>
+</table>
+</div>
+<p>The three at the top are the whole story. <code>assistant.js</code>'s 562 private rules sit
+272 in <code>initiatives.css</code> and 290 across the
+float's other eight sheets; <code>index.html</code> is static markup spread over nine sheets; <code>app.js</code> still draws
+four unrelated surfaces, all of which have a module that already owns their rules.</p>
+
+<h2>6. The state vocabulary, measured apart</h2>
+<p>One part of the CSS is deliberately shared: the <code>is-</code> and <code>has-</code> modifiers. A module writes the state,
+and any sheet that styles the element it lands on defines a rule for it. There are 126 such tokens with
+a rule; 38 are written by more than one module. The top of the
+list:</p>
+<div class="scroll">
+<table>
+<tr><th>modifier</th><th class="num">writers</th><th class="num">rules</th><th>sheets</th></tr>
+<tr><td><code>.is-on</code></td><td class="num">10</td><td class="num">16</td><td><code>board-table.css</code> 3, <code>console.css</code> 1, <code>console-head.css</code> 2, <code>assistant.css</code> 2, <code>assistant-panes.css</code> 4, <code>initiatives.css</code> 2, <code>pipeline.css</code> 1, <code>chart.css</code> 1</td></tr>
+<tr><td><code>.is-done</code></td><td class="num">4</td><td class="num">20</td><td><code>board-table.css</code> 3, <code>console.css</code> 4, <code>assistant-panes.css</code> 1, <code>initiatives.css</code> 5, <code>panes.css</code> 4, <code>queue.css</code> 3</td></tr>
+<tr><td><code>.is-running</code></td><td class="num">2</td><td class="num">11</td><td><code>board-table.css</code> 1, <code>console.css</code> 1, <code>console-turns.css</code> 1, <code>initiatives.css</code> 5, <code>panes.css</code> 2, <code>queue.css</code> 1</td></tr>
+<tr><td><code>.is-open</code></td><td class="num">12</td><td class="num">14</td><td><code>board-table.css</code> 4, <code>console.css</code> 5, <code>overlays.css</code> 1, <code>feedback.css</code> 3, <code>initiatives.css</code> 1</td></tr>
+<tr><td><code>.is-dragging</code></td><td class="num">7</td><td class="num">11</td><td><code>board-table.css</code> 1, <code>overlays.css</code> 2, <code>feedback.css</code> 4, <code>panes.css</code> 2, <code>pipeline.css</code> 2</td></tr>
+<tr><td><code>.is-none</code></td><td class="num">4</td><td class="num">7</td><td><code>board-table.css</code> 1, <code>assistant-panes.css</code> 1, <code>initiatives.css</code> 2, <code>panes.css</code> 2, <code>core/task-card.css</code> 1</td></tr>
+<tr><td><code>.is-parked</code></td><td class="num">1</td><td class="num">7</td><td><code>board-table.css</code> 1, <code>initiatives.css</code> 2, <code>panes.css</code> 2, <code>queue.css</code> 1, <code>pipeline.css</code> 1</td></tr>
+<tr><td><code>.is-bad</code></td><td class="num">3</td><td class="num">14</td><td><code>assistant-panes.css</code> 5, <code>initiatives.css</code> 1, <code>panes.css</code> 6, <code>pipeline.css</code> 2</td></tr>
+<tr><td><code>.is-over</code></td><td class="num">4</td><td class="num">9</td><td><code>console-turns.css</code> 1, <code>overlays.css</code> 4, <code>feedback.css</code> 2, <code>assistant-panes.css</code> 2</td></tr>
+<tr><td><code>.is-current</code></td><td class="num">4</td><td class="num">8</td><td><code>model-menu.css</code> 2, <code>assistant.css</code> 4, <code>initiatives.css</code> 1, <code>pipeline.css</code> 1</td></tr>
+<tr><td><code>.is-deny</code></td><td class="num">2</td><td class="num">6</td><td><code>board-table.css</code> 2, <code>overlays.css</code> 1, <code>feedback.css</code> 3</td></tr>
+<tr><td><code>.is-quiet</code></td><td class="num">3</td><td class="num">5</td><td><code>board-table.css</code> 3, <code>console.css</code> 1, <code>overlays.css</code> 1</td></tr>
+<tr><td><code>.is-starting</code></td><td class="num">5</td><td class="num">5</td><td><code>board-table.css</code> 3, <code>console.css</code> 1, <code>console-head.css</code> 1</td></tr>
+<tr><td><code>.is-copied</code></td><td class="num">2</td><td class="num">5</td><td><code>board-table.css</code> 1, <code>console.css</code> 3, <code>pipeline.css</code> 1</td></tr>
+</table>
+</div>
+<p>This is not a defect and the plan below does not treat it as one: a state modifier is meant to be read by the sheet that
+owns each element. It is measured here because it is the reason a naive "the rule names my class, so the rule is mine" count
+would attribute half the panel to half the panel. The structural-class rule in section 1 is what removes it.</p>
+
+<h2>7. What cannot be mapped, and why</h2>
+<p>Of the 607 rules with no single owner: 86 name no class at all (element or attribute
+selectors, the resets in <code>base.css</code> included), 468 are rooted on a class two or more modules write,
+and 53 are rooted on a class no producer writes. The shared roots are a real vocabulary, not noise:
+184 class tokens are written by two or more modules.</p>
+<p>The ten most-shared tokens:</p>
+<ul class="tight">
+<li><code>.mono</code> - written by 25 modules (public/app.js, public/assistant.js, public/board-scaffold.js, ...)</li>
+<li><code>.dimmer</code> - written by 13 modules (public/app.js, public/board-scaffold.js, public/board/approvals.js, ...)</li>
+<li><code>.is-open</code> - written by 12 modules (public/app.js, public/assistant.js, public/board-scaffold.js, ...)</li>
+<li><code>.is-on</code> - written by 10 modules (public/app.js, public/assistant.js, public/board/anchor.js, ...)</li>
+<li><code>.warn</code> - written by 10 modules (public/assistant.js, public/board-scaffold.js, public/board/approvals.js, ...)</li>
+<li><code>.on</code> - written by 9 modules (public/app.js, public/assistant.js, public/board-scaffold.js, ...)</li>
+<li><code>.chip</code> - written by 9 modules (public/assistant.js, public/board-scaffold.js, public/board/approvals.js, ...)</li>
+<li><code>.bad</code> - written by 8 modules (public/app.js, public/board-scaffold.js, public/board/approvals.js, ...)</li>
+<li><code>.is-dragging</code> - written by 7 modules (public/app.js, public/board/queue-drag.js, public/clarify-history.js, ...)</li>
+<li><code>.is-folded</code> - written by 7 modules (public/app.js, public/assistant.js, public/board/console-stream.js, ...)</li>
+</ul>
+<p>The classes a sheet defines that no producer writes, by sheet. Most are <code>is-&lt;state&gt;</code> values composed at
+runtime or mermaid's own class names; a few are legacy (<code>.job</code> in <code>console.css</code> had no writer until the
+<code>cls</code> local in <code>board/conversation.js</code> was resolved, and <code>.job</code> in <code>pipeline.css</code>
+still has none).</p>
+<div class="scroll">
+<table>
+<tr><th>sheet</th><th class="num">classes</th><th class="num">rules</th><th>worst examples</th></tr>
+<tr><td><code>chrome.css</code></td><td class="num">1</td><td class="num">1</td><td><code>.copy-flash</code> 1</td></tr>
+<tr><td><code>settings.css</code></td><td class="num">5</td><td class="num">8</td><td><code>.settings-remotes</code> 4, <code>.remotes</code> 1, <code>.settings-note</code> 1, <code>.settings-remote-remote</code> 1, <code>.settings-remote-where</code> 1</td></tr>
+<tr><td><code>board-table.css</code></td><td class="num">37</td><td class="num">52</td><td><code>.is-ruled</code> 5, <code>.is-absent</code> 4, <code>.branch-link</code> 3, <code>.is-check</code> 2, <code>.is-rebase</code> 2, <code>.is-roll</code> 2, <code>.refused</code> 2, <code>.removed</code> 2</td></tr>
+<tr><td><code>console.css</code></td><td class="num">30</td><td class="num">44</td><td><code>.is-cmd</code> 10, <code>.interrupted</code> 2, <code>.is-poll</code> 2, <code>.job-cmd</code> 2, <code>.md-head-l</code> 2, <code>.md-li</code> 2, <code>.btn-steer</code> 1, <code>.cancelled</code> 1</td></tr>
+<tr><td><code>console-head.css</code></td><td class="num">2</td><td class="num">2</td><td><code>.running</code> 1, <code>.starting</code> 1</td></tr>
+<tr><td><code>console-turns.css</code></td><td class="num">1</td><td class="num">2</td><td><code>.turn-prompt</code> 2</td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">9</td><td class="num">9</td><td><code>.is-danger</code> 1, <code>.is-read</code> 1, <code>.q-tint-mint</code> 1, <code>.q-tint-rose</code> 1, <code>.q-tint-sky</code> 1, <code>.q-tint-slate</code> 1, <code>.queue-item</code> 1, <code>.queue-list</code> 1</td></tr>
+<tr><td><code>feedback.css</code></td><td class="num">8</td><td class="num">22</td><td><code>.has-waiting</code> 4, <code>.is-answered</code> 4, <code>.is-replied</code> 3, <code>.is-waiting</code> 3, <code>.has-unanswered</code> 2, <code>.is-absent</code> 2, <code>.is-ruled</code> 2, <code>.is-superseded</code> 2</td></tr>
+<tr><td><code>assistant-panes.css</code></td><td class="num">3</td><td class="num">5</td><td><code>.is-info</code> 2, <code>.is-warn</code> 2, <code>.is-mid</code> 1</td></tr>
+<tr><td><code>initiatives.css</code></td><td class="num">24</td><td class="num">38</td><td><code>.is-abandoned</code> 6, <code>.is-unknown</code> 4, <code>.is-blocked</code> 3, <code>.is-ready</code> 3, <code>.init-branch-link</code> 2, <code>.is-unentered</code> 2, <code>.init-branch</code> 1, <code>.init-tag-amber</code> 1</td></tr>
+<tr><td><code>panes.css</code></td><td class="num">6</td><td class="num">8</td><td><code>.is-warn</code> 3, <code>.as-task-agents</code> 1, <code>.is-good</code> 1, <code>.is-in</code> 1, <code>.is-info</code> 1, <code>.is-out</code> 1</td></tr>
+<tr><td><code>queue.css</code></td><td class="num">2</td><td class="num">2</td><td><code>.as-task-agents</code> 1, <code>.is-stale</code> 1</td></tr>
+<tr><td><code>pipeline.css</code></td><td class="num">8</td><td class="num">9</td><td><code>.is-in</code> 2, <code>.is-after</code> 1, <code>.is-before</code> 1, <code>.is-out</code> 1, <code>.is-unplaced</code> 1, <code>.pipeline-modal-open</code> 1, <code>.pipew-open</code> 1, <code>.pm-node</code> 1</td></tr>
+<tr><td><code>core/pipeline-card.css</code></td><td class="num">10</td><td class="num">18</td><td><code>.pm-node</code> 5, <code>.edgeLabel</code> 3, <code>.nodeLabel</code> 2, <code>.pm-arc-label</code> 2, <code>.edgePath</code> 1, <code>.flowchart-link</code> 1, <code>.last</code> 1, <code>.next</code> 1</td></tr>
+</table>
+</div>
+
+<h2>8. The plan: the cuts whose seams disagree, ranked</h2>
+<p>Ordered by how many rules move out of a sheet that is not the module's, with the cheapest first among equals. Each entry
+names what a cut would need, not what it would look like afterwards.</p>
+
+<div class="rank">
+<h4>1. <code>public/assistant.js</code> - four cuts, 290 rules outside its owner</h4>
+<div class="meta">9,622 lines, 310 private tokens, owner <code>initiatives.css</code> 272 (48.4%). Spans <code>pipeline.css</code> 92, <code>panes.css</code> 70, <code>assistant-panes.css</code> 67, <code>assistant.css</code> 45, <code>queue.css</code> 9, <code>console.css</code> 3, <code>core/task-card.css</code> 3, <code>chrome.css</code> 1.</div>
+<p><b>What it would need.</b> The file is an IIFE, so the queue-cards pattern is the only one that works: one factory per cut,
+built in dependency order, each cut receiving the names it does not own as thunks over one record. The four cuts are already
+named by the sheets and by the code: the pipeline window's bar (<code>pipeline.css:28</code> <code>.pipew-bar</code>, written
+at <code>assistant.js:7607</code>), the Worktrees groups (<code>panes.css:17</code> <code>.as-wtgroups</code>, written at
+<code>assistant.js:7372</code>), the Hot Agent search and intro (<code>assistant-panes.css:36</code>, written in
+<code>assistant.js</code>), and the spawn strip (<code>assistant.css:35</code> <code>#assistant-spawn-badge</code>, written at
+<code>assistant.js:2007</code>). The Initiatives tab stays the owner (<code>initiatives.css</code>, 272
+rules). No CSS moves: the sheets are already single-surface, which is why this is four code cuts and not a sheet cut.</p>
+</div>
+
+<div class="rank">
+<h4>2. <code>public/index.html</code> - 163 rules outside its owner, and 298 in total</h4>
+<div class="meta">1,831 lines of markup, 172 class tokens, owner <code>settings.css</code> 135 (45.3%). Spans <code>assistant.css</code> 47, <code>board-table.css</code> 30, <code>feedback.css</code> 24, <code>assistant-panes.css</code> 23, <code>chrome.css</code> 20, <code>pipeline.css</code> 11, <code>overlays.css</code> 8.</div>
+<p><b>What it would need.</b> This is the static shell: the Settings drawer's markup (135 rules), the
+header's assistant button and spawn badge (<code>assistant.css:18</code> <code>.btn-assistant</code>), the approval dock
+(<code>board-table.css:400</code> <code>.approval-dock</code>), the three header buttons (<code>feedback.css:18</code>
+<code>.topbar #btn-clarify</code>), the Hot Agent search popover (<code>assistant-panes.css:13</code>
+<code>.ha-search-pop</code>) and the top bar (<code>chrome.css</code>). A cut is not a module move: the shell has to stop
+being one file. Either each control's markup moves into the module that wires it (the drawer into <code>settings-window.js</code>,
+the approval dock into <code>board/approvals.js</code>, the search popover into <code>core/search-popover.js</code>), or the
+page is assembled from per-surface fragments at build time. Until then no lane can attribute a third of the CSS by module.</p>
+</div>
+
+<div class="rank">
+<h4>3. <code>public/app.js</code> - 108 rules outside its owner</h4>
+<div class="meta">11,270 lines, 109 private tokens, owner <code>settings.css</code> 67 (38.3%). Spans <code>console.css</code> 43, <code>overlays.css</code> 26, <code>board-table.css</code> 23, <code>console-turns.css</code> 8, <code>console-head.css</code> 4, <code>model-menu.css</code> 2, <code>chrome.css</code> 2.</div>
+<p><b>What it would need.</b> Four blocks, each with a home already: the subagent rows (<code>console.css:46</code>
+<code>.subagents</code>, written at <code>app.js:3324</code>) belong with the console card; the task-question links
+(<code>overlays.css:390</code> <code>.tq-links</code>, written at <code>app.js:2373</code>) belong with the question card; the
+push controls and the artifacts popover (<code>board-table.css:543</code> <code>.push-controls</code> and
+<code>board-table.css:1172</code> <code>.artifacts-pop</code>, written at <code>app.js:10528</code> and <code>app.js:2844</code>)
+belong with <code>board/merge.js</code> and <code>board/attachments.js</code>; the stats readout, caret and model menu
+(<code>console-turns.css:31</code>, <code>model-menu.css:27</code>, written at <code>app.js:2943</code> and
+<code>app.js:3191</code>) belong with <code>turns.js</code> and <code>core/model-menu.js</code>. Same factory constraint as
+<code>assistant.js</code> if the block reads app.js locals; the board cuts already landed with this shape.</p>
+</div>
+
+<div class="rank">
+<h4>4. <code>public/board/conversation.js</code> - the card head is the next console cut, 52 rules</h4>
+<div class="meta">1,007 lines, 132 private rules, owner <code>console.css</code> 54 (40.9%).</div>
+<p><b>What it would need.</b> The head's builder and its actions are in this file (<code>.job-head</code> written at
+<code>conversation.js:340</code>, <code>.job-actions</code> at <code>conversation.js:221</code>) while every head rule is in
+<code>console-head.css</code> (<code>console-head.css:13</code> <code>.job-head</code>, <code>console-head.css:21</code>
+<code>.job-actions</code>). Row 445 cut the sheet; the matching JS cut is one factory that returns the head markup and the
+four control handlers. The turn-away cards (<code>overlays.css:554</code> <code>.turn-question-away</code>, 13 rules) belong with the question/approval card cut, and the artifacts button
+(<code>board-table.css:637</code> <code>.btn-artifacts</code>) with <code>board/attachments.js</code>.</p>
+</div>
+
+<div class="rank">
+<h4>5. <code>public/board/queue-detail.js</code> - the task card lives in three sheets, 51 rules outside queue.css</h4>
+<div class="meta">635 lines, 118 private rules, owner <code>queue.css</code> 67 (56.8%), spans <code>panes.css</code> 32, <code>core/task-card.css</code> 13, <code>pipeline.css</code> 6.</div>
+<p><b>What it would need.</b> The base card rules are in <code>panes.css:103</code> (<code>.as-task</code>), the pane's
+overrides in <code>queue.css:51</code> (<code>.as-qpane .as-task</code>), and the compact mode in
+<code>core/task-card.css:25</code> (<code>.as-task.is-compact</code>). Since <code>queue-detail.js</code> is the only writer of
+<code>.as-task</code>, the 32 base rules can move from <code>panes.css</code> into <code>queue.css</code> verbatim, and
+<code>core/task-card.css</code> can become a third link of the same card (it already documents itself as a mode, not a
+surface). The pipeline chip's six rules (<code>pipeline.css:17</code> <code>.as-task-pipeline</code>) belong with the pipeline
+surface; they are the card's one rule set that is genuinely about another component. No rename is needed, which is why this
+is the cheapest real sheet move left.</p>
+</div>
+
+<div class="rank">
+<h4>6. <code>public/board/approvals.js</code> - two approval surfaces in one module, 30 rules</h4>
+<div class="meta">994 lines, 81 private rules, owner <code>board-table.css</code> 51 (63.0%), spans <code>overlays.css</code> 30.</div>
+<p><b>What it would need.</b> The header's approval popover (<code>.ap-group</code>, written at <code>approvals.js:575</code>)
+is a board surface; the turn's approval card (<code>.ta-head</code>, <code>.ta-cmd</code>, <code>.ta-actions</code>, written at
+<code>approvals.js:178</code>) is an overlays surface (<code>overlays.css:258</code>). Split the card's builder and its two
+writers into <code>board/turn-approval.js</code>; the CSS does not move, and the two modules then match their two sheets.</p>
+</div>
+
+<div class="rank">
+<h4>7. <code>public/board/project-order.js</code> - the chart's legend is drawn by the project module, 22 rules</h4>
+<div class="meta">524 lines, 71 private rules, owner <code>board-table.css</code> 49 (69.0%), spans <code>chart.css</code> 22.</div>
+<p><b>What it would need.</b> <code>legendId</code>, <code>legendHtml</code>, <code>legendControl</code>,
+<code>closeLegends</code> and <code>toggleLegend</code> (written from <code>project-order.js:364</code>) are the only writer of
+<code>.legend</code>, and every legend rule is in <code>chart.css:61</code> onward. Move the five functions to
+<code>charts.js</code> (or a new <code>chart-legend.js</code>); no CSS moves. This one is small but it is the cleanest proof
+that the module name and the surface can agree.</p>
+</div>
+
+<div class="rank">
+<h4>8. <code>public/settings-window.js</code> - the Settings pipeline rows are styled by the pipeline sheet, 10 rules</h4>
+<div class="meta">3,918 lines, 61 private rules, owner <code>settings.css</code> 51 (83.6%), spans <code>pipeline.css</code> 10.</div>
+<p><b>What it would need.</b> <code>settings-window.js</code> is the only writer of <code>.pipeline-row</code> and
+<code>.pipeline-stage</code> (written at <code>settings-window.js:1261</code>), and those ten rules are in
+<code>pipeline.css:252</code>. Move the ten rules into <code>settings.css</code> next to the rest of the drawer; no code
+changes. If the pipeline window later needs the same rows, the move becomes a shared component and this item becomes a
+deliberate exception instead.</p>
+</div>
+
+<div class="rank">
+<h4>9. The small remainders, in one pass</h4>
+<div class="meta">27 rules: <code>public/turns.js</code> spans <code>console.css</code> 6, <code>console-head.css</code> 3, <code>assistant.css</code> 1.</div>
+<p><b>What it would need.</b> Nothing structural: these are one to six rules each (<code>turns.js</code> 27,
+<code>board-scaffold.js</code> 4,
+<code>project-row.js</code> 3,
+<code>core/console-markdown.js</code> 3,
+<code>settings.js</code> 3,
+<code>deliverables.js</code> 2). Move each assembled fragment to the module
+that owns the element it sits in, or leave them and record them as the accepted remainder. They are below the noise floor of
+the four cuts above.</p>
+</div>
+
+<h2>9. What the map says about the next four rows</h2>
+<ul class="tight">
+<li><b>A sheet is not a lane until one module owns it.</b> The split gave every surface a sheet, but <code>assistant.js</code>,
+<code>index.html</code> and <code>app.js</code> still write into nine, nine and seven sheets. The next cuts should be chosen
+by owner, not by sheet: the sheet already exists for each of them.</li>
+<li><b>Do the code cut before the sheet move.</b> For <code>assistant.js</code>, <code>conversation.js</code>,
+<code>approvals.js</code> and <code>project-order.js</code> the sheets are already right; the module is what crosses them. For
+<code>queue-detail.js</code> and <code>settings-window.js</code> it is the other way round: one module owns the rules, so the
+rules are what should move.</li>
+<li><b>The shared vocabulary is the reason the counts look better than the lanes.</b> 184 class tokens are
+written by more than one module, and 468 rules are rooted on one. That is not a cut target; it is why the
+per-module owner has to be read from the structural class, and why a future gate should measure the same way.</li>
+</ul>
+
+<h2>10. Reproduce every number</h2>
+<pre class="mono" style="background:#161d27;border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;">node tools/module-surface-map.mjs --json docs/reports/module-surface-seams.json</pre>
+<p>The tool prints the sheet table, the module table, the span ranking, the unattributed classes and the state modifiers; the
+JSON it writes is the input every table on this page was generated from. The tree it measured is
+<code>C:\ProjectDevelopment\agent-worktree-gui\.worktrees\row-444-is-the-complete-brief-the-board-9e1458</code> at <code>24275290</code>, which already contains this branch's board-table cut, the turnover
+branch's later module cuts and the tree's queue lane fix.</p>
+
+<h2>11. What this row did not do</h2>
+<p>No front-end file, no sheet and no version changed in this row's commit. It adds exactly three files -
+<code>docs/reports/module-surface-seams-2026-11-28.html</code>, <code>docs/reports/module-surface-seams.json</code> and
+<code>tools/module-surface-map.mjs</code> - and <code>git show --stat HEAD</code> prints those three. No sheet was moved, no
+module was cut, no version was bumped, no push and no pull request. Two documentation defects were found while measuring and
+are recorded, not fixed: <code>tools/css-split-review.mjs</code>'s <code>SURFACES</code> map still names
+<code>jobs.css</code>, <code>turns.css</code>, <code>rowstrips.css</code> and <code>late.css</code> (all four are gone) and
+omits <code>console-head.css</code>, <code>console-turns.css</code>, <code>model-menu.css</code> and
+<code>utilities.css</code>; and <code>public/render-jobs.js</code>'s header still describes the functions that moved to
+<code>board/stream-body.js</code> and <code>board/conversation.js</code>.</p>
+
+</main>
+</body>
+</html>
