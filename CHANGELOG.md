@@ -4,16 +4,28 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.196.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.197.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-786 releases from v0.1.0 (2026-10-20) to v1.196.2 (2026-11-28), 2817 commits between the tags. Every release is anchored by an
+787 releases from v0.1.0 (2026-10-20) to v1.197.1 (2026-11-28), 2819 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version on main; `npm run verify:version-tags` fails when a
 bump has no tag, or when a version tag names a commit main never carried.
+
+## v1.197.1 — 2026-11-28 · 2 commits
+
+[`8a73cbb`](https://github.com/JLRoper/agent-worktree-gui/commit/8a73cbbb13969833df51e5d61014598b6ed78d35) · [compare v1.196.2...v1.197.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.196.2...v1.197.1)
+
+### Docs & tests
+
+- docs: render the changelog - 786 releases ([`810ffc8`](https://github.com/JLRoper/agent-worktree-gui/commit/810ffc81a60da4c3165a4dc8bd6752709d6a13b6))
+
+### Other
+
+- Land the turnover branch 20261127_2134_TASK-405_row-405-is-the-complete (1.197.1) (#954) ([`8a73cbb`](https://github.com/JLRoper/agent-worktree-gui/commit/8a73cbbb13969833df51e5d61014598b6ed78d35))
 
 ## v1.196.2 — 2026-11-28 · 7 commits
 
