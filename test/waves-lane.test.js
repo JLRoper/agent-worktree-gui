@@ -310,8 +310,8 @@ test("the lane set is the wave's own row, not a flex item of the member strip", 
     }),
     null,
   );
-  // Two lanes are a block of their own inside the wave row...
-  assert.match(twoLanes, /<div class="wave-lanes" data-wave-lanes="2">/);
+  // Two lanes are a block of their own inside the wave row, drawn as the two-line card (O4)...
+  assert.match(twoLanes, /<div class="wave-lanes" data-wave-lanes="2" data-lane-drawing="cards">/);
   // ...and NOT nested in the member strip: nested, the block was a flex item and shrank to its content, so the two
   // lanes could only ever stack, however wide the pane was.
   assert.doesNotMatch(twoLanes, /<div class="wave-members">\s*<div class="wave-lanes"/);
@@ -323,6 +323,76 @@ test("the lane set is the wave's own row, not a flex item of the member strip", 
   assert.doesNotMatch(flat, /wave-lanes/);
 });
 
+// ---- the lane count decides the drawing (row 491) ----------------------------------------------------------------
+// The 2026-11-28 report's section 5 measured the same wave at two, four and six lanes and the ranking flips with the
+// count: two lanes is the two-line card, three or more is the manifest table. These tests pin WHICH drawing a count
+// gets and what each one owes the reader - a gate measures the pixels at each count, and neither can pass by accident.
+const lanesOf = (names, perLane = 1) =>
+  names.map((name, i) => ({
+    name,
+    state: i === 0 ? "running" : "queued",
+    read: { ok: true, why: `lane ${name} names 1 tree` },
+    trees: [{}],
+    members: Array.from({ length: perLane }, (_, k) => ({ id: 100 + i * 10 + k, title: `the ${name} work ${k}`, project: "agent-worktree-gui", state: i === 0 ? "running" : "queued" })),
+  }));
+
+test("two lanes draw the two-line card: the title is its own line and the meta line keeps the reader's order", () => {
+  const html = lane.waveHtml(wave({ lanes: lanesOf(["public/index.html", "late.css"]), laneJoinOwed: true }), null);
+  assert.match(html, /data-wave-lanes="2" data-lane-drawing="cards"/);
+  // Every member of a lane is a card row, and NONE of them is a table row: the drawings are exclusive.
+  assert.equal((html.match(/data-member-draw="card"/g) || []).length, 2);
+  assert.doesNotMatch(html, /data-member-draw="table"/);
+  assert.doesNotMatch(html, /wave-lane-cell/, "the card drawing has no lane column");
+  // The DOM keeps the reader's order even though the drawing puts the title first: id, owner/state, title, project,
+  // then the reports chip - a screen reader hears the row in the order row 295 asked for.
+  const row = html.slice(html.indexOf('data-wave-member="100"'), html.indexOf('data-wave-member="110"'));
+  const at = (needle) => row.indexOf(needle);
+  assert.ok(at("wave-member-id") < at("wave-member-title"), "the id is before the title in the DOM");
+  assert.ok(at("wave-member-title") < at("wave-member-project"), "the title is before the project in the DOM");
+  assert.ok(at("wave-member-project") < at("wave-reports"), "the reports chip is last in the DOM");
+});
+
+test("three lanes draw the manifest table: the lane is a column, the summary strip keeps every lane's read", () => {
+  const java = "src/main/java/com/sefl/rating/RatingRetryConsumer.java";
+  const html = lane.waveHtml(wave({ lanes: lanesOf(["public/index.html", "late.css", java], 2), laneJoinOwed: true }), null);
+  assert.match(html, /data-wave-lanes="3" data-lane-drawing="table"/);
+  // One table, one head, and every member row is a table row with a lane cell in front of the id.
+  assert.match(html, /<div class="wave-manifest">/);
+  assert.match(html, /<div class="wave-manifest-head" aria-hidden="true"><span>lane<\/span><span>id<\/span><span>owner<\/span><span>state<\/span><span>title<\/span><span>project<\/span><span>reports<\/span><\/div>/);
+  assert.equal((html.match(/data-member-draw="table"/g) || []).length, 6);
+  // THE SHORT LABEL: a 55-character Java path is drawn as the file's own name, and the whole path stays on the cell's
+  // title - so the column never breaks a basename mid-token and the path is one hover away.
+  assert.match(html, new RegExp(`data-lane-full="${java.replace(/[.]/g, "\\.")}" title="${java.replace(/[.]/g, "\\.")} - lane queued"><i class="wave-lane-dot is-queued" aria-hidden="true"></i><span class="wave-lane-name">RatingRetryConsumer\\.java</span>`));
+  // A lane's SECOND member repeats the column's rule with a dot, not the name again.
+  assert.equal((html.match(/wave-lane-cell is-rep/g) || []).length, 3, "one repeat cell per lane's second member");
+  // The summary strip keeps the whole path in words, beside the state and the read sentence: the lane's read is not
+  // lost when the lane stops being a box.
+  assert.match(html, /<span class="chip wave-mstate is-running">lane public\/index\.html - running<\/span><span class="as-hint wave-lane-read">runs in 1 tree<\/span>/);
+  assert.match(html, new RegExp(`lane ${java.replace(/[.]/g, "\\.")} - queued`));
+});
+
+test("every count from three up is the table, and the count is on the block where a gate can read it", () => {
+  assert.equal(lane.laneDrawingOf(2), "cards");
+  assert.equal(lane.laneDrawingOf(3), "table");
+  assert.equal(lane.laneDrawingOf(4), "table");
+  assert.equal(lane.laneDrawingOf(6), "table");
+  for (const count of [3, 4, 6]) {
+    const names = Array.from({ length: count }, (_, i) => `surface-${i}.js`);
+    const html = lane.waveHtml(wave({ lanes: lanesOf(names), laneJoinOwed: true }), null);
+    assert.match(html, new RegExp(`data-wave-lanes="${count}" data-lane-drawing="table"`), `the ${count}-lane wave is a table`);
+    assert.equal((html.match(/data-member-draw="table"/g) || []).length, count, `every member of the ${count}-lane wave is a table row`);
+  }
+});
+
+test("a lane's short label is its last path segment, and a lane with no path is still named", () => {
+  assert.equal(lane.laneLabel({ name: "public/index.html" }), "index.html");
+  assert.equal(lane.laneLabel({ name: "src/main/java/com/sefl/rating/RatingRetryConsumer.java" }), "RatingRetryConsumer.java");
+  assert.equal(lane.laneLabel({ name: "src\\main\\java\\A.java" }), "A.java");
+  assert.equal(lane.laneLabel({ name: "unlaned" }), "unlaned");
+  assert.equal(lane.laneLabel({ label: "late.css" }), "late.css");
+  assert.equal(lane.laneLabel({}), "unlaned");
+});
+
 test("the closing note is a note: the count leads, and the lanes and the note are one block", () => {
   const lanes = [
     { name: "cookie", state: "running", read: { ok: true }, trees: [{}], members: [{ id: 11, title: "the cookie lane", state: "running" }] },
@@ -330,7 +400,7 @@ test("the closing note is a note: the count leads, and the lanes and the note ar
   ];
   const html = lane.waveHtml(wave({ lanes, laneJoinOwed: true }), null);
   // One block holds the lanes and the note, so a wide pane can stand the note beside them (the sketch's callout).
-  assert.match(html, /<div class="wave-close"><div class="wave-lanes" data-wave-lanes="2">/);
+  assert.match(html, /<div class="wave-close"><div class="wave-lanes" data-wave-lanes="2" data-lane-drawing="cards">/);
   // The count is a lead line of its own, not a prefix inside the sentence: the sketch draws "2 lanes" bold above it.
   assert.match(html, /<div class="wave-join" data-wave-join="2"><b>2 lanes<\/b> <span>closing this wave is ONE commit that names them all<\/span><\/div>/);
   // A refused set keeps its lanes and draws no note at all - the two sentences would contradict each other.
