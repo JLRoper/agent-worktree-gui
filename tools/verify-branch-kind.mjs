@@ -551,12 +551,12 @@ try {
   await page.locator('.cut-dialog label:has(input[name="cut-kind"][value="implementation"])').click();
   const chosen = await page.evaluate(() => document.querySelector('.cut-dialog input[name="cut-kind"][value="implementation"]')?.checked === true);
   ok("... and the implementation card is the one chosen", chosen);
-  await page.locator(".cut-dialog .cut-name").fill("a-new-implementation-child");
+  await page.locator(".cut-dialog .cut-name").fill("new-impl-child");
   await page.locator(".cut-dialog .cut-go").click();
   const cutRow = await waitFor(
     async () => {
       const st = await stateNow();
-      return rowsOf(st).find((r) => String(r.path || "").replace(/\\/g, "/").toLowerCase().includes("a-new-implementation-child")) || false;
+      return rowsOf(st).find((r) => String(r.path || "").replace(/\\/g, "/").toLowerCase().includes("new-impl-child")) || false;
     },
     { timeoutMs: 120_000, what: "the cut tree's row" },
   );
