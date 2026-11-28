@@ -27,7 +27,8 @@ const appSrc = page("public/app.js");
 const gripSrc = page("public/core/console-grip.js");
 const jobsSrc = page("public/render-jobs.js");
 const consoleSrc = page("public/board/console.js");
-const projectsSrc = page("public/render-projects.js");
+// renderProjectRows moved to public/board/row-order.js in row 530's cut 3.
+const projectsSrc = page("public/board/row-order.js");
 const css = readStyleSheets();
 
 // The grip's three top-level functions, taken by name from the module that owns them (public/core/console-grip.js).

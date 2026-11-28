@@ -92,9 +92,7 @@ test("the marker's tooltip names the summary, the report and the step count", ()
 // ---- 2. the surfaces are wired --------------------------------------------------------------------------------
 
 const app = read("public/app.js");
-// The row template is cut 2 of row 530 and the full rebuild is still in the parent, so both are read.
-const rowsSrc = `${read("public/board/project-row.js")}
-${read("public/render-projects.js")}`;
+const rowsSrc = `${read("public/board/project-row.js")}\n${read("public/board/row-order.js")}\n${read("public/render-projects.js")}`;
 const scaffold = read("public/board-scaffold.js");
 const html = read("public/index.html");
 const settings = read("public/settings.js");

@@ -224,7 +224,9 @@ test("the row's strip draws the result chip and ONE collision diamond, and the d
 
 test("an open card survives a re-render, and Escape closes it", () => {
   const scaffold = read("public/board-scaffold.js");
-  const rowFile = read("public/render-projects.js");
+  // placeRow and renderProjectRows, the two paths that repaint a row's chips, moved to public/board/row-order.js
+  // in row 530's cut 3.
+  const rowFile = read("public/board/row-order.js");
   // The popup re-anchors onto the row's NEW chip and repaints its body only when the record it draws moved.
   const paint = sliceBetween(scaffold, "function paintRowChipPops(project = null)", "// ARROWS STEP THE POPUP");
   assert.match(paint, /if \(pop\._anchor !== anchor\)/);
