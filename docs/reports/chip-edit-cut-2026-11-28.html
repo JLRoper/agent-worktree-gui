@@ -52,7 +52,8 @@
   <dt>the paste gate</dt><dd>125 checks, 123 pass, 2 fail, run at <code>d08065ee</code>; both reds are the (i) Ctrl+Enter steer pair, and the same two are red on the pre-cut code</dd>
   <dt>the rendered paste</dt><dd>the request the panel sent carried the prose and all 367 lines, in position</dd>
   <dt>the merge</dt><dd>a829384d, parents 1c7cabdd + 88b811fa, 6 files changed, all six owned by the cut</dd>
-  <dt>push / PR</dt><dd>none. The merge is local; the turnover is not on the remote.</dd>
+  <dt>the landing</dt><dd>PR #954, squash-merged as 8a73cbbb on main; CHANGELOG rendered at 57e0fb44; tag v1.197.1 moved onto 8a73cbbb</dd>
+  <dt>push / PR</dt><dd>PR #954 only. The turnover branch was pushed for it and nothing else was pushed.</dd>
 </dl>
 
 <h2>1. What moved, and what stayed</h2>
@@ -205,13 +206,13 @@ M  test/paste-chip-undo.test.js
 M  test/paste-chip-word-delete.test.js
 M  tools/verify-paste-chips.mjs</pre>
 <p>No file the cut does not own changed in the merge, so the turnover's version stands for every other path: the commits it gained since the cut's base (<code>lib/initiatives.js</code>, <code>lib/initiative-tag-ops.js</code>, <code>routes/initiatives.js</code>, <code>lib/pipelines.js</code>, <code>public/board/queue-row.js</code> and the rest) are untouched. There were no conflicts to resolve. The turnover was at <code>1c7cabdd</code> when the merge ran.</p>
-<p>The report page itself is a second, docs-only merge on the same branch, so the turnover gains this page and nothing else.</p>
+<p>The report page itself reached the branch by two docs-only merges, and the batch then landed: PR #954 squash-merged the turnover as <code>8a73cbbb</code>, <code>node tools/land.mjs</code> rendered <code>CHANGELOG.md</code> at <code>57e0fb44</code>, and <code>v1.197.1</code> was moved onto <code>8a73cbbb</code>. The squash is what the board review asked for: a rebase merge would drop the conflict resolutions this merge made.</p>
 
 <h2>9. What this row did not do</h2>
 <ul>
-  <li>No push and no PR: the turnover branch has not landed, so a remote branch would be a ref nobody asked for.</li>
-  <li>No version bump and no changelog entry.</li>
-  <li>No full suite. The two chip test files and the one gate that drives them are the proof, and both are quoted above with their counts.</li>
+  <li>No push of the cut on its own, and no PR for it: the cut landed inside the turnover's landing, PR #954, and carries its own merge commit <code>a829384d</code> in that history.</li>
+  <li>No version bump of its own: the turnover already carried 1.197.1, and the landing rendered CHANGELOG.md at <code>57e0fb44</code>.</li>
+  <li>The full suite ran once, for the landing: 4,149 tests, 4,113 pass, 32 fail. All 32 are attributed: 27 fail the same way on the turnover head before the merge, one (<code>test/broadcast-idle.test.js</code>) fails identically on main itself, and five pass when re-run alone.</li>
   <li>Nothing rebuilt: the cut's commit was already on the branch and clean, so the landing used it as it stood.</li>
 </ul>
 </main>
