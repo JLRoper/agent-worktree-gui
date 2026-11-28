@@ -16,7 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Locks } from "../lib/locks.js";
-import { configureRepo, git, post, slash, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, slash, waitForState } from "../tools/panel-testkit.mjs";
 
 const projectOf = (snap, name) => (snap.projects || []).find((p) => p.name === name) || null;
 const rowOf = (snap, name, wtPath) => {
@@ -46,7 +46,7 @@ test.before(async () => {
   git(repo, ["worktree", "add", "-q", "-b", "feature/locked", wtLocked]);
   git(repo, ["branch", "feature/turnover"]);
 
-  const panel = await startPanel({ config: { scanRoots: [root] } });
+  const panel = await boot({ config: { scanRoots: [root] } });
   await reload(panel.base);
   await waitForState(
     panel.base,

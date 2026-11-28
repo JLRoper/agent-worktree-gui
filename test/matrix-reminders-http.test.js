@@ -5,13 +5,13 @@
 // tests are test/matrix-reminders.test.js; the bridge's turn contract is test/matrix-bridge-turn.test.js.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, post } from "../tools/panel-testkit.mjs";
 
 const TOKEN = "matrix-reminders-test-token";
 let panel = null;
 
 test.before(async () => {
-  panel = await startPanel({ token: TOKEN });
+  panel = await boot({ token: TOKEN });
 });
 test.after(async () => {
   if (panel) await panel.stop();

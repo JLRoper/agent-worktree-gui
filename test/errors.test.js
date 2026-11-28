@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HttpError, errorStatus } from "../lib/errors.js";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, post } from "../tools/panel-testkit.mjs";
 
 test("a bug is a 500, a refusal the handler chose keeps its status", () => {
   assert.equal(errorStatus(new TypeError("cannot read properties of undefined")), 500);
@@ -16,7 +16,7 @@ test("a bug is a 500, a refusal the handler chose keeps its status", () => {
 
 let panel = null;
 test.before(async () => {
-  panel = await startPanel();
+  panel = await boot();
 });
 test.after(async () => {
   if (panel) await panel.stop();

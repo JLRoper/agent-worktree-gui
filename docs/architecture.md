@@ -663,7 +663,15 @@ Three tiers, each shaped for a different question:
 | **Harness** | `tools/verify-*.mjs` (122 programs) | is this claim true on a real machine, right now? |
 
 `panel-testkit.mjs` boots the **real** `server.js` against a throwaway config on a free port, with
-its own `HERMES_HOME` and no gateway key — so a test asserts behaviour, not source text.
+its own `HERMES_HOME` and no gateway key — so a test asserts behaviour, not source text. A test file
+starts one with `boot()`, never `startPanel()` directly: `boot()` is the same call plus one line in a
+per-file registry that a single file-level `after()` sweeps, so a test that throws before its own
+`panel.stop()` cannot leave the child holding the runner's pipes and stall the whole suite (the
+failure `docs/reports/npm-test-stall-2026-11-28.html` measured, and the cure
+`docs/reports/panel-boot-net-2026-11-28.html` puts in the kit). `startPanel()` stays exported for the
+`tools/verify-*.mjs` harnesses, which are one-shot programs with no test file to outlive.
+`node tools/panel-boot-audit.mjs` ranks the test files that have not moved yet, and
+`node tools/panel-boot-proof.mjs <file>` proves a converted one.
 `tools/verify.mjs` is the runner for the harnesses (`--list`, `--all`, `--only <substring>`,
 `--dir`, `--json`, `--timeout`), with exit codes `0` all passed, `1` a failure, `2` nothing
 selected. A harness is a *program*, not a framework case: it prints what it measured and exits

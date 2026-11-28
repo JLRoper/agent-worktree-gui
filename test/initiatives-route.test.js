@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, waitForState } from "../tools/panel-testkit.mjs";
 // The store itself, so the "another writer" half of the order proof is a real second writer over the same file rather
 // than a second POST through the same process.
 import { Initiatives, normTreePath } from "../lib/initiatives.js";
@@ -50,7 +50,7 @@ const treeB1 = path.join(projectB, ".worktrees", "gateway-one");
 const treeB2 = path.join(projectB, ".worktrees", "gateway-two");
 const initiativesFile = path.join(sandbox, "logs", "initiatives.json");
 
-const panel = await startPanel({ dir: sandbox, config: { initiativesFile } });
+const panel = await boot({ dir: sandbox, config: { initiativesFile } });
 after(() => panel.stop());
 const base = panel.base;
 const get = async (p) => {

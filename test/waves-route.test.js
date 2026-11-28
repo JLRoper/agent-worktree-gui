@@ -22,7 +22,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
-import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, waitForState } from "../tools/panel-testkit.mjs";
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-waves-route-"));
 const repos = path.join(sandbox, "repos");
@@ -46,7 +46,7 @@ const treeA = path.join(projectA, ".worktrees", "wave-a");
 const treeB = path.join(projectB, ".worktrees", "wave-b");
 const wavesFile = path.join(sandbox, "logs", "waves.json");
 
-const panel = await startPanel({ dir: sandbox, config: { wavesFile } });
+const panel = await boot({ dir: sandbox, config: { wavesFile } });
 after(() => panel.stop());
 const base = panel.base;
 const get = async (p) => {

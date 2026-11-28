@@ -36,7 +36,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, post } from "../tools/panel-testkit.mjs";
 
 // Enough saves that the reader gets many chances at the window, few enough that the suite stays quick: the old writer
 // tore dozens of times over (it truncated every one of these saves), and the fixed one spends a few milliseconds a
@@ -97,7 +97,7 @@ const noStrays = (dir) =>
   );
 
 test("config.json is saved atomically: a concurrent reader never sees it torn, and no temp file survives", async () => {
-  const panel = await startPanel({
+  const panel = await boot({
     config: { apiServer: { url: "http://127.0.0.1:9" }, assistant: { enabled: false } },
   });
   const configPath = panel.configPath;

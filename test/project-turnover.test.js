@@ -42,7 +42,7 @@ import {
 } from "../lib/project-turnover.js";
 import { isTurnoverBranchName } from "../lib/turnover-base.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes, turnoverOut } from "../routes/project-turnover.js";
-import { configureRepo, git, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git } from "../tools/panel-testkit.mjs";
 
 // ---- 1: the read side ------------------------------------------------------------------------------------------
 test("an absent or unreadable turnover field reads as no branch, and a name is trimmed to one line", () => {
@@ -518,7 +518,7 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
   // `alpha` starts WITH a turnover branch (as a hand-edited config would hold it), `beta` starts without the key at
   // all, and `gamma` is discovered from the scan root but NOT named in config.json - the three shapes the writer has
   // to answer for: edit, add-to-known, and add-a-row-for-a-discovered-project.
-  const panel = await startPanel({
+  const panel = await boot({
     dir,
     keep: false,
     config: {

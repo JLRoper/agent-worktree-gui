@@ -36,7 +36,7 @@ import path from "node:path";
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
 import { Waves, WAVES_MAX, WAVE_HISTORY_MAX, WAVE_TITLE_MAX, waveIdFrom } from "../lib/waves.js";
 import { initiativeAsks } from "../lib/initiative-permissions.js";
-import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, waitForState } from "../tools/panel-testkit.mjs";
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-waves-write-"));
 const repos = path.join(sandbox, "repos");
@@ -298,7 +298,7 @@ git(projectDir, ["commit", "-q", "-m", "first"]);
 git(projectDir, ["worktree", "add", "-q", "-b", "wave-tree", path.join(projectDir, ".worktrees", "wave-tree")]);
 const tree = path.join(projectDir, ".worktrees", "wave-tree");
 
-const panel = await startPanel({ dir: sandbox, config: { wavesFile, initiativesFile } });
+const panel = await boot({ dir: sandbox, config: { wavesFile, initiativesFile } });
 after(() => panel.stop());
 const base = panel.base;
 const get = async (p) => {

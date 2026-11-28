@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import test from "node:test";
-import { freePort, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, freePort } from "../tools/panel-testkit.mjs";
 
 const DOC = '[{"id":"poc-breaking-suite","title":"POC-breaking suite — six layer questions, two answered","stageCount":9}]';
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -45,7 +45,7 @@ test.before(async () => {
   });
   await new Promise((resolve) => fixture.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${fixture.address().port}`;
-  panel = await startPanel({});
+  panel = await boot({});
 });
 
 test.after(async () => {

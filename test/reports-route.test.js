@@ -23,7 +23,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
-import { git, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
+import { boot, git, post, waitForState } from "../tools/panel-testkit.mjs";
 import { REPORTS_CSP } from "../routes/reports.js";
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-reports-route-"));
@@ -107,7 +107,7 @@ writeFileSync(
   "utf8",
 );
 
-const panel = await startPanel({ dir: sandbox, config: { deliverablesFile } });
+const panel = await boot({ dir: sandbox, config: { deliverablesFile } });
 after(() => panel.stop());
 const base = panel.base;
 const get = async (p) => {
