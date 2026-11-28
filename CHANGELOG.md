@@ -4,16 +4,53 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.191.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.193.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-777 releases from v0.1.0 (2026-10-20) to v1.191.3 (2026-11-27), 2750 commits between the tags. Every release is anchored by an
+779 releases from v0.1.0 (2026-10-20) to v1.193.0 (2026-11-27), 2758 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.193.0 — 2026-11-27 · 5 commits
+
+[`bad0742`](https://github.com/JLRoper/agent-worktree-gui/commit/bad07428d0f4304691dbfd964418ec3aa7dcab26) · [compare v1.192.0...v1.193.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.192.0...v1.193.0)
+
+### Fixed
+
+- fix(spawn): a fresh turnover container is not a landed one, and a resume keeps its own tree ([`874cbe1`](https://github.com/JLRoper/agent-worktree-gui/commit/874cbe19cd879aed0134ac4c27808f92289dcf55))
+
+### Changed
+
+- style(spawn): plain ASCII in the record lines this landing adds, so a journal line reads the same in any console ([`80113b5`](https://github.com/JLRoper/agent-worktree-gui/commit/80113b59cbfe8887c5d9c921572a06ec7a955880))
+
+### Docs & tests
+
+- docs(reports): the row 401 research brief, with the store reads and the suite's own attribution ([`ef80d92`](https://github.com/JLRoper/agent-worktree-gui/commit/ef80d92d1a0a86300c02070a24f0d35d44216eea))
+
+### Other
+
+- Lead each agent line with project:branch and end the row with the run chip ([`f926cf3`](https://github.com/JLRoper/agent-worktree-gui/commit/f926cf32169f60a8659a860c061060d8ac223343))
+- chore: 1.193.0 - the version this landing carries ([`bad0742`](https://github.com/JLRoper/agent-worktree-gui/commit/bad07428d0f4304691dbfd964418ec3aa7dcab26))
+
+## v1.192.0 — 2026-11-27 · 3 commits
+
+[`00fa30b`](https://github.com/JLRoper/agent-worktree-gui/commit/00fa30b0cc62e5caac38c04b7be9ba6b786b9784) · [compare v1.191.3...v1.192.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.191.3...v1.192.0)
+
+### Fixed
+
+- fix(spawn): a SPAWN line cannot vanish, and a spawn cannot start in an unfit tree ([`f71dc35`](https://github.com/JLRoper/agent-worktree-gui/commit/f71dc3569937d3c4147817ef291a679bfe923f69))
+
+### Docs & tests
+
+- docs: render the changelog - 777 releases ([`0c28cef`](https://github.com/JLRoper/agent-worktree-gui/commit/0c28cef0e74a1f4b0efeb084aeb3316861f823c2))
+
+### Other
+
+- chore: 1.192.0 - the version this landing carries ([`00fa30b`](https://github.com/JLRoper/agent-worktree-gui/commit/00fa30b0cc62e5caac38c04b7be9ba6b786b9784))
 
 ## v1.191.3 — 2026-11-27 · 4 commits
 
