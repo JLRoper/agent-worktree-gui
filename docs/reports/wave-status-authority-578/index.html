@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Row 578: the wave store is the authority, and the tab's memo now says so</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e9e7e2; --paper:#121417; --panel:#171a1f; --rule:#2b3038; --muted:#9aa3ad; --accent:#c8a6ff; --accent2:#7ee2a8; --warn:#e5534b; --sunk:#1b1e24; --code:#f0c987; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.58 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1120px; margin:0 auto; padding:38px 28px 84px; }
+  h1{ font-size:27px; line-height:1.22; margin:0 0 8px; letter-spacing:-.015em; }
+  h2{ font-size:20px; margin:40px 0 10px; padding-bottom:7px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  p{ margin:9px 0; }
+  .kicker{ color:var(--accent); font:12px ui-monospace,Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 18px; max-width:104ch; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin:18px 0 4px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:11px 13px; background:var(--panel); }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .card span{ color:var(--muted); font-size:12.5px; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  tr:last-child td{ border-bottom:0; }
+  code{ font:12.5px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.13); padding:1px 5px; border-radius:4px; color:var(--code); overflow-wrap:anywhere; }
+  pre{ background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:11px 13px; overflow-x:auto; font:12.3px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre code{ background:none; padding:0; color:inherit; }
+  .note{ border-left:3px solid var(--accent); padding:7px 0 7px 13px; color:var(--muted); margin:16px 0; }
+  .note b{ color:var(--ink); }
+  .box{ border:1px solid var(--rule); border-radius:10px; padding:15px 17px; margin:20px 0; background:var(--panel); }
+  .box h2,.box h3{ margin-top:0; border:0; padding:0; }
+  .okbox{ border-left:4px solid var(--accent2); }
+  .warnbox{ border-left:4px solid var(--warn); }
+  .small{ font-size:12.5px; color:var(--muted); }
+  .ok{ color:var(--accent2); }
+  .bad{ color:var(--warn); }
+  ul,ol{ padding-left:22px; }
+  li{ margin:5px 0; }
+  nav.toc{ border:1px solid var(--rule); border-radius:10px; padding:12px 16px; background:var(--panel); margin:18px 0 4px; }
+  nav.toc h2{ margin:0 0 6px; border:0; padding:0; font-size:15px; }
+  nav.toc ol{ margin:0; padding-left:20px; columns:2; column-gap:34px; }
+  nav.toc a{ color:var(--ink); text-decoration:none; border-bottom:1px dotted var(--rule); }
+</style>
+</head>
+<body>
+<main>
+
+<p class="kicker">agent-worktree-gui - row 578 - wave status</p>
+<h1>One wave, two routes, two answers: the wave store is the authority and the tab's memo now checks it</h1>
+<p class="sub">A wave created through <code>POST /api/waves</code> was answered by <code>GET /api/waves</code> and denied by <code>GET /api/initiatives</code> in the same second. The differing field was the tab's <code>waveStatus</code> and the card's <code>waves</code> array. This page quotes both bodies before and after, names the arithmetic each route used, and records the authority chosen.</p>
+
+<div class="cards">
+  <div class="card"><b>4 &rarr; 0</b><span>red tests on both sides of the waves cut</span></div>
+  <div class="card"><b>8/8</b><span>tests/waves-route.test.js</span></div>
+  <div class="card"><b>22/22</b><span>tests/waves-write.test.js</span></div>
+  <div class="card"><b>1</b><span>field that diverged: <code>waveStatus.found</code></span></div>
+</div>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#repro">The reproduction: one real wave, both ways</a></li>
+    <li><a href="#field">The field and each route's arithmetic</a></li>
+    <li><a href="#authority">The authority chosen, and why</a></li>
+    <li><a href="#change">What changed</a></li>
+    <li><a href="#after">The same wave after</a></li>
+    <li><a href="#proof">Tests</a></li>
+    <li><a href="#limits">What this guarantees, and what it does not</a></li>
+    <li><a href="#rerun">Reproduce it</a></li>
+  </ol>
+</nav>
+
+<h2 id="repro">1. The reproduction: one real wave, both ways</h2>
+<p>A real panel (<code>tools/panel-testkit.mjs</code> booting <code>server.js</code>) with a throwaway config, one initiative made through <code>POST /api/initiatives</code>, then one wave made through the only writer there is. The tab was read once before the wave so its memo existed, exactly as it would after a reader opens the tab and then asks for a wave. Both reads were taken back to back, with no write through the initiatives route in between.</p>
+
+<pre><code>POST /api/waves              200  {"ok":true,"wave":"the-wave-in-question"}
+GET  /api/waves?initiative=&lt;id&gt;   200  {"found":true,"readable":true,
+                                    "waves":[{"id":"the-wave-in-question","title":"The wave in question",
+                                              "state":"empty","stateWord":"no members"}]}
+GET  /api/initiatives        200  {"waveStatus":{"found":false,"readable":true,
+                                                 "gateChoices":["clean","pr-open","pr-head","pr-approved","pr-merged"]},
+                                    "initiatives":[{"id":"init_mx09cooo_aiuyjw","waves":[]}]}</code></pre>
+
+<p>Broken on disk, the same two callers also disagreed about whether the store could be read at all:</p>
+
+<pre><code>GET /api/waves?initiative=&lt;id&gt;   409  {"refused":"unreadable"}
+GET /api/initiatives        200  {"waveStatus":{"found":false,"readable":true}, "card waves":[]}</code></pre>
+
+<div class="note"><b>Read the second line with the first:</b> the route says the file cannot be read, and the tab says it can, with no waves. Neither answer is a parse error. They are two different reads of the same file.</div>
+
+<h2 id="field">2. The field and each route's arithmetic</h2>
+<table>
+  <tr><th>Route</th><th>Where it computes the answer</th><th>What it says about the wave</th></tr>
+  <tr>
+    <td><code>GET /api/waves</code></td>
+    <td><code>laneView()</code> per request: <code>waves.statusOf()</code> for the store's status and <code>waves.wavesFor(id)</code> for the records (<code>routes/waves.js:170-196</code>), on a store whose <code>load()</code> re-stats the file (<code>lib/waves.js:322</code> <code>stampOf</code>, <code>lib/waves.js:422</code> <code>statusOf</code>).</td>
+    <td><code>found: true</code>, one wave, <code>state: "empty"</code>. The file at this instant.</td>
+  </tr>
+  <tr>
+    <td><code>GET /api/initiatives</code></td>
+    <td><code>cachedView()</code>: the last built document, kept in memory and on disk beside the initiatives store and answered while younger than <code>VIEW_STALE_MS</code> = 2000 ms, and even when older returned while a rebuild ran behind the reader (<code>routes/initiatives.js:599-616</code> before this change). The document was built when the initiative was created, before the wave existed.</td>
+    <td><code>waveStatus.found: false</code>, card <code>waves: []</code>. The file as it was when the document was built.</td>
+  </tr>
+</table>
+
+<p><b>The differing field is <code>waveStatus.found</code></b> - <code>false</code> on the tab, <code>true</code> on the waves route - and it drags the card's <code>waves</code> array with it: empty versus one record. In the broken-file case the differing field is <code>waveStatus.readable</code>: <code>true</code> on the tab, and the route's 409 <code>refused: "unreadable"</code>.</p>
+
+<p>The two routes did not disagree about how to fold a lane; both call the same <code>waveLane()</code> over the same records and the same queue rows. They disagreed about <b>when</b> they read. The waves route read the store now. The tab answered a document it had read earlier and presented it as now, because its memo was keyed on nothing but the clock. The record had moved and the memo had no way to know.</p>
+
+<h2 id="authority">3. The authority chosen, and why</h2>
+<div class="box okbox">
+  <h3>The store is the authority: <code>waves.json</code>, through the one shared <code>Waves</code> instance.</h3>
+  <p>The derived read is not a second source of truth and must not be promoted to one. Three reasons:</p>
+  <ul>
+    <li>The store is the only authored document. A lane is a projection of it plus the queues and the evidence; if the projection is allowed to outvote the record, a wave a reader just wrote can be denied by a document nobody wrote.</li>
+    <li>The waves route cannot cache without lying about a file a reader may have just edited by hand - a hand edit is a first-class way to author this store, and the store's own loader was built to notice it on the next read (<code>lib/waves.js:322-343</code>).</li>
+    <li>The tab's memo exists for a cost reason (the gate-evidence join measured 25-52 s on a loaded box, longer than the client's 12 s timeout), not to define correctness. Its key was the clock; the key must be the input.</li>
+  </ul>
+  <p>So the tab's memo is now served only while it was built against the wave store's current file, status and <code>mtimeMs:size</code> stamp, and while the member rows that can open or close a wave are unchanged. When any of those has moved, the read waits for a fresh fold instead of answering a lane the waves route would contradict.</p>
+</div>
+
+<h2 id="change">4. What changed</h2>
+<table>
+  <tr><th>Place</th><th>Change</th></tr>
+  <tr><td><code>routes/initiatives.js:560</code></td><td><code>waveStoreKey()</code>: the store's file, <code>found</code>, <code>readable</code>, <code>mtimeMs:size</code> stamp, and every wave member row (<code>assistant:id:waveId:state:worktree:abandoned</code>, sorted). Only rows that name a wave are in it, so an unrelated task's churn costs no rebuild.</td></tr>
+  <tr><td><code>routes/initiatives.js:638</code></td><td><code>rebuildView(key)</code> keeps the document only if <code>waveStoreKey()</code> is still that key when the fold ends; a store that moved mid-fold leaves no memo.</td></tr>
+  <tr><td><code>routes/initiatives.js:652</code></td><td><code>cachedView()</code> drops a memo whose key differs and answers with a fold; a build already in flight is awaited and used only if it produced this key's document.</td></tr>
+  <tr><td><code>routes/initiatives.js:608</code></td><td><code>loadViewCache()</code> accepts the key from disk. A cache written before this change carries none, so the first read after the upgrade rebuilds once and rewrites it with a key.</td></tr>
+  <tr><td><code>routes/waves.js:18</code></td><td>The route header records the relationship: this route is the store's live answer, and the tab checks its memo against it. No behaviour change - this route was already live.</td></tr>
+</table>
+<p class="small">The waves route's wire shape is untouched: <code>file</code>, <code>found</code>, <code>readable</code>, <code>error</code> and <code>checks</code> were already the same facts the tab's <code>waveStatus</code> object carries plus <code>gateChoices</code>, both read from <code>waves.statusOf()</code> and <code>WAVE_GATE_CHOICES</code>.</p>
+
+<h2 id="after">5. The same wave after</h2>
+<pre><code>POST /api/waves              200  {"ok":true,"wave":"the-wave-in-question"}
+GET  /api/waves?initiative=&lt;id&gt;   200  {"found":true,"readable":true,
+                                    "waves":[{"id":"the-wave-in-question","title":"The wave in question",
+                                              "state":"empty","stateWord":"no members"}]}
+GET  /api/initiatives        200  {"waveStatus":{"found":true,"readable":true,
+                                                 "gateChoices":["clean","pr-open","pr-head","pr-approved","pr-merged"]},
+                                    "initiatives":[{"id":"init_mx09coo_aiuyjw","waves":[
+                                        {"id":"the-wave-in-question","state":"empty"}]}]}</code></pre>
+<pre><code>GET /api/waves?initiative=&lt;id&gt;   409  {"refused":"unreadable"}
+GET /api/initiatives        200  {"waveStatus":{"found":true,"readable":false}, "card waves":[]}</code></pre>
+<p>Same wave, same read pair, one answer. The broken store now reads as broken on both sides, and the card draws no lane because there is no lane to draw - not because the tab never heard of one.</p>
+
+<h2 id="proof">6. Tests</h2>
+<p>Run with the panel's own runner (<code>node --test</code>), one file per process, against the real server.</p>
+<table>
+  <tr><th>File</th><th class="n">Before</th><th class="n">After</th></tr>
+  <tr><td><code>test/waves-route.test.js</code></td><td class="n bad">5/8</td><td class="n ok">8/8</td></tr>
+  <tr><td><code>test/waves-write.test.js</code></td><td class="n bad">21/22</td><td class="n ok">22/22</td></tr>
+  <tr><td><code>test/initiatives-route.test.js</code>, <code>initiative-fold</code>, <code>waves-store</code>, <code>waves-derive</code>, <code>waves-auto</code>, <code>waves-lane</code>, <code>queue-wave-id</code></td><td class="n">-</td><td class="n ok">154/154 (includes the memo test and the disk-cache test)</td></tr>
+  <tr><td><code>test/initiatives-read-backoff</code>, <code>initiatives-meta-read-hint</code>, <code>initiatives-notes</code>, <code>initiatives-order-archive</code>, <code>initiative-tasks</code>, <code>wave-evidence</code>, <code>wave-evidence-cache</code>, <code>wave-evidence-scope</code>, <code>wave-file-exists</code></td><td class="n">-</td><td class="n ok">81/81</td></tr>
+</table>
+<p>The four red tests before the change were: <span class="bad">the Initiatives read carries the identical lane</span>, <span class="bad">the auto switch rides on the read</span>, <span class="bad">an unreadable store is a 409 with its path</span> (waves-route), and <span class="bad">POST /api/waves creates a wave, GET /api/waves reads it back, and the tab's read agrees</span> (waves-write). All four failed for the same reason: a card <code>waves: []</code> against a route that had just answered one wave, and a <code>waveStatus.readable: true</code> against a route that had just answered 409. No test assertion was edited.</p>
+
+<h2 id="limits">7. What this guarantees, and what it does not</h2>
+<p><b>Guaranteed:</b> the tab's read never answers a wave record, a wave's existence or the store's readability from a document built against another store state. The member rows that decide whether a wave is open or closed are part of that key, so a queue write that changes a member's state, worktree or named abandonment also forces the tab to fold again before it answers.</p>
+<p><b>Not claimed:</b> the memo's two-second window still applies to facts read from the world rather than from the store - the board rows behind a gate's evidence, and queues of tasks that name no wave. Two calls a moment apart can differ if a pull request merged or a board row changed between them. That is two different times, not two different computations, and both routes read those facts through the same evidence reader (<code>lib/wave-evidence.js</code>) when they fold.</p>
+
+<h2 id="rerun">8. Reproduce it</h2>
+<p>The script beside this page boots the panel in a throwaway sandbox, creates an initiative, reads the tab (so its memo exists), creates one wave through <code>POST /api/waves</code>, reads both routes, then breaks the store and reads both again:</p>
+<pre><code>cd &lt;this worktree&gt;
+node docs/reports/wave-status-authority-578/repro.mjs</code></pre>
+<p class="small">Evidence captured 2026-11-28. Route citations are against this tree's <code>routes/initiatives.js</code> and <code>routes/waves.js</code> after the change; the before-behaviour citation is <code>cachedView</code> as it stood at <code>20261127_2134_TASK-405_row-405-is-the-complete</code>.</p>
+
+</main>
+</body>
+</html>
