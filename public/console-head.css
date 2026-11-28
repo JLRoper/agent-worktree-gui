@@ -1,22 +1,15 @@
-/* public/jobs.css
-   The job cards.
+/* public/console-head.css
+   The console's head: the card's title and meta line, the session's cwd line, the pipeline chip, and every control
+   the head carries - pin, think, collapse, maximize, star, rename, clear-thread and attach.
 
-   One card per agent run: its head and control cluster, the subagent rows, the continue and reattach pills and
-   the card's footer rules.
-
-   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
-   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
-   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
-   pane.
+   Loaded immediately after public/console.css, so a change to how an agent's head reads opens two sheets instead
+   of the six the console used to span. The rules were moved here verbatim by row 445 out of public/jobs.css,
+   public/rowstrips.css and public/overlays.css, which held them beside the board's row strips and the page's
+   popovers; the selectors, declarations, comments and order below are those files' own text, in the order
+   public/index.html loaded them. tools/verify-css-split.mjs proves it rule by rule.
    ------------------------------------------------------------------------------------------------ */
 
-/* ---- jobs ---- */
-.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 17px; overflow-anchor: none; }
-/* A card that draws its own box ends the list with a line: the last card in a worktree's agents block and
-   a maximized card both lost their bottom edge here and faded into the background. Slightly stronger than
-   the hairlines between cards, so the group reads as closed rather than cut off. */
-.job:last-child { border-bottom: none; }
-.agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
+/* ---- moved verbatim from public/jobs.css (row 445, the console sub-sheets) ---- */
 .job-head { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; min-width: 0; padding-bottom: 6px; }
 .job-head .spacer { flex: 1; }
 /* The card's head controls — pin, think, stream (only while the Wave button switch draws it), max, clear — are ONE
@@ -89,10 +82,6 @@
 .job-cwd .btn-rename { flex: none; padding: 0 4px; font-size: 10px; line-height: 1.4; }
 /* The rename box replaces the name in place, on this line too — the head's 200px width would overflow the row. */
 .job-cwd input.rename-input { flex: 1 1 auto; min-width: 0; width: auto; }
-/* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
-   these rows are what the children are actually doing, read from their own sessions in the store. */
-/* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
-.subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
 /* The card's own switch. Off is a quiet glyph; on is visibly live, because the block it controls is easy to miss. */
 /* The anchor pin: one card can hold its place on screen while other cards above it grow. Off is a quiet
    glyph in the card head; on is the accent, because it changes how the whole board scrolls. */
@@ -102,63 +91,6 @@ button.btn-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a204
 button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 button.btn-think:hover { color: var(--text); border-color: var(--line); }
 button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
-
-
-/* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
-.reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
-.subagents[hidden] { display: none; }
-.subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; cursor: pointer; user-select: none; }
-.subagents .sub-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
-/* Finished children stay, greyed: they are part of the turn, and their consoles are still worth opening. */
-.subagents.is-done .sub-head,
-.subagents.is-done .sub-title,
-.subagents.is-done .sub-meta { color: var(--dimmer); }
-.subagents.is-done .sub-dot { background: #46505f; box-shadow: none; }
-.subagents.is-done .sub-row:hover .sub-title { color: var(--text); }
-/* Folded turn: the tally stays with it, small enough not to reopen the transcript. */
-.subagents.is-compact { margin: 2px 0 4px 18px; font-size: 10.5px; color: #c8a6ff; }
-.subagents.is-compact.is-done { color: var(--dimmer); }
-.subagents.is-collapsed .sub-row,
-.subagents.is-collapsed .sub-console-wrap { display: none; }
-.subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
-.subagents .sub-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dimmer); }
-.subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
-/* A child that has gone quiet is not "working": say so, and stop pretending with the pulse. */
-.subagents .sub-row.is-hung .sub-dot { background: #f0c674; box-shadow: 0 0 0 3px rgba(240, 198, 116, .16); animation: none; }
-.subagents .sub-row.is-hung .sub-meta { color: #f0c674; }
-.subs-collected { margin-left: 8px; color: var(--dimmer); font-size: 10px; }
-.subs-collect { margin-left: 8px; background: none; border: 1px solid #3d3350; border-radius: 4px; color: #c8a6ff; font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
-.subs-collect:hover { color: #ecd9ff; border-color: #55407a; background: #241d33; }
-.subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.subagents .sub-meta { flex: none; white-space: nowrap; color: var(--dimmer); font-size: 10.5px; }
-/* The clock on a running row reads as part of the status, not as another column. */
-.subagents .sub-meta [data-sub-elapsed] { color: var(--dim); font-variant-numeric: tabular-nums; }
-/* A folded running row keeps saying what is happening: the newest thing the child wrote, pushed to the right of the
-   line and cut short when it is long. It takes the space the title leaves rather than shoving the status around. */
-.subagents .sub-preview { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--dimmer); font-size: 10.5px; padding-left: 12px; }
-.subagents .sub-row:hover .sub-preview { color: var(--dim); }
-/* A subagent line is a door: click it for that child's own console, click it again to close. */
-.subagents .sub-row { cursor: pointer; border-radius: 4px; }
-.subagents .sub-row:hover { background: rgba(255, 255, 255, .035); }
-.subagents .sub-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
-.subagents .sub-caret { flex: none; width: 9px; color: var(--dimmer); }
-/* The triangles come from the UI font: the monospace stack on Windows has no ▾/▸, so the caret vanished. */
-.subagents .sub-chev { font-family: var(--ui); font-size: 9px; line-height: 1; }
-.subagents .sub-row.is-open { background: rgba(255, 255, 255, .02); }
-/* The docked console's own frame: the margin moves the whole box (the control), the scroller keeps the old shape.
-   Its prose is drawn as blocks, so the box no longer preserves the source's whitespace; a non-prose row still does,
-   because a tool result's indentation IS its shape. */
-.sub-console-wrap { margin: 4px 0 8px 36px; }
-.sub-console-tools { display: flex; justify-content: flex-end; gap: 4px; padding: 0 2px 3px; }
-.sub-tool { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; font: 10px/1.6 var(--mono); color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
-.sub-tool:hover { color: var(--text); border-color: var(--dim); }
-.sub-tool:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
-.sub-swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--sub-console-fg, var(--text)); border: 1px solid var(--line); }
-.sub-console { margin: 0; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--sub-console-fg, var(--text)); white-space: normal; }
-.sub-console .jl { font: inherit; white-space: pre-wrap; word-break: break-word; }
-.sub-console .md-para > .jl, .sub-console .jl.md-li, .sub-console .jl.md-head-l { white-space: normal; }
-.sub-console strong { font-weight: 650; }
-@keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .pill {
   font-size: 10.5px;
   font-weight: 700;
@@ -194,11 +126,47 @@ button.pill-continue:disabled { cursor: progress; }
 button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
 @keyframes pill-again-spin { to { transform: rotate(360deg); } }
 
-/* ---- the job card's jump flash, moved out of public/chart.css -------------------------------------
-   The card pulses when a search or a jump lands on it; it was the chart's only non-chart rule. */
+/* ---- moved verbatim from public/overlays.css (row 445, the console sub-sheets) ---- */
+/* The name is the only thing allowed to give up width: without min-width:0 its nowrap text refuses to
+   shrink and pushes the buttons that follow it onto a second row. */
+.job-head .thread-name { min-width: 0; flex: 0 1 auto; }
 
-@keyframes jumpflash {
-  from { box-shadow: 0 0 0 3px #2ea043cc; }
-  to { box-shadow: 0 0 0 3px rgba(46, 160, 67, 0); }
-}
-.job.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
+/* minimize / expand one job card (click its header) */
+.job-head { cursor: pointer; user-select: none; }
+.job-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
+.job-head:hover .chev { color: var(--text); }
+
+/* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
+button.btn-max { padding: 1px 6px; font-size: 12px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-max:hover { color: var(--text); background: #232936; }
+/* star a turn to keep it above the paged turns (still accordionable, still in its page) */
+button.btn-star { background: transparent; border: none; padding: 0 6px 0 0; margin: 0; font-size: 16.5px; line-height: 1; color: var(--dimmer); cursor: pointer; vertical-align: -2px; }
+button.btn-star:hover { color: var(--text); }
+button.btn-star.on { color: #ffd479; }
+
+/* ---- moved verbatim from public/rowstrips.css (row 445, the console sub-sheets) ---- */
+
+/* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
+.job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
+/* forget one agent session (two-step: first click arms it) */
+button.btn-clear-thread { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-clear-thread:hover, button.btn-clear-thread.armed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+button.btn-clear-thread.armed { font-weight: 700; }
+/* rename a session: sits right after its name, at the end of the head */
+button.btn-rename { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-rename:hover { color: var(--text); border-color: #2b5480; background: #232936; }
+input.rename-input { width: 200px; max-width: 42vw; background: var(--surface); color: var(--text); border: 1px solid #2b5480; border-radius: 5px; padding: 1px 6px; font: 11.5px var(--mono); }
+input.rename-input:focus { outline: none; border-color: #3c6f9e; }
+/* attach an unattached agent to a worktree */
+button.btn-attach { padding: 2px 8px; font-size: 11px; line-height: 1.3; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-attach:hover { color: var(--text); background: #232936; }
+.attach-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px 18px; font-size: 11.5px; }
+.attach-row[hidden] { display: none; }
+.attach-row select { max-width: 560px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11.5px var(--mono); }
+button.btn-attach-go { padding: 2px 8px; font-size: 11px; }
+button.btn-attach-go:hover { background: #24466a; }
+/* The card's own title, set like the revive row: the name carries the weight, its age stays quiet. */
+.job-head .job-title { font-weight: 600; color: var(--text); max-width: 52ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-head .job-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
+/* The staleness counter follows the state pill, so it hugs it: the head's 12px gap made the two read as unrelated. */
+.job-head .pill + .job-when { margin-left: -4px; }

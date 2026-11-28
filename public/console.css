@@ -1,17 +1,116 @@
 /* public/console.css
-   The console: the agent pane, its thought rows and the reply composer.
+   The console: the agent card's frame, its output body and the reply composer.
 
-   The running card's pulse and the stuck-turn chip, the output box and its grip, the copy button, the markdown
-   prose, the raw and focus views, the tool-call groups, the thought rows, the diff and code blocks, the command
-   card and the stats readout, and the reply composer's box, its action row and the container query that
-   reshapes them. This is the surface a lane touches when it changes how an agent's output reads.
+   The card's frame and its session block, the subagent rows under it, the running card's pulse and the stuck-turn
+   chip, the output box and its grip, the copy button, the markdown prose, the raw and focus views, the tool-call
+   groups, the thought rows, the diff and code blocks, the command card and the stats readout, and the reply
+   composer's box, its action row and the container query that reshapes them. This is the surface a lane touches
+   when it changes how an agent's output reads.
+
+   Three sheets beside this one hold the console's other parts: public/console-head.css (the head, the cwd line and
+   every head control), public/console-turns.css (the turns) and public/model-menu.css (the picker the turn head
+   opens). Row 445 made that split: the rules below came here verbatim from public/jobs.css, public/rowstrips.css,
+   public/board-table.css and public/overlays.css, where the console was spread over eight sheets.
 
    Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
    order below are that file's own text. public/index.html loads the sheets in the order the rules had in
-   style.css, so the cascade is unchanged. The reply composer block was later moved here verbatim from
-   public/overlays.css. tools/verify-css-split.mjs proves it rule by rule and pane by
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
    pane.
    ------------------------------------------------------------------------------------------------ */
+
+/* ---- moved verbatim from public/board-table.css (row 445, the console sub-sheets) ---- */
+/* A session panel is its own layer, not a tint of the detail row it sits in: at 1.2% white it read as the same
+   surface as its parent, which is what made the nesting flatten out. `--card` is one step lighter and moves with
+   the contrast slider like every other layer. */
+.agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--card); }
+.agents-block .job:last-child { margin-bottom: 0; }
+.agents-block .job-out { max-height: 320px; }
+.warnline { color: #ff9c94; font: 11.5px/1.4 var(--mono); min-height: 14px; }
+/* The reply row's warnline reserved a line of height even when it had nothing to say, so every card ended in
+   14px of nothing plus a flex gap. It only needs that height once it holds a message. */
+.reply-row .warnline:empty { min-height: 0; }
+.reply-row:has(.warnline:empty) { display: none; }
+
+/* ---- moved verbatim from public/jobs.css (row 445, the console sub-sheets) ---- */
+
+/* ---- jobs ---- */
+.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 17px; overflow-anchor: none; }
+/* A card that draws its own box ends the list with a line: the last card in a worktree's agents block and
+   a maximized card both lost their bottom edge here and faded into the background. Slightly stronger than
+   the hairlines between cards, so the group reads as closed rather than cut off. */
+.job:last-child { border-bottom: none; }
+.agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
+/* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
+   these rows are what the children are actually doing, read from their own sessions in the store. */
+/* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
+.subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
+
+
+/* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
+.reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
+.subagents[hidden] { display: none; }
+.subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; cursor: pointer; user-select: none; }
+.subagents .sub-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* Finished children stay, greyed: they are part of the turn, and their consoles are still worth opening. */
+.subagents.is-done .sub-head,
+.subagents.is-done .sub-title,
+.subagents.is-done .sub-meta { color: var(--dimmer); }
+.subagents.is-done .sub-dot { background: #46505f; box-shadow: none; }
+.subagents.is-done .sub-row:hover .sub-title { color: var(--text); }
+/* Folded turn: the tally stays with it, small enough not to reopen the transcript. */
+.subagents.is-compact { margin: 2px 0 4px 18px; font-size: 10.5px; color: #c8a6ff; }
+.subagents.is-compact.is-done { color: var(--dimmer); }
+.subagents.is-collapsed .sub-row,
+.subagents.is-collapsed .sub-console-wrap { display: none; }
+.subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
+.subagents .sub-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dimmer); }
+.subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
+/* A child that has gone quiet is not "working": say so, and stop pretending with the pulse. */
+.subagents .sub-row.is-hung .sub-dot { background: #f0c674; box-shadow: 0 0 0 3px rgba(240, 198, 116, .16); animation: none; }
+.subagents .sub-row.is-hung .sub-meta { color: #f0c674; }
+.subs-collected { margin-left: 8px; color: var(--dimmer); font-size: 10px; }
+.subs-collect { margin-left: 8px; background: none; border: 1px solid #3d3350; border-radius: 4px; color: #c8a6ff; font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
+.subs-collect:hover { color: #ecd9ff; border-color: #55407a; background: #241d33; }
+.subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.subagents .sub-meta { flex: none; white-space: nowrap; color: var(--dimmer); font-size: 10.5px; }
+/* The clock on a running row reads as part of the status, not as another column. */
+.subagents .sub-meta [data-sub-elapsed] { color: var(--dim); font-variant-numeric: tabular-nums; }
+/* A folded running row keeps saying what is happening: the newest thing the child wrote, pushed to the right of the
+   line and cut short when it is long. It takes the space the title leaves rather than shoving the status around. */
+.subagents .sub-preview { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--dimmer); font-size: 10.5px; padding-left: 12px; }
+.subagents .sub-row:hover .sub-preview { color: var(--dim); }
+/* A subagent line is a door: click it for that child's own console, click it again to close. */
+.subagents .sub-row { cursor: pointer; border-radius: 4px; }
+.subagents .sub-row:hover { background: rgba(255, 255, 255, .035); }
+.subagents .sub-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.subagents .sub-caret { flex: none; width: 9px; color: var(--dimmer); }
+/* The triangles come from the UI font: the monospace stack on Windows has no ▾/▸, so the caret vanished. */
+.subagents .sub-chev { font-family: var(--ui); font-size: 9px; line-height: 1; }
+.subagents .sub-row.is-open { background: rgba(255, 255, 255, .02); }
+/* The docked console's own frame: the margin moves the whole box (the control), the scroller keeps the old shape.
+   Its prose is drawn as blocks, so the box no longer preserves the source's whitespace; a non-prose row still does,
+   because a tool result's indentation IS its shape. */
+.sub-console-wrap { margin: 4px 0 8px 36px; }
+.sub-console-tools { display: flex; justify-content: flex-end; gap: 4px; padding: 0 2px 3px; }
+.sub-tool { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; font: 10px/1.6 var(--mono); color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.sub-tool:hover { color: var(--text); border-color: var(--dim); }
+.sub-tool:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.sub-swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--sub-console-fg, var(--text)); border: 1px solid var(--line); }
+.sub-console { margin: 0; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--sub-console-fg, var(--text)); white-space: normal; }
+.sub-console .jl { font: inherit; white-space: pre-wrap; word-break: break-word; }
+.sub-console .md-para > .jl, .sub-console .jl.md-li, .sub-console .jl.md-head-l { white-space: normal; }
+.sub-console strong { font-weight: 650; }
+@keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* ---- the job card's jump flash, moved out of public/chart.css -------------------------------------
+   The card pulses when a search or a jump lands on it; it was the chart's only non-chart rule. */
+
+@keyframes jumpflash {
+  from { box-shadow: 0 0 0 3px #2ea043cc; }
+  to { box-shadow: 0 0 0 3px rgba(46, 160, 67, 0); }
+}
+.job.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
+
 
 /* ---- the running card's pulse -------------------------------------------------------------------
    The heartbeat on a live run's event stream (app.js livePulse): a looping dot and the last thing the panel
@@ -960,3 +1059,74 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
   .reply-wrap .reply-actions { position: static; flex-wrap: wrap; margin-top: 6px; gap: 6px 8px; }
   .reply-wrap .reply-actions button { padding: 4px 10px; font-size: 12px; }
 }
+
+/* ---- moved verbatim from public/overlays.css (row 445, the console sub-sheets) ---- */
+button.btn-reply { position: absolute; left: 7px; bottom: 8px; z-index: 1; padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
+button.btn-reply:hover { background: #24466a; }
+
+/* ---- moved verbatim from public/rowstrips.css (row 445, the console sub-sheets) ---- */
+.job.maximized {
+  position: fixed;
+  inset: 10px;
+  z-index: 90;
+  margin: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  /* The bottom edge of a maximized card is the one line against the page background, so it gets the same
+     slightly stronger hairline as the last card in a list. */
+  border-bottom-color: #2f3947;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .65);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 14px 12px;
+}
+.job.maximized .job-head, .job.maximized .job-foot, .job.maximized .reply { flex: none; }
+.job.maximized .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
+.job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.job.maximized .turn.folded { display: block; flex: 0 0 auto; }
+.job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
+.job.maximized .reply-box { min-height: 79px; }
+/* The console's text keeps a side inset inside its own box, so a line of output is set in from the box's edge and
+   reads as a transcript rather than as the box's own chrome: that inset is the body's 10px padding, the one number
+   Settings > Display's "console text side margin" moves (0 runs the text to the edge), and the command card's own
+   side margin is measured from it. This 18px is a different number and not the reader's: it is the tab that centres
+   the console's boxes under the turn, kept here so the card and the question box below still sit in that column. */
+.job-cmd, .job-out, .job-foot { margin-left: 18px; }
+/* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
+   starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are
+   pinned inside the box itself, so this must NOT live between the textarea and them. */
+.job-stats-row { margin: 2px 0 0; }
+
+.job-preview { display: none; }
+
+/* A minimized card is a handle: the head, the preview line and the gaps between them all expand it. */
+.job.collapsed, .job.collapsed .job-preview { cursor: pointer; }
+.job.collapsed { padding-bottom: 9px; }
+.job.collapsed .job-body { display: none; }
+/* The minimized row's one line: the outcome first (the word the turn's own head uses), the duration, then either
+   the last thing the turn printed or why it died. The chip is what a folded card was missing - the head's pill only
+   says whether the agent is live. Laid out fixed so a long line ellipsizes inside .pv-text and never pushes the
+   status word out of the row. */
+.job.collapsed .job-preview {
+  display: flex; align-items: baseline; gap: 7px;
+  margin: 5px 0 0 18px;
+  color: var(--dim);
+  font: 11.5px/1.4 var(--term);
+  min-width: 0;
+}
+.pv-status {
+  flex: none;
+  font: 700 10px/1.5 var(--mono); letter-spacing: .05em; text-transform: uppercase;
+  padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--dim); background: #20242c;
+}
+.pv-status.is-run { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.pv-status.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+.pv-status.is-interrupted { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* A turn held on the gateway's 429 cap: amber like an interrupted turn — it is neither running nor failed —
+   but not the SAME chip, so "waiting for a slot" can never be read as "this turn died". */
+.pv-status.is-waiting { color: #d9b3ff; border-color: #452f5c; background: #241a33; }
+.pv-meta { flex: none; color: var(--dimmer); }
+.pv-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
