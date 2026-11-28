@@ -161,7 +161,7 @@
 
   // THE FLOAT'S HEAD, OWED TO A RELEASE. While a console's corner gesture is live, nothing above that console is drawn
   // (a chip appearing in the title row, a new tab, a renamed session all move the pane below and take the frozen corner
-  // with it). The paint is recorded here and drawn once at the release, from public/app.js endOutGrip's deferred flush.
+  // with it). The paint is recorded here and drawn once at the release, from public/core/console-grip.js end's deferred flush.
   // One stable function, so the gesture's flush list holds one entry however many times the head was asked to paint.
   let headPaintOwed = false;
   function flushHeadPaint() {
@@ -1795,7 +1795,7 @@
     if (!body) return;
     if (!force && !chatPinned) return;
     // The transcript's own record of where the reader is wins over the pane's flag. A corner gesture that has just
-    // ended left this transcript short of its foot on purpose (public/app.js endOutGrip records it), and a pin here
+    // ended left this transcript short of its foot on purpose (public/core/console-grip.js end records it), and a pin here
     // scrolls the box back by the drag's travel - measured, a state poll landing under the hand cost 35.7px of corner
     // at the release, through the frame this schedules. Following resumes on the reader's own scroll to the foot.
     if (!force && body._atBottom === false) return;
@@ -2413,7 +2413,7 @@
         // that this body is NOT following. Without the second, a fresh node answers "following" and the next streamed
         // line drags a reader who is reading the middle of the transcript back down to the foot. The band is 0: the
         // panel placed the box at an offset the pin branch above already decided is not the foot (a reader on the foot
-        // took that branch), and a corner gesture's release is recorded the same way (public/app.js endOutGrip). The
+        // took that branch), and a corner gesture's release is recorded the same way (public/core/console-grip.js end). The
         // 8 px band would mark a drag's own last few px as following, and the settle pass would scroll them away.
         setScroll(body, prevTop);
         noteCardBodyScroll(body, 0);

@@ -778,7 +778,7 @@ function reaimHotHit() {
 
 function renderJobs() {
   // The reader's corner gesture is holding a console in the unattached list: this rebuild replaces every card in it,
-  // and the box under their pointer with them. The release asks for the repaint back (public/app.js's endOutGrip).
+  // and the box under their pointer with them. The release asks for the repaint back (public/core/console-grip.js end).
   // public/app.js declares outGripLive / outGripDefer on the page's one global scope; `?.` keeps a bench that evaluates
   // this file alone from throwing on a gesture it does not have.
   if (globalThis.outGripLive?.()) {
@@ -1224,7 +1224,7 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   const prevBody = el.querySelector(".job-body");
   const bodyTop = prevBody ? prevBody.scrollTop : 0;
   // The body's own record wins over the band when it says NOT following. A corner gesture's release records this
-  // transcript off its foot even when the gap is under a line (app.js endOutGrip -> noteCardBodyScroll(body, 0)), and
+  // transcript off its foot even when the gap is under a line (console-grip.js end -> noteCardBodyScroll(body, 0)), and
   // a rebuild that measured only the DOM read that gap as "on the foot", scrolled it away, and took the corner with
   // it: 8 px after the hand let go, measured at 820x1080 from a 140px start. An unrecorded body is measured as before.
   const bodyAtBottom = prevBody

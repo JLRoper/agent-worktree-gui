@@ -285,6 +285,10 @@ test("the pruned set is the one renderJobs already keeps: a live turn keeps its 
 // calls from being deleted without a red test.
 test("the shipped rebuild and the drag's release still call the store", () => {
   assert.ok(grab("renderConversation").includes("applyStoredHeight(o);"), "renderConversation puts the height back");
-  assert.ok(src.includes("rememberOutHeight(d.out.dataset.out, h);"), "the grip's release records the height it reached");
+  assert.ok(
+    page("public/core/console-grip.js").includes("hooks.remember(d.out.dataset.out, h);"),
+    "the grip's release records the height it reached",
+  );
+  assert.ok(src.includes("remember: (id, h) => rememberOutHeight(id, h)"), "through the page's own store");
   assert.ok(src.includes("pruneOutHeights(live);"), "renderJobs prunes the store on the turns that are left");
 });
