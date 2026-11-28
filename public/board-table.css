@@ -361,12 +361,6 @@ body.addbar-top .agents-block { display: flex; flex-direction: column; }
 body.addbar-top .agents-block > .btn-add-agent,
 body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; margin-bottom: 8px; }
 .agents-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
-/* A session panel is its own layer, not a tint of the detail row it sits in: at 1.2% white it read as the same
-   surface as its parent, which is what made the nesting flatten out. `--card` is one step lighter and moves with
-   the contrast slider like every other layer. */
-.agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--card); }
-.agents-block .job:last-child { margin-bottom: 0; }
-.agents-block .job-out { max-height: 320px; }
 /* Sessions the row knows about but the board has no card for. The gateway still has the
    conversation, so these are offered back one at a time rather than auto-attached. No heading and no
    rule: the revive button says what the row is, and a label above three buttons was furniture. */
@@ -631,11 +625,6 @@ button.chip:active { transform: translateY(1px); }
 /* An empty message line is not a placeholder: with nothing to report the New agent card should end at its
    last field, not carry 29px of reserved height and two flex gaps for text that may never come. */
 #spawn-warn:empty, #spawn-msg:empty { display: none; }
-.warnline { color: #ff9c94; font: 11.5px/1.4 var(--mono); min-height: 14px; }
-/* The reply row's warnline reserved a line of height even when it had nothing to say, so every card ended in
-   14px of nothing plus a flex gap. It only needs that height once it holds a message. */
-.reply-row .warnline:empty { min-height: 0; }
-.reply-row:has(.warnline:empty) { display: none; }
 
 /* ---- the row's controls, marks and artifacts, moved out of public/rows.css ---------------------
    The artifacts button and its popover, the cut/reconcile/remove controls, rename and fold, the
@@ -1235,8 +1224,8 @@ tr.detail .live-block ul { margin: 4px 0 10px 28px; }
 
 /* ---- the row's strips: git, description, release and TODO, moved out of public/rowstrips.css ----
    The strips hang under an open row and read the same cells' values, so they are the row's own
-   detail. public/rowstrips.css keeps the console head's buttons and the panel's type/status
-   utilities, which are not the row's. */
+   detail. public/utilities.css keeps the panel's type/status utilities and public/console-head.css
+   the console head's buttons, which are not the row's. */
 
 /* git / commit / diff detail: one summary line, body only when unfolded */
 .git-block { margin-bottom: 6px; }

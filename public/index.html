@@ -15,11 +15,18 @@
        table and its rows, wherever the 2026-11-27 split had scattered them (chart.css, rows.css, rowstrips.css,
        boardchips.css, overlays.css). A board-table change opens this file. -->
   <link rel="stylesheet" href="/board-table.css" />
-  <link rel="stylesheet" href="/jobs.css" />
+  <!-- The console's family, in the order the console draws its parts: the body and the reply composer, the head, the
+       turns, and the model picker the turn head's readout opens. jobs.css and turns.css are gone; what they held is
+       in these four sheets, so a change to an agent's head or its turns opens the sheet that owns that part. -->
   <link rel="stylesheet" href="/console.css" />
-  <link rel="stylesheet" href="/turns.css" />
+  <link rel="stylesheet" href="/console-head.css" />
+  <link rel="stylesheet" href="/console-turns.css" />
+  <link rel="stylesheet" href="/model-menu.css" />
   <link rel="stylesheet" href="/overlays.css" />
-  <link rel="stylesheet" href="/rowstrips.css" />
+  <!-- The panel's type and status utilities: .mono, .name, .branch, .dim, .dimmer, .nowrap, .clean, .dirty. Read by
+       every surface, owned by none, and kept out of the sheets above so a single-class rule cannot be beaten by a
+       surface sheet that happens to load later. -->
+  <link rel="stylesheet" href="/utilities.css" />
   <link rel="stylesheet" href="/assistant.css" />
   <link rel="stylesheet" href="/feedback.css" />
   <link rel="stylesheet" href="/assistant-panes.css" />

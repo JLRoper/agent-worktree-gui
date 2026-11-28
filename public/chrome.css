@@ -11,6 +11,7 @@
    pane.
    ------------------------------------------------------------------------------------------------ */
 
+
 .topbar {
   position: sticky;
   top: 0;
@@ -274,3 +275,6 @@ thead th,
   animation: copy-flash 1.1s ease-out both; }
 @keyframes copy-flash { 0% { opacity: 0; transform: translateY(-2px); } 12% { opacity: 1; transform: none; }
   72% { opacity: 1; } 100% { opacity: 0; transform: translateY(2px); } }
+
+/* ---- moved verbatim from public/rowstrips.css (row 445, the console sub-sheets) ---- */
+body.modal-open { overflow: hidden; }
