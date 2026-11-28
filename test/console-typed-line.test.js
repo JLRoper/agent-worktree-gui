@@ -17,12 +17,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
 await import("../public/core/type-stream.js");
 const { createDrawStream } = globalThis.wtType;
 
-const code = sliceBetween(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "// ---- end result row head", "// ---- console row text");
+const code = sliceBetween(consoleSource() + "\n" + readSource("public/app.js"), "// ---- end result row head", "// ---- console row text"); // public/board/console.js and its cuts
 // `window` is only used by the "console-format asks the page for the prefix" registration at the end of that region;
 // a bare object satisfies its optional chaining, which is exactly what a harness page without the module looks like.
 const make = new Function("state", "document", "window", `${code}\nreturn { typedText, typedShown };`);

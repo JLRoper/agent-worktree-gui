@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openPage, withBrowser } from "./browser.mjs";
 import { styleLinkTags } from "./style-sheets.mjs";
+import { consoleScriptTags } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.PANEL_ROOT ? path.resolve(process.env.PANEL_ROOT) : path.join(HERE, "..");
@@ -56,7 +57,7 @@ ${styleLinkTags({ root: ROOT })}
 <script src="/public/core/console-format.js"></script>
 <script src="/public/core/console-markdown.js"></script>
 <script src="/public/core/type-stream.js"></script>
-<script src="/public/board/console.js"></script>
+${consoleScriptTags()}
 <script>
   const RECORD = ${JSON.stringify(RECORD)};
   const FRAME = ${JSON.stringify(FRAME)};

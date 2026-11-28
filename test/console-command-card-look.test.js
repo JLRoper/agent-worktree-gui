@@ -32,6 +32,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 // The page's module: a classic script over `window`. Loaded the way public/index.html loads it (after the frame).
 globalThis.window = globalThis;
@@ -43,7 +44,7 @@ const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8").replac
 const app = read("../public/app.js");
 const css = readStyleSheets();
 const html = read("../public/index.html");
-const consoleJs = read("../public/board/console.js");
+const consoleJs = consoleSource(); // public/board/console.js and its four cuts, in page order
 
 const LINE = "QUEUE assistant-3 | [Playwright test] corner resize the board";
 const PROMPT = "SPAWN IN #400 agent-worktree-gui | [Fold marker] read the renderer, then the fold";

@@ -24,10 +24,11 @@ import assert from "node:assert/strict";
 import { after } from "node:test";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 // The region under test lives in public/board/console.js after the console cut; the two page-wide counts below
 // are the shell's (app.js), so the harness reads both scripts in the order index.html loads them.
-const consoleSrc = readFileSync(new URL("../public/board/console.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
 const src = `${consoleSrc}\n${readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n")}`;
 const begin = consoleSrc.indexOf("// ---- the reader's own input, per card");
 const end = consoleSrc.indexOf("// ---- end the reader's own input, per card");

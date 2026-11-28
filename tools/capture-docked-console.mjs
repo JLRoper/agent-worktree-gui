@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openPage, withBrowser } from "./browser.mjs";
 import { styleLinkTags } from "./style-sheets.mjs";
+import { consoleScriptTags } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.PANEL_ROOT ? path.resolve(process.env.PANEL_ROOT) : path.join(HERE, "..");
@@ -73,7 +74,7 @@ ${styleLinkTags({ root: ROOT })}
 <script src="/public/core/dom-format.js"></script>
 <script src="/public/core/console-format.js"></script>
 <script src="/public/core/console-markdown.js"></script>
-<script src="/public/board/console.js"></script>
+${consoleScriptTags()}
 <script>
   // The console's own state, as app.js seeds it, and nothing else: the renderers below read these by bare name.
   window.state = {

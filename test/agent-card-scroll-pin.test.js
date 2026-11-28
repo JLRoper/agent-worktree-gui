@@ -14,9 +14,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/app.js")}\n${page("public/assistant.js")}`;
+// public/board/console.js and its four cuts, in page order (public/index.html).
+const src = `${consoleSource()}\n${page("public/app.js")}\n${page("public/assistant.js")}`;
 
 function grab(name) {
   const start = src.indexOf(`function ${name}(`);

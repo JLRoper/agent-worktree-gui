@@ -11,9 +11,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
-const consoleSrc = read("public/board/console.js");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
 // Cut 1 of render-jobs.js: the stream body and the placeholder are public/board/stream-body.js.
 const jobsSrc = `${read("public/board/stream-body.js")}\n${read("public/render-jobs.js")}`;
 const renderSrc = jobsSrc;
