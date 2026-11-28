@@ -4227,11 +4227,12 @@
   const initNoteEdit = new Map(); // initiative id -> { noteId, text, label } - the one note being amended
   const initNoteStatus = new Map(); // initiative id -> { text, bad } - what the last note write answered
   const initNoteBusy = new Set(); // initiative ids with a note write in flight, so a double press is one write
-  // THE NOTES FOLD, per initiative. Absent means OPEN: a card first painted shows its log, and only a press puts it
-  // away. Module state rather than the element's own, for the reason every fold beside it is module state - the pane
-  // repaints from a snapshot every few seconds, and a fold that lived on the <section> would pop open on the next one.
+  // THE NOTES FOLD, per initiative, and it starts FOLDED. This is an OPEN set: a card first painted draws the head
+  // with its count and nothing else, and a press unfolds the log and remembers that per initiative. Module state
+  // rather than the element's own, for the reason every fold beside it is module state - the pane repaints from a
+  // snapshot every few seconds, and a fold that lived on the <section> would pop open on the next one.
   // A note arriving while the log is folded is just a bigger count: nothing here is written by the write paths.
-  const initNotesFold = new Map(); // initiative id -> true when the reader has folded the notes
+  const initNotesOpen = new Set(); // initiative ids whose notes the reader has unfolded - folded until then
   let initNoteArm = ""; // the note id whose Delete has been pressed once and waits for the second
 
   // The four host names the store can carry, as words: the chip says which reference system a link belongs to, and
@@ -4349,7 +4350,7 @@
     // `hidden` does. The count sits INSIDE the head on purpose: folded, the log is a number the reader can still read
     // without opening it. The body is the list, the write box and the last write's status - everything the fold puts
     // away - and the body's hidden attribute is what the gate measures, not a class the CSS could outvote.
-    const notesOpen = initNotesFold.get(String(init.id)) !== true;
+    const notesOpen = initNotesOpen.has(String(init.id));
     const bodyId = `init-notes-body-${String(init.id)}`;
     return `<section class="init-notesfold${notesOpen ? "" : " is-folded"}" data-init-notes="${esc(init.id)}" aria-label="${esc(`notes on ${init.title}`)}">
       <button type="button" class="init-proj init-foldhead init-noteshead" data-init-notes-fold="${esc(init.id)}" aria-expanded="${notesOpen ? "true" : "false"}" aria-controls="${esc(bodyId)}" title="${notesOpen ? "fold the notes - the head keeps the count, and a note that arrives while it is folded only moves the count" : "unfold the notes - the log and the write box come back, and the draft you left is still in it"}">
@@ -5140,6 +5141,42 @@
     if (body && body.scrollHeight > body.clientHeight + 1) return body;
     return host;
   }
+  // A FOLD PRESS HOLDS ITS OWN HEAD, NOT THE FOOT. The restore below keeps a reader who is at the foot at the foot
+  // (its atBottom branch), and that is right for a poll: the newest row arrives where they are looking. It is wrong for
+  // a fold pressed near the foot - unfolding inserts content BELOW the pressed header, the rebuild parks the pane at
+  // its new end, and the header under the reader's pointer slides up and away from it. So a fold press captures the
+  // pressed header and its top within the scroller's box, and the restore puts THAT back, overriding the foot rule for
+  // exactly that press. A press is a person pointing at a line, and that line stays under the pointer.
+  //
+  // The eight attributes are every expandable the tab draws: a card's own title row, a project row, the notes, the
+  // assistants, one assistant's tasks, the history, the description's show more and the tasks' one-more-slice. A key
+  // is unique in the pane by construction - a project's is its initiative and project name, a task fold's is its
+  // initiative and assistant, and every other is the initiative's id - so resolving it by attribute after the
+  // innerHTML write finds the node the rebuild drew for the same fold, not a neighbour's.
+  const INIT_FOLD_ATTRS = [
+    "data-init-card-toggle",
+    "data-init-fold",
+    "data-init-notes-fold",
+    "data-init-assist-fold",
+    "data-init-task-fold",
+    "data-init-history-fold",
+    "data-init-desc-fold",
+    "data-init-tasks-more",
+  ];
+  let initFoldHold = null; // { attr, value, top } - the head a fold press is holding, and its top in the scroller's box
+  function holdInitFoldHeader(el) {
+    initFoldHold = null;
+    const host = as$("as-initiatives");
+    const scroller = initScrollerOf(host);
+    if (!el || !scroller || !host || !host.contains(el)) return;
+    const attr = INIT_FOLD_ATTRS.find((a) => el.hasAttribute(a));
+    if (!attr) return;
+    initFoldHold = {
+      attr,
+      value: String(el.getAttribute(attr) || ""),
+      top: el.getBoundingClientRect().top - scroller.getBoundingClientRect().top,
+    };
+  }
   function captureInitScroll(host) {
     const scroller = initScrollerOf(host);
     if (!scroller) return null;
@@ -5180,8 +5217,27 @@
     };
   }
   function restoreInitScroll(keep) {
+    // THE HELD HEAD IS TAKEN HERE WHATEVER HAPPENS BELOW, so a press whose node the rebuild did not draw cannot leave
+    // a hold behind for the next poll's restore to consume.
+    const held = initFoldHold;
+    initFoldHold = null;
     if (!keep || !keep.scroller || !keep.scroller.isConnected) return;
     const { scroller } = keep;
+    // THE PRESSED HEAD WINS OVER THE FOOT (see holdInitFoldHeader). The distance from the head's top to the scroller's
+    // own top is the held fact: the rebuild changes the content under it, so the correction is whatever scroll makes
+    // that distance read again what it read at the press. The clamp keeps the write inside the pane's own range.
+    if (held) {
+      const head = [...scroller.querySelectorAll(`[${held.attr}]`)].find((n) => n.getAttribute(held.attr) === held.value) || null;
+      if (head) {
+        const now = head.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        const shift = now - held.top;
+        if (Math.abs(shift) >= 0.5) {
+          const range = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          scroller.scrollTop = Math.max(0, Math.min(range, scroller.scrollTop + shift));
+        }
+        return;
+      }
+    }
     if (keep.atBottom) {
       scroller.scrollTop = scroller.scrollHeight;
       return;
@@ -6014,14 +6070,19 @@
       if (kind === "card") {
         const id = String(card?.dataset.initCard || "");
         if (!id) return;
+        // The card's own title row is an expandable like every fold under it: a press at the foot opens the body
+        // under the head the reader pressed, and the head stays under the pointer (holdInitFoldHeader).
+        holdInitFoldHeader(card.querySelector("[data-init-card-toggle]"));
         if (initOpen.has(id)) initOpen.delete(id);
         else initOpen.add(id);
         renderAssistantInitiatives(true);
         return;
       }
       if (kind === "description") {
-        const id = String(e.target.closest("[data-init-desc-fold]")?.dataset.initDescFold || "");
+        const descFold = e.target.closest("[data-init-desc-fold]");
+        const id = String(descFold?.dataset.initDescFold || "");
         if (!id) return;
+        holdInitFoldHeader(descFold);
         if (initDescMore.has(id)) initDescMore.delete(id);
         else initDescMore.add(id);
         renderAssistantInitiatives(true);
@@ -6103,6 +6164,8 @@
       if (el.dataset.initTasksMore) {
         e.preventDefault();
         const key = String(el.dataset.initTasksMore);
+        // One more slice of an assistant's tasks: another expandable that grows DOWNWARD from the pressed control.
+        holdInitFoldHeader(el);
         initTaskShown.set(key, (initTaskShown.get(key) || wtInitiativeFold.TASK_CARD_FIRST) + wtInitiativeFold.TASK_CARD_MORE);
         renderAssistantInitiatives(true);
         return;
@@ -6115,6 +6178,7 @@
       }
       if (el.dataset.initFold) {
         const key = String(el.dataset.initFold);
+        holdInitFoldHeader(el);
         if (initFolds.has(key)) initFolds.delete(key);
         else initFolds.add(key);
         renderAssistantInitiatives(true);
@@ -6122,6 +6186,7 @@
       }
       if (el.dataset.initAssistFold) {
         const id = String(el.dataset.initAssistFold);
+        holdInitFoldHeader(el);
         if (initAssistOpen.has(id)) initAssistOpen.delete(id);
         else initAssistOpen.add(id);
         renderAssistantInitiatives(true);
@@ -6132,6 +6197,7 @@
       // follows this press (and every snapshot after it) draws the same open fold.
       if (el.dataset.initTaskFold) {
         const key = String(el.dataset.initTaskFold);
+        holdInitFoldHeader(el);
         if (initTaskOpen.has(key)) initTaskOpen.delete(key);
         else initTaskOpen.add(key);
         renderAssistantInitiatives(true);
@@ -6139,17 +6205,20 @@
       }
       if (el.dataset.initHistoryFold) {
         const id = String(el.dataset.initHistoryFold);
+        holdInitFoldHeader(el);
         if (initHistoryOpen.has(id)) initHistoryOpen.delete(id);
         else initHistoryOpen.add(id);
         renderAssistantInitiatives(true);
         return;
       }
       // THE NOTES FOLD. The one book is keyed by the initiative, so two cards fold apart; the write is a flip of that
-      // entry and nothing else, which is why a note that lands while the log is shut cannot open it.
+      // entry and nothing else, which is why a note that lands while the log is shut cannot open it. The set holds the
+      // OPEN ones - a card first painted is folded, and a press is what puts its log out.
       if (el.dataset.initNotesFold) {
         const id = String(el.dataset.initNotesFold);
-        if (initNotesFold.get(id) === true) initNotesFold.delete(id);
-        else initNotesFold.set(id, true);
+        holdInitFoldHeader(el);
+        if (initNotesOpen.has(id)) initNotesOpen.delete(id);
+        else initNotesOpen.add(id);
         renderAssistantInitiatives(true);
         return;
       }
