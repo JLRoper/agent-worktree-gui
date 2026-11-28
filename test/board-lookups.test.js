@@ -22,9 +22,10 @@ import { readStyleSheets } from "./style-sheets.js";
 // public/dom.js in step 2 of docs/reports/module-map-2026-11-07.html, the chart's arrow (refreshTopToggle,
 // paintTopToggle) to public/charts.js in step 3, the turn head's peek (refreshTurnPeek) to public/turns.js in
 // step 4, and the board's child reads and re-rank (childrenMatching, boardGroups, groupBody, reorderProjects) to
-// public/render-projects.js in step 7.
+// public/render-projects.js in step 7. The ranking ticks moved to public/board/anchor.js in cut 6 of
+// docs/reports/module-separation-2026-11-28.html, so that script is read too.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/render-projects.js")}\n${page("public/render-jobs.js")}\n${page("public/board-scaffold.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/render-projects.js")}\n${page("public/render-jobs.js")}\n${page("public/board-scaffold.js")}\n${page("public/board/anchor.js")}\n${page("public/app.js")}`;
 
 function grab(name) {
   const start = src.indexOf(`function ${name}(`);
