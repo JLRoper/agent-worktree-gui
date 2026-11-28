@@ -27,6 +27,9 @@ import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
 
 globalThis.window = globalThis;
+// The page loads the git reading FIRST and the entry point second, and the entry point destructures what the first
+// one published: the import has to follow the page's order, or wtCommandSummaryGit is undefined when the parent runs.
+await import("../public/core/command-summary-git.js");
 await import("../public/core/command-summary.js");
 const M = globalThis.wtCommandSummary;
 
@@ -37,7 +40,9 @@ const app = read("../public/app.js");
 const approvals = read("../public/board/approvals.js");
 const html = read("../public/index.html");
 const css = readStyleSheets();
-const source = read("../public/core/command-summary.js");
+// The area is two files now (row 523's cut): the git reading and the entry point, read in the page's load order, so
+// the "no fetch, no clock, no import" assertions below cover the whole reading and not just what stayed behind.
+const source = [read("../public/core/command-summary-git.js"), read("../public/core/command-summary.js")].join("\n");
 
 const ROOT = "/repo/demo";
 
