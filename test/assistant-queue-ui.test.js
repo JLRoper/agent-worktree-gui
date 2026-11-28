@@ -459,16 +459,19 @@ test("the row's description, tree, files and attempts sit behind one closed disc
   assert.match(html, /<summary title="the tree, the files, the attempts and the detail/, "the summary explains the fold on hover");
 });
 
-test("the waiting-on chip draws the lane head the store derived, naming the lane in its hover text", () => {
+test("the waiting-on chip names the row it waits on and the file the two collide on, in its hover text", () => {
   const { queueTaskHtml } = build();
   const html = queueTaskHtml(
     "assistant-1",
-    { id: 8, title: "behind the head", state: "queued", files: ["lib/assistant.js"], waitingOn: { id: 3, lane: "lib/assistant.js" } },
+    { id: 8, title: "behind the live peer", state: "queued", files: ["lib/assistant.js", "lib/b.js"], waitingOn: { id: 3, lane: "lib/assistant.js", file: "lib/b.js" } },
     new Map(),
   );
   assert.ok(html.includes('data-as-qwait="3"'), "the chip names the row it waits on");
   assert.ok(html.includes(">waiting on #3</span>"), "…in three words a reader can scan");
-  assert.ok(/title="waiting on #3 — #3 heads this lane \(lib\/assistant\.js\)/.test(html), "…with the lane file on hover");
+  assert.ok(
+    /title="waiting on #3 - #3 is live on lib\/b\.js: this row claims the same file/.test(html),
+    "…with the file behind the lane's name on hover: a wait is about the file that holds the row, not the lane's own name",
+  );
 
   const quiet = queueTaskHtml("assistant-1", { id: 9, title: "no lane", state: "queued", files: [] }, new Map());
   assert.ok(!quiet.includes("as-task-wait"), "a row with no lane head wears no chip");
