@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The first of five cuts of lib/jobs.js: the 429 policy moves out, and the old path keeps all 39 names</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap: anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>The first of five cuts of lib/jobs.js: the 429 policy moves out, and the old path keeps all 39 names</h1>
+<p class="sub">agent-worktree-gui. Queue row #527 (brief row 539), the first of five cuts of <code>lib/jobs.js</code>. The module is 7,803 lines in this tree, not the 7,615 the brief quotes: the turnover branch this tree was cut from has moved since that count was taken. This page records one cut, the evidence that it changed nothing a caller can see, and why the other four cuts cannot be done in this row.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#527, cut 1 of 5 of lib/jobs.js</dd>
+  <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete at a7ac20b1, cut into branch wtgui/row-539-is-one-cut-of-the-module-b5e8a7 and merged back locally, nothing pushed</dd>
+  <dt>the cut</dt><dd>lib/jobs.js -> lib/jobs/gateway.js: the 429 backpressure policy, 58 lines</dd>
+  <dt>the source</dt><dd>lib/jobs.js 7,803 -> 7,753 lines; the new module 73 lines (15 of header, 58 of moved code)</dd>
+  <dt>export surface</dt><dd><span class="ok">39 names before, 39 names after, identical</span> - dumped by dynamic import and compared</dd>
+  <dt>moved block</dt><dd><span class="ok">byte-identical</span>, sha256 5724adf7f774b39df1ddaaf3aeb170d4190afa01f9e91014f99712e2f6695d37 over the 58 lines, before and after</dd>
+  <dt>syntax</dt><dd><code>node --check</code> clean on both files</dd>
+  <dt>focused gates</dt><dd>test/job-*.test.js + test/spawn-*.test.js: <span class="ok">80/80</span> at the turnover head (3 runs) and <span class="ok">80/80</span> after the cut (1 of 4 runs; the other three red on two timing tests, each reproduced at the head, section 5)</dd>
+  <dt>real creation</dt><dd>job <code>ca121c17</code> created through <code>Jobs.create</code> against a real HTTP stand-in: 2 POSTs, held 1,016 ms on a 20 ms backoff</dd>
+  <dt>version</dt><dd>unchanged, no bump</dd>
+</dl>
+
+<h2>1. The cut, and why this one first</h2>
+<p><code>lib/jobs.js</code> is a run state machine with an HTTP client grown through it. The plan at <code>docs/arch-review-r1-a.md:366-394</code> names four seams in it (J1 gateway transport, J2 persistence, J3 artifacts and the worktree, J4 steering and stopping). J1 is the biggest, and its first half is the one cluster in the file with no <code>this</code> in it at all: the 429 backpressure policy.</p>
+<p>Five names move: <code>RETRY_429_DEFAULTS</code>, <code>retry429Settings</code>, <code>retryAfterMs</code>, <code>retry429DelayMs</code> and <code>fmtWait</code>. They read the panel's config and a response's <code>Retry-After</code> header and write nothing. They were already exported, and <code>tools/verify-429-hold.mjs</code> already drove them through the shipped <code>Jobs</code>, so a move has a gate that predates it. That is why it is the smallest cut that leaves every caller working: no method leaves the class, no field moves, no call site changes.</p>
+<p>What stays, and has to stay for now: the hold that spends them. The POST loop inside <code>create</code> (<code>lib/jobs.js:4917-5006</code>) owns the attempt count, the <code>waiting</code> status, the cancel that beats the retry and the failure sentence a spent budget writes. That is state, and it is the other half of J1.</p>
+
+<h2>2. Why the other four cuts need their own rows</h2>
+<p>Each remaining cut moves a method out of the <code>Jobs</code> class, so each one has to decide what the class keeps as a delegating wrapper and what state travels with the move. None of that is in this row's scope, and the plan says why:</p>
+<table>
+  <tr><th>#</th><th>cut</th><th>what moves</th><th>why it is not this row</th></tr>
+  <tr><td>2</td><td class="tool">postRun (the rest of J1)</td><td class="tool">the POST and its 429 absorption out of create()</td><td><code>create</code> is 447 lines at <code>lib/jobs.js:4248</code> and derives 28 <code>this.</code> fields before the POST. The extraction needs a context object designed and reviewed first.</td></tr>
+  <tr><td>3</td><td class="tool">J2 persistence</td><td class="tool">schedulePersist, load, the v1 to v4 migrations, KEEP_JOBS, revive</td><td>It moves the file format and the debounce, and it collides with the in-memory map that must stay. <code>docs/arch-review-r1-a.md:380-384</code>.</td></tr>
+  <tr><td>4</td><td class="tool">J3 artifacts and worktree</td><td class="tool">measureTree, repointPath, sweepArtifacts</td><td>They mutate job records (the artifact list, the repointed path), so the seam is a record contract, not a pure move.</td></tr>
+  <tr><td>5</td><td class="tool">J4 steering and stopping</td><td class="tool">approve, steer, answerQuestion, controlContext</td><td>Three control verbs over one status field, and the vocabulary is shared with <code>public/core/steerable.js</code>.</td></tr>
+</table>
+<p class="note">The split of J1 into two rows is deliberate. A row that moved the policy AND rewrote <code>create</code>'s POST would have one commit nobody can review as a pure move, and the pure-move property is the only thing that makes a cut this size safe at all.</p>
+
+<h2>3. The export surface, before and after</h2>
+<p>Both dumps are a dynamic import of <code>lib/jobs.js</code> and a sorted key list, taken before any edit and after the commit. The comparison is <code>diff</code> over the two files and it is empty.</p>
+<pre>$ node -e "import('./lib/jobs.js').then(m =&gt; console.log(Object.keys(m).sort().join(' ')))"
+APPROVAL_CHOICE_LABEL CLARIFY_LINKS_BRIEF COLLISION_BRIEF DELIVER_BRIEF GIT_BRIEF Jobs KEEP_JOBS
+LIVE_JOB_STATUS PAGE_BRIEF RELEASE_BRIEF REPORT_BRIEF RETRY_429_DEFAULTS TERMINAL_BRIEF TESTING_BRIEF
+WAIT_LETTERS WORKTREE_BRIEF apiConfig approvalHistoryKey clarifyText fmtWait hermesHome isDestructiveAsk
+isLiveJobStatus liveJobsInTree makeThreadName normaliseAttachments previewRequest questionBaseFor
+remoteWriteLine retry429DelayMs retry429Settings retryAfterMs runGonePointerLines runRefusal toolGlyph
+treeOfJob waitsOf worktreeBriefFor writeFileQueued
+                                              39 names, before and after, diff empty</pre>
+<p>The re-export is the reason: <code>lib/jobs.js:523</code> imports the five back for its own use and <code>lib/jobs.js:524</code> re-exports them. ESM does not bind a re-export locally, so the two lines are both needed and both present. The readers of these names from this path are <code>tools/verify-429-hold.mjs</code>, <code>lib/jobs.test.js</code> and the 429 hold itself.</p>
+
+<h2>4. The moved block, byte for byte</h2>
+<p>The extraction is a line range from the base commit, hashed, then the same lines in the new file hashed again. The module header is 15 lines and line 15 is blank, so the moved block is <code>lib/jobs/gateway.js:16-73</code>.</p>
+<pre>$ git show a7ac20b1:lib/jobs.js | sed -n '517,574p' | sha256sum
+5724adf7f774b39df1ddaaf3aeb170d4190afa01f9e91014f99712e2f6695d37  -
+
+$ tail -n +16 lib/jobs/gateway.js | sha256sum
+5724adf7f774b39df1ddaaf3aeb170d4190afa01f9e91014f99712e2f6695d37  -
+
+$ diff block-before.txt block-after.txt &amp;&amp; echo identical
+identical</pre>
+<p>Not one line of the moved code changed: the functions were already <code>export function</code> and the constant already <code>export const</code>, so the block needed no keyword added. The only new text is the module header, and it is a header, not a rewrite. The source keeps a section comment and the two seam lines (<code>lib/jobs.js:517-524</code>); the bodies are gone from it.</p>
+
+<h2>5. Syntax and the focused gates</h2>
+<p>Both files parse, and the gates are the jobs and spawn suites. They were run at the turnover head from an exported copy of <code>a7ac20b1</code> (<code>git archive | tar -x</code>, no second worktree) and in this tree after the cut. Nothing else was running against either copy.</p>
+<pre>$ node --check lib/jobs.js &amp;&amp; node --check lib/jobs/gateway.js
+CHECK OK
+
+$ node --test --test-concurrency=4 test/job-*.test.js test/spawn-*.test.js
+turnover head (a7ac20b1), 3 runs:  80 tests, 80 pass, 0 fail   (each run)
+after the cut (86ffd8dd), 4 runs:  80 tests, 79 pass, 1 fail
+                                   80 tests, 78 pass, 2 fail
+                                   80 tests, 79 pass, 1 fail
+                                   80 tests, 80 pass, 0 fail</pre>
+<p>The reds are named so they can be judged. Three of the four post-cut runs were on a box other agents were also building on, and both failures are timing assertions:</p>
+<ul>
+  <li><b>test/job-settle-state-agreement.test.js:121</b>, "the primed board read carries the live status" (actual <code>undefined</code>, expected <code>running</code>). Red in 3 of 4 loaded runs after the cut. It is red at the turnover head too: run standalone against the exported <code>a7ac20b1</code> tree it failed on attempt 3 of 6 with the identical assertion, and it is 3 of 3 green standalone in this tree. The mechanism is in the panel, not in this cut: <code>/api/state</code> answers the last built frame while a rebuild runs behind it (<code>server.js:918-928</code> and the comment at <code>server.js:944-950</code> describing exactly this "state contradicts jobs" window), and the test reads <code>/api/state</code> immediately after <code>/api/jobs</code> goes live. Under load the rebuild is slower than the assertion's patience.</li>
+  <li><b>test/job-store-atomic.test.js</b>, "a reader sees the whole old file or the whole new one, never a fragment". Red once, in the most loaded run. Standalone it is 5 of 5 green on the head tree and 5 of 5 green here, and this cut touches no write path.</li>
+  <li><b>lib/jobs.test.js</b> is a panel-driving harness, not a node:test file, and it is red at the head as well: 56 pass / 3 fail here, and the same three FAIL lines at the turnover head (its phase 4 and 5 assertions race the stub's POST counter). It is quoted for completeness and is not the gate this cut is judged on.</li>
+</ul>
+<p class="note">The honest reading: on 3 of 4 loaded runs this tree is red on tests that a clean <code>a7ac20b1</code> passes. I did not tune the tests and I did not move on from it until I could reproduce the same assertion at the head, which is what section 5 shows. The cut itself has no timing surface: it adds one import and moves five pure functions.</p>
+
+<h2>6. One real job creation through the module</h2>
+<p>The policy is only proved if a creation still spends it. A real HTTP stand-in answered the first <code>POST /v1/runs</code> with the gateway's own refusal shape (429, <code>Retry-After: 1</code>, <code>{error:{code:"rate_limit_exceeded"}}</code>) and the second with a run id. <code>Jobs.create</code> was driven against it in a real git checkout, with <code>retry429: {attempts:3, baseMs:20, maxMs:40, jitter:0}</code> so the backoff alone would have waited 20 ms.</p>
+<pre>$ node create-proof.mjs
+{
+  "module": "lib/jobs.js",
+  "createReturned": true,
+  "error": null,
+  "jobId": "ca121c17",
+  "thread": "wtgui-prove-the-429-seam-holds-306406",
+  "statusAtReturn": "running",
+  "posts": 2,
+  "holdWaitMsObserved": 1016,
+  "holdLine": "⇢ the gateway is at its concurrent-run cap (HTTP 429: with 10 concurrent runs (cap 10)) — holding this turn, try 2 of 3 in 1.0s",
+  "holdLog": "run ca121c17: gateway at capacity (429) — holding 1.0s before try 2/3",
+  "tailLines": [
+    "⇢ workspace C:/Users/roper/AppData/Local/Temp/wag-539-job-jUo2Hq/repo — included in the prompt as a tool-directory safeguard",
+    "⇢ the gateway is at its concurrent-run cap (HTTP 429: with 10 concurrent runs (cap 10)) — holding this turn, try 2 of 3 in 1.0s",
+    "run run_proof_539 · session wtgui-prove-the-429-seam-holds-306406 · turn 1 · cwd C:\\Users\\roper\\AppData\\Local\\Temp\\wag-539-job-jUo2Hq\\repo",
+    "this gateway does not advertise run_events_sse - this card is polled every 2s instead of streamed"
+  ]
+}</pre>
+<p>What each line proves: a card exists and was accepted (<code>jobId</code>, <code>createReturned</code>), two POSTs were sent and the second landed a run, the observed wait is 1,016 ms against a 20 ms backoff, so <code>retryAfterMs</code> read the header and <code>retry429DelayMs</code> used it as the floor rather than the backoff; the card's own console line and the panel log both carry <code>fmtWait</code>'s wording ("1.0s"), which is the moved function running inside the hold. The card stays <code>running</code> through the stub because the stand-in advertises no event stream; settlement is a different seam and not the one this cut touched.</p>
+
+<h2>7. The seam as it reads now</h2>
+<pre>lib/jobs.js:517  // ---- 429: the gateway's backpressure, not a failed run ---------------------
+lib/jobs.js:523  import { RETRY_429_DEFAULTS, retry429Settings, retryAfterMs, retry429DelayMs, fmtWait } from "./jobs/gateway.js";
+lib/jobs.js:524  export { RETRY_429_DEFAULTS, retry429Settings, retryAfterMs, retry429DelayMs, fmtWait };
+
+lib/jobs/gateway.js:1-14  the module header: what it owns, why it is the first cut, what lands there next
+lib/jobs/gateway.js:16-73 the moved block, byte-identical</pre>
+
+<h2>8. Landing</h2>
+<p>The cut is commit <code>86ffd8dd</code> on <code>wtgui/row-539-is-one-cut-of-the-module-b5e8a7</code>, and this page is the commit after it. The branch merges into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally and is not pushed, because that branch has not landed and a remote copy of this tree would be a branch nobody asked for. The merge commit is the child of this page's commit on the turnover branch.</p>
+<p>Two commits on this branch are not this row's: <code>d695ec1b</code> and <code>fcddf992</code> add the watchlist cut's page. They were committed in this same worktree at 10:19 and 10:23 while this row worked, by the row that cut <code>public/assistant/watches.js</code>. They touch <code>docs/reports/assistant-watchlist-cut-2026-11-28.html</code> only, so they collide with nothing here and the merge carries them.</p>
+<p>The next row takes <code>postRun</code>: the POST itself and its absorption of a 429 out of <code>create</code>, into <code>lib/jobs/gateway.js</code>, with the hold's state deliberately left where it is until the context object it needs is designed. After that J2, J3 and J4 in the plan's order. No version bump, no push, no PR.</p>
+</main>
+</body>
+</html>
