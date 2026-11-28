@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.194.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.194.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-780 releases from v0.1.0 (2026-10-20) to v1.194.0 (2026-11-27), 2763 commits between the tags. Every release is anchored by an
+781 releases from v0.1.0 (2026-10-20) to v1.194.3 (2026-11-28), 2766 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.194.3 — 2026-11-28 · 3 commits
+
+[`c1fd71d`](https://github.com/JLRoper/agent-worktree-gui/commit/c1fd71dec39e074395f4f12c95b3d29810a519fc) · [compare v1.194.0...v1.194.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.194.0...v1.194.3)
+
+### Docs & tests
+
+- docs: render the changelog - 780 releases ([`632af65`](https://github.com/JLRoper/agent-worktree-gui/commit/632af6599ae84a10e41c3bd8864a2ca2425ef602))
+- test: the css split gate judges a cross-sheet move by the rule multiset ([`b14a286`](https://github.com/JLRoper/agent-worktree-gui/commit/b14a286c347a2f6d72c03c2a92e4eefb4d664136))
+
+### Other
+
+- chore: 1.194.3 - the version this landing carries ([`c1fd71d`](https://github.com/JLRoper/agent-worktree-gui/commit/c1fd71dec39e074395f4f12c95b3d29810a519fc))
 
 ## v1.194.0 — 2026-11-27 · 5 commits
 
