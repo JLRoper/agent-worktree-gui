@@ -1635,6 +1635,13 @@
        re-exports them on window.WMApp.anchor; it declares only, so that order costs nothing and nothing here waits on
        boot. The 1 s clock and the observers that start them stay in app.js with the page's other load-time wiring. -->
   <script src="/board/anchor.js"></script>
+  <!-- The chart's column widths, the fit and the grips, out of app.js (cut 7 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): what this browser remembers about the
+       columns, the header cells, the natural width of each column, the plan that fits them into the room the page has,
+       and the grip on each header edge. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.columns; it declares only, so that order costs nothing and nothing here waits on boot. The drag
+       handlers themselves stay in app.js and read the same colDrag binding. -->
+  <script src="/board/columns.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

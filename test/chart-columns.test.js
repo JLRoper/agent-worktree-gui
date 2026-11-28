@@ -302,7 +302,10 @@ test("every column-spanning row asks for the shown count, never a literal 10", (
   // took the detail row and the refresh offer with it, and this pin kept reading public/app.js alone — so it counted
   // 2 of 4 and failed on a page whose four rows were all correct. Read the file that carries each row.
   const board = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
-  const spanning = `${src}\n${board}`;
+  // Three of the five are the delete confirm, the lock and the cut dialog, which moved to
+  // public/board/worktrees.js in cut 4 of docs/reports/module-separation-2026-11-28.html.
+  const trees = readFileSync(new URL("../public/board/worktrees.js", import.meta.url), "utf8");
+  const spanning = `${src}\n${board}\n${trees}`;
   assert.equal((spanning.match(/colspan="10"/g) || []).length, 0);
   assert.equal((spanning.match(/colspan="\$\{wtColspan\(\)\}"/g) || []).length, 5);
 });
