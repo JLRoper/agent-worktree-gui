@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.191.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.191.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-776 releases from v0.1.0 (2026-10-20) to v1.191.2 (2026-11-27), 2746 commits between the tags. Every release is anchored by an
+777 releases from v0.1.0 (2026-10-20) to v1.191.3 (2026-11-27), 2750 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.191.3 — 2026-11-27 · 4 commits
+
+[`d54bd9b`](https://github.com/JLRoper/agent-worktree-gui/commit/d54bd9bdb37c5c454535acad2433c94c97fbc809) · [compare v1.191.2...v1.191.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.191.2...v1.191.3)
+
+### Fixed
+
+- fix(search): the popover places and drags in layout px, so page zoom cannot slide it ([`2cb7344`](https://github.com/JLRoper/agent-worktree-gui/commit/2cb734447629a50ea15eb726ba5aac8832e02da2))
+
+### Docs & tests
+
+- docs: render the changelog - 776 releases ([`1933da6`](https://github.com/JLRoper/agent-worktree-gui/commit/1933da6689902b1c457d03c2820c9c8495d6251d))
+- test(search): pin the popover's zoom conversion at 110% in the unit test ([`0b02ec7`](https://github.com/JLRoper/agent-worktree-gui/commit/0b02ec70b965c372f313a6ec607a34741cf29b05))
+
+### Other
+
+- chore: 1.191.3 - the version this landing carries ([`d54bd9b`](https://github.com/JLRoper/agent-worktree-gui/commit/d54bd9bdb37c5c454535acad2433c94c97fbc809))
 
 ## v1.191.2 — 2026-11-27 · 5 commits
 
