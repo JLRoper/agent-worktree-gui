@@ -16,6 +16,33 @@ test("the real panel exposes bounded synchronous phase diagnostics", async (t) =
   assert.ok(body.syncPhases.recent.length <= 20);
 });
 
+test("the real panel reports the heap split and the sizes of what it retains", async (t) => {
+  const panel = await startPanel();
+  t.after(() => panel.stop());
+  const body = await (await fetch(`${panel.base}/api/diagnostics`)).json();
+
+  assert.equal(typeof body.memory.heapUsedMB, "number");
+  assert.equal(typeof body.memory.heapTotalMB, "number");
+  assert.equal(typeof body.memory.rssMB, "number");
+  assert.ok(body.memory.heapUsedMB > 0, "a live panel has a used heap");
+
+  // The retained structures the memory work touched are countable, so the next climb is visible before it OOMs.
+  assert.equal(typeof body.retained["activity.memoKeys"], "number");
+  assert.equal(typeof body.retained["activity.touchedSessions"], "number");
+  assert.equal(typeof body.retained.jobStatusSeen, "number");
+  assert.equal(typeof body.retained.jobTreeMisses, "number");
+  assert.equal(typeof body.retained.heldFailureLogged, "number");
+  assert.equal(typeof body.retained.collisionRegisteredCache, "number");
+  assert.equal(typeof body.retained.checkedAnswers, "number");
+
+  // The activity cache stats carry their documented caps, and the sentinel is wired but not tripped.
+  assert.equal(typeof body.activityCaches.memoKeys, "number");
+  assert.equal(typeof body.activityCaches.memoCap, "number");
+  assert.equal(typeof body.activityCaches.touched.sessionCap, "number");
+  assert.equal(body.memoryWatch.warned, false);
+  assert.equal(typeof body.memoryWatch.thresholdBytes, "number");
+});
+
 test("the real panel serves a decodable compressed state snapshot", async (t) => {
   const panel = await startPanel();
   t.after(() => panel.stop());

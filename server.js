@@ -21,6 +21,9 @@ import { createSnapshotCache } from "./lib/snapshot-cache.js";
 // What a stream PUSH has to say once the reader already has the board: the panes and rows that moved, nothing else
 // (lib/snapshot-delta.js). The first frame of a connection is unchanged - board, then the full snapshot.
 import { snapshotDelta, snapshotRowPrints, rowFingerprint } from "./lib/snapshot-delta.js";
+// Every SSE frame goes out through this: a peer that has stopped reading must not leave frame after frame in the
+// heap (lib/sse-write.js). A stuck client is counted and dropped; EventSource reconnects and takes a fresh board.
+import { writeClientFrame } from "./lib/sse-write.js";
 // Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
 // scope (a job that settled, a scan, the panel on the way out). See lib/child-tree.js for the leak it ends.
 import { panelChildren } from "./lib/child-tree.js";
@@ -161,7 +164,8 @@ import { MatrixPolicyStore, matrixPolicyTemplate } from "./lib/matrix-policy.js"
 // `apply` refuses those keys before it touches the file).
 import { MatrixRemindersStore } from "./lib/matrix-reminders.js";
 import { clarifyWindowSeconds, approvalWindowSeconds } from "./lib/hermes-config.js";
-import { hermesSessionTail } from "./lib/activity.js";
+import { hermesSessionTail, activityStats } from "./lib/activity.js";
+import { createMemoryWatch, HIGH_WATER_BYTES } from "./lib/memory-watch.js";
 import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from "./lib/assistant.js";
 // The page's held reply, made durable: state/held-replies.json. The store owns the record and the claim; server.js
 // owns the one acceptance a claim turns into (`startThreadReply`).
@@ -911,9 +915,56 @@ const clients = new Set();
 // What /api/diagnostics reports about the page's own connection: connect/disconnect counts, the
 // last snapshot build, write errors, and the recent slow requests — the frontend's yellow dot,
 // made countable.
-const streamMetrics = { connected: 0, disconnected: 0, writeErrors: 0, bootSuppressed: 0, lastConnectAt: null, lastDisconnectAt: null, lastDisconnectHeldMs: null, lastSnapshot: null };
+const streamMetrics = { connected: 0, disconnected: 0, writeErrors: 0, backpressureDrops: 0, bootSuppressed: 0, lastConnectAt: null, lastDisconnectAt: null, lastDisconnectHeldMs: null, lastSnapshot: null };
 const slowRequests = [];
 const SLOW_REQUESTS_KEPT = 20;
+
+// ---- memory observability ------------------------------------------------------------------------------------
+// /api/diagnostics already reported RSS; a heap climb is what actually killed the panel (2026-11-28: ~3944 MB
+// heap, exit 134), so report the heap split and the sizes of the structures that can grow. The same sizes are
+// what the one high-water warning names, so the line that fires says WHICH structure was largest at the time.
+// Nothing here restarts or kills: the point is to make the next climb visible before it OOMs.
+function memoryReport() {
+  const m = process.memoryUsage();
+  const mb = (n) => Math.round((Number(n) || 0) / 1048576);
+  return {
+    heapUsedMB: mb(m.heapUsed),
+    heapTotalMB: mb(m.heapTotal),
+    rssMB: mb(m.rss),
+    externalMB: mb(m.external),
+    arrayBuffersMB: mb(m.arrayBuffers),
+  };
+}
+
+function retainedSizes() {
+  const a = activityStats();
+  return {
+    "activity.memoKeys": a.memoKeys,
+    "activity.touchedSessions": a.touched.sessions,
+    "activity.touchedCalls": a.touched.calls,
+    "activity.touchedPaths": a.touched.paths,
+    "jobs.store": jobs.jobs.size,
+    checkedAnswers: checkedAnswers.size,
+    pendingChecked: pendingChecked.size,
+    jobStatusSeen: jobStatusSeen.size,
+    jobTreeMisses: jobTreeMisses.size,
+    heldFailureLogged: heldFailureLogged.size,
+    collisionRegisteredCache: collisionRegisteredCache.size,
+    clientRowPrints: clientRowPrints.size,
+  };
+}
+
+const memoryWatch = createMemoryWatch({
+  thresholdBytes: HIGH_WATER_BYTES,
+  retained: retainedSizes,
+  warn: (line) => logger.warn(line),
+});
+let memoryWatchTimer = null;
+function startMemoryWatch() {
+  if (memoryWatchTimer) return;
+  memoryWatchTimer = setInterval(() => memoryWatch.check(), 30_000);
+  memoryWatchTimer.unref?.();
+}
 
 // Snapshot cache (lib/snapshot-cache.js). Building the whole board costs 300-585ms and the
 // board polls /api/state far more often than anything changes. `build` is the existing
@@ -955,13 +1006,26 @@ function invalidateSnapshot() {
 // the text drop to a genuine STATUS move - a `job` frame also carries stats, queue notes and approval opens/closes,
 // and dropping the text for news the jobs pane does not draw would rebuild the board on every stat tick.
 const jobStatusSeen = new Map(); // thread -> the status the board was built with
+// Bounded: a thread id is never reused, so without a cap this keeps every thread the process ever saw. Evicting
+// the oldest key is safe — a dropped key simply makes the next frame look like a first sighting, which still
+// broadcasts (the map only suppresses a rebuild when the status did NOT move).
+const JOB_STATUS_SEEN_MAX = 2000;
+function rememberJobStatus(key, status) {
+  const had = jobStatusSeen.has(key);
+  if (had) jobStatusSeen.delete(key); // re-insert so Map order is least-recently-set first
+  else if (jobStatusSeen.size >= JOB_STATUS_SEEN_MAX) {
+    const oldest = jobStatusSeen.keys().next().value;
+    if (oldest !== undefined) jobStatusSeen.delete(oldest);
+  }
+  jobStatusSeen.set(key, status);
+}
 function jobStatusMoved(job) {
   if (!job) return false;
   const key = String(job.thread || job.id || "");
   if (!key) return false;
   const status = String(job.status || "");
   const prev = jobStatusSeen.get(key);
-  jobStatusSeen.set(key, status);
+  rememberJobStatus(key, status);
   return prev !== undefined && prev !== status;
 }
 function broadcastJobs(evt = null) {
@@ -1123,18 +1187,13 @@ function broadcastSnapshot() {
   const useDelta = Boolean(leanFrame) && leanFrame.length < text.length;
   let fullFrame = null;
   for (const res of clients) {
-    try {
-      if (useDelta && res.wagShape === "delta" && !res.wagNeedsFull) {
-        res.write(leanFrame);
-        continue;
-      }
-      if (!fullFrame) fullFrame = `event: snapshot\ndata: ${text}\n\n`;
-      res.write(fullFrame);
-      res.wagNeedsFull = false;
-    } catch {
-      streamMetrics.writeErrors += 1;
-      clients.delete(res);
+    if (useDelta && res.wagShape === "delta" && !res.wagNeedsFull) {
+      writeClientFrame(res, leanFrame, { clients, metrics: streamMetrics });
+      continue;
     }
+    if (!fullFrame) fullFrame = `event: snapshot\ndata: ${text}\n\n`;
+    res.wagNeedsFull = false;
+    writeClientFrame(res, fullFrame, { clients, metrics: streamMetrics });
   }
   lastPushedText = text;
   rebaseRowPrints(snap);
@@ -1217,14 +1276,7 @@ function broadcast(evt) {
   // snapshot may be megabytes, so do not stringify it on every event with nobody listening.
   if (!clients.size) return;
   const frame = syncTiming.measure("SSE event serialization", () => `event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`);
-  for (const res of clients) {
-    try {
-      res.write(frame);
-    } catch {
-      streamMetrics.writeErrors += 1;
-      clients.delete(res);
-    }
-  }
+  for (const res of clients) writeClientFrame(res, frame, { clients, metrics: streamMetrics });
 }
 
 // One part of a job event's handling must not be able to take the rest down with it. `broadcast` writes to every
@@ -1305,6 +1357,17 @@ function adoptFromJob(evt) {
 // A miss is retried on a clock, not on every event: a job whose tree git does not list (a deleted tree, a scratch
 // folder) would otherwise spawn `git worktree list` on every line of its console.
 const jobTreeMisses = new Map(); // tree key -> ms of the last failed resolve
+// Bounded: a tree whose resolve keeps failing is retried on a clock, and a key for a tree that later disappears
+// would otherwise live here forever. The oldest key is evicted; a dropped miss just means one extra retry.
+const JOB_TREE_MISSES_MAX = 2000;
+function noteJobTreeMiss(key) {
+  if (jobTreeMisses.has(key)) jobTreeMisses.delete(key);
+  else if (jobTreeMisses.size >= JOB_TREE_MISSES_MAX) {
+    const oldest = jobTreeMisses.keys().next().value;
+    if (oldest !== undefined) jobTreeMisses.delete(oldest);
+  }
+  jobTreeMisses.set(key, Date.now());
+}
 let jobTreeReconciling = null;
 let jobTreeReconcileDue = null;
 function scheduleJobTreeReconcile() {
@@ -1345,7 +1408,7 @@ async function reconcileJobTrees({ force = false } = {}) {
       if (!force && Date.now() - (jobTreeMisses.get(key) || 0) < 12_000) continue;
       const res = await resolveJobTree({ job: j, projects: registry.projects, listWorktrees: scheduler.listWorktrees });
       if (!res.ok) {
-        jobTreeMisses.set(key, Date.now());
+        noteJobTreeMiss(key);
         if (!j.jobTreeNote || j.jobTreeNote !== res.why) {
           j.jobTreeNote = res.why;
           log(`job ${j.id}: no row for ${cleanPath(tree)} — ${res.why} (card stays unattached)`);
@@ -1354,7 +1417,7 @@ async function reconcileJobTrees({ force = false } = {}) {
       }
       const adopted = await scheduler.adoptWorktree(res.project.name, res.path).catch(() => false);
       if (!adopted) {
-        jobTreeMisses.set(key, Date.now());
+        noteJobTreeMiss(key);
         continue;
       }
       jobTreeMisses.delete(key);
@@ -1457,7 +1520,7 @@ const jobs = new Jobs({
 });
 // The statuses the board is BUILT with, so the first frame after a restart can still say whether it moved one: the
 // store has loaded its persisted cards by this point, and that is the list a snapshot built now would carry.
-for (const j of jobs.list()) jobStatusSeen.set(String(j.thread || j.id || ""), String(j.status || ""));
+for (const j of jobs.list()) rememberJobStatus(String(j.thread || j.id || ""), String(j.status || ""));
 // Which branch a cut for a project starts from, when the reader has named one. Read per cut rather than copied at
 // boot: the settings save updates the registry's record, and the very next SPAWN must cut from the new branch without
 // a restart. `registry` is built above this point; a project absent from it is answered "" (the checkout's own ref).
@@ -3353,6 +3416,17 @@ let heldDraining = null;
 // The last failure line written for a record. The clock runs every 2s while anything is open, and an unchanged
 // reason is not news: without this, one permanently failing record wrote 58,119 lines in a day (measured 2026-11-21).
 const heldFailureLogged = new Map();
+// Bounded: a record id is unique, so an unbounded map keeps every held-reply failure the process ever logged. The
+// value only dedupes the next identical line, so evicting the oldest id costs one repeated line at worst.
+const HELD_FAILURE_LOGGED_MAX = 1000;
+function rememberHeldFailure(id, reason) {
+  if (heldFailureLogged.has(id)) heldFailureLogged.delete(id);
+  else if (heldFailureLogged.size >= HELD_FAILURE_LOGGED_MAX) {
+    const oldest = heldFailureLogged.keys().next().value;
+    if (oldest !== undefined) heldFailureLogged.delete(oldest);
+  }
+  heldFailureLogged.set(id, reason);
+}
 function drainHeldReplies({ why = "drain" } = {}) {
   if (heldDraining) return heldDraining;
   const pass = (async () => {
@@ -3380,12 +3454,12 @@ function drainHeldReplies({ why = "drain" } = {}) {
         // A permanent failure: said once, then never retried. The record keeps the reader's words and the card
         // offers Retry, so parking is not losing it.
         parked.push({ id: head.id, thread, why: out.why || "" });
-        heldFailureLogged.set(head.id, out.why || "");
+        rememberHeldFailure(head.id, out.why || "");
         changed = true;
       } else if (out.state === "held") {
         const reason = out.why || "";
         if (heldFailureLogged.get(head.id) !== reason) {
-          heldFailureLogged.set(head.id, reason);
+          rememberHeldFailure(head.id, reason);
           failed = { id: head.id, thread, why: reason };
           changed = true;
         }
@@ -3748,6 +3822,9 @@ function collisionMainBranch(name) {
 // answer a ruling, so a pair standing on it is absent rather than a question - and telling it from a live tree takes the
 // registration, not the folder. One list per repository per half minute, and nothing is ever removed by a sweep.
 const collisionRegisteredCache = new Map();
+// One entry per repository, so this is naturally small (a project count). The cap is a backstop for a registry
+// that churns paths; the oldest entry is evicted and its next read just re-lists git.
+const COLLISION_REGISTERED_CACHE_MAX = 256;
 function collisionRegisteredPaths(treePath) {
   const project = projectOfTree(treePath);
   const repo = String(project?.path || "").trim();
@@ -3762,6 +3839,10 @@ function collisionRegisteredPaths(treePath) {
   } catch (err) {
     log(`collisions: could not list the worktrees of ${repo} (${String((err && err.message) || err)})`);
     paths = null;
+  }
+  if (!collisionRegisteredCache.has(key) && collisionRegisteredCache.size >= COLLISION_REGISTERED_CACHE_MAX) {
+    const oldest = collisionRegisteredCache.keys().next().value;
+    if (oldest !== undefined) collisionRegisteredCache.delete(oldest);
   }
   collisionRegisteredCache.set(key, { at: Date.now(), paths });
   return paths;
@@ -5046,12 +5127,9 @@ function snapshotBody() {
 
 const heartbeat = setInterval(() => {
   const payload = { at: new Date().toISOString(), stats: scheduler.stats, pool: { inFlight: pool.inFlight, queued: pool.queued } };
+  const frame = `event: heartbeat\ndata: ${JSON.stringify(payload)}\n\n`;
   for (const res of clients) {
-    try {
-      res.write(`event: heartbeat\ndata: ${JSON.stringify(payload)}\n\n`);
-    } catch {
-      streamMetrics.writeErrors += 1;
-      clients.delete(res);
+    if (!writeClientFrame(res, frame, { clients, metrics: streamMetrics })) {
       logger.debug(`stream: heartbeat write failed — client dropped (${clients.size} streaming)`);
     }
   }
@@ -5225,6 +5303,10 @@ const server = createServer(async (req, res) => {
         slowRequests: { thresholdMs: config.logging.slowRequestMs, kept: slowRequests.length, recent: slowRequests.slice(-10) },
         stream: { clients: clients.size, ...streamMetrics },
         memoryMB: Math.round(process.memoryUsage().rss / 1048576),
+        memory: memoryReport(),
+        retained: retainedSizes(),
+        activityCaches: activityStats(),
+        memoryWatch: memoryWatch.stats(),
       });
     }
 
@@ -8691,6 +8773,10 @@ const checkedAnswers = new Set();
 // Answers whose tree the board has not re-adopted yet. Not `acted`: the answer is still good, and the next tick may
 // find the row. Only the one log line is deduped.
 const pendingChecked = new Set();
+// Bounded: both sets key on a job id, and job ids are never reused, so without a cap they keep every check this
+// process has ever answered. A job that has left `jobs.list()` can never be swept again (the sweep reads only that
+// list), so ids absent from it are pruned instead of being remembered forever.
+const CHECKED_ANSWERS_MAX = 4000;
 let sweepingChecked = false;
 async function sweepCheckedLandings() {
   if (sweepingChecked) return;
@@ -8700,6 +8786,12 @@ async function sweepCheckedLandings() {
     // enriched from the LIVE job first: the answer is the last line of a message the completion payload may have
     // truncated from the start.
     const rows = jobs.list().map((s) => ({ ...s, finalMessage: jobs.get(s.id)?.finalMessage || s.completion?.final?.text || "" }));
+    if (checkedAnswers.size > CHECKED_ANSWERS_MAX || pendingChecked.size > CHECKED_ANSWERS_MAX) {
+      // Only ids still in the job list can be swept again; everything else is history and safe to forget.
+      const live = new Set(rows.map((r) => r.id));
+      for (const id of checkedAnswers) if (!live.has(id)) checkedAnswers.delete(id);
+      for (const id of pendingChecked) if (!live.has(id)) pendingChecked.delete(id);
+    }
     for (const { job, answer } of answeredChecks(rows, { acted: checkedAnswers })) {
       const live = jobs.get(job.id);
       const tree = jobTreePath(job) || "";
@@ -8869,6 +8961,9 @@ try {
   for (const p of registry.projects) store.ensureProject(p);
   if (!config.defaultCwd) config.defaultCwd = registry.projects[0]?.path || process.cwd();
   await scheduler.start();
+  // The heap sentinel starts with the board, not with module load: it must never run while `jobs` and the route
+  // maps are still in their temporal dead zone. One unref'd 30s timer; it warns once and never acts.
+  startMemoryWatch();
   // A card whose tree has no row is matched against git's own worktree list at boot, and again on a slow clock (a
   // tree cut while the panel was up is caught by the job event itself, see scheduleJobTreeReconcile).
   void reconcileJobTrees({ force: true });
