@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Every worktree row's Merge state names its parent, and says how sure it is</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:22px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 170px 1fr; gap:4px 14px; margin:10px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; overflow-wrap:anywhere; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:10px 13px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:8px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre.line { font-size:14px; border-left:3px solid var(--ok); }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.k { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); }
+  .no { color:var(--no); }
+  .when { color:var(--dim); margin:10px 0 2px; }
+  .small { font-size:13px; color:var(--dim); }
+  ul.checks { margin:6px 0 4px 20px; padding:0; font-size:13px; }
+  ul.checks li { margin:2px 0; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Every worktree row's Merge state names its parent, and says how sure it is</h1>
+<p class="sub">agent-worktree-gui, branch <code>wtgui/row-497-is-the-complete-brief-every-011b0e</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. The Merge state block of every worktree row now carries one line about where the tree was cut from, from the cut book first, from lib/parents.js's reconstruction second, and unknown with its reason when neither answers. All line numbers are on this branch. Store text is quoted verbatim with its long dashes printed as hyphens.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#497 in assistant-3's queue</dd>
+  <dt>the sentence</dt><dd>lib/parent-line.js:78 <code>parentLineFor</code>; the unknown text is lib/parent-line.js:36; the list item is lib/parent-line.js:157 <code>parentLineItemHtml</code></dd>
+  <dt>recorded, only</dt><dd>lib/worktrees.js:544 <code>recordedParentFor</code> over the book lib/worktrees.js:531 <code>readBranchParents</code> reads (<code>branch-parents.json</code>, keyed <code>tag:&lt;six hex&gt;</code> then <code>tree:&lt;path&gt;</code>)</dd>
+  <dt>reconstructed, only</dt><dd>lib/parents.js:61 <code>reflogCut</code>, :87 <code>pickBackfill</code>, :205 <code>resolveParents</code>; the book's row shape is lib/parents.js:374 <code>rowsFor</code></dd>
+  <dt>stamped on the row</dt><dd>server.js:4780 <code>withParentLines</code>, in the snapshot chain at server.js:5090</dd>
+  <dt>drawn</dt><dd>public/board-scaffold.js:2018 <code>parentItem</code>, placed in the Merge state list at :2180</dd>
+  <dt>the proof</dt><dd>tools/verify-parent-line.mjs, 5 sayings, exit 0 (this page's evidence is its own <code>--json</code> run)</dd>
+  <dt>the tests</dt><dd>test/parent-line.test.js, 9 tests, all pass</dd>
+  <dt>the books read</dt><dd>~/.wag/state/branch-parents.json (500 entries) and ~/.wag/state/parents.json (2,733 records), plus the live rows at GET /api/state</dd>
+  <dt>not touched</dt><dd>the kind chip, the UNMERGED chip, the child-cut button; no stylesheet rule (public/chart.css and public/rowstrips.css are byte identical)</dd>
+</dl>
+
+<h2>1. The five sayings, and what decides each</h2>
+<p>The line is one sentence plus a provenance, and the provenance is the point: a sentence that reads "cut from X" whether X came from the panel's own cut book or from a reconstruction of a branch nobody watched is the defect this replaces. Each saying is a separate <code>kind</code>, so a renderer, a test and this page can name the same case instead of matching on prose.</p>
+<table>
+  <tr><th>kind</th><th>the exact line</th><th>decided by</th></tr>
+  <tr><td class="k">recorded</td><td><code>cut from &lt;branch&gt;</code></td><td>the cut book has the tree, through <code>recordedParentFor</code>; the title names the key the record sits under</td></tr>
+  <tr><td class="k">reconstructed</td><td><code>cut from &lt;branch&gt; - reconstructed from its reflog, not recorded</code></td><td>no cut record, and the parent book says <code>backfilled</code>. A guess from the shared-ticket heuristic says <code>reconstructed, not recorded</code> (its title names which reconstruction)</td></tr>
+  <tr><td class="k">unknown</td><td><code>unknown - no cut record and its reflog names no local branch</code></td><td>neither source answers; the title carries the reason, including a tie between two equally near candidates</td></tr>
+  <tr><td class="k">base</td><td><code>cut from the project base &lt;branch&gt; - &lt;branch&gt; is the turnover destination, never a child's parent</code></td><td>the record (or a refused reflog) names main, master, trunk or develop</td></tr>
+  <tr><td class="k">turnover</td><td><code>turnover container - nothing above it</code></td><td>the row IS the project's turnover branch, read from the project's own turnover list</td></tr>
+</table>
+<p>A row that is the project's own checkout carries no line at all: it IS the base. That is one <code>delete row.parentLine</code> in server.js:4780's overlay, and nothing else in the snapshot chain drops the field.</p>
+
+<h2>2. Three real trees from the state directory, and two more</h2>
+<p>Each case below was found by tools/verify-parent-line.mjs in the panel's live rows, not in a fixture: the tree, the branch and the path are the board's own, the cut book entry and the parent-book record are quoted from <code>~/.wag/state</code>, and the line is what lib/parent-line.js returns for exactly those facts. The recorded case is this run's own tree, so the proof is of the row this work lands from.</p>
+
+<h3>2a. recorded - the cut book has it</h3>
+<dl class="facts">
+  <dt>tree</dt><dd>ProjectDevelopment/agent-worktree-gui/.worktrees/row-497-is-the-complete-brief-every-011b0e</dd>
+  <dt>project / branch</dt><dd>agent-worktree-gui / <code>wtgui/row-497-is-the-complete-brief-every-011b0e</code></dd>
+  <dt>the cut book</dt><dd>branch-parents.json <code>tag:011b0e</code> -> parent <code>20261127_2134_TASK-405_row-405-is-the-complete</code>, written 2026-11-28T08:59:29.855Z</dd>
+  <dt>the parent book</dt><dd><code>cut</code> -> <code>20261127_2134_TASK-405_row-405-is-the-complete</code></dd>
+</dl>
+<p class="when">The key is the tree's six-hex tag, which survives the panel's rename: the record's branch is the branch the tree had when it was cut.</p>
+<p>The line the Merge state block prints:</p>
+<pre class="line">cut from 20261127_2134_TASK-405_row-405-is-the-complete</pre>
+<p class="small">Its tooltip: recorded in the cut book (branch-parents.json tag:011b0e) when the panel cut this tree - not reconstructed and not guessed</p>
+<p>The list item it draws (the page's template, byte for byte):</p>
+<pre>&lt;li class=&quot;git-parent&quot; title=&quot;recorded in the cut book (branch-parents.json tag:011b0e) when the panel cut this tree - not reconstructed and not guessed&quot;&gt;&lt;span class=&quot;dim&quot;&gt;parent&lt;/span&gt; &lt;span class=&quot;mono&quot;&gt;cut from 20261127_2134_TASK-405_row-405-is-the-complete&lt;/span&gt;&lt;/li&gt;</pre>
+<ul class="checks"><li class="ok">held - the cut book records this tree</li><li class="ok">held - the line says cut from, with no reconstruction wording</li><li class="ok">held - the title names the record it came from</li></ul>
+
+<h3>2b. reconstructed - no cut record, its reflog still records the cut</h3>
+<dl class="facts">
+  <dt>tree</dt><dd>ProjectDevelopment/ai-development-factory/.worktrees/land-the-poc-breaking-pdl-document-and-36cfd2</dd>
+  <dt>project / branch</dt><dd>ai-development-factory / <code>wtgui/semantic-facets-cheatsheet</code></dd>
+  <dt>the cut book</dt><dd><span class="no">no cut record</span></dd>
+  <dt>the parent book</dt><dd><code>backfilled</code> -> <code>20261110_poc-breaking-pdl-pipeline</code><br><span class="small">its reflog still records `Created from 20261110_poc-breaking-pdl-pipeline`</span></dd>
+</dl>
+<p class="when">No entry in the cut book under either key, so the only source is lib/parents.js. The line names the branch and says it was not recorded, because a reader must be able to tell this from a record.</p>
+<p>The line the Merge state block prints:</p>
+<pre class="line">cut from 20261110_poc-breaking-pdl-pipeline - reconstructed from its reflog, not recorded</pre>
+<p class="small">Its tooltip: reconstructed by lib/parents.js, not recorded: its reflog still records `Created from 20261110_poc-breaking-pdl-pipeline`</p>
+<p>The list item it draws (the page's template, byte for byte):</p>
+<pre>&lt;li class=&quot;git-parent&quot; title=&quot;reconstructed by lib/parents.js, not recorded: its reflog still records `Created from 20261110_poc-breaking-pdl-pipeline`&quot;&gt;&lt;span class=&quot;dim&quot;&gt;parent&lt;/span&gt; &lt;span class=&quot;mono&quot;&gt;cut from 20261110_poc-breaking-pdl-pipeline - reconstructed from its reflog, not recorded&lt;/span&gt;&lt;/li&gt;</pre>
+<ul class="checks"><li class="ok">held - the cut book has no record for this tree</li><li class="ok">held - the parent book says backfilled</li><li class="ok">held - the line says reconstructed, not recorded</li></ul>
+
+<h3>2c. unknown - neither source names a local branch</h3>
+<dl class="facts">
+  <dt>tree</dt><dd>ProjectDevelopment/ai-development-factory/.worktrees/poc-breaking-run-1-drive-s220-to-s223-a8dd62</dd>
+  <dt>project / branch</dt><dd>ai-development-factory / <code>wtgui/poc-breaking-run-1-drive-s220-to-s223-a8dd62</code></dd>
+  <dt>the cut book</dt><dd><span class="no">no cut record</span></dd>
+  <dt>the parent book</dt><dd><code>unknown</code><br><span class="small">its reflog says it was created from origin/main, which is not a local branch  -  nothing here can roll into it</span></dd>
+</dl>
+<p class="when">Its reflog names a remote-tracking ref, which is not a branch anything can roll into; the cut book has nothing. The title says why, and the line says unknown rather than offering the ref as a parent.</p>
+<p>The line the Merge state block prints:</p>
+<pre class="line">unknown - no cut record and its reflog names no local branch</pre>
+<p class="small">Its tooltip: its reflog says it was created from origin/main, which is not a local branch  -  nothing here can roll into it</p>
+<p>The list item it draws (the page's template, byte for byte):</p>
+<pre>&lt;li class=&quot;git-parent&quot; title=&quot;its reflog says it was created from origin/main, which is not a local branch  -  nothing here can roll into it&quot;&gt;&lt;span class=&quot;dim&quot;&gt;parent&lt;/span&gt; &lt;span class=&quot;mono&quot;&gt;unknown - no cut record and its reflog names no local branch&lt;/span&gt;&lt;/li&gt;</pre>
+<ul class="checks"><li class="ok">held - the cut book has no record for this tree</li><li class="ok">held - no reconstruction names a parent</li><li class="ok">held - the line reads unknown</li><li class="ok">held - the title carries the reason</li></ul>
+
+<h3>2d. base - the record names main</h3>
+<dl class="facts">
+  <dt>tree</dt><dd>ProjectDevelopment/sales-citdev-POC-build-1/.worktrees/add-last-visit-date-to-book-read-2b01dd</dd>
+  <dt>project / branch</dt><dd>sales-citdev-POC-build-1 / <code>wtgui/add-last-visit-date-to-book-read-2b01dd</code></dd>
+  <dt>the cut book</dt><dd>branch-parents.json <code>tag:2b01dd</code> -> parent <code>main</code>, written 2026-11-23T18:41:18.984Z</dd>
+  <dt>the parent book</dt><dd><code>unknown</code><br><span class="small">its reflog says it was created from main  -  a main branch, never a child's parent</span></dd>
+</dl>
+<p class="when">A cut record whose parent is a main branch is the one shape that must never read as a parent: main and master are the turnover's destination. The line names it as the project base and refuses it as a parent in the same sentence.</p>
+<p>The line the Merge state block prints:</p>
+<pre class="line">cut from the project base main - main is the turnover destination, never a child's parent</pre>
+<p class="small">Its tooltip: recorded in the cut book (branch-parents.json tag:2b01dd): this tree was cut from main, which is the project base and the turnover's destination - never a child's parent</p>
+<p>The list item it draws (the page's template, byte for byte):</p>
+<pre>&lt;li class=&quot;git-parent&quot; title=&quot;recorded in the cut book (branch-parents.json tag:2b01dd): this tree was cut from main, which is the project base and the turnover's destination - never a child's parent&quot;&gt;&lt;span class=&quot;dim&quot;&gt;parent&lt;/span&gt; &lt;span class=&quot;mono&quot;&gt;cut from the project base main - main is the turnover destination, never a child's parent&lt;/span&gt;&lt;/li&gt;</pre>
+<ul class="checks"><li class="ok">held - the record names a main branch</li><li class="ok">held - the line says a main branch is never a child's parent</li><li class="ok">held - it is not printed as a plain parent</li></ul>
+
+<h3>2e. turnover - the container has nothing above it</h3>
+<dl class="facts">
+  <dt>tree</dt><dd>ProjectDevelopment/agent-worktree-gui/.worktrees/20261127_2134_TASK-405_row-405-is-the-complete</dd>
+  <dt>project / branch</dt><dd>agent-worktree-gui / <code>20261127_2134_TASK-405_row-405-is-the-complete</code></dd>
+  <dt>the cut book</dt><dd>branch-parents.json <code>tree:projectdevelopment/agent-worktree-gui/.worktrees/20261127_2134_task-405_row-405-is-the-complete</code> -> parent <code>main</code>, written 2026-11-28T02:34:40.024Z</dd>
+  <dt>the parent book</dt><dd><code>cut</code> -> <code>main</code></dd>
+</dl>
+<p class="when">The project's turnover branch, from its own &lt;code&gt;turnoverBranches&lt;/code&gt; list. Its record names main too, so this saying is decided BEFORE the base one: a container is not cut from a parent, it is where its children start.</p>
+<p>The line the Merge state block prints:</p>
+<pre class="line">turnover container - nothing above it</pre>
+<p class="small">Its tooltip: 20261127_2134_TASK-405_row-405-is-the-complete is the project's turnover branch: children are cut from it, and nothing sits above it to name</p>
+<p>The list item it draws (the page's template, byte for byte):</p>
+<pre>&lt;li class=&quot;git-parent&quot; title=&quot;20261127_2134_TASK-405_row-405-is-the-complete is the project's turnover branch: children are cut from it, and nothing sits above it to name&quot;&gt;&lt;span class=&quot;dim&quot;&gt;parent&lt;/span&gt; &lt;span class=&quot;mono&quot;&gt;turnover container - nothing above it&lt;/span&gt;&lt;/li&gt;</pre>
+<ul class="checks"><li class="ok">held - the row is the project's turnover branch</li><li class="ok">held - the line says nothing sits above it</li><li class="ok">held - no parent is named</li></ul>
+
+<h2>3. What the module refuses, in the same words</h2>
+<ul>
+  <li><b>A guess is never printed as a record.</b> <code>parentSource: "backfilled"</code> yields <code>kind: "reconstructed"</code> and a sentence that says so; there is no branch of <code>parentLineFor</code> that turns a backfilled answer into "cut from X" alone.</li>
+  <li><b>A sibling is never printed as a parent.</b> A cut record that names the tree's own branch is not a parent (the module falls through to unknown), and a reconstruction that names it is refused the same way. lib/parents.js has already refused the descendant and equal-tip shapes before a parent reaches the module.</li>
+  <li><b>A tie reads unknown.</b> <code>pickBackfill</code> answers null when two ancestors are equally near, and the line is the unknown sentence with <code>ambiguous: ...</code> in its title - never a coin flip between siblings.</li>
+  <li><b>Main and master are never a parent.</b> <code>isMainName</code> covers main, master, trunk, develop and the project's own <code>mainBranch</code>; every one of them lands on the base saying. A reflog that refused a main name now carries that fact (<code>refused</code>, lib/parents.js:205) instead of a sentence being parsed back into a branch name.</li>
+</ul>
+
+<h2>4. Where the facts come from, and what it costs</h2>
+<p>The row already carried <code>row.parent</code> and <code>row.parentSource</code> from the scan, which is the parent book's answer; it could not say how sure that answer is, or name the record behind it. server.js:4780 <code>withParentLines</code> stamps the sentence on each row from one read of the cut book per snapshot (<code>jobs.loadParents()</code>, the same 500-record book <code>withTreeKinds</code> already walks per row), plus one Map lookup in the parent book for the reason. The page never reads a file: it draws <code>row.parentLine</code>.</p>
+<p>The page's template and the proof's renderer cannot drift: public/board-scaffold.js is a classic script and cannot import lib/parent-line.js, so test/parent-line.test.js pins the page's literal template to <code>parentLineItemHtml</code>'s markup, its <code>.dim</code> label and <code>.mono</code> value, and asserts that no stylesheet rule names <code>.git-parent</code> anywhere in the panel's sheets.</p>
+
+<h2>5. What was run</h2>
+<pre>node --test test/parent-line.test.js
+# 9 tests, 9 pass, 0 fail
+
+node --test test/parent-line.test.js test/chart-nesting.test.js test/worktree-release.test.js \
+  test/branch-kind.test.js test/row-chips.test.js test/turnover-row-marker.test.js \
+  test/board-lookups.test.js test/child-worktree.test.js
+# 107 tests, 107 pass, 0 fail
+
+node tools/verify-parent-line.mjs
+# recorded, reconstructed, unknown, base, turnover: all held, exit 0</pre>
+<p>The full suite was started once and did not finish: <code>npm test</code> was killed at 32 minutes with no verdict, under the 20-minute rule this fleet runs tests by, on a host that was carrying four other <code>node --test</code> suites started two to four and a half hours earlier (process ids 10264, 12148, 20328, 29800, all still running when this page was written). The focused set above is the answer this branch has: every test that names the files it changes, plus the two files it adds, passes.</p>
+<p class="note">One gate is red on this branch's base and stays red here: <code>node tools/absolute-paths.mjs</code> names <code>test/maintenance.test.js</code> for twenty-three drive-letter paths that HEAD's own copy already carries (last touched by <code>a69d1cb3</code>, not by this row). Nothing this change adds is named by it: the page and both new files carry no drive-letter path.</p>
+
+<h2>6. What this page does not claim</h2>
+<p>The running panel is the main checkout (version 1.196.0), so the live board does not yet draw the line: the proof above is the state directory's real rows read through this branch's module and renderer, which is the same computation the server will make once this merges and the panel restarts. The <code>refused</code> fact on an unknown record is written by the first refresh pass after that restart; until then an old record whose reflog named main reads as unknown with that reason in its title, and never as a parent.</p>
+
+</main>
+</body>
+</html>

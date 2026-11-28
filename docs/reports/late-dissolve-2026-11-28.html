@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>late.css is gone - row 446</title>
+<style>
+  :root { --bg: #0d1117; --panel: #151b24; --line: #26303d; --ink: #e6edf3; --dim: #9aa7b4; --dimmer: #6b7684;
+          --green: #3fb950; --red: #f85149; --amber: #d29922; --violet: #a371f7; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 22px 60px; background: var(--bg); color: var(--ink);
+         font: 14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 25px; letter-spacing: -.01em; }
+  h2 { margin: 34px 0 10px; font-size: 17px; padding-top: 10px; border-top: 1px solid var(--line); }
+  h3 { margin: 18px 0 6px; font-size: 14px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { color: #cfd8e3; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: #1c222c; padding: 1px 5px; border-radius: 4px; color: #c9d6e4; }
+  .sub { color: var(--dim); font-size: 13px; }
+  .verdict { margin: 16px 0 6px; padding: 14px 16px; background: var(--panel);
+             border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 8px; }
+  .verdict b { color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .ok { color: var(--green); }
+  .bad { color: var(--red); }
+  .warn { color: var(--amber); }
+  .note { background: #161d27; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+  .note h4 { margin: 0 0 4px; font-size: 13px; color: #fff; }
+  ul.tight { margin: 6px 0; padding-left: 20px; }
+  ul.tight li { margin: 3px 0; }
+  .kv { display: grid; grid-template-columns: 210px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  pre { background: #10151d; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto;
+        font-family: var(--mono); font-size: 12px; color: #c9d6e4; }
+  pre b { color: #fff; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>late.css is gone</h1>
+<p class="sub">Row 446. Tree <code>row-446-is-the-complete-brief-dissolve-f10ff3</code>, cut from
+<code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>8ed0e86d</code>, version 1.197.0. Every number
+below was measured in this tree on 2026-11-28; the command that produces each one is in section 10.</p>
+
+<div class="verdict">
+<b>What changed.</b> <code>public/late.css</code> is deleted. Its 33 rule blocks - 49 selector entries, 118
+declarations - moved verbatim to the sheet that owns the surface each one paints:
+<code>public/board-table.css</code> (19 blocks: the page column and the board's folder cards),
+<code>public/assistant.css</code> (13: the page row the board and the rail share, and the search popovers' drag and
+grip chrome) and <code>public/chrome.css</code> (1: the header). The page loads 20 sheets now, not 21.
+<br /><br />
+<b>What proves it.</b> <b>3,431 rule blocks before, 3,431 after, 0 missing, 0 extra, 0 edited</b>, keyed by at-rule
+context, selector and declarations. <b>3 cascade pairs</b> existed between late.css and the sheets it overrode; all
+three keep the winning value, with the sheet that owns it now the new home - and those two selectors were the only
+rules that depended on late.css loading last. Page-wide, cross-sheet ties drop from <b>4 to 1</b> and no winner changes. And in
+one document, with the two sheet sets swapped under the same DOM at four readings, <b>0 boxes and 0 declarations
+differ</b>, including the 300 px band where the media block is live.
+<br /><br />
+<b>Where it landed.</b> Merged locally into <code>20261127_2134_TASK-405_row-405-is-the-complete</code>; no version
+bump, no push, no pull request.
+</div>
+
+<h2>1. The brief, checked against the tree before anything moved</h2>
+
+<p>The brief says late.css holds 68 rules, 62 of them sole definitions, and names the cut dialog, the 300 px window,
+the legend popover and the search drag handles. That inventory is the file at the 1.191.0 split
+(<code>db287788</code>); two landings have already taken part of it:</p>
+
+<table>
+<tr><th>revision</th><th class="num">rule blocks</th><th>what left</th></tr>
+<tr><td><code>db287788</code>, the split</td><td class="num">68</td><td>22 the sliver window, 14 the cut dialog, 21 the legend, 11 the search chrome</td></tr>
+<tr><td><code>687cb0b1</code>, 1.192.0</td><td class="num">54</td><td>the cut dialog's 14 to <code>overlays.css</code> ("give the cut dialog, the board table and the console composer their own sheets")</td></tr>
+<tr><td><code>a6d564a6</code>, row 444</td><td class="num">33</td><td>the legend's 21 to <code>chart.css</code>, with the board table's own sheet</td></tr>
+<tr><td><code>HEAD</code> at this tree's cut, <code>8ed0e86d</code></td><td class="num">33</td><td>22 the sliver window + 11 the search chrome: this row's work</td></tr>
+</table>
+
+<p>So the brief's two blocks are already home and are not touched by this row; what is left is the 300 px window and
+the search chrome. Those 33 blocks carry <b>49 selector entries and 118 declarations</b>. The review tool counts
+<b>31 of the 33 as sole definitions</b>: the two that are not are <code>html, body</code> and <code>body</code>, which
+<code>base.css</code> also names. The brief's "62 of 68" is the split-time figure.</p>
+
+<h2>2. Where every rule went</h2>
+
+<table>
+<tr><th>sheet</th><th class="num">rules before</th><th class="num">after</th><th class="num">bytes before</th><th class="num">after</th><th></th></tr>
+<tr><td><code>base.css</code></td><td class="num">13</td><td class="num ">13</td><td class="num">4,832</td><td class="num">4,832</td><td>the token layer and the resets: unchanged</td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">71</td><td class="num ok">72</td><td class="num">16,467</td><td class="num">17,072</td><td>+1: the sliver block's .topbar rule</td></tr>
+<tr><td><code>settings.css</code></td><td class="num">300</td><td class="num ">300</td><td class="num">45,899</td><td class="num">45,899</td><td></td></tr>
+<tr><td><code>board-table.css</code></td><td class="num">791</td><td class="num ok">810</td><td class="num">147,088</td><td class="num">151,444</td><td>+19: the sliver block's page and board rules</td></tr>
+<tr><td><code>console.css</code></td><td class="num">369</td><td class="num ">369</td><td class="num">78,336</td><td class="num">78,336</td><td></td></tr>
+<tr><td><code>console-head.css</code></td><td class="num">65</td><td class="num ">65</td><td class="num">13,900</td><td class="num">13,900</td><td></td></tr>
+<tr><td><code>console-turns.css</code></td><td class="num">35</td><td class="num ">35</td><td class="num">5,829</td><td class="num">5,829</td><td></td></tr>
+<tr><td><code>model-menu.css</code></td><td class="num">29</td><td class="num ">29</td><td class="num">4,765</td><td class="num">4,765</td><td></td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">255</td><td class="num ">255</td><td class="num">43,983</td><td class="num">43,983</td><td></td></tr>
+<tr><td><code>utilities.css</code></td><td class="num">8</td><td class="num ">8</td><td class="num">2,502</td><td class="num">2,502</td><td></td></tr>
+<tr><td><code>assistant.css</code></td><td class="num">98</td><td class="num ok">111</td><td class="num">20,117</td><td class="num">25,234</td><td>+13: the page-row pair and the search chrome</td></tr>
+<tr><td><code>feedback.css</code></td><td class="num">226</td><td class="num ">226</td><td class="num">30,977</td><td class="num">30,977</td><td></td></tr>
+<tr><td><code>assistant-panes.css</code></td><td class="num">126</td><td class="num ">126</td><td class="num">17,910</td><td class="num">17,910</td><td></td></tr>
+<tr><td><code>initiatives.css</code></td><td class="num">439</td><td class="num ">439</td><td class="num">93,498</td><td class="num">93,498</td><td></td></tr>
+<tr><td><code>panes.css</code></td><td class="num">120</td><td class="num ">120</td><td class="num">16,615</td><td class="num">16,615</td><td></td></tr>
+<tr><td><code>queue.css</code></td><td class="num">76</td><td class="num ">76</td><td class="num">13,601</td><td class="num">13,601</td><td></td></tr>
+<tr><td><code>pipeline.css</code></td><td class="num">263</td><td class="num ">263</td><td class="num">52,512</td><td class="num">52,512</td><td></td></tr>
+<tr><td><code>late.css</code></td><td class="num">33</td><td class="num bad">gone</td><td class="num">8,652</td><td class="num">-</td><td>deleted: every rule moved, none edited</td></tr>
+</table>
+
+<p>Per-sheet rule counts are <code>npm run review:css-split -- --static</code>'s inventory; the totals are 3,317
+blocks on both sides (the tool does not count keyframe steps; the gate's 3,431 includes them).</p>
+
+<h3>The three blocks in the sheets they landed in</h3>
+<ul class="tight">
+<li><code>public/board-table.css:2332</code> - the block header, the sliver block's own comment moved verbatim, and
+the 19 rules that lay the page out as the board.</li>
+<li><code>public/assistant.css:283</code> - <code>.shell</code> and <code>.shell &gt; main</code>, written after the
+<code>.shell</code> rules they beat; <code>public/assistant.css:306</code> - the search popovers' drag strip, close x
+and resize grip.</li>
+<li><code>public/chrome.css:282</code> - the header's one rule, written after <code>.topbar</code>'s own.</li>
+</ul>
+
+<h2>3. The rule multiset: 0 missing, 0 extra, 0 edited</h2>
+
+<div class="kv">
+<div>before</div><div><code>8ed0e86d</code>: 21 sheets, <b>3,431</b> rule blocks</div>
+<div>after</div><div>this tree: 20 sheets, <b>3,431</b> rule blocks</div>
+<div>missing / extra / edited</div><div><b class="ok">0 / 0 / 0</b></div>
+<div>dissolved</div><div>33 blocks into 3 sheets: <code>board-table.css</code> 19, <code>chrome.css</code> 1, <code>assistant.css</code> 13</div>
+</div>
+
+<p>A rule is keyed as <code>at-rule context | selector list | declarations</code> after whitespace is collapsed: a
+move between sheets passes, a dropped, doubled or reworded rule fails with the rule named. The before set is the
+sheets the page at <code>8ed0e86d</code> linked, read out of git - the commit that deleted
+<code>late.css</code>, minus one - so it is the tree this move was cut from and not "the last revision that happened
+to edit late.css".</p>
+
+<h2>4. Every rule, its home, and whether it depended on being last</h2>
+
+<p>The column that matters is the last one. A rule depended on late.css loading last only if another sheet declared
+the <em>same property on the same selector</em>: specificity is then equal, and source order alone decided. Two rules
+did, over three properties. Of the other 31, three share a selector with another sheet but no declaration on it
+(<code>html, body</code> and <code>body</code> with base.css's reset, <code>.shell &gt; main</code> with the shell's
+own rule), and 28 are sole definitions. Only the two marked yes ever needed the last position.</p>
+
+<table>
+<tr><th class="num">#</th><th>at-rule</th><th>selector</th><th class="num">decls</th><th>home</th><th>needed to be last?</th></tr>
+<tr><td class="num">1</td><td>300 px</td><td><code>html,body</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - the name is shared (html in base.css; body in base.css), no property is</td></tr>
+<tr><td class="num">2</td><td>300 px</td><td><code>body</code></td><td class="num">3</td><td><code>board-table.css</code></td><td>no - the name is shared (body in base.css), no property is</td></tr>
+<tr><td class="num">3</td><td>300 px</td><td><code>.topbar</code></td><td class="num">3</td><td><code>chrome.css</code></td><td><span class="warn">yes</span> - .topbar { position } over chrome.css sticky; .topbar { padding } over chrome.css 10px 16px</td></tr>
+<tr><td class="num">4</td><td>300 px</td><td><code>.shell</code></td><td class="num">3</td><td><code>assistant.css</code></td><td><span class="warn">yes</span> - .shell { align-items } over assistant.css flex-start</td></tr>
+<tr><td class="num">5</td><td>300 px</td><td><code>.shell&gt;main</code></td><td class="num">9</td><td><code>assistant.css</code></td><td>no - the name is shared (.shell&gt;main in assistant.css), no property is</td></tr>
+<tr><td class="num">6</td><td>300 px</td><td><code>#spawn-strip</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">7</td><td>300 px</td><td><code>#newagent</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">8</td><td>300 px</td><td><code>#agents</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">9</td><td>300 px</td><td><code>#newagent,#agents</code></td><td class="num">2</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">10</td><td>300 px</td><td><code>#newagent:not(.fixed-collapsed),#agents:not(.fixed-collapsed)</code></td><td class="num">2</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">11</td><td>300 px</td><td><code>#newagent&gt;.project-head,#agents&gt;.project-head</code></td><td class="num">2</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">12</td><td>300 px</td><td><code>#newagent&gt;.project-head .path,#agents&gt;.project-head .path</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">13</td><td>300 px</td><td><code>#newagent&gt;.project-head button,#agents&gt;.project-head button</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">14</td><td>300 px</td><td><code>#projects</code></td><td class="num">6</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">15</td><td>300 px</td><td><code>#projects&gt;.root-group</code></td><td class="num">5</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">16</td><td>300 px</td><td><code>#projects&gt;.root-group.collapsed</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">17</td><td>300 px</td><td><code>#projects&gt;.root-group&gt;.root-head</code></td><td class="num">4</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">18</td><td>300 px</td><td><code>#projects&gt;.root-group&gt;.root-head h2</code></td><td class="num">5</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">19</td><td>300 px</td><td><code>#projects&gt;.root-group&gt;.root-head .chips</code></td><td class="num">2</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">20</td><td>300 px</td><td><code>#projects&gt;.root-group&gt;.root-head .root-filter</code></td><td class="num">2</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">21</td><td>300 px</td><td><code>#projects&gt;.root-group&gt;.root-head button</code></td><td class="num">1</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">22</td><td>300 px</td><td><code>#projects&gt;.root-group&gt;.root-body</code></td><td class="num">3</td><td><code>board-table.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">23</td><td>top</td><td><code>.as-search-pop&gt;.as-search-drag,.ha-search-pop&gt;.as-search-drag</code></td><td class="num">15</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">24</td><td>top</td><td><code>.as-search-pop&gt;.as-search-drag::before,.ha-search-pop&gt;.as-search-drag::before</code></td><td class="num">5</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">25</td><td>top</td><td><code>.as-search-pop&gt;.as-search-drag:hover::before,.ha-search-pop&gt;.as-search-drag:hover::before</code></td><td class="num">1</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">26</td><td>top</td><td><code>.as-search-pop&gt;.as-search-drag&gt;.as-search-x,.ha-search-pop&gt;.as-search-drag&gt;.as-search-x</code></td><td class="num">14</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">27</td><td>top</td><td><code>.as-search-pop&gt;.as-search-drag&gt;.as-search-x:hover,.ha-search-pop&gt;.as-search-drag&gt;.as-search-x:hover</code></td><td class="num">2</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">28</td><td>top</td><td><code>.as-search-pop&gt;.as-search-grip,.ha-search-pop&gt;.as-search-grip</code></td><td class="num">11</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">29</td><td>top</td><td><code>.as-search-pop&gt;.as-search-grip::after,.ha-search-pop&gt;.as-search-grip::after</code></td><td class="num">5</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">30</td><td>top</td><td><code>.as-search-pop&gt;.as-search-grip:hover::after,.ha-search-pop&gt;.as-search-grip:hover::after</code></td><td class="num">1</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">31</td><td>top</td><td><code>.as-search-pop.is-moving,.ha-search-pop.is-moving</code></td><td class="num">1</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">32</td><td>top</td><td><code>.as-search-pop.is-resizing,.ha-search-pop.is-resizing</code></td><td class="num">1</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+<tr><td class="num">33</td><td>top</td><td><code>.as-search-pop&gt;.as-search-drag+.as-search-item</code></td><td class="num">3</td><td><code>assistant.css</code></td><td>no - sole definition</td></tr>
+</table>
+
+<p>The two that did are placed to keep winning: <code>.topbar</code> sits in <code>chrome.css</code> after
+<code>.topbar</code>'s base rule (<code>public/chrome.css:15</code> then <code>:282</code>), and <code>.shell</code>
+sits in <code>assistant.css</code> after the <code>.shell</code> rules at <code>public/assistant.css:112</code>
+(then <code>:283</code>). Every other sheet writes those two selectors nowhere.</p>
+
+<h2>5. The cross-sheet cascade pairs, by name, with the same winners</h2>
+
+<table>
+<tr><th>pair</th><th>winner before (late.css last)</th><th>winner after</th><th></th></tr>
+<tr><td><code>.topbar</code> { position }</td><td><code>late.css</code> <span class="mono">static</span></td><td><code>chrome.css</code> <span class="mono">static</span></td><td class="ok">same value</td></tr>
+<tr><td><code>.topbar</code> { padding }</td><td><code>late.css</code> <span class="mono">4px 12px</span></td><td><code>chrome.css</code> <span class="mono">4px 12px</span></td><td class="ok">same value</td></tr>
+<tr><td><code>.shell</code> { align-items }</td><td><code>late.css</code> <span class="mono">stretch</span></td><td><code>assistant.css</code> <span class="mono">stretch</span></td><td class="ok">same value</td></tr>
+</table>
+
+<p>Page-wide, the number of <b>(selector, property) pairs set by two or more sheets is 4 before and 1 after</b>. The
+three that disappeared are these three: their two declarations are now in one sheet, so there is no tie left to
+decide. The one that remains is <code>.jl-think .think-dot</code>, console.css against pipeline.css, which is not this
+row's and keeps its winner. No pair anywhere on the page changed its winning value (0 of
+4).</p>
+
+<h2>6. One document, both sheet sets, four readings</h2>
+
+<p>The panel is booted from the pre-dissolve revision (a <code>git archive</code>, not a worktree) against a fixture
+with two scan folders, two project cards, two agent cards and both search popovers open. In the <em>same</em> document
+- same DOM, same scroll, same media state - every element each dissolved selector matches is read for its box and for
+all 45 properties the dissolved rules declare, plus <code>::before</code> and <code>::after</code>; then the page's
+links are disabled, this tree's 20 sheets are injected in their own order, and the same elements are read again.</p>
+
+<table>
+<tr><th>reading</th><th class="num">viewport</th><th class="num">element readings</th><th class="num">differing</th></tr>
+<tr><td><code>desk</code></td><td class="num">1680x1200</td><td class="num">39</td><td class="num ok">0</td></tr>
+<tr><td><code>narrow</code></td><td class="num">1280x900</td><td class="num">39</td><td class="num ok">0</td></tr>
+<tr><td><code>sliver</code></td><td class="num">1879x157</td><td class="num">39</td><td class="num ok">0</td></tr>
+<tr><td><code>sliver-open</code></td><td class="num">1879x157</td><td class="num">41</td><td class="num ok">0</td></tr>
+</table>
+
+<p>The <code>sliver</code> reading is the band the media block exists for, and the <code>sliver-open</code> one repeats
+it with both fixed cards open, which is when the block's <code>:not(.fixed-collapsed)</code> rules apply. A layout
+probe proves the block was live in that reading: <code>body</code> computes <code>display:flex;
+flex-direction:column</code>, <code>.topbar</code> computes <code>position:static</code>, and
+<code>#projects</code> computes <code>display:grid</code>; at 1680x1200 the same probe reads
+<code>body:block</code>, <code>.topbar:sticky</code>, <code>#projects:block</code>. The two folder heads share one
+head row in the sliver reading: y 121.69-158.69, x 11, 683.5x37; y 121.69-158.69, x 704.5, 683.5x37.</p>
+
+<div class="note">
+<h4>One honest difference from the block's own comment</h4>
+<p>The comment at the block says the two heads measured 83.9-120.9 of 157. This fixture's header wraps to two rows
+(74.75 px) because it carries the fixture's own status text, so the heads land at
+121.69-158.69 of 157 - 1.7 px past the glass - with the same layout
+otherwise. The claim this proof makes is the before/after identity, which holds to the pixel; the absolute band is
+the fixture's, not the reader's board.</p>
+</div>
+
+<h2>7. The lane measure, on both scales</h2>
+
+<p><code>npm run review:css-split</code> prints two figures per surface. <b>own</b> counts the rules that match the
+surface's own elements at the measured viewport and are not the page's base layer; <b>container</b> counts every sheet
+holding at least one rule that matches anywhere inside the surface root, nested panes included - the sheets a lane
+must open.</p>
+
+<table>
+<tr><th>surface</th><th class="num">own before</th><th class="num">own after</th><th class="num">container before</th><th class="num">container after</th></tr>
+<tr><td>board</td><td class="num">199 over 2</td><td class="num">198 over 2</td><td class="num">9</td><td class="num ok">8</td></tr>
+<tr><td>assistant</td><td class="num">164 over 10</td><td class="num">164 over 10</td><td class="num">14</td><td class="num">14</td></tr>
+</table>
+
+<p><b>The board's container measure drops from 9 sheets to 8</b>: the 7 rules late.css contributed to it are gone
+with the file, and 6 of them now sit in <code>board-table.css</code>, a sheet the board's lane already opens (its
+count there goes 166 to 172). The assistant's two figures are unchanged because its lane already opened both sheets
+the search chrome moved between; the 11 rules now sit in <code>assistant.css</code>, one of its 10 own sheets. The
+board's own figure reads 199 before and 198 after between the two live boots; that one rule is the tool's
+per-viewport live count, not a rule leaving the page - the multiset (3,431 both sides) and the computed comparison
+(0 differences) are the rule-level claims, and neither moves.</p>
+
+<p class="sub">Before: board own board-table.css 166, chart.css 33; board container board-table.css 166, console.css 70, chart.css 33, console-head.css 21, console-turns.css 8, utilities.css 8, late.css 7, chrome.css 3, base.css 1. After: board own
+board-table.css 165, chart.css 33; board container board-table.css 172, console.css 70, chart.css 33, console-head.css 21, console-turns.css 8, utilities.css 8, chrome.css 3, base.css 1.</p>
+
+<h2>8. index.html: 20 sheets, and why none of them has to be last</h2>
+
+<p>The link block is <code>public/index.html:7-51</code>. late.css's line is gone; the moved rules sit at:</p>
+
+<table>
+<tr><th class="num">line</th><th>sheet</th><th>what moved into it</th></tr>
+<tr><td class="num">16</td><td><code>chrome.css</code></td><td>the sliver's <code>.topbar</code> rule, after the header's own</td></tr>
+<tr><td class="num">21</td><td><code>board-table.css</code></td><td>the page column and the board's 19 sliver rules</td></tr>
+<tr><td class="num">34</td><td><code>assistant.css</code></td><td>the page-row pair and the 11 search-chrome rules</td></tr>
+<tr><td class="num">44</td><td><code>chart.css</code></td><td>unchanged: the age column and the legend</td></tr>
+<tr><td class="num">47, 51</td><td><code>core/pipeline-card.css</code>, <code>core/task-card.css</code></td><td>unchanged</td></tr>
+</table>
+
+<p>late.css's name said it was loaded last "for a reason"; the reason was those three pairs in section 5, and each is
+now written after the rule it beats inside one sheet, so the order of the links no longer decides anything. The
+comment at the top of the block says so, so the next reader does not re-create a late sheet to win a tie.</p>
+
+<h2>9. The css-split gate: pre-existing red, named as such</h2>
+
+<p><code>npm run verify:css-split -- --stream</code> is <b class="bad">red</b> at this tree, and it is equally red at
+the base - the same sentence, the same counts, before and after this move:</p>
+
+<pre>FAIL  stream: every rule in the old file is still on the page, exactly once and unedited, or reported
+      as a move: 21 lost, 0 edited, 225 borrowed from chart.css, 52 added</pre>
+
+<p>The five lost rules the gate prints are <code>.legend</code>, <code>.legend-line</code>,
+<code>.legend-keys</code>, <code>.legend .legend-line .sig</code> and <code>.legend .legend-line .age-slot</code> -
+the legend family the board table's cut rewrote; the five added it prints are <code>.maintenance</code>,
+<code>.maintenance-target</code>, <code>.maintenance-head</code>, <code>.maintenance-label</code> and
+<code>.maintenance-size</code>, a block that landed after the split. The gate compares the sheets against
+<code>public/style.css</code> at <code>623f3864</code> and spends a once-per-rule allowance list; neither family is
+in it. <b>This row does not pass that gate and does not claim to: it leaves it exactly as red as it found it, with the
+same 21/0/225/52 line before and after.</b> The move itself is judged by sections 3 to 6, which read
+the before and after sheets of this branch rather than the pre-split file.</p>
+
+<p>The gate's <b>pixel half</b> is red as well, at this tree and at the base, for a reason that predates the move: its
+before root is HEAD with <code>public/style.css</code> restored from <code>623f3864</code>, and that file holds 3,061
+rule blocks against today's 3,317, so the two pages cannot agree. Both runs print the same shape of failure: the
+six-pane delta differs (the board pane: 564 boxes and 288 text runs at the base, 543 and 270 here; the console 54 and
+10 in both), and the CSSOM reads <b>3,115 rule nodes against 3,359 at the base and 3,361 here</b>. The two extra nodes
+are the move's own structure: one <code>@media (max-height: 300px)</code> wrapper became three, because the block now
+lives in the three sheets that own its rules, and a media rule is a rule node. The self-proof - the before root
+against itself, which never looks at this tree's sheets - passed at the base and differed here by one board box and one
+text run, which is the fixture's own churn between two boots.</p>
+
+<h2>10. What reproduces this, and what it does not cover</h2>
+
+<pre><b>npm run verify:late-dissolve</b>                  # both halves (stream + one-document), ~1 min
+<b>node tools/verify-late-dissolve.mjs --stream</b>  # the multiset, homes and cascade pairs, no browser
+<b>npm run review:css-split -- --static</b>         # the inventory and the catch-all record
+<b>npm run review:css-split</b>                     # the lane measures, in a real page
+<b>npm run verify:css-split</b>                   # the gate named in section 9, both halves</pre>
+
+<p>The gate is <code>tools/verify-late-dissolve.mjs:10</code> (its halves at <code>:10</code> and <code>:25</code>;
+the before revision at <code>:123</code>; the one-document comparison at <code>:660</code>). The review tool's record
+of the dissolve is <code>tools/css-split-review.mjs:374</code> (blocks) and <code>:409</code> (the scan); the split
+gate's before-root anchor no longer names late.css - it finds the last sheet the page links,
+<code>tools/verify-css-split.mjs:830</code>.</p>
+
+<div class="note">
+<h4>What is not covered</h4>
+<p>The cut dialog and the legend are not measured here: they left late.css in 1.192.0 and at row 444, and this row
+did not touch them (section 1). The <code>:hover</code> states of the drag strip and the grip are compared with the
+state forced through CDP rather than with a pointer, because the popover can sit under the sticky header in the
+157 px band; the forced state is the same <code>:hover</code> the pointer would produce. The fixture's header wraps,
+which is the one absolute-geometry difference section 6 names.</p>
+</div>
+
+<p class="sub">Measured with <code>node tools/verify-late-dissolve.mjs</code> and
+<code>node tools/css-split-review.mjs</code> in this tree on 2026-11-28; base revision <code>8ed0e86d</code>,
+version 1.197.0.</p>
+
+</main>
+</body>
+</html>

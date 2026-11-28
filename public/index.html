@@ -7,7 +7,11 @@
   <!-- style.css is split by surface: these seventeen sheets load in the order their rules had inside it, so every
        rule keeps the cascade position it held in the one file. tools/verify-css-split.mjs proves the concatenation
        rule for rule, and the six-pane layout delta against the pre-split commit. Add a rule to the sheet that owns
-       its surface, never to a later sheet as a shortcut. -->
+       its surface, never to a later sheet as a shortcut.
+       late.css is gone (row 446): the sliver window's page and board rules are board-table.css's, its page-row two
+       are assistant.css's and its header rule is chrome.css's, each written after the rule it has to beat, and the
+       search popovers' drag and grip chrome is assistant.css's. So no rule on this page depends on a sheet loading
+       last; the order above is the order the surfaces read, not a cascade device. -->
   <link rel="stylesheet" href="/base.css" />
   <link rel="stylesheet" href="/chrome.css" />
   <link rel="stylesheet" href="/settings.css" />
@@ -34,7 +38,6 @@
   <link rel="stylesheet" href="/panes.css" />
   <link rel="stylesheet" href="/queue.css" />
   <link rel="stylesheet" href="/pipeline.css" />
-  <link rel="stylesheet" href="/late.css" />
   <!-- The worktree chart's own rules: the age column's ring and figure, its evidence strip, the age arrow and the
        legend. It loads right after the per-surface sheets, so every rule keeps the cascade position it had when
        style.css was one sheet; the table itself is board-table.css's. -->

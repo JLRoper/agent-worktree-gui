@@ -2009,6 +2009,16 @@ function detailHtml(row) {
       </div>
       <ul>${liveLines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
     </div>`;
+  // WHERE THE TREE WAS CUT FROM: one line in the Merge state block, from the record the row carries. `row.parentLine`
+  // is stamped by the server (server.js `withParentLines` -> lib/parent-line.js), which is the only place the five
+  // sayings are decided: a recorded cut, a reconstruction (labelled as one), an unknown with its reason, a main
+  // branch named as the project base, or a turnover container with nothing above it. The block's own classes are the
+  // whole styling - `.dim` for the label, `.mono` for the branch - so no stylesheet rule is added. A row that carries
+  // no line (the project's own checkout, or a snapshot from before this landed) draws nothing.
+  const parentItem =
+    row.parentLine && row.parentLine.text
+      ? `<li class="git-parent" title="${esc(row.parentLine.title || row.parentLine.text)}"><span class="dim">parent</span> <span class="mono">${esc(row.parentLine.text)}</span></li>`
+      : "";
   const gitOpen = state.gitOpen.has(key);
   const gitSummary = [
     row.verdict || "…",
@@ -2167,6 +2177,7 @@ function detailHtml(row) {
       <div class="git-body">
         <ul class="git-list">
           <li class="git-summary-line">${esc(gitSummary)}</li>
+          ${parentItem}
           ${ownerDetailHtml(row)}
           ${metaItems.map((m) => `<li>${m}</li>`).join("")}
         </ul>
