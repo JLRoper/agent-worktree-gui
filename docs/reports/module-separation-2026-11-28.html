@@ -47,7 +47,7 @@
   <dt>new files</dt><dd>8, at 9,640 lines together</dd>
   <dt>functions moved</dt><dd>374 (app.js keeps 356)</dd>
   <dt>branch</dt><dd>wtgui/row-525-is-the-complete-brief-split-62ca65</dd>
-  <dt>merge into the turnover</dt><dd>bc0e5253 (recovers the eight), 7186d2ee (the six test repairs), plus the commit that adds this page</dd>
+  <dt>merge into the turnover</dt><dd>bc0e5253 (recovers the eight), 7186d2ee (the six test repairs), 4d256d3a (the turnover's four later landings merged in), plus the commit that adds this page</dd>
 </dl>
 
 <h2>1. The line count, before and after</h2>
@@ -90,6 +90,7 @@
   <tr><td class="tool">public/app.js, block 2</td><td class="n">786</td><td>the General tab's stale-read line, <code>maintenanceLoadedAt</code> / <code>loadMaintenance()</code></td><td>take the cut, and port the three lines into <code>public/settings-window.js:185-187</code>'s <code>selectSettingsTab</code>, beside the tab's other four stale-read rules</td></tr>
 </table>
 <p>Taking the cut was checked rather than assumed: all 164 top-level functions in the two HEAD-side blocks are defined in the eight modules (a script compared every name against every loaded script and found none missing). The 238-line settings &gt; storage &amp; cleanup section the turnover added lives lower in app.js, outside both blocks, and came through the merge intact (<code>public/app.js:9909</code> is its <code>maintenanceLoadedAt</code>).</p>
+<p>The turnover then moved again while this row ran: it went from <code>9e236116</code> to <code>2bbb3755</code> with two more landings (row-497's Merge-state parent line and row-446's <code>late.css</code> dissolution). Those four commits touch no line of <code>public/app.js</code> (<code>git diff --stat 9e236116 2bbb3755 -- public/app.js</code> is empty), so merging them in was clean and produced <code>4d256d3a</code>; the result is a fast-forward for the turnover.</p>
 
 <h2>5. The card for public/app.js: the eight cuts</h2>
 <ol>
@@ -109,17 +110,17 @@
   <tr><td class="tool">node --check public/app.js and the eight modules</td><td><span class="ok">clean</span> - ten files, no syntax error</td></tr>
   <tr><td class="tool">dom-format / app.js duplicate top-level names</td><td><span class="warn">one, and it predates the cuts</span> - <code>fmtBytes</code> is declared in both <code>public/core/dom-format.js</code> and <code>public/app.js</code> (it was in the 20,096-line file at <code>19333</code> too); no name the cuts moved is declared twice</td></tr>
   <tr><td class="tool">npm run absolute-paths</td><td><span class="warn">refused at the turnover tip as well</span> - three files already there name a machine folder (<code>docs/reports/landing-cut-2026-11-28.html</code>, <code>docs/reports/wave-lane-counts/lane-counts.json</code>, <code>test/maintenance.test.js</code>). <code>public/app.js</code> holds its recorded four paths and no more, so this change adds nothing to that record</td></tr>
-  <tr><td class="tool">focused set: 142 test files</td><td><span class="no">1,382 tests, 1,377 pass, 5 fail</span> - the set is the union of <code>npm run test:module</code> for the nine files the cuts touched, minus <code>test/worktree-assistant.test.js</code> (row #569 owns its stall). The full suite was not run</td></tr>
+  <tr><td class="tool">focused set: 143 test files</td><td><span class="no">1,391 tests, 1,387 pass, 4 fail</span> - the set is the union of <code>npm run test:module</code> for the nine files the cuts touched, minus <code>test/worktree-assistant.test.js</code> (row #569 owns its stall), plus <code>test/parent-line.test.js</code> from the turnover's own last landing. The full suite was not run</td></tr>
 </table>
-<h3>the five failures, named</h3>
+<h3>the four failures, named</h3>
 <table>
   <tr><th>test file</th><th>status</th><th>why</th></tr>
   <tr><td class="tool">test/assistant-queue-reattach.test.js</td><td><span class="warn">already red at 9e236116</span></td><td>fails on the untouched turnover tip with the same assertion; not this row's</td></tr>
   <tr><td class="tool">test/junctioned-node-modules.test.js</td><td><span class="warn">already red at 9e236116</span></td><td>same, and it is the worktree-remove measurement in this host's temp layout</td></tr>
   <tr><td class="tool">test/scan-roots.test.js</td><td><span class="warn">already red at 9e236116</span></td><td>same</td></tr>
-  <tr><td class="tool">test/build-version-deadline.test.js</td><td><span class="warn">flake under load</span></td><td>two failures in the 142-file run; 4/4 pass when run alone</td></tr>
-  <tr><td class="tool">test/assistant-message-attachments.test.js</td><td><span class="warn">flake under load</span></td><td>EPERM removing its own temp dir in the 142-file run; passes alone</td></tr>
+  <tr><td class="tool">test/parent-line.test.js</td><td><span class="warn">already red at 2bbb3755</span></td><td>its "the page's template is the renderer's, byte for byte" reads <code>public/rowstrips.css</code>, a sheet the turnover's own lineage never carried: the file is in row-497's merged commit <code>9450ae06</code> and absent from the merge <code>cf340e14</code> that landed it. Red before this branch's merge, and no page damage - the turnover's <code>public/index.html</code> links no such sheet.</td></tr>
 </table>
+<p class="small">Two more files went red once each in an earlier 142-file run and pass alone: <code>test/build-version-deadline.test.js</code> (2 failures, 4/4 alone) and <code>test/assistant-message-attachments.test.js</code> (EPERM removing its own temp dir). Both passed in the final run above, so they are load flakes, not regressions.</p>
 
 <h2>7. Six tests still read app.js for code that had moved</h2>
 <p>The eight commits repaired 31 test files, and six were missed. Each read <code>public/app.js</code> as text for a block that the cuts moved, so each went red on the recovered branch. Every assertion is kept: only the file it reads changed.</p>
@@ -135,7 +136,7 @@
 
 <h2>8. What is left, and what is red</h2>
 <ul>
-  <li><b>Red before this row and still red:</b> <code>test/assistant-queue-reattach.test.js</code>, <code>test/junctioned-node-modules.test.js</code> and <code>test/scan-roots.test.js</code> fail identically at <code>9e236116</code>. They are the turnover's own debt, not a product of these cuts.</li>
+  <li><b>Red before this row and still red:</b> <code>test/assistant-queue-reattach.test.js</code>, <code>test/junctioned-node-modules.test.js</code> and <code>test/scan-roots.test.js</code> fail identically at <code>9e236116</code>, and <code>test/parent-line.test.js</code> fails at <code>2bbb3755</code> over the missing <code>public/rowstrips.css</code>. They are the turnover's own debt, not a product of these cuts.</li>
   <li><b>The full suite was not run</b> on this row: <code>test/worktree-assistant.test.js</code> stalls it and row #569 exists to fix that. The focused set above is the evidence.</li>
   <li><b>next entries of the module map</b> - the split's remaining steps are still in app.js's 11,189 lines; this page covers entry 1 only.</li>
 </ul>
