@@ -239,18 +239,27 @@ node --check lib/restart-checks.js  # no output, exit 0</pre>
     <tr><td>when the row was read</td><td><code>0ce44e77</code></td><td>the row 470 landing</td></tr>
     <tr><td>08:44</td><td><code>edd9873c</code></td><td>row 515's initiative-write cut</td></tr>
     <tr><td>08:50</td><td><code>b4f88ad9</code></td><td>row 515's cut page, docs only</td></tr>
-    <tr><td>08:54, the tip the merge was made against</td><td><code>59097534</code></td><td>row 513's merge, carrying row 534's recheck page</td></tr>
+    <tr><td>08:54, the tip the first merge was made against</td><td><code>59097534</code></td><td>row 513's merge, carrying row 534's recheck page</td></tr>
+    <tr><td>08:56, the tip the final merge was made against</td><td><code>c2a6c75f</code></td><td>row 512's second restart cut, the controller moves out</td></tr>
   </table>
   <p class="cite">
-    The merge was made with <code>git merge-tree --write-tree</code> and <code>git commit-tree</code> rather than a
-    <code>git merge</code> in the turnover worktree: that worktree held another run's nine staged files, and a plain
-    merge is refused while the index is dirty. The merge tree was read back against the tip before the ref moved, the
-    new page was checked out into the turnover worktree and staged on its own, and the other nine files' staged diff
-    hashes the same before and after: <code>0383e2fa</code>.
+    Row 512 landed after the first merge and moved <code>RestartController</code> out of <code>lib/restart.js</code>:
+    the tip's entry point is now blob <code>98782d79</code>, while <code>lib/restart-checks.js</code> is still
+    <code>3d5f6f00</code>, the blob this cut wrote. The blob comparison in section 7 is against the revisions named
+    there, not against whatever the tip holds later.
+  </p>
+
+  <p class="cite">
+    The first merge was made with <code>git merge-tree --write-tree</code> and <code>git commit-tree</code> rather
+    than a <code>git merge</code> in the turnover worktree: that worktree held another run's nine staged files, and a
+    plain merge is refused while the index is dirty. The merge tree was read back against the tip before the ref moved,
+    the new page was checked out into the turnover worktree and staged on its own, and the other nine files' staged
+    diff hashed the same before and after: <code>0383e2fa</code>. By the final merge the worktree was clean, so that
+    one is an ordinary <code>git merge --no-ff</code> there.
   </p>
   <p class="cite">
-    No push, no pull request, no version bump. The turnover stays local at <code>f9bd6509</code> for the reader to
-    land when they choose.
+    No push, no pull request, no version bump. The turnover stays local and unpushed, and the reader decides when it
+    lands.
   </p>
 
 
