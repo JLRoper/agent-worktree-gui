@@ -289,6 +289,27 @@ test("the route: GET answers without a token, POST needs one, and an unknown tar
   assert.equal(fallthrough.handled, false, "an unanswered method falls through to the chain's own 404");
 });
 
+// The contract mismatch this batch reconciled, pinned: a refusal is ANSWERED — 200, ok:true, the reason in
+// `refused` — because the General tab paints that sentence in red (maintenanceResultText); a bare non-2xx made it
+// show a status code instead. Nothing was deleted, and the body says so.
+test("the route: a refused clean answers 200 with the reason in `refused`, never a bare status", async (t) => {
+  const dir = await sandbox(t);
+  const scratch = path.join(dir, "scratch");
+  await writeFiles(scratch, ["held.txt"]);
+  await writeFile(path.join(scratch, ".wag-scratch"), "", "utf8");
+  const config = { ...configOf(dir), scratchDir: scratch, scratchDirSource: "config", token: "secret" };
+  // A live run working inside the folder is the refusal a route test can produce without touching a real disk root.
+  const { call } = harness({ config, jobs: [{ id: "job-7", status: "running", cwd: path.join(scratch, "job-7") }] });
+
+  const refused = await call("POST", MAINTENANCE_CLEAN_PATH, { token: "secret", body: { target: "scratch", dryRun: false } });
+  assert.equal(refused.status, 200, "a refusal is an answer, not an error status");
+  assert.equal(refused.body.ok, true);
+  assert.match(String(refused.body.refused), /scratch is in use: a live run is working/, "the reason travels in `refused`");
+  assert.equal(refused.body.removedFiles, 0, "and nothing was removed");
+  assert.ok((await readdir(scratch)).includes("held.txt"), "the held file is still there");
+  assert.match(refused.log.join("\n"), /refused:/, "the log says what was refused too");
+});
+
 test("the route: a clean dry run returns the contract shape and a real press deletes", async (t) => {
   const dir = await sandbox(t);
   const config = { ...configOf(dir), scratchDir: path.join(dir, "scratch"), scratchDirSource: "config", token: "secret" };
