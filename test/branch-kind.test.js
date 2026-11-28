@@ -334,10 +334,10 @@ test("7. the same push is allowed once the reader lifts it, and never still refu
 });
 
 // 8. THE ROW'S KIND CELL, evaluated from the page's own source: all three letters, the container named as the
-// container, and BOTH local kinds drawn as the button that lifts them - a lifted tree keeps its letter with a tick.
-// The page cannot be imported (it is a classic script), so the region between KIND_MARK and the turnover mark is
-// evaluated with the two helpers it calls.
-test("8. the Kind column names the container and lifts both local kinds", () => {
+// container, BOTH local kinds drawn as the button that lifts them, and an UPGRADED one drawn as T - the kind it
+// behaves as - with the kind it was left in the tooltip. The page cannot be imported (it is a classic script), so the
+// region between KIND_MARK and the turnover mark is evaluated with the two helpers it calls.
+test("8. the Kind column names the container, the local kinds, and what an upgraded one behaves as", () => {
   const src = readFileSync(path.resolve("public", "render-projects.js"), "utf8");
   const start = src.indexOf("const KIND_MARK =");
   const end = src.indexOf("// The row's turnover mark", start);
@@ -365,8 +365,13 @@ test("8. the Kind column names the container and lifts both local kinds", () => 
     assert.match(unlifted, /<button[^>]*data-kind-lift="demo::\/w\//, `${kind} is the button that lifts it`);
     assert.match(unlifted, /local only - press to lift/, "and says what pressing does");
     const lifted = kindMarkHtml({ branchKind: kind, branchKindLifted: true, project: "demo", path: `/w/${kind}`, branchKindParent: TURNOVER });
-    assert.match(lifted, /is-lifted/, `${kind} draws the lifted state`);
-    assert.match(lifted, /kind-tick/, "with a tick");
+    assert.match(lifted, />T</, `${kind} upgraded reads T, the kind it behaves as`);
+    assert.match(lifted, /kind-turnover/, "in the turnover chip, not its old letter");
+    assert.doesNotMatch(lifted, new RegExp(`kind-${kind}`), "with the recorded kind no longer drawn");
+    assert.match(lifted, /is-lifted/, "and the lifted ink still separates it from a recorded T");
+    const was = kind === "research" ? "a research tree" : "an implementation tree";
+    assert.match(lifted, new RegExp(`was ${was}, upgraded by the reader; it behaves as a turnover tree`), "the tooltip names the kind the record keeps");
+    assert.doesNotMatch(lifted, /kind-tick|✓/, "with no tick");
     assert.doesNotMatch(lifted, /data-kind-lift/, "and no second lift");
   }
   assert.match(

@@ -286,6 +286,21 @@ test("a hidden column leaves the header, the colspan and the order consistent", 
   assert.ok(html.indexOf('data-col-id="branch"') < html.indexOf('data-col-id="ahead"'), "table order survives");
 });
 
+test("the Kind column's help says an upgraded tree reads T", () => {
+  // The header's title is the reader's one sentence for the mark (public/charts.js), so it has to name the same
+  // behaviour the cell draws: an upgraded R or I reads T, and the tooltip carries the kind it was. A help line that
+  // still promised a letter with a tick would describe a cell that no renderer draws any more.
+  const { CHART_COLUMNS } = page();
+  const kind = CHART_COLUMNS.find((c) => c.id === "kind");
+  assert.ok(kind?.title, "the Kind column carries its help");
+  assert.match(kind.title, /T for a turnover tree/, "the container keeps its letter");
+  assert.match(kind.title, /R for an unlifted research tree/);
+  assert.match(kind.title, /I for an unlifted implementation tree/);
+  assert.match(kind.title, /an upgraded tree reads T, because it behaves as a turnover tree/, "the upgraded T is named as behaviour");
+  assert.match(kind.title, /was an implementation tree, upgraded by the reader; it behaves as a turnover tree/, "and the tooltip's own sentence is quoted");
+  assert.doesNotMatch(kind.title, /tick/, "no letter with a tick survives in the help");
+});
+
 test("a config that hides every column still draws one, and it is the actions cell", () => {
   const { shownColumns, wtColspan, chartHeaderHtml } = page({ hiddenColumns: [...CHART_COLUMN_IDS] }, second());
   assert.deepEqual(shownColumns(), [CHART_COLUMN_IDS.length - 1]);

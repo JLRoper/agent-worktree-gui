@@ -274,7 +274,8 @@ try {
     "the number is time since that last happened, the ring fills up to green as the row becomes due for its next read",
     "turnover tree (the feature container - research and implementation trees are cut from it, and an implementation tree's work merges back into it locally)",
     "research tree (local only - press the R to lift it)",
-    "implementation tree (local only - press the I to lift it; a lifted tree keeps its letter with a tick)",
+    "implementation tree (local only - press the I to lift it)",
+    "an upgraded tree (was R or I - it behaves as a turnover tree, and its tooltip names the kind it was)",
     "a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight",
     "a fold only hides, every chip and open panel stays as it was",
   ];
