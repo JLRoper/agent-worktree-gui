@@ -26,7 +26,7 @@ import { sweepBoard } from "../lib/panel-watch.js";
 const T0 = Date.parse("2026-11-28T03:40:00.000Z");
 const MINUTE = 60_000;
 const iso = (ms = 0) => new Date(T0 + ms).toISOString();
-const TREE = "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-401-investigate";
+const TREE = "/repo/.worktrees/row-401-investigate";
 const THREE = [
   { id: "assistant-1", name: "Assistant #1", threadId: ASSISTANT_THREAD, rules: [] },
   { id: "assistant-2", name: "Assistant #2", threadId: threadFor("assistant-2"), rules: [] },
