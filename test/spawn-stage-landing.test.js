@@ -116,8 +116,8 @@ async function panel(t) {
   });
   // The tree a stage runs in, cut the way the panel cuts one: from the checkout's own branch, which is `main`, so the
   // parent's paragraph WOULD say "push it and open a pull request" for anything that gets it.
-  const cutTree = async (prompt) => {
-    const job = await jobs.create({ prompt, cwd: project.path, existing: false, project: project.name, branchPolicy: "allow", remote: "github" });
+  const cutTree = async (prompt, { turnover = null } = {}) => {
+    const job = await jobs.create({ prompt, cwd: project.path, existing: false, project: project.name, branchPolicy: "allow", remote: "github", ...(turnover ? { turnoverBranch: turnover } : {}) });
     return { path: job.worktreePath, branch: job.branch || null };
   };
   const stageOf = (id) => PING_PONG.stages.find((stage) => stage.id === id);
@@ -171,13 +171,16 @@ test("a pr stage keeps its push and PR, and an ordinary worker is briefed by its
   assert.doesNotMatch(prBody, /is not a pull request/, "and never the local-only stage paragraph");
 
   // An ordinary worker - no stage, no flag - is briefed by the KIND its tree was cut with. The cut's own brief names
-  // code, so the tree is an implementation tree: its paragraph is the local landing, never the PR one.
-  const other = await p.cutTree("cut an ordinary tree to fix the failing test");
+  // code, so the tree is an implementation tree: its paragraph is the local landing into its turnover branch, never
+  // the PR one. Implementation lives on a turnover branch (the reader's rule), so the branch is made first.
+  const TURNOVER = "20261128_1200_DEMO-9_the_feature";
+  execFileSync("git", ["-C", p.project.path, "branch", TURNOVER], { stdio: "ignore" });
+  const other = await p.cutTree("cut an ordinary tree to fix the failing test", { turnover: TURNOVER });
   await p.assistant.startSpawn({ target: other.path, existing: true, project: p.project.name, prompt: "keep going", branch: other.branch }, { source: "assistant" });
   const plain = p.gw.last();
   assert.match(plain, /This is an implementation tree/, `an ordinary worker is briefed by its kind:\n${plain}`);
-  assert.match(plain, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
-  assert.match(plain, /do not push/);
+  assert.match(plain, new RegExp("merge it into `" + TURNOVER + "` LOCALLY"));
+  assert.match(plain, /Do not push/);
   assert.doesNotMatch(plain, /gh pr create|push it and open a pull request/);
   assert.doesNotMatch(plain, /is not a pull request/);
 });
