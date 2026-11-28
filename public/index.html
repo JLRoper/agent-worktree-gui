@@ -1619,6 +1619,14 @@
        declares only, so that order costs nothing and nothing here waits on boot. The delegated presses that open the
        dialog and the lift stay in app.js with the page's other load-time wiring. -->
   <script src="/board/worktrees.js"></script>
+  <!-- The merge control, its chooser and the row's own cells, out of app.js (cut 5 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the UNMERGED chip and the label that
+       says a merge agent already works that tree, the verdict badge, the chooser between a rebase and a merge into the
+       parent, start-merge, and the row's branch, base, ahead/behind, PR and owner cells. Loaded before app.js, which
+       calls them by bare name and re-exports them on window.WMApp.merge; it declares only, so that order costs nothing
+       and nothing here waits on boot. The delegated presses that open the chooser stay in app.js with the page's other
+       load-time wiring. -->
+  <script src="/board/merge.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

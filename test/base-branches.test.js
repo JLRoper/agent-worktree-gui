@@ -268,8 +268,10 @@ test("a single-branch project is untouched: origin/main is the base and its coun
 
 // The chip beside the branch, read out of the page and run with no browser (the shape test/branch-cell.test.js uses).
 // The rule is the one the board rests on: a row measured against the project's single base stays as quiet as it was,
-// and only a row with a base of its own - or one whose base is missing - says so.
-const appSrc = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// and only a row with a base of its own - or one whose base is missing - says so. The branch cell moved out of app.js
+// into public/board/merge.js (cut 5 of the eight in docs/reports/module-separation-2026-11-28.html), so the region is
+// read from the file that carries it.
+const appSrc = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 const cellCode = sliceRegion(appSrc, "branch cell");
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 // The branch NAME is drawn by public/core/branch-link.js (shared with the Initiatives tab), so the slice runs with
