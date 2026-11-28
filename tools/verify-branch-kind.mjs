@@ -24,7 +24,7 @@
 //      the header and every cell away while the verdict cell keeps reading the badge alone, and checking it again
 //      brings both back - so the mark is not a cell that cannot be hidden
 //   5. the confirm: Enter opens it under that row, the keyboard rests on Cancel, the sentence says the one thing the
-//      lift does (the tree's push stops meeting the research refusal), and Escape closes it back onto R
+//      lift does (the tree's push stops being parked on the permission card), and Escape closes it back onto R
 //   6. the refusal: a branch with no record answers the real route with its 404 and the page draws that sentence in
 //      the confirm and the banner - not a silent no-op
 //   7. THE LIFT STILL WORKS FROM THE NEW COLUMN: pressing it writes lifted:true on the record (read back from the FILE
@@ -33,7 +33,8 @@
 //      research
 //   8. the Worktrees tab draws the same pair, and its R is the same button
 //   9. the cut dialog still offers exactly the two kinds from GET /api/branch-kinds, pre-selects NEITHER, and a cut
-//      that picks turnover records kind:turnover with the parent it was cut from - the recording path is unchanged
+//      that picks implementation records kind:implementation with the parent it was cut from and draws the UNLIFTED
+//      I that the lift turns into T - the recording path and both letters are unchanged
 //  10. no page errors
 //  11. the four rows the landing note photographs (research, turnover, a landed MERGED row, the lifted row) are shot
 //      at 1440x900 AND at 768 wide, so a narrow board is proved too
@@ -161,12 +162,12 @@ try {
   ok("the scan found the research tree, the turnover child, the landed tree and the parent they were cut from", Boolean(researchRow && childRow && landedRow && parentRow));
   const fields = (r) => [r?.branchKind, r?.branchKindLabel, r?.branchKindLifted, r?.branchKindParent];
   check("the research tree carries the kind its cut recorded", fields(researchRow), ["research", "research tree", false, "main"]);
-  check("the turnover child carries its own kind and the parent it was cut from", fields(childRow), ["turnover", "turnover child", false, fx.suffixes.parent]);
+  check("the turnover tree carries its own kind and the parent it was cut from", fields(childRow), ["turnover", "turnover tree", false, fx.suffixes.parent]);
   ok("a row with no record carries no kind field at all, not a guessed third kind", !("branchKind" in parentRow) && !("branchKindLifted" in parentRow), JSON.stringify(Object.keys(parentRow || {}).filter((k) => k.startsWith("branchKind"))));
   check("the landed tree's verdict reads MERGED, so its badge carries words to clip", String(landedRow?.verdict || "").startsWith("MERGED"), true);
   const kinds = await getJson("/api/branch-kinds");
-  check("GET /api/branch-kinds still answers exactly the closed vocabulary", kinds.body.kinds, ["turnover", "research"]);
-  check("... and still offers the two cut choices to the dialog", (kinds.body.choices || []).map((c) => c.value), ["turnover", "research"]);
+  check("GET /api/branch-kinds offers exactly the two kinds a cut may make", kinds.body.kinds, ["research", "implementation"]);
+  check("... and still offers the two cut choices to the dialog", (kinds.body.choices || []).map((c) => c.value), ["research", "implementation"]);
 
   // ---- the browser ---------------------------------------------------------------------------
   browser = await pw.chromium.launch({ headless: true }).catch(async (err) => {
@@ -288,7 +289,7 @@ try {
   const child = await markState(CHILD);
   check("the turnover row draws T in td.kind", [child.text, child.inKind, child.inVerdict, child.inName], ["T", true, false, false]);
   check("...as a statement, not a control: a turnover child already has a destination", [child.markTag, child.role], ["span", "img"]);
-  ok("...with an accessible name of its own", /turnover child/i.test(child.aria), child.aria);
+  ok("...with an accessible name of its own", /turnover tree/i.test(child.aria), child.aria);
   ok("...and no button in the column", !child.isButton);
   check("the turnover verdict cell is the badge alone too", [child.verdictMarks, child.verdictText], [0, child.badgeText]);
   ok("the turnover name is drawn whole too", child.nameWhole, `${child.nameText}, ${child.nameWidth}px`);
@@ -318,7 +319,7 @@ try {
       text: (l?.textContent || "").replace(/\s+/g, " ").trim(),
     };
   });
-  ok("the chart's legend decodes both letters", legend.hasT && legend.hasR && /turnover child/.test(legend.text) && /research tree/.test(legend.text), legend.hasT && legend.hasR ? "T and R in the legend" : "missing");
+  ok("the chart's legend decodes both letters", legend.hasT && legend.hasR && /turnover tree/.test(legend.text) && /research tree/.test(legend.text), legend.hasT && legend.hasR ? "T and R in the legend" : "missing");
   ok("...and names the column they live in, rather than the verdict cell", /the kind column/i.test(legend.text) && !/verdict cell/i.test(legend.text), legend.text.slice(0, 140));
 
   // ---- 3. THE COLUMN IS A SWITCH, in the same panel as every other column ----------------------
@@ -445,7 +446,7 @@ try {
     };
   });
   ok("Enter opens the lift question under that row", Boolean(confirm && confirm.underResearch));
-  ok("... it says the one thing the lift does: the tree's push stops meeting the research refusal", /the tree's push stops meeting the research refusal/i.test(confirm?.text || ""), confirm?.text?.slice(0, 120));
+  ok("... it says the one thing the lift does: the tree's push stops being parked on the permission card", /the tree's push stops being parked on the permission card/i.test(confirm?.text || ""), confirm?.text?.slice(0, 120));
   ok("... and that nothing is pushed and no branch moves", /nothing is pushed and no branch moves/i.test(confirm?.text || ""));
   ok("... the two answers are Cancel and Lift", confirm?.cancel && confirm?.lift);
   ok("... and the keyboard rests on Cancel, not on Lift", confirm?.focus === "Cancel", confirm?.focus);
@@ -527,6 +528,9 @@ try {
   await shoot(page, RESEARCH, "lifted-row");
 
   // ---- 8. the cut dialog still records the kind the same way ------------------------------------
+  // A cut makes research or implementation and NEVER turnover (lib/branch-kind.js CHILD_KINDS). This section chooses
+  // IMPLEMENTATION, which is also the one row the rest of the gate does not have: an UNLIFTED I, the letter the column
+  // keeps while the tree is local only.
   await page.locator(`${PARENT} [data-child-tree]`).click();
   const dialog = await waitFor(
     async () => {
@@ -540,23 +544,23 @@ try {
     },
     { timeoutMs: 15_000, what: "the cut dialog" },
   );
-  check("the cut dialog offers exactly the two kinds GET /api/branch-kinds answers with", dialog?.opts.map((o) => o.kind), ["turnover", "research"]);
+  check("the cut dialog offers exactly the two kinds GET /api/branch-kinds answers with", dialog?.opts.map((o) => o.kind), ["research", "implementation"]);
   ok("... pre-selecting neither, so a cut still records only what the reader chose", dialog?.opts.every((o) => !o.checked), JSON.stringify(dialog?.opts.map((o) => o.checked)));
   ok("... with a name field and a Cut button", dialog?.hasName && dialog?.hasGo);
   await shoot(page, ".cut-dialog", "cut-dialog");
-  await page.locator('.cut-dialog label:has(input[name="cut-kind"][value="turnover"])').click();
-  const chosen = await page.evaluate(() => document.querySelector('.cut-dialog input[name="cut-kind"][value="turnover"]')?.checked === true);
-  ok("... and the turnover card is the one chosen", chosen);
-  await page.locator(".cut-dialog .cut-name").fill("a-new-turnover-child");
+  await page.locator('.cut-dialog label:has(input[name="cut-kind"][value="implementation"])').click();
+  const chosen = await page.evaluate(() => document.querySelector('.cut-dialog input[name="cut-kind"][value="implementation"]')?.checked === true);
+  ok("... and the implementation card is the one chosen", chosen);
+  await page.locator(".cut-dialog .cut-name").fill("a-new-implementation-child");
   await page.locator(".cut-dialog .cut-go").click();
   const cutRow = await waitFor(
     async () => {
       const st = await stateNow();
-      return rowsOf(st).find((r) => String(r.path || "").replace(/\\/g, "/").toLowerCase().includes("a-new-turnover-child")) || false;
+      return rowsOf(st).find((r) => String(r.path || "").replace(/\\/g, "/").toLowerCase().includes("a-new-implementation-child")) || false;
     },
     { timeoutMs: 120_000, what: "the cut tree's row" },
   );
-  ok("a cut that chose turnover is recorded and drawn as a turnover child", cutRow && cutRow.branchKind === "turnover" && cutRow.branchKindParent === fx.suffixes.parent, cutRow ? `${cutRow.branchKind} from ${cutRow.branchKindParent}` : "no row");
+  ok("a cut that chose implementation is recorded as implementation from the turnover parent", cutRow && cutRow.branchKind === "implementation" && cutRow.branchKindParent === fx.suffixes.parent, cutRow ? `${cutRow.branchKind} from ${cutRow.branchKindParent}` : "no row");
   // The cut's write is queued (lib/jobs.js `saveParents`, `writeFileQueued`), so read until the record is on disk.
   const cutTail = String(cutRow?.path || "").replace(/\\/g, "/").toLowerCase();
   let cutEntry = null;
@@ -569,13 +573,13 @@ try {
     { timeoutMs: 10_000, what: "the cut's record on disk" },
   );
   ok("... the book on disk gained the record the cut always wrote", cutWritten, cutEntry ? JSON.stringify({ kind: cutEntry.kind, parent: cutEntry.parent }) : `keys: ${Object.keys(JSON.parse(readFileSync(bookFile, "utf8"))).join(", ")}`);
-  // `lifted` is only written when true (lib/jobs.js `rememberParent`), so absent IS false for a turnover child.
-  check("... with the kind the dialog chose, the parent it was cut from, and not lifted", [cutEntry?.kind, cutEntry?.parent, Boolean(cutEntry?.lifted)], ["turnover", fx.suffixes.parent, false]);
+  // `lifted` is only written when true (lib/jobs.js `rememberParent`), so absent IS false for a fresh cut.
+  check("... with the kind the dialog chose, the parent it was cut from, and not lifted", [cutEntry?.kind, cutEntry?.parent, Boolean(cutEntry?.lifted)], ["implementation", fx.suffixes.parent, false]);
   const cutMark = cutRow ? await waitFor(async () => {
     const st = await markState(`tr.row[data-key*="${String(cutRow.path).split("/").pop()}"]`);
-    return st && st.text === "T" && st.inKind ? st : false;
-  }, { timeoutMs: 20_000, what: "the new row's T" }) : null;
-  ok("... and the new row draws T in the Kind column without a reload", Boolean(cutMark), cutMark ? cutMark.text : "none");
+    return st && st.text === "I" && st.inKind && st.isButton ? st : false;
+  }, { timeoutMs: 20_000, what: "the new row's unlifted I" }) : null;
+  ok("... and the new row draws I, still a button that lifts it, without a reload", Boolean(cutMark), cutMark ? `${cutMark.text}, ${cutMark.markTag}` : "none");
 
   ok("no page errors", pageErrors.length === 0, pageErrors.join(" | "));
 
