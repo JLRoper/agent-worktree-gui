@@ -1688,8 +1688,12 @@
        THE ROW is its own file now (entry 8 of docs/reports/module-separation-2026-11-28.html's split plan):
        the pane's state, the row and its head, the chips, the agents under a task and the reader's order. It is
        loaded FIRST of the queue's files because /queue-cards.js builds it when its own factory is called; it
-       declares one factory and no page names, so the order among these files is all that matters. -->
+       declares one factory and no page names, so the order among these files is all that matters.
+
+       THE DRAG is next: the pointer gesture, its record and the pane's edge crawl. It reads the row cut and the
+       card cut by name, so it is built last; here it only has to load before /queue-cards.js. -->
   <script src="/board/queue-row.js"></script>
+  <script src="/board/queue-drag.js"></script>
   <script src="/queue-cards.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
