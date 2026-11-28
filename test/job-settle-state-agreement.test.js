@@ -165,9 +165,10 @@ test("a settled run reads done on /api/jobs AND /api/state, and the turn head sa
 
   // THE SETTLE, through the gateway's own terminal event. No polling trick, no direct store call.
   stub.finish();
+  const settleDeadline = Date.now() + 20_000;
   let settledJobs = null;
   let settledState = null;
-  while (Date.now() < deadline) {
+  while (Date.now() < settleDeadline) {
     settledJobs = await jobOf(panel.base, id);
     if (settledJobs && settledJobs.status !== "running") {
       // Taken in the same breath as the jobs read that proved the settle: this is the pair the reader compared.
