@@ -1,0 +1,247 @@
+{
+ "rev": "623f386458c545827a9bc3350bfc861310175299",
+ "before": "HEAD with the cut undone (623f386458c545827a9bc3350bfc861310175299:public/style.css restored, sheets removed)",
+ "after": "this tree",
+ "selfProof": [
+  {
+   "pane": "board-table",
+   "elements": 778,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 438,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "console",
+   "elements": 68,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 33,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "queue-cards",
+   "elements": 174,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 109,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "assistant-float",
+   "elements": 295,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 165,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "initiatives",
+   "elements": 49,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 33,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "settings",
+   "elements": 1652,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 1030,
+   "textDiffer": [],
+   "maxDelta": 0
+  }
+ ],
+ "delta": [
+  {
+   "pane": "board-table",
+   "elements": 778,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 438,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "console",
+   "elements": 68,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 33,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "queue-cards",
+   "elements": 174,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 109,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "assistant-float",
+   "elements": 295,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 165,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "initiatives",
+   "elements": 49,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 33,
+   "textDiffer": [],
+   "maxDelta": 0
+  },
+  {
+   "pane": "settings",
+   "elements": 1652,
+   "boxesDiffer": [],
+   "missing": [],
+   "extra": [],
+   "texts": 1030,
+   "textDiffer": [],
+   "maxDelta": 0
+  }
+ ],
+ "cssom": {
+  "before": [
+   {
+    "href": "style.css?v=d23fa20e8945",
+    "rules": 2992
+   },
+   {
+    "href": "chart.css?v=d23fa20e8945",
+    "rules": 244
+   },
+   {
+    "href": "core/pipeline-card.css?v=d23fa20e8945",
+    "rules": 51
+   },
+   {
+    "href": "core/task-card.css?v=d23fa20e8945",
+    "rules": 16
+   },
+   {
+    "href": "",
+    "rules": 9
+   }
+  ],
+  "after": [
+   {
+    "href": "base.css?v=c0d525b9cfb3",
+    "rules": 13
+   },
+   {
+    "href": "chrome.css?v=c0d525b9cfb3",
+    "rules": 60
+   },
+   {
+    "href": "settings.css?v=c0d525b9cfb3",
+    "rules": 272
+   },
+   {
+    "href": "board.css?v=c0d525b9cfb3",
+    "rules": 198
+   },
+   {
+    "href": "jobs.css?v=c0d525b9cfb3",
+    "rules": 82
+   },
+   {
+    "href": "console.css?v=c0d525b9cfb3",
+    "rules": 263
+   },
+   {
+    "href": "turns.css?v=c0d525b9cfb3",
+    "rules": 64
+   },
+   {
+    "href": "rows.css?v=c0d525b9cfb3",
+    "rules": 181
+   },
+   {
+    "href": "overlays.css?v=c0d525b9cfb3",
+    "rules": 286
+   },
+   {
+    "href": "rowstrips.css?v=c0d525b9cfb3",
+    "rules": 133
+   },
+   {
+    "href": "boardchips.css?v=c0d525b9cfb3",
+    "rules": 109
+   },
+   {
+    "href": "assistant.css?v=c0d525b9cfb3",
+    "rules": 98
+   },
+   {
+    "href": "feedback.css?v=c0d525b9cfb3",
+    "rules": 221
+   },
+   {
+    "href": "assistant-panes.css?v=c0d525b9cfb3",
+    "rules": 126
+   },
+   {
+    "href": "initiatives.css?v=c0d525b9cfb3",
+    "rules": 382
+   },
+   {
+    "href": "panes.css?v=c0d525b9cfb3",
+    "rules": 120
+   },
+   {
+    "href": "queue.css?v=c0d525b9cfb3",
+    "rules": 76
+   },
+   {
+    "href": "pipeline.css?v=c0d525b9cfb3",
+    "rules": 261
+   },
+   {
+    "href": "late.css?v=c0d525b9cfb3",
+    "rules": 47
+   },
+   {
+    "href": "chart.css?v=c0d525b9cfb3",
+    "rules": 244
+   },
+   {
+    "href": "core/pipeline-card.css?v=c0d525b9cfb3",
+    "rules": 51
+   },
+   {
+    "href": "core/task-card.css?v=c0d525b9cfb3",
+    "rules": 16
+   },
+   {
+    "href": "",
+    "rules": 9
+   }
+  ]
+ }
+}

@@ -1,0 +1,428 @@
+/* public/settings.css
+   Settings and its dialogs.
+
+   The Settings popover: its head and tab strip, the Board, Prompt, Skills and Permissions tabs, the release
+   notes, the row glossary and the three prompt budget diagrams. Every rule is scoped to the drawer or to a
+   control the drawer owns; the `.hidden` utility is here because the drawer's markup is where it first sat.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* settings panel: a small popover under the top bar */
+/* A fixed panel with a scrolling body: the head stays put (and the close button with it) however far down the
+   reader is. The body owns the scrollbar so the rounded border is never clipped by it. One tab's rows can be 18
+   rows deep, so the window opens at a fixed box (520px, or the room there is) instead of growing to the tallest
+   tab's content and covering the board; the body scrolls what does not fit, and the corner grip is how the reader
+   asks for more. */
+.settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; height: min(520px, calc(100vh - 90px)); max-height: calc(100vh - 90px); display: flex; flex-direction: column; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; overflow: hidden; }
+/* The body owns the scrollbar. Both spellings are set: Chrome 121+ honours scrollbar-width/color and ignores the
+   ::-webkit- rules, older Chromium is the other way round, and Firefox only knows the standard pair. */
+/* Its own scroll pane: nothing in Settings grows under the reader the way the board does, and native anchoring
+   would pick an element of its own and move the pane while the reader is setting a value. */
+.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; overflow-anchor: none; }
+.settings-body::-webkit-scrollbar { width: 10px; }
+.settings-body::-webkit-scrollbar-track { background: var(--panel); }
+.settings-body::-webkit-scrollbar-thumb { background: #39424f; border: 2px solid var(--panel); border-radius: 999px; }
+.settings-body::-webkit-scrollbar-thumb:hover { background: #4b5666; }
+.settings-head { display: flex; align-items: center; gap: 8px; flex: none; margin: 0; padding: 12px 14px 9px; border-bottom: 1px solid var(--line); background: var(--panel); cursor: grab; }
+/* The panel is a WINDOW: its head is the bar a drag starts from — a press on one of the controls in it stays that
+   control's, which the script checks on the target — and the corner grip is the one place a resize starts. Both say
+   so with their cursor, and a gesture in progress is what stops the drag selecting the panel's own text. */
+.settings-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; border-bottom-right-radius: 8px; color: var(--dimmer); cursor: nwse-resize; touch-action: none; }
+.settings-grip::before { content: ""; position: absolute; right: 3px; bottom: 3px; width: 9px; height: 9px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; border-top-right-radius: 1px; }
+.settings-grip::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 4px; height: 4px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; }
+.settings-grip:hover { color: var(--dim); background: var(--surface); }
+.settings.is-moving, .settings.is-sizing { user-select: none; }
+.settings.is-moving .settings-head { cursor: grabbing; }
+/* The strip: one tab per group, in the markup's own order. It WRAPS rather than scrolls, so every section is
+   reachable without a horizontal gesture in a window the reader may have narrowed; the selected tab is the one
+   Tab stop (roving tabindex), and the arrows walk the strip. */
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 1px; flex: none; padding: 6px 9px 0; border-bottom: 1px solid var(--line); background: var(--panel); }
+.settings-tab { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 5px 8px; min-height: 26px; border: 0; border-bottom: 2px solid transparent; border-radius: 5px 5px 0 0; background: transparent; color: var(--dimmer); font: 11.5px var(--mono); letter-spacing: .02em; text-transform: uppercase; cursor: pointer; user-select: none; }
+.settings-tab:hover { color: var(--dim); background: var(--surface); }
+.settings-tab:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.settings-tab[aria-selected="true"] { color: var(--text); border-bottom-color: #4a90d9; }
+/* The per-tab match count the search hangs on the tab: the number of rows on THAT tab that answer the query. */
+.settings-tab-count { font-size: 10.5px; letter-spacing: 0; color: #46505f; }
+.settings-tab[aria-selected="true"] .settings-tab-count { color: var(--dim); }
+.settings-tab-count[hidden] { display: none; }
+/* One panel at a time, and the attribute is the whole state: the markup ships the six other tabs `hidden`, so a
+   frame the script has not reached yet still shows the Display panel rather than all seven. */
+.settings-group { padding-top: 12px; }
+.settings-group[hidden] { display: none; }
+/* The search box sits in the fixed head, so it is on screen whichever tab is open — and it is the panel's first
+   control (it takes the focus when the panel opens). */
+.settings-head input[type="search"] { flex: 0 1 240px; min-width: 76px; margin-left: 4px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); cursor: text; }
+.settings-head input[type="search"]::placeholder { color: var(--dimmer); }
+/* One clear control, not two: the panel's own ✕ answers Esc, so the browser's built-in one is hidden. */
+.settings-head input[type="search"]::-webkit-search-cancel-button { display: none; }
+.settings-head input[type="search"]:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.settings-head #btn-settings-search-clear[hidden] { display: none; }
+/* A search hides what does not answer it by class alone — on every tab, so no markup is swapped out from under a
+   click or a keypress while the reader is typing. */
+.settings-group .search-hidden { display: none; }
+/* Matched text is painted by the CSS Custom Highlight API over the row's own text nodes, so a keystroke costs no
+   re-render: every control in a matching row keeps its value, its focus and its half-typed number. */
+::highlight(settings-search-match) { background: #3d5372; color: #f2f6fb; }
+/* The read-now pair: one row, two buttons, pushed right like every other row's control. */
+.settings-act { margin-left: auto; display: flex; gap: 6px; }
+.settings-info { margin-left: 2px; font-size: 10px; color: #46505f; cursor: help; }
+.settings-row:hover .settings-info { color: var(--dim); }
+.settings-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); }
+.settings-head .spacer { flex: 1; }
+.settings-head button { padding: 1px 6px; font-size: 11px; }
+.settings-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--dim); }
+.settings-row.settings-gap { margin-top: 12px; }
+.settings-row select { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-preview { margin-top: 10px; padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 13px; color: var(--text); }
+
+/* ---- Settings > the row glossary: what a letter or a chip means, in prose -------------------------------------
+   Reading, not setting. A block follows the heading row that names it, so the settings search treats it the way it
+   treats a preview strip: it travels with the row above and is hidden when that row does not answer. The panel is
+   340 px wide until it is dragged, so every long token (a route, a branch shape) wraps instead of widening the
+   window, and the prose is the panel's own reading size rather than a tooltip's. The T and R marks keep the chart's
+   `.kind-mark` ink; only their cell margins are dropped, so the letter reads as part of the line rather than a cell. */
+.settings-glossary { margin: 4px 0 2px; padding: 2px 0 2px 10px; border-left: 2px solid #232c38; font-size: 12px; line-height: 1.55; color: var(--dim); overflow-wrap: anywhere; }
+.settings-glossary p { margin: 6px 0 0; }
+.settings-glossary-say { color: var(--dim); }
+.settings-glossary dl { margin: 2px 0 0; }
+.settings-glossary dt { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px; margin-top: 9px; font: 12px var(--mono); color: var(--text); }
+.settings-glossary dd { margin: 3px 0 0; }
+.settings-glossary .kind-mark { margin-right: 1px; vertical-align: 0; }
+
+/* ---- Settings > Prompt: three box-in-box budget diagrams ------------------------------------
+   The outer box is the whole prompt, the two inside it are its carriers (system text and turn text),
+   and each section is a box inside its carrier whose BAR is its share of the turn. The window is a
+   340px popover, so the three diagrams stack; at a wider drag they still wrap rather than scroll. */
+.prompt-summary { margin-top: 10px; font-size: 12px; line-height: 1.5; }
+.prompt-summary.bad { border-color: var(--red); color: var(--red); }
+.prompt-legend { margin-top: 10px; border-color: #232c38; color: var(--dimmer); font-size: 11px; line-height: 1.55; }
+.prompt-legend[hidden] { display: none; }
+.prompt-diagrams { display: grid; gap: 12px; margin-top: 12px; }
+.prompt-diagram { border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 8px; }
+.prompt-diagram-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.prompt-diagram-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.prompt-diagram-total { flex: none; font-size: 10.5px; color: var(--dim); }
+.prompt-diagram-note { margin-top: 6px; font-size: 10.5px; line-height: 1.45; color: var(--dimmer); }
+.prompt-box { border: 1px solid #2c3645; border-radius: 7px; background: var(--surface); padding: 6px; }
+.prompt-box-head { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 5px; font: 9.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--dimmer); }
+.prompt-half { border: 1px dashed #2e3a4a; border-radius: 6px; padding: 5px 6px 6px; margin-top: 6px; }
+.prompt-half[data-prompt-half="system"] { border-color: #2f4159; }
+.prompt-half[data-prompt-half="turn"] { border-color: #453c2a; }
+.prompt-half-head { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; font-size: 10px; color: var(--dim); }
+.prompt-section { margin-top: 4px; border: 1px solid #232c38; border-radius: 4px; padding: 3px 4px 4px; background: #121821; }
+.prompt-section-head { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--dim); }
+.prompt-section-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-section-share { flex: none; color: var(--dimmer); font-size: 9.5px; }
+.prompt-track { height: 4px; margin-top: 3px; border-radius: 2px; background: #0b0f14; overflow: hidden; }
+.prompt-fill { display: block; height: 100%; border-radius: 2px; background: var(--blue); }
+.prompt-half[data-prompt-half="turn"] .prompt-fill { background: var(--violet); }
+.prompt-section[data-prompt-section="rules"] .prompt-fill { background: #2ea043; }
+.prompt-section[data-prompt-section="notes"] .prompt-fill { background: #8b7bd8; }
+.prompt-section[data-prompt-section="projects"] .prompt-fill { background: #5b8def; }
+.prompt-section[data-prompt-section="queue"] .prompt-fill { background: var(--amber); }
+.prompt-section[data-prompt-section="board"] .prompt-fill { background: var(--green); }
+.prompt-section[data-prompt-section="charter"] .prompt-fill { background: var(--violet); }
+.prompt-section.is-gated { border-style: dashed; }
+.prompt-section.is-gated .prompt-track { background: repeating-linear-gradient(90deg, #1c2531 0 3px, transparent 3px 6px); }
+.prompt-section.is-gated .prompt-fill { display: none; }
+/* ---- Settings > Prompt: the tab as documentation -------------------------------------------------
+   The tab is a page to READ, not a row of controls: a key, an A-to-Z of its own words, the diagrams
+   beside the text that explains them, and the worker briefs. It is read in a window the reader may
+   widen, so the two-column layouts key off the PANEL's width (a container query named promptdoc), not
+   the browser's: at the 340px default the page is one column, and a wide window puts each chart beside
+   its note and each term beside its definition. */
+[data-settings-group="prompt"] { container-type: inline-size; container-name: promptdoc; }
+/* A doc block is a child the tab's search can find (paintSettingsRows walks the panel's children and
+   counts .settings-row), but it is not a control row: the flex layout is undone below. Both halves of
+   the selector are :where() so this lands at the weight of `.settings-row` itself (and no higher), which
+   leaves every component rule below free to give a block its own display; the :not() keeps it off a
+   block the search has hidden, so `.settings-group .search-hidden { display: none }` stays the winner. */
+:where([data-settings-group="prompt"]) :where(.prompt-doc-block.settings-row):not(.search-hidden) { display: block; }
+.prompt-doc-title { margin: 2px 0 4px; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--text); }
+.prompt-doc-lede { margin: 0 0 10px; max-width: 78ch; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.prompt-toc { display: grid; gap: 2px; margin: 0 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.prompt-toc a { display: block; padding: 2px 0; font-size: 12px; line-height: 1.4; color: var(--blue); text-decoration: none; }
+.prompt-toc a:hover, .prompt-toc a:focus-visible { text-decoration: underline; }
+.prompt-toc-n { display: inline-block; min-width: 14px; margin-right: 6px; font: 10px var(--mono); color: var(--dimmer); }
+.prompt-doc-h { margin: 16px 0 6px; padding-top: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--text); border-top: 1px solid var(--line); scroll-margin-top: 4px; }
+.prompt-doc-h4 { margin: 10px 0 3px; font-size: 11.5px; font-weight: 600; color: var(--text); }
+[data-settings-group="prompt"] p, [data-settings-group="prompt"] li { margin: 0 0 6px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.prompt-doc-note { margin: 0 0 8px; font-size: 11.5px; line-height: 1.45; color: var(--dimmer); }
+[data-settings-group="prompt"] code { font: 10.5px var(--mono); color: var(--text); background: #0f141b; border: 1px solid #232c38; border-radius: 3px; padding: 0 3px; }
+.prompt-doc-list { margin: 2px 0 0; padding-left: 16px; }
+.prompt-doc-list li { margin: 3px 0; }
+.prompt-key { display: grid; gap: 8px; margin: 0 0 4px; }
+.prompt-key-notes { display: grid; gap: 8px 12px; }
+.prompt-key-card { margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.prompt-key-card[data-prompt-half="system"] { border-left: 3px solid var(--blue); }
+.prompt-key-card[data-prompt-half="turn"] { border-left: 3px solid var(--violet); }
+.prompt-key-card p { margin: 0; }
+.prompt-key-card .prompt-key-name { margin: 0 0 3px; font-size: 11.5px; font-weight: 600; color: var(--text); }
+.prompt-def { margin: 0 0 6px; padding: 7px 9px; border: 1px solid #232c38; border-radius: 6px; background: var(--surface); }
+.prompt-def .prompt-def-term { margin: 0 0 3px; font-size: 12px; font-weight: 600; color: var(--text); }
+.prompt-def .prompt-def-says { margin: 0; max-width: 78ch; }
+.prompt-box-chip { display: inline-block; margin-left: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; font: 9.5px/15px var(--mono); font-weight: 400; color: var(--dim); white-space: nowrap; vertical-align: 1px; }
+.prompt-box-chip[data-prompt-box="system"] { color: var(--blue); border-color: #2f4159; }
+.prompt-box-chip[data-prompt-box="turn"] { color: var(--violet); border-color: #453c2a; }
+.prompt-brief { margin: 0 0 6px; padding: 8px 9px; border: 1px solid #232c38; border-radius: 6px; background: var(--surface); }
+.prompt-brief .prompt-brief-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0 0 4px; }
+.prompt-brief-marker { font: 11.5px var(--mono); font-weight: 600; letter-spacing: .04em; color: var(--text); }
+.prompt-brief-when { font: 10px var(--mono); color: var(--dimmer); }
+.prompt-brief .prompt-brief-says { margin: 0 0 4px; }
+.prompt-brief .prompt-brief-from { margin: 0; font-size: 10px; line-height: 1.5; color: var(--dimmer); }
+/* The diagram's own text: the model's sentence about the turn and the page's sentence about why it is
+   that size, beside the picture they explain once the window has the room for two columns. */
+.prompt-diagram-body { display: grid; gap: 8px; }
+.prompt-diagram-side { border-left: 2px solid #2a3340; padding-left: 8px; }
+.prompt-diagram-side .prompt-diagram-note { margin: 0; }
+.prompt-diagram-side .prompt-diagram-why { margin: 4px 0 0; font-size: 10px; line-height: 1.45; color: var(--dim); }
+.prompt-diagram-head { margin-bottom: 6px; }
+@container promptdoc (min-width: 620px) {
+  .prompt-key { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .prompt-key-notes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .prompt-diagram-body { grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr); align-items: start; }
+  .prompt-def { display: grid; grid-template-columns: 200px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+  .prompt-def .prompt-def-term { margin-bottom: 0; }
+  .prompt-def .prompt-def-term .prompt-box-chip { display: block; width: fit-content; margin: 4px 0 0; }
+  .prompt-brief { display: grid; grid-template-columns: 190px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+  .prompt-brief .prompt-brief-head { display: block; margin-bottom: 0; }
+  .prompt-brief-when { display: block; margin-top: 3px; }
+  .prompt-brief .prompt-brief-says, .prompt-brief .prompt-brief-from { grid-column: 2; }
+}
+/* The contrast slider, and a strip of the six layers it moves - each swatch reads the variable it changes, so
+   the preview is the setting, not a drawing of it. */
+.settings-row input[type="range"] { flex: 1; min-width: 0; height: 18px; accent-color: #4a90d9; }
+.settings-preview.contrast { display: flex; padding: 0; height: 24px; overflow: hidden; border-style: solid; }
+.settings-preview.contrast span { flex: 1; }
+/* The add-agent bar's own swatch: it IS the button, shrunk - the same five variables, so the preview is the setting. */
+.settings-preview.addbar {
+  display: flex; align-items: center; justify-content: center;
+  height: 26px; padding: 0; border-style: solid; border-radius: 6px;
+  border-color: var(--addbar-edge, #2c8148); background: var(--addbar, #215f35);
+  color: #fff; font: 700 14px/1 system-ui, sans-serif;
+}
+.settings-note { display: none; }
+/* The approval window is the one setting in here that is not a browser preference: it is the
+   gateway's own approvals.timeout, written to its config.yaml, so it is styled as a form field with
+   an explicit Save rather than a picker that applies on change. */
+.settings-sep { height: 1px; margin: 14px 0 12px; background: var(--line); }
+.settings-row input[type="color"] { flex: none; width: 34px; height: 26px; padding: 1px 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.settings-row select.settings-size { flex: 0 0 96px; }
+/* The three text styles' previews are drawn FROM the variables the console reads, so each one IS the setting. */
+.settings-preview.sample-think { font: italic var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--think-color, #b3a8cc); }
+.settings-preview.sample-skill { font: var(--skill-font-size, var(--term-size))/1.5 var(--term); font-weight: var(--term-weight); color: var(--skill-color, var(--con-color, var(--dim))); }
+.settings-preview.sample-console { font: var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
+/* The console's row spacing, drawn on the row that sets it: three lines of console text at the reader's own size,
+   weight and colour, whose leading is the SAME variable a card's console reads. A preview that does not move with
+   the number beside it is decoration; this one is the console's own line box. */
+.settings-preview.sample-rows { font: var(--term-size)/var(--con-row-space, 1.5) var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
+.settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="url"], .settings-row input[type="password"], .settings-row input[type="text"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
+.settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
+.settings-unit { font-size: 11px; color: var(--dimmer); }
+/* Settings → Board > "Folders the board scans": one card per root, and an add row that uses the width it has.
+   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px - the row painted
+   `C:/CodeReviewsexists`), the ✕ sat 3.84 px off the chip, and the add field kept the UA's 154 px, so its
+   placeholder clipped to `an absolute folder pat` with 74 px of the row empty to the right of the button.
+   Scoped to the Board panel and kept at class weight with :where(), so `.settings-group .search-hidden
+   { display: none }` still wins over these `display` rules and a search that hides the block really hides it. */
+:where(#settings-panel-board) .settings-roots { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+:where(#settings-panel-board) .settings-root { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 2px 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+:where(#settings-panel-board) .settings-root-path { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
+:where(#settings-panel-board) .settings-root-chip { flex: none; padding: 0 6px; border: 1px solid #2c4a34; border-radius: 999px; background: #12251a; color: #7fd39a; font-size: 10px; line-height: 1.7; }
+:where(#settings-panel-board) .settings-root-chip.bad { border-color: #57262a; background: #2a1517; color: #ff9c94; }
+:where(#settings-panel-board) .settings-root-x { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--dimmer); font: 12px/1 var(--mono); cursor: pointer; }
+:where(#settings-panel-board) .settings-root-x:hover { background: var(--panel-2); color: var(--text); }
+:where(#settings-panel-board) .settings-root-empty { margin-top: 6px; font-size: 11.5px; color: var(--dimmer); }
+:where(#settings-panel-board) .settings-roots-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+:where(#settings-panel-board) .settings-roots-add input { flex: 1 1 auto; min-width: 0; box-sizing: border-box; height: 26px; padding: 4px 7px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: 11.5px var(--mono); }
+:where(#settings-panel-board) .settings-roots-add input::placeholder { color: var(--dimmer); }
+:where(#settings-panel-board) .settings-roots-add button { flex: none; box-sizing: border-box; height: 26px; white-space: nowrap; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+:where(#settings-panel-board) .settings-roots-add button:hover { border-color: #3b4757; }
+/* Settings → Updates > Release notes. One folded block per release, the newest open. The summary IS the heading a
+   reader scans — version, date, commit count — so a folded release still answers the three facts; the body is the
+   changelog's own group headings and bullets. `serving` marks the release this panel runs, which is the reader's
+   place in the list. */
+.release-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.release-notes-source { margin-top: 4px; font-size: 10.5px; color: var(--dimmer); overflow-wrap: anywhere; }
+.release-notes .release { border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); }
+.release-notes .release-head { display: flex; align-items: baseline; gap: 10px; padding: 6px 9px; cursor: pointer; list-style: none; font-size: 12px; color: var(--dim); user-select: none; }
+.release-notes .release-head::-webkit-details-marker { display: none; }
+.release-notes .release-head::before { content: "\25b8"; color: var(--dimmer); font-size: 9px; }
+.release-notes .release[open] > .release-head::before { content: "\25be"; }
+.release-notes .release-version { color: var(--text); font-weight: 600; }
+.release-notes .release-date, .release-notes .release-commits { font-size: 11px; color: var(--dimmer); }
+.release-notes .release-mark { margin-left: auto; padding: 1px 7px; border: 1px solid #2c8148; border-radius: 999px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #9fe0b4; }
+.release-notes .release-body { padding: 2px 9px 9px 24px; font-size: 12px; }
+.release-notes .release-group { margin: 8px 0 3px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--dimmer); }
+.release-notes .release-bullet { position: relative; padding: 2px 0 2px 12px; color: var(--text); overflow-wrap: anywhere; }
+.release-notes .release-bullet::before { content: "·"; position: absolute; left: 2px; color: var(--dimmer); }
+.release-notes .release-state { padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 12.5px; color: var(--text); }
+.release-notes .release-state.bad { border-color: #57262a; color: #ff9c94; }
+.release-notes-raw { margin-left: auto; font-size: 10.5px; color: var(--dimmer); text-decoration: none; }
+.release-notes-raw:hover { color: var(--text); text-decoration: underline; }
+/* A row's link out of the panel (the pipeline map): the same quiet mono as the unit beside it, with a dotted rule
+   that says "this leaves" rather than "this is a number". */
+.settings-link { color: var(--dim); text-decoration: none; border-bottom: 1px dotted var(--line); padding-bottom: 1px; }
+.settings-link:hover { color: var(--text); border-bottom-color: #8fb8ff; }
+.settings-link:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+/* The Matrix bridge's log tail: a `pre` so its own line breaks are the log's, capped and scrolling so forty
+   lines never grow the tab, and wrapping so one long line cannot push the panel sideways. */
+#matrix-log { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 168px; overflow: auto; font: 11px/1.5 var(--mono); color: var(--dim); }
+#matrix-script { overflow-wrap: anywhere; }
+.settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.settings-row button:hover { border-color: #3b4757; }
+.settings-row button:disabled { color: var(--dimmer); cursor: default; }
+.settings-row button.dirty { border-color: #6b4d16; background: var(--amber-bg); color: #ffd479; }
+/* The chart's ten column switches: two columns of small labels rather than one row that wraps mid-word, and a
+   checkbox first so the state is read the same way down the list. */
+.settings-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; margin-top: 8px; }
+.settings-cols label { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--dim); cursor: pointer; }
+.settings-cols label:hover { color: var(--text); }
+.settings-cols input { flex: none; accent-color: #4a90d9; }
+.settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+/* Settings → General: the preset strip under a number field is part of that field, not of the row below.
+   Rows carry no bottom margin, so one strip's 8 px above and 0 px below put the pills closer to the NEXT
+   field than to the one they set (app.js:12385 already filters a preset row with the row above it). The
+   strip now hugs its field and holds air below, and every pill is one equal segment of the strip, so
+   "5 s" and "1 min" cannot read as different-sized controls. Scoped to General: the other tabs' strips
+   were not captured and are left as they were. `:where()` keeps the selector at class weight, so the
+   search filter's `.settings-group .search-hidden { display: none }` still wins over this `display: grid`. */
+:where(#settings-panel-general) .settings-presets { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 2px 0 6px; }
+:where(#settings-panel-general) .settings-presets button { width: 100%; min-width: 0; padding: 1px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
+.settings-presets button:hover { color: var(--text); border-color: #3b4757; }
+.settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
+/* Settings → Branches > Remotes: one entry per project — the switch first so the state reads down the column, the
+   NAME and its REMOTE on the first line, the folder under them. 340 px cannot hold all three on one line, and the
+   remote is the half a reader checks before trusting the row: leaving it off the end of a squeezed path hid it. */
+.settings-remotes { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
+.settings-remotes .settings-remote { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 7px; align-items: center; padding: 3px 2px; border-radius: 5px; cursor: pointer; }
+.settings-remotes .settings-remote:hover { background: var(--surface); }
+.settings-remotes input { grid-column: 1; grid-row: 1 / span 2; margin: 0; accent-color: #4a90d9; }
+.settings-remote-name { grid-column: 2; grid-row: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-remote-remote { grid-column: 3; grid-row: 1; font-size: 10.5px; color: var(--dim); }
+.settings-remote-where { grid-column: 2 / span 2; grid-row: 2; font-size: 10.5px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-remote-empty { padding: 4px 2px; font-size: 11.5px; color: var(--dimmer); }
+.settings-preview.remotes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.45; }
+/* Settings → Repo: one collapsible block per remote repository. The section is the unit the reader thinks in
+   ("git.sefl.com/IT"), so its head carries the label, how many projects it governs and whether the force-override is
+   on; its body carries the two defaults, the toggle and the project list. The summary is the fold control and the
+   marker is drawn here (a platform marker inside a flex summary reads at the wrong size). */
+.settings-repos { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.settings-repo { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.settings-repo > summary { cursor: pointer; padding: 6px 8px; display: flex; align-items: center; gap: 6px; list-style: none; user-select: none; }
+.settings-repo > summary::-webkit-details-marker { display: none; }
+.settings-repo > summary::before { content: "\25b8"; color: var(--dimmer); font-size: 11px; }
+.settings-repo[open] > summary::before { content: "\25be"; }
+.settings-repo-name { font: 12px var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-repo-count { margin-left: auto; font-size: 10.5px; color: var(--dimmer); white-space: nowrap; }
+.settings-repo-force { font-size: 10px; color: #f0c674; border: 1px solid #4d3d12; background: var(--amber-bg); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.settings-repo-body { padding: 2px 8px 8px; }
+.settings-repo-body .settings-row { font-size: 11.5px; }
+.settings-repo-body .settings-row select { flex: 1 1 auto; min-width: 0; font-size: 11px; padding: 3px 5px; }
+.settings-repo-force-row { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 11.5px; color: var(--dim); cursor: pointer; }
+.settings-repo-force-row input { margin: 0; accent-color: #4a90d9; flex: none; }
+.settings-repo-force-row .settings-remote-name { white-space: normal; font-size: 11px; }
+.settings-repo-list { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10.5px; line-height: 1.45; margin-top: 6px; }
+.settings-preview.push-help { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.45; }
+.settings-preview.bad { border-color: #57262a; color: #ff9c94; }
+/* The assistant reset's answer is a LIST — one line per admission, watch and wake, and a keeps line under them — so
+   it is painted as pre-wrapped text: the default `normal` would fold every row into one paragraph and the dry run's
+   whole point is that its rows can be read one at a time. `overflow-wrap` keeps a long run/admission id inside the
+   box instead of widening it. */
+.settings-preview.reset { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The restart row carries THREE controls now — the two restarts and the reset pair (whose assistant, and the press).
+   At the panel's 340px a single line squeezed the select down to its caret and wrapped every button's label, so the
+   row wraps: the restarts keep the first line and the reset pair takes the next one. Each label stays on one line,
+   and the select keeps enough width to read the assistant it names. */
+#restart-row { flex-wrap: wrap; row-gap: 8px; }
+#restart-row button { white-space: nowrap; }
+#restart-row #reset-assistant { flex: 1 1 120px; min-width: 0; max-width: 180px; }
+#restart-row #btn-reset-assistant { flex: 0 1 auto; }
+/* ---- the Skills tab: a read-only inventory, grouped source -> category ------------------------------------
+   Two levels of folding: a source's heading (label, what kind of place it is, how many skills it holds) with the
+   path it reads and — for a junction — the target it points at, then one heading per category the skill's own
+   directory gives it, then a row per skill. The rows are no longer direct children of the panel (the settings
+   search's flat walk could only hide a whole pack at once), so the tab paints its own filter and its own counts:
+   every heading's number is the rows under it, filtered or not. Each skill's second line stays a
+   `.settings-preview`, the class the search treats as belonging to the row above it. The only controls in here are
+   the fold headings themselves — a skill is a file, and this window only reads it. */
+.skills-srcgroup { margin-top: 16px; }
+/* The tab's own bar, above the inventory: the window's one search, where the list it filters is. Ctrl+Shift+S
+   leaves the caret here; the ✕ and Esc both clear it, and the row is chrome - the filter walk never hides it. */
+.skills-search-row { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
+.skills-search-row input[type="search"] { flex: 1 1 auto; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); cursor: text; }
+.skills-search-row input[type="search"]::placeholder { color: var(--dimmer); }
+/* One clear control, not two: the ✕ answers Esc, so the browser's built-in one is hidden. */
+.skills-search-row input[type="search"]::-webkit-search-cancel-button { display: none; }
+.skills-search-row input[type="search"]:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.skills-search-row #btn-skills-search-clear[hidden] { display: none; }
+/* A query that answers no skill is a sentence, not an empty list under the folds. */
+.skills-nohits { margin-top: 8px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; font: 10.5px/1.45 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+.skills-nohits[hidden] { display: none; }
+.skills-fold { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0; padding: 1px 0; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; user-select: none; }
+.skills-fold:hover .skills-source-name, .skills-fold:hover .skills-cat-name { color: #e6e9ef; }
+.skills-fold:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+/* The caret is drawn from the state the element already carries, so the markup holds no glyph that can go stale. */
+.skills-caret { flex: none; width: 9px; font-size: 9px; line-height: 1; color: #46505f; }
+.skills-caret::before { content: "▸"; }
+.skills-fold[aria-expanded="true"] .skills-caret::before { content: "▾"; }
+/* A source starts open and its heading is the loudest thing in the group; its categories indent under it, and the
+   quiet rule down their left edge is what says "these belong to the heading above". */
+.skills-source.empty { color: var(--dim); }
+.skills-source-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.skills-source-count { flex: none; font-size: 10.5px; color: var(--dim); }
+.skills-source-path { margin-top: 3px; padding: 3px 6px; border-style: solid; border-color: var(--line); border-radius: 5px; font-size: 10px; line-height: 1.35; color: var(--dimmer); overflow-wrap: anywhere; }
+.skills-source-path.bad { border-color: #57262a; color: #ff9c94; }
+.skills-srcbody { margin-top: 4px; }
+.skills-srcbody[hidden], .skills-catbody[hidden] { display: none; }
+.skills-catgroup { margin-top: 6px; }
+.skills-cathead { padding-left: 10px; }
+.skills-cat-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10.5px var(--mono); letter-spacing: .02em; color: #9fb6cf; }
+.skills-cat-count { flex: none; font-size: 10px; color: var(--dimmer); }
+.skills-catbody { margin: 2px 0 0 10px; padding-left: 9px; border-left: 1px solid #1c2230; }
+.skills-empty { margin: 2px 0 0 10px; font: 10.5px var(--mono); color: var(--dimmer); }
+.skills-skill { margin-top: 7px; gap: 5px; align-items: baseline; }
+.skills-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
+.skills-chip { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font: 9px/1.6 var(--mono); letter-spacing: .01em; color: var(--dim); }
+.skills-chip.kind { color: var(--dimmer); text-transform: uppercase; }
+.skills-chip.link { color: #8fb8ea; border-color: #2c4a6e; }
+.skills-chip.unsent { color: #ff9c94; border-color: #57262a; }
+/* The gateway did not answer: the banner at the top of the tab is the sentence, and this is the whole of what a row
+   says about it — a mark, not the word "unverified" repeated down the list. */
+.skills-mark { flex: none; font: 9px/1 var(--mono); color: #46505f; cursor: help; }
+.skills-detail { margin-top: 1px; padding: 0 0 0 2px; border: 0; display: block; font-size: 10px; line-height: 1.4; }
+.skills-desc, .skills-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skills-desc { color: var(--dim); }
+.skills-path { color: #46505f; }
+/* The gateway's answer is ONE line at the top of the tab, whatever it is: a failure must not push the inventory
+   down the panel with a wrapped paragraph. The whole sentence stays in the tooltip and in textContent. */
+#skills-gateway { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The Permissions tab: one group per source, every row a permission and the file:line (or endpoint) it
+   was read from. The status chip is the difference between "read", "not in the file" and a source that
+   could not be read — a source with a reason draws the reason, never a row it did not read. */
+.perm-group { margin-top: 16px; }
+.perm-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: start; }
+.perm-label { min-width: 0; overflow-wrap: anywhere; font: 11px var(--mono); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.perm-status { justify-self: end; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font: 9px/1.7 var(--mono); color: var(--dim); }
+.perm-status.bad { color: #ff9c94; border-color: #57262a; }
+/* The head's source gets the full width under the label and pill: three columns cannot share 310 px without the
+   label's wrapped lines painting under the pill. One line, ellipsized, with the whole path in the title. */
+.perm-head .perm-source { grid-column: 1 / -1; min-width: 0; font-size: 10px; color: var(--dimmer); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.perm-rows { margin-top: 3px; }
+.perm-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 8px; align-items: start; padding: 2px 0 2px 9px; border-left: 1px solid #1c2230; font-size: 11px; }
+.perm-row .perm-name { color: var(--text); overflow-wrap: anywhere; }
+.perm-row .perm-value { color: #9fb6cf; overflow-wrap: anywhere; }
+/* Every row's file:line is ONE line: a 310 px column holds three wrapped paths that make the tab four times its
+   height. The full path:line stays in the span's title. */
+.perm-row .perm-source { min-width: 0; font-size: 10px; color: #46505f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.perm-note { margin-top: 3px; padding: 3px 6px; font-size: 10px; line-height: 1.4; border-style: solid; color: var(--dimmer); overflow-wrap: anywhere; }
+.perm-note.bad { border-color: #57262a; color: #ff9c94; }
+.hidden { display: none; }

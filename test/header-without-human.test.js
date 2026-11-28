@@ -14,12 +14,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { readStyleSheets } from "./style-sheets.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 const html = read("public/index.html");
 const app = read("public/app.js");
-const css = read("public/style.css");
+const css = readStyleSheets();
 const pkg = JSON.parse(read("package.json"));
 
 test("the Human control is gone: button, badge, label, tab, panel and every switch", () => {

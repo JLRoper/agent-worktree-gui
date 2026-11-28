@@ -1,0 +1,1461 @@
+/* public/initiatives.css
+   The initiatives tab.
+
+   The whole Initiatives tab on one token layer: its tokens, shell, ledger row, tags and registry editor, the
+   cast, the order arrows and view switch, the route and its authoring form, the lanes, the folds and note log,
+   the wide and focus variants, and the note writer.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ---- the initiatives tab: THE ROUTE, on one token layer ------------------------------------------
+   The reader chose round A's direction B, The Route (docs/reports/initiatives-redesign-research-a-2026-11-22.html),
+   and round B's values as the visual system (docs/reports/initiatives-redesign-research-b-2026-11-22.html). This
+   block is that choice in one place.
+
+   THE TOKENS COME FIRST, and they are round B's own numbers, not new ones: five surfaces, two lines, three inks with
+   their measured ratios, six state roles each with a wash and a line, five type steps, six space steps, five radii,
+   three fixed heights, two elevations and one focus ring. They live on the pane rather than :root, so a retune can
+   never leak into the board, the queue or the console, and the reader can change the whole tab here.
+
+   THE ROUTE IS THE STRUCTURE, NOT A SKETCH: a folded initiative is a ledger row on the ground with a four-dot route
+   mark, its title, its measured two-line preview and its counts as a sentence; an opened initiative is a plate, and
+   its waves are a route - one line down the card, a numbered station on it, a state-coloured segment beside each
+   station, lanes branching into parallel blocks and members aligned as a manifest. Every row, field, count, control
+   and link the tab drew before is still drawn; what changed is rank, surface and rhythm. */
+
+/* ---- 1. THE TOKENS ------------------------------------------------------------------------------ */
+#as-initiatives {
+  /* surfaces: five depths, each a real elevation on the dark ground. */
+  --tab-ground: #0f1115;
+  --tab-surface: #141922;
+  --tab-row: #171d27;
+  --tab-raised: #1c2330;
+  --tab-sunken: #10151c;
+  --tab-hover: #1c2330;
+
+  /* lines: one hairline, one emphasis. Nothing heavier. */
+  --tab-line: #232a36;
+  --tab-line-strong: #35404f;
+
+  /* ink: three reading weights. The ratios on --tab-surface are round B's measured ones. */
+  --tab-ink: #e9edf4;      /* 15.0:1 */
+  --tab-ink-2: #aeb8c6;    /*  8.8:1 */
+  --tab-ink-3: #7f8a9a;    /*  5.0:1 */
+  --tab-link: #79b8ff;     /*  8.5:1 */
+  --tab-accent: #3fb950;   /*  6.0:1 */
+
+  /* state roles: a foreground, a wash and a line each, so a pill and a spine read as one thing. */
+  --tab-ready: #9ecbff;
+  --tab-ready-bg: rgba(56, 139, 253, 0.12);
+  --tab-ready-line: rgba(56, 139, 253, 0.38);
+  --tab-run: #56d364;
+  --tab-run-bg: rgba(46, 160, 67, 0.14);
+  --tab-run-line: rgba(46, 160, 67, 0.42);
+  --tab-warn: #e3b341;
+  --tab-warn-bg: rgba(210, 153, 34, 0.12);
+  --tab-warn-line: rgba(210, 153, 34, 0.4);
+  --tab-bad: #ff7b72;
+  --tab-bad-bg: rgba(229, 83, 75, 0.12);
+  --tab-bad-line: rgba(229, 83, 75, 0.4);
+  --tab-idle: #8b95a5;
+  --tab-idle-bg: rgba(139, 149, 165, 0.1);
+  --tab-idle-line: rgba(139, 149, 165, 0.32);
+
+  /* type: five steps with one job each, two line heights, one family pair. */
+  --tab-fs-display: 15.5px;
+  --tab-fs-title: 13px;
+  --tab-fs-body: 12.5px;
+  --tab-fs-meta: 11.5px;
+  --tab-fs-chip: 10.5px;
+  --tab-lh-tight: 1.25;
+  --tab-lh-body: 1.6;
+  --tab-font-ui: var(--ui);
+  --tab-font-mono: var(--mono);
+
+  /* space: the 4px grid, named by step. */
+  --tab-s1: 4px;
+  --tab-s2: 8px;
+  --tab-s3: 12px;
+  --tab-s4: 16px;
+  --tab-s5: 24px;
+  --tab-s6: 32px;
+
+  /* radius: four steps and a pill. */
+  --tab-r1: 4px;
+  --tab-r2: 8px;
+  --tab-r3: 12px;
+  --tab-r4: 16px;
+  --tab-r-pill: 999px;
+
+  /* density: three fixed heights plus the member row, so a row cannot drift between surfaces. */
+  --tab-row-h: 32px;
+  --tab-control: 30px;
+  --tab-chip-h: 20px;
+  --tab-member: 26px;
+
+  /* the initiative card's title gutter: the dot column, one gap, then the title. A row pays the same 45px whether
+     or not it has a wave to draw, so every title in the ledger starts on one reading edge - and the OPEN plate pays
+     it too (its left padding is this, less its 1px border), which is what keeps the title on the same x when the
+     reader unfolds it. `--init-row-top` carries the plate's 1px top border as padding on the folded row, so the title
+     lands on the same y in both drawings. */
+  --init-dot-slot: 27px;
+  --init-title-gutter: 45px;
+  --init-row-top: calc(var(--tab-s4) + 1px);
+
+  /* elevation: light from above - a top hairline and one soft shadow, never a glow. */
+  --tab-e1: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --tab-e2: 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* focus: one ring, two pixels, outside the control. */
+  --tab-ring: 2px solid #79b8ff;
+
+  /* the panel's own variables, remapped inside this tab only. Every existing rule below inherits the new ink,
+     surfaces and lines without a second palette beside the panel's. */
+  --surface: var(--tab-surface);
+  --card: var(--tab-row);
+  --panel: var(--tab-ground);
+  --line: var(--tab-line);
+  --text: var(--tab-ink);
+  --dim: var(--tab-ink-2);
+  --dimmer: var(--tab-ink-3);
+  --hover: var(--tab-hover);
+  --blue: var(--tab-link);
+
+  container-type: inline-size;
+}
+
+/* THE DENSITY IS A READER CHOICE, not a constant (round B 3.4): the same tokens, one step tighter. No colour moves,
+   so the type, the contrast and the state roles are identical in both settings. */
+#as-initiatives[data-density="compact"] {
+  --tab-s3: 8px;
+  --tab-s4: 12px;
+  --tab-s5: 16px;
+  --tab-row-h: 28px;
+  --tab-member: 22px;
+}
+
+/* ---- 2. THE SHELL: a toolbar, one meta line, and About ------------------------------------------- */
+#as-initiatives > .as-group.init-shell {
+  padding: var(--tab-s4);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  box-shadow: var(--tab-e1);
+  margin-bottom: var(--tab-s3);
+}
+#as-initiatives .init-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s2) var(--tab-s3);
+  margin-bottom: var(--tab-s3);
+}
+#as-initiatives .init-toolbar h4 {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--tab-s1) var(--tab-s2);
+  margin: 0;
+  font-size: var(--tab-fs-display);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--tab-ink);
+}
+#as-initiatives .init-toolbar h4 .as-hint {
+  font-size: var(--tab-fs-meta);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--tab-ink-3);
+}
+#as-initiatives .init-actions { flex: 0 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; }
+#as-initiatives .init-shell .as-actions button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  cursor: pointer;
+}
+#as-initiatives .init-shell .as-actions button:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
+#as-initiatives .init-shell .as-actions button:active { background: var(--tab-sunken); transform: none; }
+#as-initiatives .init-shell .as-actions button[aria-expanded="true"],
+#as-initiatives .init-shell .as-actions button[aria-pressed="true"] { color: var(--tab-ink); border-color: var(--tab-line-strong); background: var(--tab-sunken); }
+#as-initiatives .init-shell .as-actions button.primary { color: #0f1115; background: var(--tab-accent); border-color: var(--tab-accent); font-weight: 600; }
+#as-initiatives .init-shell .as-actions button.primary:hover { background: #4ad35c; color: #0f1115; }
+#as-initiatives .init-shell .as-actions button[disabled] { opacity: .55; cursor: not-allowed; }
+/* THE FOUR VERBS ARE ONE ROW, AND THE PRIMARY ONE IS FIRST. The toolbar used to order About, Compact rows, New
+   initiative, Refresh, so the tab's only create action was third in every path and a second row orphaned Refresh at
+   768. The fix is two things that must hold together: the order (New initiative, Refresh, About, Compact rows, in the
+   markup, which is also the keyboard order) and a row that does not wrap in the narrow dock. The words shorten rather
+   than the row: under 430px of pane the density control says "Density", and under 320px it says "Aa" and the primary
+   says "New". The accessible name is "Density - compact rows", which contains each visible word, so a reader speaking
+   the label still finds the control. */
+#as-initiatives .init-lbl-sm, #as-initiatives .init-lbl-xs { display: none; }
+@container (max-width: 430px) {
+  #as-initiatives .init-actions { gap: var(--tab-s1); }
+  #as-initiatives .init-shell .as-actions button { padding: 0 6px; }
+  #as-initiatives .init-lbl-density { display: none; }
+  #as-initiatives .init-lbl-sm { display: inline; }
+}
+@container (max-width: 320px) {
+  #as-initiatives .init-lbl { display: none; }
+  #as-initiatives .init-lbl-sm { display: none; }
+  #as-initiatives .init-lbl-xs { display: inline; }
+}
+/* THE META LINE: what the store holds, who may change it, and whether this read is in flight. The tier sentence is
+   NOT folded away and NOT a tooltip: it is the reader's only statement of who may change the map (round B, eight
+   things that must survive). */
+#as-initiatives .init-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+}
+#as-initiatives .init-meta .as-help { margin: 0; max-width: 68ch; font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+#as-initiatives .init-tier {
+  margin: 0;
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+}
+#as-initiatives .init-tier b { color: var(--tab-ink); font-weight: 600; }
+#as-initiatives .init-read { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+/* ZERO HEIGHT WHEN THERE IS NOTHING TO SAY. The read's hint is written only for a failure now (the in-flight case draws
+   no node at all: public/assistant.js's meta line), and this is the second lock on the same door - an EMPTY span in
+   .init-meta is still a flex item in a column with a gap, so it would cost 8px and could take a line box from a later
+   change that puts a word here. `display: none` removes it from the column entirely. */
+#as-initiatives .init-read:empty { display: none; }
+#as-initiatives .init-about {
+  margin: 0 0 var(--tab-s3);
+  padding: var(--tab-s3) var(--tab-s4);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-line-strong);
+  border-radius: 0 var(--tab-r2) var(--tab-r2) 0;
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-about .as-help { margin: 0; max-width: 68ch; font-size: var(--tab-fs-meta); line-height: 1.55; color: var(--tab-ink-2); }
+#as-initiatives .as-help { font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+
+/* ---- 3. THE LEDGER ROW: a folded initiative ------------------------------------------------------ */
+/* FOLDED IS A ROW ON THE GROUND, NOT A CARD: the list reads as one ledger, the title and its preview carry the
+   identity, and the route mark and status word say where the work has got to before any card is opened. */
+#as-initiatives .init-card.is-titlecard {
+  padding: var(--init-row-top) var(--tab-s2) var(--tab-s3) var(--init-title-gutter);
+  border: 0;
+  border-bottom: 1px solid var(--tab-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
+}
+#as-initiatives .init-card.is-titlecard:hover { background: var(--tab-hover); }
+#as-initiatives .init-card.is-titlecard:last-child { border-bottom: 0; }
+#as-initiatives .init-card {
+  margin-bottom: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  box-shadow: var(--tab-e1);
+}
+/* THE OPEN INITIATIVE IS THE PLATE. It lifts off the ledger with a surface, one radius and the elevation token. Its
+   LEFT inset is the ledger's own title gutter, less the 1px border that the folded row does not have: the dots hang at
+   10px inside it and the title lands on the same 45px every folded row starts on, so a press that unfolds the card
+   does not move the title a pixel - and the plate's body, chips and sections keep sharing that one reading edge. */
+#as-initiatives .init-card:not(.is-titlecard) {
+  padding: var(--tab-s4) var(--tab-s4) var(--tab-s4) calc(var(--init-title-gutter) - 1px);
+  margin: var(--tab-s2) 0 var(--tab-s3);
+  background: var(--tab-surface);
+  border-color: var(--tab-line);
+}
+#as-initiatives .init-head { display: flex; align-items: flex-start; gap: var(--tab-s3); margin-bottom: var(--tab-s3); }
+#as-initiatives .init-card.is-titlecard .init-head { margin-bottom: var(--tab-s1); align-items: center; }
+#as-initiatives .init-head-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  /* THE TITLE STARTS AT THE HEAD'S TOP, IN BOTH DRAWINGS. Centring it in the 36px row was a 8.3px jump every time the
+     title's own line count changed between folded and open (the split plate's head column is narrower, so the title
+     can wrap to one more line), and the reader asked for a measured x and y that do not move. The mark is a line tall
+     (see `.init-glyph` below), so it follows the FIRST line where this puts the text. */
+  align-items: flex-start;
+  gap: var(--tab-s2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* A folded row and an open plate share the button's geometry: one rule, no per-state alignment (a centre here and a
+   top there is exactly the 8.3px the title used to jump by). */
+#as-initiatives .init-head-btn:hover { background: transparent; }
+#as-initiatives .init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--tab-ink-3); text-underline-offset: 2px; }
+#as-initiatives .init-head-btn:active { transform: none; }
+/* THE OPEN HEAD IS THE FOLDED ROW'S GEOMETRY, DOWN TO THE PIXEL (row 295, ask 3). The name's row spans the card - the
+   grid below gives it both columns - and it pays the LEDGER ROW's insets, not the plate's: the folded row ends its
+   text box 8px from the card's right edge (--tab-s2, no border) while the plate's padding is 16px plus its 1px border,
+   so the row is given a negative right margin of exactly that difference. Same left edge, same right edge, same 18px
+   caret column and the same glyph slot and gap follow, so the title's AVAILABLE WIDTH is identical open and closed and
+   the same words break in both drawings. The Edit control lives on the facts row now: anything in this row's flow
+   shortens the title, and a title that wraps one word earlier on the open card is the defect this row is here to
+   remove. */
+#as-initiatives .init-card:not(.is-titlecard) .init-head { position: relative; margin-right: calc(var(--tab-s2) - var(--tab-s4) - 1px); }
+#as-initiatives .init-card:not(.is-titlecard) .init-head-btn { padding-right: 18px; }
+#as-initiatives .init-card:not(.is-titlecard) .init-head-btn .init-caret { position: absolute; right: 0; top: 2px; margin-left: 0; padding-left: 0; }
+#as-initiatives .init-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: var(--tab-fs-display);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.01em;
+  color: var(--tab-ink);
+  white-space: normal;
+}
+#as-initiatives .init-card:not(.is-titlecard) .init-title { flex: 1 1 auto; display: block; -webkit-line-clamp: unset; overflow: visible; }
+/* THE ROUTE MARK, at rest: one dot per wave, in the wave's own derived state, the current one ringed. It is a second
+   read of the same fact the status word says, so it is never the only answer; decorative, so aria-hidden. */
+/* THE MARK HANGS IN THE ROW'S GUTTER, AND THE GUTTER IS RESERVED ON EVERY ROW. The 45px is the glyph's own slot:
+   10px in from the row, 27px of dots, 8px to the title. A row WITH a route paints the dots in it; a row without one
+   leaves it empty. Reserving it on both is what keeps one reading edge down the whole ledger - if only the route row
+   paid the tax, its title would sit 37px right of every other (the review's measured 977 x3 and 1014) and the eye
+   would read a ragged left edge exactly where the new mark arrived. */
+#as-initiatives .init-card.is-titlecard { position: relative; }
+#as-initiatives .init-glyph {
+  flex: 0 0 var(--init-dot-slot);
+  width: var(--init-dot-slot);
+  /* ONE TITLE LINE BOX, so the dots are centred on the title's FIRST line whatever the title wraps to, and never on a
+     guessed offset from the card's top (the absolute `top: s3 + 6px` was 8.5px above the line). */
+  height: calc(var(--tab-fs-display) * var(--tab-lh-tight));
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  /* THE MARK PAYS ITS OWN SLOT BACK, so the dots hang in the gutter the row already reserved instead of pushing the
+     title right by it. The margin is the slot plus the flex gap: the title's x is the gutter's 45px whatever the mark
+     draws, and a row with no waves keeps the same reading edge as one with three. The same rule serves the open plate,
+     whose own left padding puts the head's content edge on that same 45px. */
+  margin-left: calc(-1 * (var(--init-dot-slot) + var(--tab-s2)));
+}
+#as-initiatives .init-glyph i { width: 7px; height: 7px; border-radius: 50%; background: var(--tab-idle); }
+#as-initiatives .init-glyph i.is-done { background: var(--tab-accent); }
+#as-initiatives .init-glyph i.is-running { background: var(--tab-run); }
+#as-initiatives .init-glyph i.is-ready { background: var(--tab-ready); }
+#as-initiatives .init-glyph i.is-blocked, #as-initiatives .init-glyph i.is-unknown { background: var(--tab-warn); }
+#as-initiatives .init-glyph i.is-abandoned { background: var(--tab-bad); }
+#as-initiatives .init-glyph i.is-empty, #as-initiatives .init-glyph i.is-unentered { background: var(--tab-idle-line); }
+#as-initiatives .init-glyph i.is-current { box-shadow: 0 0 0 2px var(--tab-line-strong); }
+/* THE INITIATIVE'S OWN THEME COLOUR, on the project boxes' rule (Ctrl+click its dot column or its title; the chooser
+   and the tab-only fallback are public/core/theme-hue.js). One hue on the card's own surfaces and its title, and
+   NOTHING that carries a state of its own: the route dots keep the colours that ARE each wave's state, and the status
+   pill and the chips keep their tones. A theme that recoloured the mark would make the mark lie. */
+#as-initiatives .init-card.has-init-hue { border-color: hsl(var(--init-hue) 40% 34%); background: hsl(var(--init-hue) 20% 10%); }
+#as-initiatives .init-card.is-titlecard.has-init-hue { border-bottom-color: hsl(var(--init-hue) 32% 26%); }
+#as-initiatives .init-card.is-titlecard.has-init-hue:hover { background: hsl(var(--init-hue) 26% 13%); }
+#as-initiatives .init-card.has-init-hue .init-title { color: hsl(var(--init-hue) 78% 82%); }
+#as-initiatives .init-card.has-init-hue .init-head-btn .init-caret { color: hsl(var(--init-hue) 55% 62%); }
+/* THE CHIP'S LANDING FLASH (public/assistant.js `flashInitCard`): the card a chart chip press just opened takes one
+   green-gold wash that fades back to the card's own surface. Green because the chart's own pulse is green and this is
+   the same walk (a press that lands the reader on a row); gold in the ring because a landing is a confirmation rather
+   than a sign of life, and the two must not read as the same event. The RING and the WASH are box shadows, not a
+   background: an inset shadow paints above the card's fill and below its text, so the wash cannot dim a word of the
+   description, and it ends at alpha 0 - the card's own background, hue or no hue, is what the last frame reveals. The
+   class is added by the page and removed on animationend, so nothing sticks (this sheet never keeps it on its own).
+   Both keyframe lists carry three shadows, or the browser would drop the interpolation and snap between frames. */
+@keyframes initcardflash {
+  0% {
+    box-shadow: 0 0 0 2px rgba(198, 206, 84, .72), 0 0 22px rgba(126, 231, 135, .30), inset 0 0 0 999px rgba(154, 178, 76, .16);
+  }
+  55% {
+    box-shadow: 0 0 0 2px rgba(198, 206, 84, .34), 0 0 14px rgba(126, 231, 135, .14), inset 0 0 0 999px rgba(154, 178, 76, .07);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(198, 206, 84, 0), 0 0 10px rgba(126, 231, 135, 0), inset 0 0 0 999px rgba(154, 178, 76, 0);
+  }
+}
+#as-initiatives .init-card.is-flash { animation: initcardflash 1400ms ease-out; }
+/* THE STATUS WORD: the current wave and its state, or the honest "no waves" / "waves unreadable". A pill, because it
+   is the shortest answer the tab gives, and a word as well as a colour. */
+#as-initiatives .init-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--tab-chip-h);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r-pill);
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  white-space: nowrap;
+}
+#as-initiatives .init-status::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+#as-initiatives .init-status.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .init-status.is-ready { color: var(--tab-ready); border-color: var(--tab-ready-line); background: var(--tab-ready-bg); }
+#as-initiatives .init-status.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); }
+#as-initiatives .init-status.is-blocked, #as-initiatives .init-status.is-unknown { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .init-status.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .init-status.is-idle { color: var(--tab-idle); border-color: var(--tab-idle-line); }
+#as-initiatives .init-caret { flex: 0 0 auto; width: 14px; color: var(--tab-ink-3); font-size: 9px; line-height: 1.4; text-align: center; }
+#as-initiatives .init-head-btn .init-caret { width: 12px; padding-top: 0; line-height: inherit; }
+/* A folded row's chevron is a disclosure column at the row's right edge, not the end of the title's last line: the
+   title box is as wide as the row, so a flowing chevron lands mid-row on a two-line title. */
+#as-initiatives .init-card.is-titlecard .init-head-btn { padding-right: 18px; }
+#as-initiatives .init-card.is-titlecard .init-caret { position: absolute; right: var(--tab-s2); top: calc(var(--init-row-top) + 2px); font-size: 11px; line-height: 1; }
+/* THE OPEN CARET IS A REAL GLYPH. A folded row ends its head with ▸ in the disclosure column; the open plate used to
+   end with nothing at all, so the only evidence of the open state was the absence of the folded mark (and the test
+   could only assert "not ▸ at the end"). The plate's head now draws ▾ at its own right edge, just before Edit, so the
+   state has a mark as well as aria-expanded - and the gate asserts that mark, not its absence. */
+#as-initiatives .init-head-btn .init-caret.is-open { margin-left: auto; padding-left: 2px; font-size: 11px; line-height: 1.2; color: var(--tab-ink-3); }
+
+/* THE DESCRIPTION: body at a reading size, 68ch, and its fold re-measures because the line height is unitless. */
+#as-initiatives .init-desc {
+  max-width: 68ch;
+  margin: 0 0 var(--tab-s4);
+  font-size: var(--tab-fs-body);
+  line-height: var(--tab-lh-body);
+  color: var(--tab-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* THE CLAMP (row 295, ask 2): an expanded card's description is drawn to three lines and no further, and THE WHOLE TEXT
+   STAYS IN THE DOM - the clamp is a line box, not a text cut, so a browser find, a selection and a copy still reach
+   every word, and the control that unfolds it does not have to restore anything. 3 is the "few lines" the reader
+   asked for; the toggle beside the label is drawn only when the text really overflows it (assistant.js measures the
+   unclamped height in the same task it paints, before a frame is drawn). */
+#as-initiatives .init-desc.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+#as-initiatives .init-card.is-titlecard .init-desc { margin: 0 0 var(--tab-s1); color: var(--tab-ink-2); }
+#as-initiatives .init-desc.is-empty { color: var(--tab-ink-3); font-style: italic; }
+#as-initiatives .init-descfold { margin-bottom: var(--tab-s3); }
+/* THE DESCRIPTION'S LABEL ROW: the word on the left, its show more / show less control on the right. */
+#as-initiatives .init-desc-head { display: flex; align-items: center; gap: var(--tab-s2); margin-bottom: var(--tab-s1); }
+#as-initiatives .init-desc-label { font-family: var(--tab-font-ui); font-size: 12px; font-weight: 600; color: var(--tab-ink); }
+#as-initiatives .init-desc-more { margin-left: auto; }
+#as-initiatives .init-dots { color: var(--tab-ink-2); }
+#as-initiatives .init-card.is-titlecard .init-chips { margin-bottom: 0; }
+
+/* THE COUNTS ARE A SENTENCE. Three counts, a status word and the provenance line share one 11.5px row with a dot
+   between the numbers: the capsule wall is gone, the numbers and their tooltips are not. */
+#as-initiatives .init-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s1) 0;
+  margin-bottom: 0;
+  padding-top: var(--tab-s3);
+  border-top: 1px solid var(--tab-line);
+  font-variant-numeric: tabular-nums;
+}
+#as-initiatives .init-chips .init-status { margin-left: var(--tab-s2); margin-right: 0; }
+#as-initiatives .init-chips .chip {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+  white-space: normal;
+}
+#as-initiatives .init-chips .chip + .chip::before { content: "\00b7"; margin: 0 7px; color: var(--tab-ink-3); }
+#as-initiatives .init-chips .chip.is-zero { color: var(--tab-ink-3); border: 0; background: transparent; }
+#as-initiatives .init-chips .init-meta { flex: 0 0 auto; margin-left: auto; font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+/* EDIT RIDES THE FACTS ROW (row 295, ask 3): the name's row is the folded row's geometry and owes it every pixel of
+   the title's width, so the one control that used to sit beside the title moved here, at the row's right end. */
+#as-initiatives .init-chips .init-edit { margin-left: var(--tab-s2); }
+/* THE COUNTS STEP UP ON THE HOVER FILL. The row's hover raises the ground under the counts from --tab-row (#171c24)
+   to --tab-hover (#1c2330), and ink-3 on that fill measures 4.50:1 - the AA floor and two steps below the preview
+   beside it. Rest is left alone (ink-3 is the counts' own role); on hover the counts and the provenance take ink-2, so
+   the secondary ink is never the hardest thing on the row to read. The 10px lane project tag keeps ink-3: 4.51 on
+   --tab-raised is the pair round B named as the floor, and it is not tinted by this row's hover. */
+#as-initiatives .init-card.is-titlecard:hover .init-chips .chip,
+#as-initiatives .init-card.is-titlecard:hover .init-chips .chip.is-zero,
+#as-initiatives .init-card.is-titlecard:hover .init-chips .init-meta,
+#as-initiatives .init-card.is-titlecard:hover .init-chips .chip + .chip::before { color: var(--tab-ink-2); }
+
+/* ---- THE BOARD'S TAGS: a chip that is a WORD, not a COUNT ------------------------------------------
+   A tag is a word about the work; the chips beside it count its scale. They share one row, so they must be told
+   apart at a glance: the count is a borderless sentence in muted ink, and the tag is a small PLATE with a 4px radius,
+   a coloured spine on its left edge and the ident in the mono face. Not `.chip`'s 999px capsule and not its palette -
+   the palette here is the registry's own ten names (lib/initiative-tags.js TAG_PALETTE), each one a dark-theme pair
+   that clears 4.5:1 on --tab-surface. */
+#as-initiatives .init-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0 0 0 var(--tab-s1);
+  padding: 0 6px;
+  border: 1px solid var(--tag-line, var(--tab-line));
+  border-left: 2px solid var(--tag-ink, var(--tab-ink-3));
+  border-radius: 4px;
+  background: var(--tag-bg, transparent);
+  color: var(--tag-ink, var(--tab-ink-2));
+  font-family: var(--tab-font-mono);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+#as-initiatives .init-chips > .init-tag:first-of-type { margin-left: var(--tab-s2); }
+#as-initiatives button.init-tag { cursor: pointer; font: 600 var(--tab-fs-chip)/1.7 var(--tab-font-mono); }
+#as-initiatives button.init-tag:hover { filter: brightness(1.25); }
+#as-initiatives button.init-tag:active { transform: translateY(1px); }
+#as-initiatives button.init-tag.is-off { opacity: 0.45; filter: saturate(0.5); }
+#as-initiatives button.init-tag.is-off:hover { opacity: 0.8; }
+#as-initiatives .init-tag-more {
+  margin: 0 0 0 var(--tab-s1);
+  padding: 0 6px;
+  border: 1px dashed var(--tab-line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tab-ink-2);
+  font: 600 var(--tab-fs-chip)/1.7 var(--tab-font-mono);
+  cursor: pointer;
+}
+#as-initiatives .init-tag-more:hover { color: var(--tab-ink); border-color: var(--tag-line, var(--tab-line-strong)); filter: brightness(1.2); }
+/* The rest of a card's tags, under its facts row and never ON it: a 100% basis wraps the group to its own line. */
+#as-initiatives .init-tags-rest {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tab-s1) 0;
+  margin-top: var(--tab-s1);
+  padding-top: var(--tab-s1);
+  border-top: 1px dashed var(--tab-line);
+}
+#as-initiatives .init-tags-rest .init-tag:first-child { margin-left: 0; }
+
+/* THE TEN NAMES. One block per colour, and nothing else in the panel repaints when one changes. */
+#as-initiatives .init-tag-slate { --tag-ink: #aeb8c6; --tag-line: rgba(174, 184, 198, 0.34); --tag-bg: rgba(174, 184, 198, 0.08); }
+#as-initiatives .init-tag-red { --tag-ink: #ff9c94; --tag-line: rgba(255, 156, 148, 0.38); --tag-bg: rgba(229, 83, 75, 0.12); }
+#as-initiatives .init-tag-amber { --tag-ink: #f0c674; --tag-line: rgba(240, 198, 116, 0.38); --tag-bg: rgba(210, 153, 34, 0.12); }
+#as-initiatives .init-tag-olive { --tag-ink: #cbd47c; --tag-line: rgba(203, 212, 124, 0.36); --tag-bg: rgba(160, 175, 70, 0.12); }
+#as-initiatives .init-tag-green { --tag-ink: #7ee787; --tag-line: rgba(126, 231, 135, 0.36); --tag-bg: rgba(46, 160, 67, 0.14); }
+#as-initiatives .init-tag-teal { --tag-ink: #6fd7c4; --tag-line: rgba(111, 215, 196, 0.36); --tag-bg: rgba(40, 150, 140, 0.14); }
+#as-initiatives .init-tag-sky { --tag-ink: #7fd3f7; --tag-line: rgba(127, 211, 247, 0.36); --tag-bg: rgba(56, 139, 253, 0.12); }
+#as-initiatives .init-tag-blue { --tag-ink: #9ecbff; --tag-line: rgba(158, 203, 255, 0.38); --tag-bg: rgba(56, 139, 253, 0.14); }
+#as-initiatives .init-tag-violet { --tag-ink: #c8a6ff; --tag-line: rgba(200, 166, 255, 0.38); --tag-bg: rgba(163, 113, 247, 0.16); }
+#as-initiatives .init-tag-pink { --tag-ink: #f2a0c8; --tag-line: rgba(242, 160, 200, 0.38); --tag-bg: rgba(219, 97, 162, 0.14); }
+
+/* ---- THE TAG FILTER ROW: one row at the top of the pane, composed with the view switch ------------- */
+#as-initiatives .init-tagbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s2) 0;
+  border-top: 1px solid var(--tab-line);
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tagbar-label {
+  flex: 0 0 auto;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+#as-initiatives .init-tagtoggles { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tab-s1); flex: 1 1 auto; min-width: 0; }
+#as-initiatives .init-tagtoggles .init-tag { margin-left: 0; }
+#as-initiatives .init-tagmode .init-tagmode-btn { min-height: 22px; padding: 0 var(--tab-s2); font-size: var(--tab-fs-chip); }
+#as-initiatives .init-tag-clear, #as-initiatives .init-tag-manage { flex: 0 0 auto; }
+#as-initiatives .init-tagbar-bad { color: var(--tab-bad); }
+
+/* ---- THE REGISTRY EDITOR: one row per tag, then the create form ------------------------------------ */
+#as-initiatives .init-tagmgr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s3);
+  padding: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-tagmgr-hint { margin: 0; }
+#as-initiatives .init-tagmgr-list { display: flex; flex-direction: column; gap: 0; }
+#as-initiatives .init-tagrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tab-s2);
+  padding: var(--tab-s2) 0;
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-tagrow:last-child { border-bottom: 0; }
+#as-initiatives .init-tagrow > .init-tag { margin-left: 0; }
+#as-initiatives .init-tagname { color: var(--tab-ink); font: 600 var(--tab-fs-body)/1.4 var(--tab-font-ui); }
+#as-initiatives .init-tagdesc { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .init-tagrow-acts { display: inline-flex; gap: var(--tab-s1); margin-left: auto; }
+#as-initiatives .init-tagrow .init-tagform { flex: 1 1 100%; margin: var(--tab-s1) 0 0; }
+#as-initiatives .init-tagask { flex: 1 1 100%; margin: 0; }
+#as-initiatives .init-tag-force { margin-left: var(--tab-s2); }
+#as-initiatives .init-tagpick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1); }
+#as-initiatives .init-tagpick .init-tag { margin-left: 0; }
+#as-initiatives .init-tagpick-empty { margin: 0 0 var(--tab-s1); }
+
+/* SECTION HEADS: sentence case, one weight, a hairline that carries the eye to the count. */
+#as-initiatives .init-sechead {
+  display: flex;
+  align-items: center;
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tab-ink);
+}
+#as-initiatives .init-sechead::after { content: ""; order: 2; flex: 1 1 auto; height: 1px; background: var(--tab-line); }
+#as-initiatives .init-sechead .chip {
+  order: 1;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 4. THE CAST: projects, trees, forms and the disclosure rows --------------------------------- */
+#as-initiatives .init-proj {
+  display: flex;
+  align-items: center;
+  gap: var(--tab-s2);
+  width: 100%;
+  min-height: var(--tab-row-h);
+  padding: var(--tab-s1) var(--tab-s2);
+  margin-left: calc(var(--tab-s2) * -1);
+  border: 0;
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives .init-proj:hover { background: var(--tab-raised); color: var(--tab-ink); }
+#as-initiatives .init-proj:active { transform: none; }
+#as-initiatives .init-proj .init-proj-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--tab-font-ui); font-weight: 500; }
+#as-initiatives .init-proj .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; color: var(--tab-ink-3); font-family: var(--tab-font-ui); }
+#as-initiatives .init-project + .init-project { margin-top: 0; }
+#as-initiatives .init-trees { margin: 0 0 var(--tab-s2) 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-tree { display: flex; flex-direction: column; gap: var(--tab-s1); padding: var(--tab-s2) 0; border-top: 1px solid var(--tab-line); font-size: var(--tab-fs-body); }
+#as-initiatives .init-tree:first-child { border-top: 0; padding-top: var(--tab-s1); }
+#as-initiatives .init-tree-main { display: flex; align-items: center; gap: var(--tab-s2); min-height: 28px; }
+#as-initiatives .init-tree-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--tab-r1);
+  color: var(--tab-link);
+  font-size: var(--tab-fs-body);
+  text-decoration: none;
+}
+#as-initiatives .init-tree-name:hover { text-decoration: underline; }
+#as-initiatives .init-tree-name.is-missing { color: var(--tab-ink-3); text-decoration: line-through; }
+#as-initiatives .init-tree-main .init-mini { margin-left: auto; }
+#as-initiatives .init-tree-branch { min-width: 0; }
+#as-initiatives .init-branch {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r1);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-meta);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#as-initiatives a.init-branch-link { color: var(--tab-link); text-decoration: none; }
+#as-initiatives a.init-branch-link:hover { text-decoration: underline; }
+#as-initiatives .init-mini {
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.4;
+  cursor: pointer;
+}
+#as-initiatives .init-mini:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
+#as-initiatives .init-mini:active { transform: none; background: var(--tab-sunken); color: var(--tab-ink); }
+#as-initiatives .init-mini[disabled] { opacity: .55; cursor: not-allowed; }
+/* ---- THE ORDER ARROWS (row 297, answer 1) -------------------------------------------------------- */
+/* ONE PAIR ON EVERY ACTIVE CARD, drawn on every card at every position and DISABLED at the ends rather than
+   omitted: an arrow that disappears at the top would change the card's height as it moved, which is the jump the
+   reader asked to be spared. The pair rides the front of the facts row - the one row drawn open AND folded - and
+   never the title's row, whose width is the title's own (row 295, ask 3). The press saves at once, so the control
+   carries no "apply" state of its own. */
+#as-initiatives .init-order { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; margin-right: var(--tab-s2); }
+#as-initiatives .init-arrow {
+  width: 22px;
+  min-width: 22px;
+  height: var(--tab-control);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+#as-initiatives .init-arrow:hover { background: var(--tab-raised); border-color: var(--tab-line-strong); color: var(--tab-ink); }
+#as-initiatives .init-arrow:active { transform: none; background: var(--tab-sunken); color: var(--tab-ink); }
+#as-initiatives .init-arrow[disabled] { opacity: .4; cursor: not-allowed; }
+/* ---- THE VIEW SWITCH AND THE ARCHIVED SEARCH (row 297, answer 2) --------------------------------- */
+/* Two lists, one tab. The switch sits under the toolbar and above the store line, so it reads as the tab's frame
+   rather than as one of the reader's verbs; the search takes the rest of the row and is drawn only in the archived
+   view, where it has something to search. */
+#as-initiatives .init-views { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tab-s2); margin: 0 0 var(--tab-s3); }
+#as-initiatives .init-seg { display: inline-flex; flex: 0 0 auto; align-items: center; }
+#as-initiatives .init-seg .init-view {
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  background: transparent;
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  cursor: pointer;
+}
+#as-initiatives .init-seg .init-view:first-child { border-radius: var(--tab-r2) 0 0 var(--tab-r2); }
+#as-initiatives .init-seg .init-view:last-child { border-radius: 0 var(--tab-r2) var(--tab-r2) 0; border-left: 0; }
+#as-initiatives .init-seg .init-view:hover { background: var(--tab-raised); color: var(--tab-ink); }
+#as-initiatives .init-seg .init-view[aria-pressed="true"] { background: var(--tab-sunken); border-color: var(--tab-line-strong); color: var(--tab-ink); font-weight: 600; }
+#as-initiatives .init-seg .init-view .chip { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); }
+#as-initiatives .init-search {
+  flex: 1 1 220px;
+  min-width: 120px;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font: var(--tab-fs-meta)/1.4 var(--tab-font-mono);
+}
+#as-initiatives .init-search::placeholder { color: var(--tab-ink-3); }
+#as-initiatives .init-search:focus-visible { outline: none; border-color: var(--tab-accent); }
+/* ---- AN ARCHIVED CARD ---------------------------------------------------------------------------- */
+/* The plate, not the ledger row: an archived initiative is out of the list and is drawn as one self-contained card,
+   with its counts, the stamp that says who put it away, and the one control that matters. The description is clamped
+   by CSS with the WHOLE text in the DOM, so a browser find and the search both reach every word. */
+#as-initiatives .init-card.is-archived { padding: var(--tab-s4); background: var(--tab-sunken); border-style: dashed; box-shadow: none; }
+#as-initiatives .init-card.is-archived .init-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--tab-s2); margin-bottom: var(--tab-s2); }
+#as-initiatives .init-arch-title { margin: 0; font-family: var(--tab-font-ui); font-size: var(--tab-fs-display); font-weight: 600; line-height: var(--tab-lh-tight); color: var(--tab-ink); text-transform: none; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+#as-initiatives .init-arch-when { flex: 0 0 auto; margin-left: auto; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
+#as-initiatives .init-desc.is-arch-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin: 0 0 var(--tab-s2); color: var(--tab-ink-2); }
+#as-initiatives .init-card.is-archived .init-chips { padding-top: var(--tab-s2); border-top: 1px solid var(--tab-line); }
+#as-initiatives .init-card.is-archived .init-restore { margin-left: auto; }
+#as-initiatives .init-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  padding: var(--tab-s3);
+  margin: var(--tab-s2) 0 var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+#as-initiatives .init-form input[type="text"],
+#as-initiatives .init-form select {
+  width: 100%;
+  /* THE FORM IS A COLUMN, SO THE BASIS IS A HEIGHT (row 320). `.as-group input[type="text"]` (style.css, the rule
+     above `#as-initiatives`) gives every text input in a group `flex: 1 1 250px`, and a flex-basis is measured on the
+     MAIN axis: in a `flex-direction: column` box that 250px became the title input's HEIGHT - measured 250px of empty
+     box for one line of text at a 449px and a 479px pane - while the description under it (a textarea with no flex
+     rule, three rows of 20px) drew 78px with a scrollbar through 356px of words. The basis has to be off the field in
+     the column, which is the same correction `#as-initiatives .wave-field input` already carries for the same reason.
+     The height below then says what the field is: ONE line, whatever the pane is doing. */
+  flex: 0 0 auto;
+  height: var(--tab-row-h);
+  min-height: var(--tab-row-h);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font-family: var(--tab-font-mono);
+  font-size: 12px;
+}
+/* THE PARAGRAPH FIELD GETS THE ROOM (row 320): four line boxes of the tab's own body type, and it still resizes by
+   hand (`resize: vertical`, from `.as-note-box`). The swap is the whole point of the row - the field that holds a
+   paragraph is the tall one, and the field that holds a title is one line. */
+#as-initiatives .init-form .as-note-box {
+  width: 100%;
+  min-height: 96px;
+  padding: var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font: var(--tab-fs-body)/var(--tab-lh-body) var(--tab-font-ui);
+}
+#as-initiatives .init-form .as-role-caption { margin: 0; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); }
+#as-initiatives .init-form .as-actions { margin-top: 0; }
+#as-initiatives .init-form .primary, #as-initiatives .init-form button { min-height: var(--tab-row-h); }
+#as-initiatives .init-addrow { margin-top: var(--tab-s2); }
+#as-initiatives .init-none {
+  margin: var(--tab-s1) 0 0;
+  padding: var(--tab-s3);
+  border: 1px dashed var(--tab-line);
+  border-radius: var(--tab-r3);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-body);
+  line-height: 1.5;
+}
+#as-initiatives .init-none b { display: block; margin-bottom: var(--tab-s1); color: var(--tab-ink-2); font-size: 12px; }
+#as-initiatives .init-none span { display: block; }
+#as-initiatives .init-empty {
+  max-width: 560px;
+  padding: var(--tab-s6);
+  border: 1px solid var(--tab-line-strong);
+  border-radius: var(--tab-r4);
+  background: var(--tab-surface);
+  color: var(--tab-ink-3);
+}
+#as-initiatives .init-empty h5 { margin: 0 0 var(--tab-s2); font-size: var(--tab-fs-display); font-weight: 600; letter-spacing: -0.01em; text-transform: none; color: var(--tab-ink); }
+#as-initiatives .init-empty p { max-width: 60ch; margin: 0 0 var(--tab-s4); font-size: var(--tab-fs-body); line-height: var(--tab-lh-body); color: var(--tab-ink-2); }
+#as-initiatives .init-empty .as-actions { margin-top: 0; }
+
+/* ---- 5. THE ROUTE: one line down the card, a station per wave ------------------------------------ */
+#as-initiatives .init-wavefold { margin: 0 0 var(--tab-s3); padding-top: var(--tab-s3); border-top: 1px solid var(--tab-line); min-width: 0; }
+#as-initiatives .init-wavefold .init-sechead { display: flex; align-items: center; gap: var(--tab-s2); }
+#as-initiatives .init-wavefold .init-sechead .chip { font-size: var(--tab-fs-meta); padding: 0; border: 0; background: transparent; text-transform: none; letter-spacing: 0; }
+/* The waves head's own hint had the same narrow-dock overflow the notes head did: `flex: 0 0 auto` plus `nowrap` in a
+   239px pane measured 248px of head inside 161px of card and widened the whole Initiatives pane to 301px. It shrinks
+   and ellipses now, which changes nothing at a width where it fits. */
+#as-initiatives .init-wave-note { order: 3; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+/* THE LINE. It runs behind every station, from the first to the last, in the emphasis hairline; a station paints its
+   own stretch in its state colour, so the route reads before a single word does. "Behind every station" is a claim the
+   station has to keep: it sits ON the connector, so its disc has to be OPAQUE or the line reads straight through it. */
+#as-initiatives .init-waves { position: relative; display: flex; flex-direction: column; gap: 20px; padding-left: 24px; min-width: 0; }
+#as-initiatives .init-waves::before { content: ""; position: absolute; left: 9px; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--tab-line-strong); }
+#as-initiatives .wave-row {
+  position: relative;
+  min-width: 0;
+  padding: var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-row);
+}
+/* the station's own stretch of the line: 2px, from the server's data-wave-state, never from a class the painter guesses */
+#as-initiatives .wave-row::before { content: ""; position: absolute; left: -15px; top: -1px; bottom: -1px; width: 2px; background: var(--tab-idle); }
+#as-initiatives .wave-row[data-wave-state="running"]::before { background: var(--tab-run); }
+#as-initiatives .wave-row[data-wave-state="ready"]::before { background: var(--tab-ready); }
+#as-initiatives .wave-row[data-wave-state="done"]::before { background: var(--tab-accent); }
+#as-initiatives .wave-row[data-wave-state="unknown"]::before,
+#as-initiatives .wave-row[data-wave-state="blocked"]::before { background: var(--tab-warn); }
+#as-initiatives .wave-row[data-wave-state="abandoned"]::before { background: var(--tab-bad); }
+#as-initiatives .wave-row[data-wave-state="empty"]::before,
+#as-initiatives .wave-row[data-wave-state="unentered"]::before { background: var(--tab-line-strong); }
+#as-initiatives .wave-row[data-wave-current="true"] { border-color: var(--tab-line-strong); background: linear-gradient(180deg, var(--tab-raised), var(--tab-row)); box-shadow: var(--tab-e1); }
+/* THE STATION MARKER: the wave's position sits ON the line, not at the left of a box. Its fill is the opaque surface
+   the card is drawn on, and `z-index` is stated rather than left to tree order: the disc is what hides the connector
+   inside the ring, in every state. */
+#as-initiatives .wave-pos {
+  position: absolute;
+  left: -25px;
+  top: 13px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tab-line-strong);
+  border-radius: 50%;
+  background: var(--tab-surface);
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  letter-spacing: 0;
+  z-index: 2;
+}
+#as-initiatives .wave-row[data-wave-state="running"] .wave-pos { border-color: var(--tab-run-line); color: var(--tab-run); }
+#as-initiatives .wave-row[data-wave-state="done"] .wave-pos { border-color: var(--tab-run-line); color: var(--tab-accent); }
+#as-initiatives .wave-row[data-wave-state="blocked"] .wave-pos,
+#as-initiatives .wave-row[data-wave-state="unknown"] .wave-pos { border-color: var(--tab-warn-line); color: var(--tab-warn); }
+#as-initiatives .wave-row[data-wave-state="abandoned"] .wave-pos { border-color: var(--tab-bad-line); color: var(--tab-bad); }
+/* The current station's ring is the running green and its fill carries the running tint. The tint is a translucent
+   colour, so it is laid as an IMAGE OVER the opaque surface instead of standing in for the fill: the disc keeps the
+   exact colour it had, and nothing behind it - the connector - can show through. That is the whole fix: the line used
+   to run through this one station's middle while every other state's opaque disc hid it. */
+#as-initiatives .wave-row[data-wave-current="true"] .wave-pos {
+  border-width: 2px;
+  border-color: var(--tab-run);
+  color: var(--tab-ink);
+  background-color: var(--tab-surface);
+  background-image: linear-gradient(var(--tab-run-bg), var(--tab-run-bg));
+}
+#as-initiatives .wave-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); min-width: 0; }
+#as-initiatives .wave-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(100%, 760px);
+  font-size: var(--tab-fs-title);
+  font-weight: 600;
+  line-height: var(--tab-lh-tight);
+  letter-spacing: -0.005em;
+  color: var(--tab-ink);
+  overflow-wrap: anywhere;
+}
+/* the state belongs to the name, not to the far edge of a wide row: it is the next thing after the title */
+#as-initiatives .wave-head .chip { margin-left: 0; }
+#as-initiatives .wave-template { flex: 1 0 100%; margin-top: var(--tab-s1); font-size: var(--tab-fs-meta); color: var(--tab-ink-3); overflow-wrap: anywhere; }
+#as-initiatives .wave-template .mono { color: var(--tab-ink-2); }
+#as-initiatives .wave-unresolved { color: var(--tab-bad); font-weight: 600; }
+#as-initiatives .wave-head .chip {
+  height: var(--tab-chip-h);
+  padding: 0 var(--tab-s2);
+  border-radius: var(--tab-r-pill);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 600;
+  line-height: 1.4;
+}
+#as-initiatives .wave-state.is-empty, #as-initiatives .wave-state.is-unentered { color: var(--tab-idle); border-color: var(--tab-idle-line); background: transparent; }
+#as-initiatives .wave-state.is-ready { color: var(--tab-ready); border-color: var(--tab-ready-line); background: var(--tab-ready-bg); }
+#as-initiatives .wave-state.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-state.is-blocked { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-state.is-unknown { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-state.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); background: transparent; }
+#as-initiatives .wave-state.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .wave-current { color: #d8c7ff; border-color: #5b4a86; background: rgba(163, 113, 247, 0.14); }
+/* GATE PILLS ARE ANSWERS: a 5px dot in the answer's colour, the check's name, the answer in words. "no check" keeps a
+   dashed edge, so nothing-to-check cannot be mistaken for not-met. */
+#as-initiatives .wave-gates { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: var(--tab-s2); }
+#as-initiatives .wave-gate, #as-initiatives .wave-auto, #as-initiatives .wave-auto-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--tab-chip-h);
+  padding: 0 var(--tab-s2);
+  border-radius: var(--tab-r-pill);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-chip);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#as-initiatives .wave-gate[data-gate-state]::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+#as-initiatives .wave-gate.is-met { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-gate.is-unmet { color: var(--tab-idle); border-color: var(--tab-idle-line); background: transparent; }
+#as-initiatives .wave-gate.is-unknown { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-gate.is-none { color: var(--tab-idle); border-style: dashed; border-color: var(--tab-line); background: transparent; }
+#as-initiatives .wave-gate.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+#as-initiatives .wave-auto { border: 1px solid var(--tab-line); background: var(--tab-sunken); color: var(--tab-ink-3); }
+#as-initiatives .wave-auto.is-on { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-auto-open.is-on { color: #d8c7ff; border-color: #5b4a86; background: rgba(163, 113, 247, 0.14); }
+#as-initiatives .wave-auto-open.is-wait { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-join { display: block; margin-top: 6px; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); line-height: 1.5; }
+/* THE CLOSING NOTE (the sketch's callout). The count is the lead, the rule is the note, and the note is a box: at
+   11.5px of ink-3 on the row fill a bare line is the least-read sentence in the wave, and it is the one sentence
+   that says what closing costs. */
+#as-initiatives .wave-join b { display: block; margin-bottom: 2px; color: var(--tab-ink); font-size: var(--tab-fs-chip); font-weight: 600; letter-spacing: 0.01em; }
+#as-initiatives .wave-join span { color: var(--tab-ink-2); }
+#as-initiatives .wave-close > .wave-join { margin-top: 0; padding: var(--tab-s2) var(--tab-s3); border: 1px solid var(--tab-line); border-left: 2px solid var(--tab-line-strong); border-radius: 0 var(--tab-r2) var(--tab-r2) 0; background: var(--tab-sunken); }
+#as-initiatives .wave-close { display: flex; flex-direction: column; gap: var(--tab-s2); margin-top: var(--tab-s3); }
+#as-initiatives .wave-close > .wave-lanes { margin-top: 0; }
+/* Wide enough for a third column: the note stands beside the lanes it is about, the way the sketch draws it. Below
+   900px of pane the note sits above them, because a 196px note beside two 340px lanes is the note nobody can read. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-close { flex-direction: row; align-items: flex-start; }
+  #as-initiatives .wave-close > .wave-lanes { flex: 1 1 auto; min-width: 0; }
+  #as-initiatives .wave-close > .wave-join { flex: 0 0 196px; align-self: stretch; }
+}
+
+/* ---- 5b. AUTHORING: the Add control, a station's controls, and the one-line form ------------------ */
+/* The Add control sits on the section head beside "Waves N", in the same mini-button language the tree rows use, so a
+   control that changes the map looks like the controls that change the map everywhere else on this card. */
+#as-initiatives .wave-add { order: 2; height: 20px; padding: 0 8px; font-size: var(--tab-fs-meta); }
+/* A station's controls are RIGHT-ALIGNED under the row: edit the record, move it one place, delete it. Up/Down are a
+   reorder of the whole list in one write, so a station that is already first or last has the button disabled rather
+   than posting a move that changes nothing. */
+#as-initiatives .wave-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: var(--tab-s2); }
+#as-initiatives .wave-actions .init-mini { height: 20px; padding: 0 8px; font-size: 10.5px; }
+#as-initiatives .wave-actions .wave-del:hover { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+/* THE FORM. One line on a wide pane, two columns on a narrow one; a dashed edge so it reads as a draft the reader is
+   filling in, not as a station that already exists. It is drawn by the module from `waveForm`, so a snapshot repaint
+   cannot erase a half-typed title. */
+#as-initiatives .wave-form {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(130px, 1.4fr) auto auto;
+  align-items: end;
+  gap: var(--tab-s2);
+  margin: var(--tab-s2) 0;
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px dashed var(--tab-line-strong);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+@container (max-width: 820px) {
+  #as-initiatives .wave-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #as-initiatives .wave-field-title, #as-initiatives .wave-field-template, #as-initiatives .wave-form-error { grid-column: 1 / -1; }
+}
+#as-initiatives .wave-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#as-initiatives .wave-field > span { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--tab-ink-3); }
+#as-initiatives .wave-field input, #as-initiatives .wave-field select {
+  min-width: 0;
+  /* `.as-group input[type="text"]` gives every text input `flex: 1 1 250px`, and a flex basis is the MAIN size: in the
+     field's column that turned a 24px input into a 250px one. The field is a column, so the basis has to be off. */
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-surface);
+  color: var(--tab-ink);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  line-height: 1;
+}
+#as-initiatives .wave-field input:focus, #as-initiatives .wave-field select:focus { outline: 1px solid var(--tab-accent); outline-offset: 1px; border-color: var(--tab-line-strong); }
+#as-initiatives .wave-switch { display: inline-flex; align-items: center; gap: 5px; height: 24px; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); white-space: nowrap; }
+#as-initiatives .wave-switch input { margin: 0; }
+#as-initiatives .wave-form-error { grid-column: 1 / -1; margin: 0; }
+
+/* ---- 6. THE LANES: parallel blocks, members as a manifest ---------------------------------------- */
+#as-initiatives .wave-lanes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--tab-s2); margin-top: var(--tab-s3); }
+/* Lanes run SIDE BY SIDE wherever the pane can hold two; below 900px of pane they stack, because a squeezed lane is
+   two lanes nobody can read. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-lanes { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+}
+#as-initiatives .wave-lane {
+  min-width: 0;
+  padding: var(--tab-s2) var(--tab-s3);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-line-strong);
+  border-radius: 0 var(--tab-r2) var(--tab-r2) 0;
+  background: var(--tab-sunken);
+}
+#as-initiatives .wave-lane[data-lane-read="cannot-tell"] { border-left-color: var(--tab-warn); }
+#as-initiatives .wave-lane .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
+#as-initiatives .wave-lane-read { margin-left: var(--tab-s2); font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .wave-lanes-bad { margin-bottom: var(--tab-s2); }
+/* THE BAR IS ONE FULL-WIDTH ROW (row 291): every member of a wave fills its section's content width, at the docked pane
+   and at the wide float, so the left inset and the right edge are the same for all of them and a long title wraps
+   instead of widening the bar. `flex-direction: column` here is what makes the row fill: a wrapped flex row sizes each
+   item from its content, which is exactly the "ends where its text ends" defect the reader's screenshot showed. The
+   wide drawing below turns the same row into a grid, one column per fact. */
+#as-initiatives .wave-members { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--tab-s2); min-width: 0; }
+#as-initiatives .wave-lane .wave-members { display: flex; flex-direction: column; gap: var(--tab-s1); margin-top: 6px; }
+#as-initiatives .wave-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--tab-s2);
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: var(--tab-member);
+  padding: 3px var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-surface);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+}
+/* THE MIN-CONTENT TRAP, one level down from the card: a flex item's automatic minimum is its min-content width, so a
+   long title would still widen the row past the card unless every link in the chain may shrink. The row can, its
+   children can, and the title is the one that takes the space the chips do not. */
+#as-initiatives .wave-member > * { min-width: 0; max-width: 100%; }
+#as-initiatives .wave-member-id { flex: 0 0 auto; font-family: var(--tab-font-mono); font-weight: 600; font-size: 11px; color: var(--tab-ink-3); font-variant-numeric: tabular-nums; }
+#as-initiatives .wave-member-title { flex: 1 1 12ch; min-width: 0; overflow-wrap: anywhere; color: var(--tab-ink-2); }
+/* The title is the bar's KEYBOARD press (the row itself is pressed with the pointer): a button drawn as the words it
+   already drew, so the lane gains a way in for the tab key without gaining a control that looks like one. */
+#as-initiatives button.wave-member-title {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives button.wave-member-title:hover { color: var(--tab-ink); text-decoration: underline; text-underline-offset: 2px; }
+#as-initiatives button.wave-member-title:focus-visible { outline: var(--tab-ring); outline-offset: 1px; border-radius: var(--tab-r1); }
+#as-initiatives .wave-member-project { min-width: 0; overflow-wrap: anywhere; padding: 0 5px; border-radius: var(--tab-r1); background: var(--tab-raised); font-family: var(--tab-font-mono); font-size: 10px; color: var(--tab-ink-3); }
+#as-initiatives .wave-member .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
+/* THE OWNER CHIP is the worktree column's `.owner-tag` (public/chart.css), unchanged: same font, box, border and
+   colours, because the two chips say the same fact - which assistant owns this - and must read as one thing. */
+#as-initiatives .wave-member .wave-owner { flex: 0 0 auto; }
+/* THE REPORTS CHIP KEEPS THE RIGHT EDGE (row 295, ask 1). The owner and state chips moved left, to just after the id,
+   and the reports chip is the one control that stays at the bar's end - where a reading eye stops. In the wrapped
+   flex drawing the auto margin is what holds it there at every width; in the grid below its own last column does. */
+#as-initiatives .wave-member .wave-reports { margin-left: auto; }
+#as-initiatives .wave-mstate.is-queued { color: var(--tab-idle); border-color: var(--tab-idle-line); }
+#as-initiatives .wave-mstate.is-running { color: var(--tab-run); border-color: var(--tab-run-line); background: var(--tab-run-bg); }
+#as-initiatives .wave-mstate.is-parked { color: var(--tab-warn); border-color: var(--tab-warn-line); background: var(--tab-warn-bg); }
+#as-initiatives .wave-mstate.is-done { color: var(--tab-accent); border-color: var(--tab-run-line); background: transparent; }
+#as-initiatives .wave-mstate.is-abandoned { color: var(--tab-bad); border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+/* THE MANIFEST: at a pane that can hold it, a member is a row - 44px id, the owner chip, an 80px state, the title, a
+   150px project, the reports chip - so two members compare down a column instead of wrapping into prose. The row is
+   the CARD'S full width: the 760px cap this rule used to carry is what made the bars stop short of the section.
+   THE COLUMN ORDER IS THE BAR'S (row 295, ask 1): `#<id> | owner | status | <name ...> | reports`, and the reports
+   chip stays the last column so it keeps the right edge. */
+@container (min-width: 900px) {
+  #as-initiatives .wave-member {
+    display: grid;
+    grid-template-columns: 44px auto 80px minmax(0, 1fr) 150px auto;
+    gap: var(--tab-s2);
+    align-items: center;
+    width: 100%;
+  }
+  #as-initiatives .wave-member .chip { justify-self: start; }
+  #as-initiatives .wave-member .wave-owner { justify-self: start; }
+  /* The auto margin that holds the chip right in the wrapped drawing has nothing to do here: the last column does. */
+  #as-initiatives .wave-member .wave-reports { margin-left: 0; justify-self: start; }
+}
+#as-initiatives .wave-skipped { margin-top: var(--tab-s2); }
+#as-initiatives .wave-skip-row { overflow-wrap: anywhere; }
+#as-initiatives .wave-none { padding: var(--tab-s1) 0; }
+#as-initiatives .wave-store-bad { margin: 0; }
+
+/* ---- 7. THE CAST BELOW THE ROUTE: assistants, tasks and history as disclosure rows ---------------- */
+/* `min-width: 0` because the wide plate makes this fold a GRID ITEM, and a grid item's automatic minimum is its
+   min-content - the same defect the task list had, one level up. */
+#as-initiatives .init-assistfold, #as-initiatives .init-histfold { min-width: 0; margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+#as-initiatives .init-assists { margin: var(--tab-s1) 0 0 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-assist { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); min-height: var(--tab-row-h); font-size: 12px; color: var(--tab-ink-2); }
+#as-initiatives .init-assist-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--tab-s1);
+  border: 0;
+  border-radius: var(--tab-r1);
+  background: transparent;
+  color: var(--tab-link);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+#as-initiatives .init-assist-btn:hover { background: transparent; text-decoration: underline; }
+#as-initiatives .init-counts { display: flex; flex-wrap: wrap; gap: var(--tab-s1); font-variant-numeric: tabular-nums; }
+#as-initiatives .init-counts .chip {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tab-ink-3);
+  font-family: var(--tab-font-ui);
+  font-size: var(--tab-fs-meta);
+  white-space: normal;
+}
+#as-initiatives .init-counts .chip.good { color: var(--tab-run); background: transparent; border: 0; }
+#as-initiatives .init-counts .chip.warn { color: var(--tab-warn); background: transparent; border: 0; }
+#as-initiatives .init-counts .chip + .chip::before { content: "\00b7"; margin-right: 8px; color: var(--tab-ink-3); }
+#as-initiatives .init-assist-when { margin-left: auto; white-space: nowrap; color: var(--tab-ink-3); font-size: var(--tab-fs-meta); }
+#as-initiatives .init-assist .init-proj.init-assist-fold { width: auto; flex: 0 0 auto; min-height: 28px; padding: var(--tab-s1) 6px; gap: var(--tab-s1); }
+#as-initiatives .init-assist-fold .init-proj-name { flex: 0 0 auto; }
+#as-initiatives .init-assist .init-counts { flex: 1 0 100%; }
+/* THE TASK LIST IS THE CARD'S WIDTH, NOT ITS ROWS'. A flex item's automatic minimum size is its min-content
+   width, and a compact card's title is ONE nowrap line, so `flex: 1 0 100%` with `min-width: auto` sized this list
+   to the longest title inside it: measured 1180px inside a 463px card, every row 1163px wide and running past the
+   card's content edge into the gutter. `flex-basis: 0` with `grow: 1` takes the line's free space AFTER the 6px
+   margin, and `min-width: 0` stops the min-content from setting the width at all. */
+#as-initiatives .init-tasks { flex: 1 1 0; min-width: 0; max-width: 100%; margin: var(--tab-s1) 0 var(--tab-s1) 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+/* EVERY ROW IS THE LIST'S WIDTH, AND NOTHING IN ONE ASKS FOR MORE. Belt to the rule above: the row and its flex
+   chain may not take a width from their own content, and the two fields that cannot wrap - the title and the
+   agent's thread - already ellipsize (public/core/task-card.css). The no-agent label is the one piece of plain text
+   on the row, so it is cut the same way rather than left to paint past the card. */
+#as-initiatives .init-tasks .as-task { min-width: 0; max-width: 100%; }
+#as-initiatives .init-tasks .as-task-main,
+#as-initiatives .init-tasks .as-task-body,
+#as-initiatives .init-tasks .as-task-head,
+#as-initiatives .init-tasks .as-task-facts { min-width: 0; max-width: 100%; }
+#as-initiatives .init-tasks .as-task-head > *,
+#as-initiatives .init-tasks .as-task-facts > * { min-width: 0; max-width: 100%; }
+#as-initiatives .init-tasks .as-task-agent.is-none { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .init-task-none { padding: var(--tab-s1) 0; }
+#as-initiatives .init-history { margin: var(--tab-s1) 0 0 6px; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--tab-s2); min-height: 28px; font-size: 12px; color: var(--tab-ink-2); }
+#as-initiatives .init-hist-what { min-width: 0; overflow-wrap: anywhere; }
+#as-initiatives .init-hist-who { color: var(--tab-ink); font-weight: 600; }
+#as-initiatives .init-hist-when { margin-left: auto; white-space: nowrap; font-family: var(--tab-font-mono); font-size: 11px; color: var(--tab-ink-3); }
+#as-initiatives .init-hist-none { padding: var(--tab-s1) 0; }
+#as-initiatives .init-tier, #as-initiatives .init-hist-row, #as-initiatives .init-assist { font-size: 12px; }
+
+/* ---- 7b. THE TWO FOLDS AND THE NOTE LOG (row 320) ------------------------------------------------- */
+/* THE FOLDS ARE SECTIONS, NOT ACCORDIONS GROWN SIDEWAYS. The Assistants and History folds used to be a 12px
+   transparent row with a caret, which read as body text beside the waves lane's section head. They now share that
+   head's grammar - the name at one weight, the count in tabular figures, one sentence saying what the fold holds, a
+   hairline over the block - and their rows are cards on a rail. THE BEHAVIOUR IS UNTOUCHED: the same
+   data-init-assist-fold / data-init-history-fold attributes and aria-expanded, the same module sets, the same rows and
+   their own data attributes, so every press, keyboard path, focus token and repaint answers exactly as before. */
+#as-initiatives .init-fold { min-width: 0; margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+#as-initiatives .init-fold .init-foldhead {
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  padding: 0 var(--tab-s2) 0 0;
+  border-radius: var(--tab-r2);
+}
+#as-initiatives .init-fold .init-foldhead .init-proj-name { flex: 0 0 auto; font-weight: 600; font-size: 12px; color: var(--tab-ink); }
+#as-initiatives .init-fold .init-foldhead .chip { font-variant-numeric: tabular-nums; }
+#as-initiatives .init-fold .init-foldhead:hover .init-foldmeta { color: var(--tab-ink-2); }
+#as-initiatives .init-foldmeta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-fold .init-caret { color: var(--tab-ink-3); }
+/* The rail: one hairline down the block, an assistant's own row and a history line as a card on it, with a hairline
+   between neighbours. The rail is what makes a fold read as a list inside a section rather than as more prose. */
+#as-initiatives .init-assists { margin: var(--tab-s1) 0 0; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-assist + .init-assist { border-top: 1px solid var(--tab-line); padding-top: var(--tab-s1); }
+#as-initiatives .init-history { position: relative; margin: var(--tab-s1) 0 0; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s4); }
+#as-initiatives .init-hist-row { position: relative; min-height: 26px; padding: var(--tab-s1) 0; font-size: var(--tab-fs-body); }
+#as-initiatives .init-hist-row + .init-hist-row { border-top: 1px solid var(--tab-line); }
+#as-initiatives .init-hist-dot {
+  position: absolute;
+  left: calc((var(--tab-s4) + 1px) * -1 - 2.5px);
+  top: 13px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tab-line-strong);
+}
+
+/* THE NOTE LOG. A section above the Assistants fold: a count on the head, the list newest first, the writer under
+   it. A reader's own note is neutral and an assistant's carries the violet this panel already uses for a turn that
+   wrote something - the same colour, not a second meaning. A link is a pill with its host in the store's own word
+   (Jira, Bitbucket, GitHub, link), its label beside it, and it opens in a new tab. THE HEAD IS THE FOLD CONTROL: it
+   wears the same row the Assistants and History heads wear, and the count stays on it, so a folded log is still a
+   number the reader can read. */
+#as-initiatives .init-notesfold { min-width: 0; margin-top: var(--tab-s4); border-top: 1px solid var(--tab-line); padding-top: var(--tab-s3); }
+#as-initiatives .init-notesfold .init-noteshead {
+  gap: var(--tab-s2);
+  margin: 0 0 var(--tab-s2);
+  padding: 0 var(--tab-s2) 0 0;
+  border-radius: var(--tab-r2);
+}
+#as-initiatives .init-noteshead .init-caret { color: var(--tab-ink-3); }
+#as-initiatives .init-noteshead .init-sechead-name { flex: 0 0 auto; font-weight: 600; font-size: 12px; color: var(--tab-ink); }
+#as-initiatives .init-sechead-name { flex: 0 0 auto; }
+#as-initiatives .init-noteshead .init-notes-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+#as-initiatives .init-notes-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+#as-initiatives .init-noteshead .init-notes-note { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-noteshead:hover .init-notes-note { color: var(--tab-ink-2); }
+#as-initiatives .init-notes-note { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+/* The fold's own answer to `hidden`: the body is a plain block, so the browser's default rule is enough, but the
+   attribute is stated here too so no later display rule can outvote what aria-expanded says. */
+#as-initiatives .init-notesfold .init-notesbody[hidden] { display: none; }
+#as-initiatives .init-notes { display: flex; flex-direction: column; min-width: 0; }
+#as-initiatives .init-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s1);
+  min-width: 0;
+  padding: var(--tab-s2) var(--tab-s2) var(--tab-s2) var(--tab-s3);
+  border-left: 2px solid var(--tab-line-strong);
+  border-bottom: 1px solid var(--tab-line);
+}
+#as-initiatives .init-note:last-child { border-bottom: 0; }
+#as-initiatives .init-note.is-assistant { border-left-color: var(--violet); background: linear-gradient(90deg, var(--violet-bg), transparent 52%); }
+#as-initiatives .init-note-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--tab-s1) var(--tab-s2); min-width: 0; }
+#as-initiatives .init-note-by { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .init-note.is-assistant .init-note-by { color: #d7c4ff; }
+#as-initiatives .init-note-who { font-weight: 600; color: var(--tab-ink-2); }
+#as-initiatives .init-note.is-assistant .init-note-who { color: #ecd9ff; }
+#as-initiatives .init-note-when, #as-initiatives .init-note-edited { font-family: var(--tab-font-mono); font-size: 10.5px; color: var(--tab-ink-3); }
+#as-initiatives .init-note-text { margin: 0; font-size: var(--tab-fs-body); line-height: var(--tab-lh-body); color: var(--tab-ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+#as-initiatives .init-note-chip {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--tab-s2);
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s2) 0 0;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r-pill);
+  background: var(--tab-row);
+  color: var(--tab-link);
+  font-size: var(--tab-fs-meta);
+  text-decoration: none;
+  overflow: hidden;
+}
+#as-initiatives .init-note-chip:hover { border-color: var(--tab-line-strong); background: var(--tab-raised); text-decoration: none; }
+#as-initiatives .init-note-host {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0 var(--tab-s2);
+  border-right: 1px solid var(--tab-line);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+  font-family: var(--tab-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+#as-initiatives .init-note-chip.is-jira .init-note-host { color: #9ecbff; background: var(--tab-ready-bg); }
+#as-initiatives .init-note-chip.is-bitbucket .init-note-host { color: #ffd7a8; background: var(--tab-warn-bg); }
+#as-initiatives .init-note-chip.is-github .init-note-host { color: var(--tab-ink); background: var(--tab-raised); }
+#as-initiatives .init-note-label { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .init-note-go { display: inline-flex; align-items: center; flex: 0 0 auto; color: var(--tab-ink-3); font-size: 11px; }
+#as-initiatives .init-note-actions { display: flex; flex-wrap: wrap; gap: var(--tab-s1); }
+#as-initiatives .init-note-actions .init-mini { min-height: 24px; padding: 0 var(--tab-s2); font-size: 11px; }
+#as-initiatives .init-note-del.is-armed { color: #ffd7d2; border-color: var(--tab-bad-line); background: var(--tab-bad-bg); }
+/* WHAT THE LAST NOTE WRITE ANSWERED, beside the box it came from. A note write is not a question - the store never
+   asks one - so this is a plain status line with an accent edge, and only a refusal turns it red. */
+#as-initiatives .init-note-status {
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s1) var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-left: 2px solid var(--tab-accent);
+  border-radius: var(--tab-r2);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-2);
+  font-size: var(--tab-fs-meta);
+  line-height: 1.5;
+}
+#as-initiatives .init-note-status.is-bad { border-left-color: var(--tab-bad); background: var(--tab-bad-bg); color: #ffb4ac; }
+#as-initiatives .init-notes-empty {
+  margin: 0 0 var(--tab-s2);
+  padding: var(--tab-s3);
+  border: 1px dashed var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+  color: var(--tab-ink-3);
+  font-size: var(--tab-fs-body);
+  line-height: 1.55;
+}
+#as-initiatives .init-notes-empty b { display: block; margin-bottom: var(--tab-s1); color: var(--tab-ink-2); font-size: 12px; font-weight: 600; }
+#as-initiatives .init-notewrite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tab-s2);
+  margin-top: var(--tab-s2);
+  padding: var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r3);
+  background: var(--tab-sunken);
+}
+/* THE PARAGRAPH BOX IS THE TALL ONE HERE TOO (row 320): the same inversion the edit form had, corrected at the cause
+   by taking the flex basis off the field in a column and giving the textarea a height of its own. `.init-notebox`
+   deliberately does not borrow `.as-note-box`: that class carries the panel's 11.5px console type, and a note is read
+   as prose, so it takes the tab's body step. */
+#as-initiatives .init-notebox {
+  width: 100%;
+  min-height: 76px;
+  padding: var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font: var(--tab-fs-body)/var(--tab-lh-body) var(--tab-font-ui);
+  resize: vertical;
+}
+#as-initiatives .init-note-write-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s2); }
+#as-initiatives .init-notefield {
+  flex: 1 1 160px;
+  width: auto;
+  min-width: 0;
+  min-height: var(--tab-control);
+  padding: 0 var(--tab-s2);
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-row);
+  color: var(--tab-ink);
+  font-family: var(--tab-font-mono);
+  font-size: 11px;
+}
+#as-initiatives .init-note-write-row .init-note-cap { flex: 1 1 100%; }
+#as-initiatives .init-noteedit { display: flex; flex-direction: column; gap: var(--tab-s1); }
+#as-initiatives .init-noteedit .init-note-write-row .as-hint { flex: 1 1 100%; }
+#as-initiatives .init-mini.primary { color: #0f1115; background: var(--tab-accent); border-color: var(--tab-accent); font-weight: 600; }
+#as-initiatives .init-mini.primary:hover { background: #4ad35c; color: #0f1115; }
+#as-initiatives .init-mini.primary[disabled] { opacity: .55; }
+
+/* ---- 8. WIDE: the plate splits into its words and its cast, the route runs full width -------------- */
+@container (min-width: 1000px) {
+  #as-initiatives .init-card:not(.is-titlecard) {
+    display: grid;
+    /* THE NAME'S ROW IS ABOVE BOTH COLUMNS (row 295, ask 3): `head` spans the pair, and the words and the worktrees
+       stay side by side beneath it. */
+    grid-template-columns: minmax(0, 66ch) minmax(320px, 1fr);
+    grid-template-areas: "head head" "desc side" "chips side" "waves waves" "notes notes" "assist assist" "hist hist";
+    column-gap: var(--tab-s5);
+    align-items: start;
+    justify-content: start;
+  }
+  #as-initiatives .init-card > .init-head { grid-area: head; }
+  #as-initiatives .init-card > .init-descfold, #as-initiatives .init-card > .init-desc { grid-area: desc; }
+  #as-initiatives .init-card > .init-chips { grid-area: chips; }
+  #as-initiatives .init-card > .init-wavefold { grid-area: waves; padding-top: var(--tab-s4); }
+  #as-initiatives .init-card > .init-notesfold { grid-area: notes; }
+  #as-initiatives .init-card > .init-side { grid-area: side; border-left: 1px solid var(--tab-line); padding-left: var(--tab-s5); }
+  #as-initiatives .init-card > .init-assistfold { grid-area: assist; }
+  #as-initiatives .init-card > .init-histfold { grid-area: hist; }
+  #as-initiatives .init-card > .init-form { grid-column: 1 / -1; }
+  #as-initiatives .init-card > .init-desc { max-width: 66ch; }
+  #as-initiatives .init-card .init-title { font-size: var(--tab-fs-display); }
+}
+
+/* ---- 9. FOCUS: one 2px ring, in the link's blue, on every control in the tab --------------------- */
+#as-initiatives button:focus-visible,
+#as-initiatives a:focus-visible,
+#as-initiatives select:focus-visible,
+#as-initiatives input:focus-visible,
+#as-initiatives textarea:focus-visible,
+#as-initiatives .init-focus-restored { outline: var(--tab-ring); outline-offset: 2px; border-radius: var(--tab-r2); }

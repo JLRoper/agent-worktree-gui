@@ -19,6 +19,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
@@ -143,7 +144,7 @@ test("the flash is a class the animation itself takes back, with a timer as the 
 });
 
 test("the sheet carries the keyframe and the class, and the keyframes match shadow for shadow", () => {
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  const css = readStyleSheets();
   const block = sliceBetween(css, "@keyframes initcardflash {", "\n#as-initiatives .init-status {");
   assert.match(block, /#as-initiatives \.init-card\.is-flash \{ animation: initcardflash 1400ms ease-out; \}/);
   // A frame list of a different length is not interpolated: the browser would snap between frames instead of fading.

@@ -1,0 +1,291 @@
+/* public/late.css
+   Late overrides, loaded last.
+
+   Rules that must beat earlier sheets: the sliver-window layout, the cut dialog, the chart legend and its
+   popover, and the search popovers' drag and resize affordances. This sheet is loaded after every other one,
+   exactly as these rules sat at the end of style.css.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ---- a window squashed to a sliver: the folder heads ARE the board ------------------------------------------
+   The reader can shrink this window to a 157 px band (the size the two-folder check measures). Down there the
+   header, the two folded agent cards and the folder cards' own bodies push the second folder below the glass:
+   measured 175.9-224.9 and 329.9-378.9 of 157, so "two folders" read as one folder and a scrollbar. The chrome
+   above the board is not what that height is for. The two folder heads are, because they are the board's two
+   halves and everything else is reachable by scrolling inside them.
+
+   So a window under 300 px of height lays the page out as panes instead of a page: the header stops being a
+   sticky band over the board and becomes the first row of a full-height column, the two folded agent cards
+   become ONE slim row side by side, and the folder cards become columns whose heads share a row while each body
+   scrolls inside its own card. Measured at 1879x157 after the change: both heads at 83.9-120.9, i.e. 36 px above
+   the bottom of the window, with each folder's list scrolling in the 29 px left under its head.
+
+   Nothing is hidden and nothing is re-aimed: the heads, their chips, their filters, their project bodies and
+   every project in them are the same elements; only which box scrolls changes. #spawn-strip keeps its place
+   above the pair when a proposed worker is waiting for a click. */
+@media (max-height: 300px) {
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { position: static; flex: none; padding: 4px 12px; }
+  .shell { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+  .shell > main {
+    /* `height: 100%`, not just a stretched item: a wrapped flex line is content-sized, so without it the board's
+       content (95 px of card) hangs past the 157 px window and its last rows are below the glass, unreachable. */
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    /* spawn strip, the folded agent pair, then the board taking every pixel that is left */
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "spawn spawn" "newagent agents" "board board";
+    gap: 4px 10px;
+    min-height: 0;
+    padding: 4px 10px 6px;
+    overflow: hidden;
+  }
+  #spawn-strip { grid-area: spawn; }
+  #newagent { grid-area: newagent; }
+  #agents { grid-area: agents; }
+  /* A card left open in this band scrolls inside itself rather than eating the board's row. */
+  #newagent, #agents { margin: 0; min-width: 0; }
+  #newagent:not(.fixed-collapsed), #agents:not(.fixed-collapsed) { max-height: 30vh; overflow: auto; }
+  #newagent > .project-head, #agents > .project-head { padding: 3px 10px; flex-wrap: nowrap; }
+  #newagent > .project-head .path, #agents > .project-head .path { display: none; }
+  #newagent > .project-head button, #agents > .project-head button { padding: 1px 7px; }
+  /* The board: one column per folder, one shared head row, each folder's list scrolling on its own. */
+  #projects {
+    grid-area: board;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 8px;
+  }
+  #projects > .root-group { margin: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #projects > .root-group.collapsed { align-self: start; }
+  /* One head row per column: the folder's own path ellipsizes rather than wrapping the head to a second line (the
+     name is the same text: `textContent` still reads it whole, and the title carries it), while its chips, its
+     filter and its buttons stay. 37 px instead of the 75 a wrapped head measured. */
+  #projects > .root-group > .root-head { flex: none; padding: 4px 12px; flex-wrap: nowrap; overflow: hidden; }
+  #projects > .root-group > .root-head h2 { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #projects > .root-group > .root-head .chips { flex: 0 0 auto; flex-wrap: nowrap; }
+  #projects > .root-group > .root-head .root-filter { flex: 0 1 200px; min-width: 96px; }
+  /* One line per control: a 62 px "collapse" button wrapped its own label to two lines and made the head 12 px
+     taller than the row it shares. */
+  #projects > .root-group > .root-head button { white-space: nowrap; }
+  #projects > .root-group > .root-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+}
+
+/* ---- the cut dialog: which KIND of tree a child is (public/app.js openCutDialog) ------------------------- */
+/* One floating card, drawn where the press was: the two kinds as radio rows, a name, and Cut. It sits above the
+   board and the banner because it is the one thing a press must answer before anything is written. */
+.cut-dialog {
+  position: fixed;
+  z-index: 60;
+  width: min(520px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  font-size: 12.5px;
+}
+.cut-dialog .cut-head { font-weight: 600; line-height: 1.35; }
+.cut-dialog .cut-kinds { display: flex; flex-direction: column; gap: 6px; }
+.cut-dialog .cut-kind {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.cut-dialog .cut-kind:hover { background: var(--hover); }
+.cut-dialog .cut-kind input { grid-row: 1 / span 2; align-self: center; margin: 0; }
+.cut-dialog .cut-kind span { color: var(--dim); line-height: 1.35; }
+.cut-dialog .cut-row { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+.cut-dialog .cut-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  background: var(--console);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+.cut-dialog .cut-note { color: var(--dim); line-height: 1.45; }
+.cut-dialog .cut-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.cut-dialog .cut-actions button {
+  padding: 6px 14px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+.cut-dialog .cut-actions .cut-go { border-color: var(--blue); color: var(--blue); }
+.cut-dialog .cut-actions button:disabled { opacity: 0.55; cursor: default; }
+
+/* ---- the chart legend: one line at rest, the words behind a popover --------------------------------
+   Every chart used to carry one 700-character paragraph under it: the five liveness chips, the meaning of the
+   age number and its ring, the kind column's three letters and the fold, all at once. The reader called it too
+   busy to display as a block, so it is a DISCLOSURE now. The strip keeps every symbol and its short word - the
+   chips spell hermes, claude, board, port and files, the kind marks keep T, R and I, and the parent's chevron
+   keeps "fold" - and one control whose visible label says what it is. The words are unchanged; they live in the
+   popover as short lines under three headings, so nothing is lost, only deferred.
+
+   The popover is absolutely positioned, so opening it never reflows the chart, and it hangs BELOW the strip -
+   which is the bottom edge of the card - so it cannot cover a tree row; .legend is its containing block. The
+   strip is nowrap and its keys clip rather than wrap, so the control stays on the one line at the live width
+   instead of dropping to a second row, which is the busy block this replaced. `.legend` keeps its padding and
+   its colour in public/chart.css; only what the disclosure adds lives here, so a rebase meets one block. */
+.legend { position: relative; }
+.legend-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  white-space: nowrap;
+}
+.legend-keys {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.legend .legend-line .sig { flex: 0 0 auto; margin-top: 0; }
+.legend .legend-line .age-slot { flex: 0 0 auto; }
+.legend .legend-line .kind-mark { flex: 0 0 auto; vertical-align: 0; }
+.legend-fold { flex: 0 0 auto; margin-left: 2px; color: var(--dim); font: 10.5px var(--mono); }
+.legend-fold-glyph { margin-right: 1px; color: var(--dimmer); }
+.legend-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px;
+  border: 1px solid #333b47;
+  border-radius: 9px;
+  background: #20242c;
+  color: var(--dim);
+  font: 10.5px/1.7 var(--mono);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.legend-toggle:hover { color: var(--text); border-color: #4a5568; background: #262b34; }
+.legend-toggle:focus-visible { outline: 2px solid #7fb2e8; outline-offset: 1px; }
+.legend-toggle[aria-expanded="true"] { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+.legend-q {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 9.5px;
+  line-height: 1;
+  opacity: .85;
+}
+.legend-pop {
+  position: absolute;
+  left: 14px;
+  top: calc(100% - 4px);
+  z-index: 60;
+  width: min(860px, calc(100% - 28px));
+  max-height: 62vh;
+  overflow: auto;
+  padding: 10px 12px 11px;
+  border: 1px solid #2c3542;
+  border-radius: 8px;
+  background: #151a21;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: left;
+}
+.legend-pop[hidden] { display: none; }
+.legend-pop .legend-group + .legend-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #232b36;
+}
+.legend-pop h4 {
+  margin: 0 0 3px;
+  color: var(--dimmer);
+  font: 600 10px/1.5 var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.legend-pop p { margin: 0 0 2px; }
+.legend .legend-pop .sig { margin: 0 4px 0 0; vertical-align: 0; }
+.legend .legend-pop .kind-mark { margin: 0 4px 0 0; vertical-align: 0; }
+.legend-pop .legend-note { color: var(--dimmer); }
+
+/* THE SEARCH POPOVER'S OWN CHROME: a drag strip with a close x across its top, and a resize grip in its bottom-right
+   corner. Both header searches mount the one popover (public/core/search-popover.js), so the controls are drawn once
+   in that module and skinned here; the rules are scoped to the two popover containers so nothing else on the page
+   inherits them. The strip is sticky because `.as-search-pop` is its own scroller: the handle and the x have to stay
+   reachable when the reader walks the list past the fold. The grip is a bottom-right triangle, 14x14, clipped so its
+   hit box is the corner and not the whole row under it. */
+.as-search-pop > .as-search-drag,
+.ha-search-pop > .as-search-drag {
+  position: sticky; top: 0; z-index: 2; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  height: 14px; margin: -2px 0 2px; border-radius: 4px;
+  background: #121821; color: var(--dimmer);
+  cursor: move; touch-action: none; user-select: none;
+}
+.as-search-pop > .as-search-drag::before,
+.ha-search-pop > .as-search-drag::before {
+  content: ""; width: 28px; height: 3px; border-radius: 2px; background: #33404f;
+}
+.as-search-pop > .as-search-drag:hover::before,
+.ha-search-pop > .as-search-drag:hover::before { background: #4f6480; }
+.as-search-pop > .as-search-drag > .as-search-x,
+.ha-search-pop > .as-search-drag > .as-search-x {
+  position: absolute; right: 0; top: -2px; width: 16px; height: 16px; padding: 0;
+  border: 0; border-radius: 3px; background: none;
+  color: var(--dimmer); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer;
+}
+.as-search-pop > .as-search-drag > .as-search-x:hover,
+.ha-search-pop > .as-search-drag > .as-search-x:hover { color: var(--text); background: #1d2734; }
+.as-search-pop > .as-search-grip,
+.ha-search-pop > .as-search-grip {
+  position: sticky; bottom: 0; z-index: 2; flex: 0 0 auto; align-self: flex-end;
+  width: 16px; height: 16px; margin: 0 -3px -3px auto;
+  cursor: nwse-resize; touch-action: none;
+  /* The whole 16x16 box is the hit target; the VISUAL is the bottom-right triangle drawn by ::after. A clip-path on
+     the grip itself would clip the hit test too, and a press at its centre would land on the row underneath. */
+  background: none;
+}
+.as-search-pop > .as-search-grip::after,
+.ha-search-pop > .as-search-grip::after {
+  content: ""; position: absolute; inset: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background-image: repeating-linear-gradient(135deg, #3a4758 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop > .as-search-grip:hover::after,
+.ha-search-pop > .as-search-grip:hover::after {
+  background-image: repeating-linear-gradient(135deg, #6b819f 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop.is-moving, .ha-search-pop.is-moving { cursor: move; }
+.as-search-pop.is-resizing, .ha-search-pop.is-resizing { cursor: nwse-resize; }
+/* The drag strip is the popover's first child, so the item header under it is the first ITEM even though it is no
+   longer `:first-child`; the rule that removes its top border has to be repeated for this neighbour. */
+.as-search-pop > .as-search-drag + .as-search-item { margin-top: 0; padding-top: 3px; border-top: 0; }

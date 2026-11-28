@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { readStyleSheets } from "./style-sheets.js";
 
 // The classic scripts in page order (public/index.html): board/console.js, then dom.js, then charts.js, then
 // turns.js, then settings.js, then render-projects.js, then app.js. A classic script's names are page-wide, so a
@@ -550,7 +551,7 @@ test("with no IntersectionObserver nothing is watched and nothing breaks (contro
 });
 
 test("the stylesheet pauses an off-screen dot, and only that", () => {
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  const css = readStyleSheets();
   assert.match(css, /\.live-pulse \.pulse-dot\.is-offscreen \{ animation-play-state: paused; \}/);
 });
 

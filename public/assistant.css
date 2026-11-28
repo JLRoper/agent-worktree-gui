@@ -1,0 +1,281 @@
+/* public/assistant.css
+   The assistant entry, the spawn strip and the float's shell.
+
+   The header button and its badges, the spawn strip's rows and refusals, the aggressive-mode switch and the
+   floating panel's own frame (docked or floating, split, resized and pads).
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------------------------------------
+   Assistant: a header button, a floating panel, and inside it one real agent card plus what the
+   sentry noticed. The panel takes no page height, is never modal, and stays out of the way of the
+   approvals dock (bottom-right) by defaulting to the top-right.
+   ------------------------------------------------------------------------------------------------ */
+.btn-assistant { display: inline-flex; align-items: center; gap: 6px; }
+#assistant-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 3px;
+  border-radius: 9px; background: #a371f7; color: #fff;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+}
+#assistant-badge[hidden] { display: none; }
+/* The spawn card badge: its own count, beside the alert count and never folded into it. A spawn card is an act
+   waiting on the reader (one press cuts a worktree), and it is the one thing on this board that is invisible
+   until somebody presses it — so it is counted here, and the watchdog's verdict turns the number red. */
+#assistant-spawn-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 2px;
+  border: 1px solid #56d36455; border-radius: 9px; background: #1f3a2b; color: #b7f7d0;
+  font: 700 10.5px/15px var(--ui); text-align: center;
+}
+#assistant-spawn-badge::before { content: "⧗"; margin-right: 3px; font-weight: 400; }
+#assistant-spawn-badge[hidden] { display: none; }
+#assistant-spawn-badge.is-stuck { border-color: var(--red); background: #3d1618; color: #ffd7d5; }
+
+/* A spawn card is not another alert: it is a worker that has NOT started, waiting on the reader's click. It
+   gets its own count beside the alert count, in the violet every spawn card already wears, and it pulses once
+   the card is past the two-minute mark — the number alone was what the reader read as "the agents failed". */
+.as-spawn-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 5px; margin-left: 3px;
+  border-radius: 9px; background: var(--violet); color: #1a1226;
+  font: 700 10.5px/17px var(--ui); text-align: center; letter-spacing: .02em;
+}
+.as-spawn-badge[hidden] { display: none; }
+.as-spawn-badge.is-late { background: var(--amber); color: #2a1c0c; box-shadow: 0 0 0 1px #ffb36b55; }
+.btn-assistant.is-hot { border-color: #8fb8ff; color: #dbebff; box-shadow: 0 0 0 1px #8fb8ff33; }
+
+/* ---- the spawn strip: the board's top line while a card is waiting ---------------------------------
+   A spawn card exists only as an alert, so the board itself used to show nothing at all for it. This strip is
+   the board's own answer: one row per waiting card, a Start button per row, and the oldest waiting first. It
+   is deliberately not a second Alerts list — the button is here, and "Discard" stays in the float. */
+.spawn-strip {
+  border: 1px solid #4a3a6e; border-left: 3px solid var(--violet);
+  border-radius: 10px; background: linear-gradient(180deg, #1d1729, var(--panel));
+  margin-bottom: 18px; padding: 9px 12px;
+}
+.spawn-strip[hidden] { display: none; }
+.spawn-strip-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.spawn-strip-title { font-size: 12.5px; font-weight: 700; color: #ecd9ff; }
+.spawn-strip-title .as-spawn-badge { margin-left: 4px; vertical-align: 1px; }
+.spawn-strip-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
+.spawn-strip-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--card);
+}
+.spawn-strip-row.is-late { border-color: #6b4a1f; background: linear-gradient(180deg, #241d12, var(--card)); }
+.spawn-strip-what { font-size: 12px; color: var(--text); }
+.spawn-strip-prompt {
+  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  flex: 1 1 220px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.spawn-strip-age { font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
+.spawn-strip-row.is-late .spawn-strip-age { color: var(--amber); }
+.spawn-strip-note { font-size: 10.5px; color: var(--dimmer); }
+/* A refusal from the Spawn route lands on its own row (a dirty tree, an unknown project, the gateway down):
+   red, on its own line, with the card still there to retry. */
+.spawn-strip-err { flex: 1 1 100%; font-size: 11px; color: var(--red); }
+.spawn-strip .spacer { flex: 1; }
+
+/* Aggressive mode: one switch at the top of whichever assistant's Settings sub-pane is on screen. It reads as a
+   switch, not a link — the pill beside the label says which way it is thrown, so the state is legible without
+   colour alone. */
+.as-aggressive { border-color: #ffb36b40; }
+.as-aggressive .as-line { margin-bottom: 4px; }
+.btn-aggressive { display: inline-flex; align-items: center; gap: 6px; }
+.btn-aggressive #aggressive-state {
+  display: inline-block; min-width: 22px; padding: 0 5px;
+  border: 1px solid currentColor; border-radius: 9px; opacity: .65;
+  font: 700 9.5px/13px var(--ui); text-align: center; text-transform: uppercase; letter-spacing: .04em;
+}
+.btn-aggressive.is-on { border-color: #ffb36b; color: #ffe4c7; box-shadow: 0 0 0 1px #ffb36b55; }
+.btn-aggressive.is-on #aggressive-state { opacity: 1; background: #ffb36b; border-color: #ffb36b; color: #2a1c0c; }
+
+/* The settings a running aggressive mode holds. Greyed, with the reason on the label, so the reader can tell a
+   disabled knob from a knob they set themselves — and the switch at the top of the tab is where it is turned off. */
+.as-held { border-color: #ffb36b55; }
+.as-held h4 { color: #ffb36b; }
+.as-held-label { opacity: .55; }
+.as-held-label::after { content: " (held)"; font-style: italic; opacity: .8; }
+#aggressive-msg {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  z-index: 120; max-width: min(560px, 90vw); padding: 6px 12px; border-radius: 8px;
+  background: #2a2f3a; border: 1px solid #ffb36b66; color: #ffe4c7;
+  font: 12px/1.4 var(--ui); box-shadow: 0 6px 20px #0006;
+}
+#aggressive-msg[hidden] { display: none; }
+
+/* The board and the assistant's rail share one row: the rail is a flex item, so it takes layout width and the
+   board is laid out beside it. That is the whole of "it must never cover the board" — there is no overlay left
+   to cover anything with. */
+.shell { display: flex; flex-wrap: wrap; align-items: flex-start; }
+/* `flex-basis: 0`, not `auto`: the row wraps, and a basis of `auto` makes the line-breaking decision on the
+   board's CONTENT width, which pushes the rail onto a line of its own. */
+.shell > main { flex: 1 1 0; min-width: 0; }
+/* The footer is the row's last line, and it is what makes the rail's sticky box reach the bottom of the page. */
+.shell > .foot { flex: 1 0 100%; }
+
+/* The assistant, docked: a column at the right of the board, as tall as the window and pinned there while the
+   board scrolls under it. Its width is the reader's - 340px at the floor, half the window at the cap, with the
+   board's 420px floor as the second stop - and `assistant.js` is its one authority: a min/max here would fight
+   that clamp the way a second cap fought the old drag.
+   Scoped to `#assistant`: this rule was `.assistant` alone, and the chart's owner cell used to carry
+   `class="assistant"` — so every owner <td> was a 480px sticky flex column with the rail's border and background. */
+#assistant {
+  position: sticky; top: 0; z-index: 5;
+  flex: 0 0 auto; width: 480px;
+  display: flex; flex-direction: column;
+  background: var(--panel); border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+#assistant[hidden] { display: none; }
+/* The FLOAT: one assistant's own frame, and never the default. The rule above is the rail every reader has; this class
+   is written only when that assistant's `dock` setting is `floating` (`applyFrame` in assistant.js). `fixed`, not
+   sticky: it is a window OVER the board and takes no layout width, which is why the board's column widens while it is
+   on. Its rect is inline — the geometry has one authority, and the stylesheet owns only the chrome a window needs.
+   90 is the layer the model popup's own comment names for "the assistant float": over the board and the approvals
+   dock (45), under Settings and the banner layer (120). */
+#assistant.is-floating {
+  position: fixed; z-index: 90;
+  border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 18px 48px #000a;
+}
+/* The bar is the float's handle. It is not the rail's: a pinned column has nowhere to be dragged to, so its title row
+   stays a label and the buttons in it stay buttons. */
+#assistant.is-floating .as-bar { cursor: move; }
+#assistant.is-floating .as-bar button { cursor: pointer; }
+/* One grab, and in the float it is the corner opposite the bar: the same element the rail sizes itself on, moved to
+   where a window's resize corner is. */
+#assistant.is-floating .as-split {
+  left: auto; right: 0; top: auto; bottom: 0;
+  width: 16px; height: 16px; cursor: nwse-resize;
+  border-radius: 0 0 9px 0;
+}
+#assistant.is-floating .as-split::after {
+  content: ""; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px;
+  border-right: 2px solid var(--dim); border-bottom: 2px solid var(--dim); border-radius: 0 0 2px 0;
+}
+/* A gesture owns the pointer: text under it must not be selected while the window is dragged or sized. */
+#assistant.is-moving { user-select: none; }
+#assistant.is-moving .as-bar { cursor: grabbing; }
+#assistant.is-moving .as-split { background: #3d6ea8; }
+/* The rail's rows never share its height with the transcript: they keep their natural height and the body takes
+   what is left, at every width. */
+#assistant > .as-bar, #assistant .as-tabs, #assistant .as-subtabs { flex: none; }
+/* The rail's title row: what it is, how it is running, and the one close toggle. It is not a window's title bar —
+   there is nothing to drag, and no pin or maximize to press.
+   SCOPED, and that is the point: `.as-bar` is a name a progress bar reaches for too. The watchlist's deadline bar
+   carried it, its 78x4 box became this row's box, and the header — 78 px wide, 15 px tall — spilled its name and
+   mode chip above the float's top edge, where `overflow: hidden` cut them. The deadline bar is `.as-watchbar` now;
+   this selector keeps the title row from ever picking up another bar's box again. */
+#assistant > .as-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 7px 10px;
+  background: linear-gradient(180deg, #1a2230, #141a23);
+  border-bottom: 1px solid var(--line); user-select: none;
+}
+/* The name and its mode chip keep ONE line each, and the row wraps instead: a width that cannot hold the whole row
+   moves the chips down, and a name longer than the row ellipsizes in its own box (its `title` carries the rest). No
+   header text is cut off, in either frame, at any zoom. */
+#assistant > .as-bar > strong {
+  font-size: 13px; letter-spacing: .02em;
+  flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#assistant > .as-bar .spacer { flex: 1; }
+.as-glyph { color: #8fb8ff; font-size: 14px; }
+.as-mode { font-size: 10.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; flex: 0 0 auto; white-space: nowrap; }
+.as-mode.is-auto { color: #7ee787; border-color: #2ea043; background: var(--green-bg); }
+.as-mode.is-safe { color: #e3b341; border-color: #6b4d16; background: var(--amber-bg); }
+#btn-as-close { border: 0; background: none; color: var(--dim); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; margin-left: auto; }
+#btn-as-close:hover { color: var(--text); }
+#assistant > .as-bar .chips { display: flex; gap: 5px; flex: 0 1 auto; flex-wrap: wrap; }
+
+/* The header's search: ONE box in the gap the spacer leaves between the mode chip and the chips row, and a popover
+   under it. The box is 20px tall and the chips beside it measure 21.94px at the default zoom, so the title row -
+   its tallest child plus the bar's own 7px padding - measures the same with this control in it as without. Nothing
+   here sets the row's height: the results are position: fixed (the pane clips its own overflow), so a result can
+   never wrap the row or add a line to it. */
+#assistant > .as-bar .as-search { display: flex; align-items: center; gap: 4px; flex: 1 1 120px; min-width: 96px; max-width: 164px; height: 20px; }
+#assistant > .as-bar .as-search-q {
+  flex: 1 1 auto; min-width: 0; width: 100%; height: 20px; box-sizing: border-box;
+  font-family: var(--mono); font-size: 10.5px; line-height: 18px; color: var(--text);
+  background: #0d121a; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px;
+}
+#assistant > .as-bar .as-search-q::placeholder { color: var(--dimmer); }
+#assistant > .as-bar .as-search-q:focus { outline: none; border-color: #3b6ea8; background: #0b1017; }
+#assistant > .as-bar .as-search-n { font-size: 10px; color: var(--dim); white-space: nowrap; }
+#assistant > .as-bar .as-search-n.is-capped { color: #e3b341; }
+#assistant > .as-bar .as-search-n[hidden] { display: none; }
+#assistant > .as-bar .as-search-scope {
+  flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; line-height: 1; letter-spacing: .04em;
+  color: var(--dim); background: #171f2a; border: 1px solid #2a3444; border-radius: 99px;
+  padding: 4px 6px; cursor: pointer;
+}
+#assistant > .as-bar .as-search-scope:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
+#assistant > .as-bar .as-search-scope[aria-pressed="true"] { color: #7ee787; border-color: #2ea043; background: var(--green-bg); }
+
+/* The results: a popover under the box. Fixed rather than absolute so the pane's `overflow: hidden` cannot clip it;
+   96 is above the floating rail (90) and its bar, so a row can be read even when the rail is over the board. */
+.as-search-pop {
+  position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 1px;
+  padding: 4px; overflow-y: auto; background: #121821; border: 1px solid #2a3444; border-radius: 7px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+}
+.as-search-pop[hidden] { display: none; }
+.as-search-row {
+  display: grid; grid-template-columns: auto 1fr; gap: 0 6px; text-align: left; cursor: pointer;
+  background: none; border: 0; border-radius: 5px; padding: 4px 5px; color: var(--text);
+}
+/* One message's head, above its rows: the turn's place in the conversation, when it last did something, and how many
+   of its rows matched. A quiet band rather than another result - it is not a press target - and the first one sits
+   flush with the popover's padding. */
+.as-search-item {
+  flex: 0 0 auto; padding: 5px 5px 1px; margin-top: 2px; font-size: 9.5px; color: var(--dimmer);
+  border-top: 1px solid var(--line); letter-spacing: .02em;
+}
+.as-search-item:first-child { margin-top: 0; padding-top: 3px; border-top: 0; }
+.as-search-row:hover, .as-search-row:focus-visible { background: #1b2532; outline: none; }
+.as-search-where { grid-row: 1; grid-column: 1; font-size: 9.5px; color: #8fb8ff; text-transform: uppercase; letter-spacing: .05em; }
+.as-search-meta { grid-row: 1; grid-column: 2; font-size: 9.5px; color: var(--dimmer); }
+.as-search-snip { grid-column: 1 / -1; grid-row: 2; font-size: 11px; line-height: 1.4; color: var(--dim); overflow-wrap: anywhere; }
+.as-search-more { padding: 4px 5px 2px; font-size: 9.5px; color: var(--dimmer); border-top: 1px solid var(--line); }
+/* The match, in a result row and inside the turn it belongs to: one mark, one colour, both drawn by a read of the
+   same compiled query. */
+mark.as-search-mark { background: #5c4310; color: #ffe9a8; border-radius: 2px; padding: 0 1px; box-shadow: 0 0 0 1px #b8860b; }
+/* The CURRENT match: the turn the box is standing on, and the row in the list that belongs to it. The ring is drawn
+   on the whole turn - every row of the message, so a press moves a message and not one of its lines - and the mark
+   inside it goes brighter than a plain hit's, so "which item" and "which text in it" are two different reads. A 1px
+   ring plus a soft halo: legible on the dark card, and it moves no layout. */
+.turn.is-search-current { box-shadow: 0 0 0 1px #d9a521, 0 0 0 4px rgba(217, 165, 33, .16); border-radius: 6px; }
+mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow: 0 0 0 1px #ffdf8a; }
+/* The row the walk is standing on when the card has no visible text to mark: a console tool CALL is drawn as a
+   folded group row (the tool's name and a chevron, the command kept in data-ltext), so the amber edge is the only
+   honest way to say where the match is. */
+.jl.is-search-current-row, .turn-prompt-inline.is-search-current-row { background: rgba(242, 199, 68, .12); box-shadow: inset 2px 0 0 #f2c744; border-radius: 2px; }
+.as-search-row.is-current { background: #1b2532; box-shadow: inset 2px 0 0 #e3b341; }
+.as-search-row.is-current .as-search-where { color: #ffd479; }
+/* WHOSE TURN a row belongs to. The turn search reads EVERY assistant's turns, so two hits from two assistants have to
+   be told apart at a glance: the assistant's own name leads the row's first line. Only the assistant's bar carries
+   the third cell (`.as-search-row-who`), so the Hot Agent rows beside it keep their two-cell grid and their look. */
+.as-search-row-who { grid-template-columns: auto auto 1fr; }
+.as-search-row-who .as-search-where { grid-column: 2; }
+.as-search-row-who .as-search-meta { grid-column: 3; }
+.as-search-who { grid-row: 1; grid-column: 1; font-size: 9.5px; color: #e3b341; letter-spacing: .02em; }
+.as-search-row.is-current .as-search-who { color: #ffd479; }
+
+/* The SECOND search: the Hot Agent bar's popover, and the opener that moved out of the assistant's title row into
+   the floating header. The popover, the keys and the follow are still the turn search's own module
+   (public/core/search-popover.js), and the rows are the same .as-search-row grid, so the two bars cannot drift.
+   What is here is the opener's skin and the parts only this bar has: the popover's own head/list/footer (the LIST
+   scrolls, so the box and the footer never scroll away) and the thread line a hot agent row adds to name where the
+   turn came from. The opener wears the header family's hit area - the same padding, border and radius as the
+   buttons beside it, so the row's height does not move - and its glyph is the inline SVG hand-and-pen in
+   currentColor, so the control's dim, hover and open states are the ones the 20px pill had in the rail. */
+.topbar .ha-search-open {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 5px 8px; line-height: 0; color: var(--dim);
+}
+.topbar .ha-search-open .ha-search-glyph { display: block; }
+.topbar .ha-search-open:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
+.topbar .ha-search-open[aria-expanded="true"] { color: #ffd479; border-color: #b8860b; background: #221a0c; }
+.topbar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }

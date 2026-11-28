@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
@@ -287,7 +288,7 @@ test("the row chips open their card popups, and no title promises a card under t
 // sections that are closed until asked for. Each header keeps its one line, so a minimised section still reads.
 test("the pair card is a summary over four closed sections", () => {
   const scaffold = read("public/board-scaffold.js");
-  const css = read("public/style.css");
+  const css = readStyleSheets();
   const block = sliceBetween(scaffold, "function collisionBlockHtml(row, key) {", "// The card behind a chip, from the row the board holds now.");
   // ABOVE THE FOLD: the two sides, the shared files and the presses are one summary, drawn BEFORE any section.
   const summary = block.indexOf('class="collision-summary"');

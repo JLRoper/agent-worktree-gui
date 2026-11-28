@@ -24,6 +24,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 globalThis.window = globalThis;
 await import("../public/core/command-summary.js");
@@ -32,7 +33,7 @@ const M = globalThis.wtCommandSummary;
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const app = read("../public/app.js");
 const html = read("../public/index.html");
-const css = read("../public/style.css");
+const css = readStyleSheets();
 const source = read("../public/core/command-summary.js");
 
 const ROOT = "/repo/demo";

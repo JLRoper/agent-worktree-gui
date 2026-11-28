@@ -23,6 +23,7 @@ import test from "node:test";
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { buildTaskPipelineWindow } from "../lib/pipeline-window.js";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 
@@ -457,7 +458,7 @@ test("every line under the current stage's title is placed on its own row, not a
     "the row's children are the nine the stylesheet has to place",
   );
 
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  const css = readStyleSheets();
   // The rule that gives a child its own line: a selector list carrying `grid-column: 2 / -1`.
   const placed = new Set();
   for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {

@@ -29,6 +29,7 @@ import { createClarifyHistoryRoutes } from "../routes/clarify-history.js";
 import { Jobs } from "../lib/jobs.js";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 import "../public/core/clarify-history.js";
+import { readStyleSheets } from "./style-sheets.js";
 
 const Core = globalThis.wtClarifyHistory;
 const quiet = () => {};
@@ -298,7 +299,7 @@ test("a card with no choices draws no strip: it offers no directions to be short
 // ---- the wiring: the strip, the popup line and the styles are shipped together -------------------------------------
 test("the card, the popup and the stylesheet carry the shape line", async () => {
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  const css = readStyleSheets();
   const pop = readFileSync(new URL("../public/clarify-history.js", import.meta.url), "utf8");
   const core = readFileSync(new URL("../public/core/clarify-history.js", import.meta.url), "utf8");
   assert.match(app, /function questionPrompt\(turn, copy = ""\)[\s\S]*?\$\{questionShape\(q\)\}/, "the strip is drawn inside the card");

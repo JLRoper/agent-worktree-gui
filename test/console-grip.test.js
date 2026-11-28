@@ -19,13 +19,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { readStyleSheets } from "./style-sheets.js";
 
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const appSrc = page("public/app.js");
 const jobsSrc = page("public/render-jobs.js");
 const consoleSrc = page("public/board/console.js");
 const projectsSrc = page("public/render-projects.js");
-const css = page("public/style.css");
+const css = readStyleSheets();
 
 function grab(src, name) {
   const start = src.indexOf(`function ${name}(`);

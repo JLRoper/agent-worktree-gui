@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
@@ -94,7 +95,7 @@ const rowsSrc = read("public/render-projects.js");
 const scaffold = read("public/board-scaffold.js");
 const html = read("public/index.html");
 const settings = read("public/settings.js");
-const css = read("public/style.css");
+const css = readStyleSheets();
 
 test("the header draws the count and the bulk press, and the page loads the lane's arithmetic", () => {
   assert.match(html, /id="btn-review"/);

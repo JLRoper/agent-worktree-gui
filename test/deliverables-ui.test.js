@@ -18,13 +18,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 // The list's own code moved to public/deliverables.js in step 3 of docs/reports/module-map-2026-11-07.html's
 // order of work; the page's wiring for it stayed in public/app.js.
 const list = readFileSync(new URL("../public/deliverables.js", import.meta.url), "utf8");
-const cssRaw = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const cssRaw = readStyleSheets();
 // The stylesheet's comments argue the rules; a keyword in prose is not a rule.
 const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
 const block = () => sliceRegion(list, "deliverables");

@@ -21,9 +21,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const css = readStyleSheets();
 
 const headerBlock = () => {
   const found = html.match(/<header class="topbar">[\s\S]*?<\/header>/);

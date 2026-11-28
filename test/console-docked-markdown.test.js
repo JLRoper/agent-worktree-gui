@@ -15,6 +15,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { readStyleSheets } from "./style-sheets.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(path.join(root, file), "utf8");
@@ -214,7 +215,7 @@ test("the dock's colour is a design token and its margin is the saved preference
 });
 
 test("the pre-wrap behaviour is gone from the docked console's box, and the fold hides the whole frame", () => {
-  const css = read("public/style.css");
+  const css = readStyleSheets();
   const box = css.match(/\.sub-console\s*\{([^}]*)\}/);
   assert.ok(box, ".sub-console still has a rule");
   assert.match(box[1], /white-space:\s*normal/, "the box does not preserve the source's whitespace");

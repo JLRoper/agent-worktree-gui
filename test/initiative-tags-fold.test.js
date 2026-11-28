@@ -18,13 +18,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 await import("../public/core/initiative-fold.js");
 const fold = globalThis.wtInitiativeFold;
 const { TAG_CHIP_FIRST, tagChips, tagFilterMatch, tagFilterParse, tagFilterQuery, tagFilterFromUrl } = fold;
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-const style = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const style = readStyleSheets();
 const route = readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8");
 
 const tags = (...idents) => idents.map((ident, at) => ({ id: `tag_${at + 1}`, ident, name: `${ident} tag`, color: "violet" }));

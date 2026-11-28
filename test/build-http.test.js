@@ -46,7 +46,8 @@ test("the shell is served no-store with every asset URL versioned, and /api/buil
   assert.ok(Number.isInteger(info.uptimeSeconds) && info.uptimeSeconds >= 0, "and the uptime is derived from it");
   assert.ok(info.files["index.html"], "the shell is in the payload");
   assert.equal(info.files["app.js"], sha256(await readFile(path.join(ROOT, "public", "app.js"))), "a per-file hash is the sha256 of that file");
-  assert.equal(info.files["style.css"], sha256(await readFile(path.join(ROOT, "public", "style.css"))));
+  assert.equal(info.files["chrome.css"], sha256(await readFile(path.join(ROOT, "public", "chrome.css"))), "the split sheets are hashed by name");
+  assert.equal(info.files["chart.css"], sha256(await readFile(path.join(ROOT, "public", "chart.css"))), "and the sheet that stayed put is still in the bundle");
   assert.ok(info.files["core/transport.js"], "everything under public/core is hashed too");
 
   const shell = await fetch(`${panel.base}/`);
@@ -63,7 +64,7 @@ test("the shell is served no-store with every asset URL versioned, and /api/buil
     assert.ok(url.includes(`?v=${info.version}`), `${url} carries the build version`);
   }
   assert.ok(urls.some((u) => u.startsWith("/app.js?")), "app.js is one of them");
-  assert.ok(urls.some((u) => u.startsWith("/style.css?")), "style.css is one of them");
+  assert.ok(urls.some((u) => u.startsWith("/base.css?")), "the first per-surface sheet is one of them");
 
   const index = await fetch(`${panel.base}/index.html`);
   assert.equal(index.headers.get("cache-control"), "no-store, must-revalidate", "the explicit shell URL is no-store too");
@@ -105,7 +106,7 @@ test("an asset under the current version is cached hard; any other URL is no-sto
   const core = await fetch(`${panel.base}/core/sse.js?v=${info.version}`);
   assert.equal(core.headers.get("cache-control"), "public, max-age=31536000, immutable", "core/ is in the bundle too");
 
-  for (const url of ["/app.js", "/app.js?v=000000000000", "/style.css?v=oldbuild", "/index.html?v=" + info.version]) {
+  for (const url of ["/app.js", "/app.js?v=000000000000", "/initiatives.css?v=oldbuild", "/index.html?v=" + info.version]) {
     const r = await fetch(`${panel.base}${url}`);
     assert.equal(r.status, 200, `${url} still serves (a stale URL must not 404 into a broken page)`);
     const cache = r.headers.get("cache-control");

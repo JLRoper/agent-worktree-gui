@@ -1,0 +1,97 @@
+/* public/base.css
+   The token layer and the resets.
+
+   The :root custom properties every other sheet reads, the box-sizing reset, the scrollbar pseudo-elements
+   and the three page-level element rules. Nothing here is a component; editing it changes the whole panel.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+:root {
+  --bg: #0f1115;
+  --panel: #161a21;
+  --panel-2: #1b2029;
+  /* Layered surfaces. Settings > Panel contrast rewrites all of these (and --bg/--panel/--panel-2) from one
+     scale: 0% flattens them into a single neutral, 100% pushes the page to near-black and the raised
+     surfaces light. These values are the resting palette before that runs. */
+  --surface: #12161d;
+  --card: #151a22;
+  --console: #0c0f14;
+  --hover: #1a2029;
+  --band: #171d27;
+  --line: #262c37;
+  --text: #e6e9ef;
+  --dim: #9aa4b2;
+  --dimmer: #6b7482;
+  --green: #2ea043;
+  --green-bg: #12261a;
+  --red: #e5534b;
+  --red-bg: #2a1618;
+  --amber: #d29922;
+  --amber-bg: #2a2312;
+  --blue: #4a90d9;
+  --blue-bg: #141f2c;
+  --violet: #a371f7;
+  --violet-bg: #1e1730;
+  /* The console leads every tool call with the tool's emoji. A monospace stack has no emoji of its
+     own, so the color emoji fonts are named BEFORE the generic keyword: without them Chromium
+     falls back to a monochrome symbol font and the glyphs come out as small grey marks. */
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", monospace;
+  /* Interface font and terminal font are separate settings: the panel's labels and the text inside
+     an agent's terminal (transcript, prompt, reply box, command preview) can be chosen apart. */
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --term: var(--mono);
+  /* Console text: the font comes from Settings; size and weight default to what this box always had.
+     --term-size is the ONE console size: normal output, a tool's output and the agent's reasoning all resolve to
+     it, and a card overrides it in its own inline style when the reader Ctrl+wheel-zooms that card. */
+  --term-size: 11.5px;
+  --term-weight: 400;
+}
+
+* { box-sizing: border-box; }
+/* Scrollbars are part of the surface. The platform default is a light track with stepper arrows, and on this
+   dark panel it was the brightest thing on screen - more attention than the output it belonged to. Thin, dark,
+   no buttons: a rail that reports position and nothing else.
+
+   The pseudo-elements are the only way to keep a scrollbar VISIBLE here. Chromium's standard scrollbar-width/
+   scrollbar-color paint an overlay scrollbar that fades out a second after the last scroll, and styling the
+   old pseudo-elements at the same time is not allowed: a non-auto scrollbar-width makes Chromium ignore them
+   entirely. So the webkit rules below are the whole story for Chromium, and Firefox (which has no
+   pseudo-elements) gets the standard properties in the @supports guard - thin and dark, its closest match. */
+*::-webkit-scrollbar { width: 11px; height: 11px; background: transparent; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: #3d4655;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: #4e596b; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:active { background: #55616f; background-clip: content-box; }
+*::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+*::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #333c49 transparent;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--ui);
+}
+
+/* The panel holds its own anchor: one element at the reading line, put back where the reader had it after
+   anything above it grows. The browser also does scroll anchoring, and it cannot be told which element the
+   reader is on - it picks one of its own - so every growth "above" got corrected twice and the held bar could
+   end up anywhere (observed: +200px then +200px for one 200px insertion). One owner: the JS anchor. */
+html { overflow-anchor: none; }
+
+button, select, input, textarea { font-family: var(--ui); }

@@ -15,12 +15,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 // The two sheets in PAGE ORDER (public/index.html): the chart's arrow moved into chart.css, and the cascade
 // question below is about where these rules sit relative to each other as the browser loads them, so the pin reads
-// both files, style.css first.
-const css = ["../public/style.css", "../public/chart.css"]
-  .map((rel) => readFileSync(new URL(rel, import.meta.url), "utf8"))
+// every per-surface sheet first, then chart.css.
+const css = [readStyleSheets(), readFileSync(new URL("../public/chart.css", import.meta.url), "utf8")]
   .join("\n")
   .replace(/\r\n/g, "\n")
   .replace(/\/\*[\s\S]*?\*\//g, "");

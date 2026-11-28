@@ -29,11 +29,12 @@ import { Assistant } from "../lib/assistant.js";
 import { DEFAULTS, DOCK_DEFAULT, DOCK_MODES, SETTINGS_SCOPE, pickDock } from "../lib/assistant/config.js";
 import { EMPTY_PROFILE, pickProfile } from "../lib/assistant/profile.js";
 import { PRIMARY_ASSISTANT } from "../lib/assistants.js";
+import { readStyleSheets } from "./style-sheets.js";
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 const here = (p) => new URL(p, import.meta.url);
 const html = await readFile(here("../public/index.html"), "utf8");
-const css = (await readFile(here("../public/style.css"), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\r/g, "");
+const css = (await readStyleSheets()).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\r/g, "");
 const assistant = await readFile(here("../public/assistant.js"), "utf8");
 const appSrc = (await readFile(here("../public/app.js"), "utf8")).replace(/\r/g, "");
 const settingsSrc = (await readFile(here("../public/settings.js"), "utf8")).replace(/\r/g, "");

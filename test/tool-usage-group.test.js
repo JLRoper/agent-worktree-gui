@@ -5,13 +5,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { readStyleSheets } from "./style-sheets.js";
 
 // Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
 // script's names are page-wide, so a region is read from the script that now carries it.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const source = `${page("public/board/console.js")}\n${page("public/app.js")}`;
 
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const css = readStyleSheets().replaceAll("\r\n", "\n");
 const part = (a, b) => {
   const start = source.indexOf(a);
   const end = source.indexOf(b, start);

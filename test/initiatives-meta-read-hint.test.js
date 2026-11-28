@@ -18,9 +18,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readStyleSheets } from "./style-sheets.js";
 
 const pane = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const css = readStyleSheets();
 
 // The renderer's markup: from the node the meta line is built in to the end of the template literal.
 const metaAt = pane.indexOf('<div class="init-meta">');

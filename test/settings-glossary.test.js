@@ -10,9 +10,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+const css = readStyleSheets();
 
 const panel = (key) => {
   const start = html.indexOf(`data-settings-group="${key}"`);

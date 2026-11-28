@@ -1,0 +1,184 @@
+/* public/panes.css
+   The assistant's Worktrees and Bridge sub-tabs.
+
+   The worktrees sub-tab's board cards and its per-project tables, and the Bridge tab's connection, message and
+   policy rows.
+
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
+   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
+   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
+   pane.
+   ------------------------------------------------------------------------------------------------ */
+
+/* ---- the worktrees sub-tab: one board project card per project ------------------------------------
+   The card IS the board's `.project` (its background, outline and the `collapsed` body rule), narrowed to the
+   pane: the cards stack with a small gap, the head is the fold handle, and the table keeps its own horizontal
+   scroll so a wide chart is reachable instead of clipped by the card. */
+.as-wtgroups { display: flex; flex-direction: column; gap: 10px; }
+.as-wtgroups > .as-wtgroup { margin-bottom: 0; }
+.as-wtgroups > .as-wtgroup > .project-head {
+  gap: 8px; padding: 7px 10px; cursor: pointer; user-select: none;
+  border-radius: 9px;
+}
+.as-wtgroups > .as-wtgroup:not(.collapsed) > .project-head { border-radius: 9px 9px 0 0; }
+.as-wtgroups > .as-wtgroup > .project-head:hover .chev { color: var(--text); }
+.as-wtgroups .project-head h2 { font-size: 12.5px; }
+.as-wtgroup-count { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.as-wtgroups .wt-scroll { overflow-x: auto; }
+.as-wtgroups tr.row { cursor: pointer; }
+.as-wtgroups tr.row:hover td { background: var(--row-rest-bg, #1a2230); }
+
+/* ---- the Bridge tab: one agent, no worktree, no queue ------------------------------------------------
+   Four sections in one pane. The rows are a label/value grid so a path, a pid and a timestamp all line up;
+   state is carried by BOTH a dot and a word, never colour alone (the same rule the alerts list follows). */
+.as-bridge-head { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; margin-bottom: 8px; }
+.as-bridge-head h4 { margin: 0 0 4px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.as-bridge-head .as-help { max-width: 46em; }
+.as-bridge-head button { flex: 0 0 auto; }
+.as-bridge-sec { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.as-bridge-sec:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.as-bridge-sec h5 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.as-bridge-sec h5 .as-hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.as-bridge-rows { display: flex; flex-direction: column; }
+.as-bridge-row { display: grid; grid-template-columns: minmax(84px, 34%) minmax(0, 1fr); gap: 2px 10px; padding: 4px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
+.as-bridge-row:last-child { border-bottom: 0; }
+.as-bridge-k { color: var(--dimmer); }
+.as-bridge-v { min-width: 0; overflow-wrap: anywhere; }
+.as-bridge-v code { font-family: var(--mono); font-size: 10.5px; color: var(--dim); word-break: break-all; }
+.as-bridge-v.is-bad { color: #ffb4ac; }
+.as-bridge-v.is-warn { color: var(--amber); }
+.as-bridge-v.is-ok { color: #7ee787; }
+.as-bridge-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dimmer); margin-right: 5px; vertical-align: middle; flex: 0 0 auto; }
+.as-bridge-dot.is-ok { background: #3fb950; box-shadow: 0 0 0 2px #3fb95022; }
+.as-bridge-dot.is-warn { background: var(--amber); }
+.as-bridge-dot.is-bad { background: var(--red); }
+.as-bridge-grouphead { display: flex; align-items: baseline; gap: 7px; margin: 8px 0 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.as-bridge-grouphead:first-of-type { margin-top: 0; }
+.as-bridge-msg { border-left: 2px solid #2a3240; padding: 4px 0 4px 8px; margin-bottom: 6px; }
+.as-bridge-msg.is-in { border-left-color: var(--blue); }
+.as-bridge-msg.is-out { border-left-color: #8b949e; }
+.as-bridge-msg.is-bad { border-left-color: var(--red); background: var(--red-bg); border-radius: 0 6px 6px 0; padding-right: 6px; }
+.as-bridge-msg-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; font-family: var(--mono); font-size: 9.5px; color: var(--dimmer); text-transform: uppercase; letter-spacing: .05em; }
+.as-bridge-msg-head b { color: var(--dim); font-weight: 500; }
+.as-bridge-msg-head .as-ago { margin-left: auto; }
+.as-bridge-msg-text { margin-top: 2px; font-size: 11.5px; line-height: 1.4; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+.as-bridge-msg.is-bad .as-bridge-msg-text { color: #ffb4ac; }
+.as-bridge-fail { margin-top: 3px; font-size: 10.5px; color: #ff9f97; overflow-wrap: anywhere; }
+.as-bridge-policy-box { min-height: 210px; font-size: 11px; line-height: 1.5; }
+/* The bridge's own reminders: a line of text with a stamp, never a card in a queue. */
+.as-bridge-reminders { display: flex; flex-direction: column; margin-bottom: 6px; }
+.as-bridge-reminder { display: flex; align-items: baseline; gap: 7px; padding: 4px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
+.as-bridge-reminder:last-child { border-bottom: 0; }
+.as-bridge-reminder-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.as-bridge-reminder.is-done .as-bridge-reminder-text { color: var(--dimmer); text-decoration: line-through; }
+.as-bridge-check, .as-bridge-remove { flex: 0 0 auto; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 4px; padding: 0 5px; font-size: 10px; line-height: 1.6; cursor: pointer; }
+.as-bridge-check:hover, .as-bridge-remove:hover { color: var(--text); border-color: var(--dimmer); }
+.as-bridge-remove:hover { color: #ff9f97; border-color: #ff9f97; }
+.as-bridge-reminder-input, .as-bridge-reminder-due { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; font-family: var(--mono); font-size: 11px; }
+.as-bridge-reminder-input { flex: 1 1 200px; }
+.as-bridge-reminder-due { flex: 0 1 130px; }
+.as-bridge-alert { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; padding: 5px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
+.as-bridge-alert:last-child { border-bottom: 0; }
+.as-bridge-alert b { color: var(--text); font-weight: 500; }
+.as-bridge-alert span:not(.as-bridge-dot):not(.as-ago) { color: var(--dim); flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.as-bridge-alert.is-bad b { color: #ffb4ac; }
+.as-bridge-alert.is-warn b { color: var(--amber); }
+.as-bridge-alert.is-ok b { color: #7ee787; }
+.as-bridge-alert .as-ago { margin-left: auto; }
+.as-rule-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
+.as-rule-row:last-child { border-bottom: 0; }
+/* The group now ends on two help lines rather than a row, so the last row above them gives up its divider the
+   way the `:last-child` line above always did. A row followed by its own disclosure keeps it: that line is
+   what attaches the summary to the rule it belongs to. */
+.as-rule-row:has(+ .as-help) { border-bottom: 0; }
+.as-rule-row .as-rule-name { flex: 1; min-width: 0; }
+.as-rule-row .as-rule-name b { font-weight: 500; }
+.as-rule-row .as-rule-name i { display: block; font-style: normal; color: var(--dimmer); font-size: 10px; }
+.as-rule-row select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; font-size: 11px; }
+/* The Queue sub-tab: one CARD per task. The marker is the state at a glance — ○ queued, ● running, ⏸ parked,
+   ✓ done — and a done row stays in place greyed rather than vanishing, because "it finished" is the record the
+   reader asked for. A stale or skipped row carries its reason under the title in amber/red: "why is this not
+   moving" is the question a queue exists to answer. The card is a raised surface on the group's own background:
+   a radius and a gap between cards is what separates one task from the next now that the bullet rules are gone. */
+.as-task { display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin: 0 0 8px; font-size: 11.5px; box-shadow: 0 1px 2px #0006; }
+.as-task:last-child { margin-bottom: 0; }
+/* The chart's own green pulse, on a queue row: @keyframes flashrow lives in public/chart.css and fades to
+   --row-rest-bg, so this rule only has to say what the card rests on. A task id in the transcript is followed to its
+   row with this (public/queue-cards.js queueOpenTask), so the two surfaces flash the same green for the same reason. */
+.as-task.flash { --row-rest-bg: var(--panel-2); animation: flashrow var(--flash-row, 900ms) ease-out; }
+.as-task.is-done { opacity: .55; }
+/* A QUEUED card is the one thing the reader can move: running, parked and done keep their own sections, so only these
+   take the grab cursor. The drag lifts the card over its neighbours with a shadow while the pane reflows around it —
+   the card itself is re-inserted, so what the reader sees before the drop is the list the drop sends. */
+.as-task.is-draggable, .as-task.is-draggable .as-task-body { cursor: grab; }
+.as-task.is-dragging { position: relative; z-index: 5; opacity: .97; box-shadow: 0 12px 26px #000a; }
+.as-task.is-dragging, .as-task.is-dragging .as-task-body { cursor: grabbing; }
+.as-qdrag, .as-qdrag * { user-select: none; }
+/* The one line a blocked drop says, above the cards it is about: which row is holding the card, and that it cannot go
+   above it. Amber, the same voice as a note on a card, because nothing failed — the queue refused a move.
+   STICKY, because the queue it describes is usually scrolled: the line is painted above the cards, and a reader who
+   dropped a card near the bottom of a long list would otherwise have the refusal snap back with its reason sitting
+   off-screen above them — indistinguishable from a drag that did nothing. `top: 0` pins it to the scrollport the cards
+   move in (`.as-body` in the rail and the float, the document when the window is narrow), so the sentence arrives where
+   the reader is looking; the background keeps the cards from reading through it. */
+.as-qdrop { position: sticky; top: 0; z-index: 6; margin: 0 0 8px; padding: 5px 8px; font-size: 10.5px; color: #e0b341; background: #2a2418; border: 1px solid #4a3d1f; border-radius: 7px; }
+/* The badge a card whose hold actually blocks wears — the only card that wears one. A card the drag is not competing
+   with is not greyed: the row it waits on is named in the badge, and everything above it stays legible. */
+.as-task-hold { margin-left: auto; flex: 0 0 auto; font-size: 9px; color: #c4b5fd; background: #241f36; border: 1px solid #3b3358; border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
+/* The body is what opens the console — the head, the agents, the meta line and the note — while the actions row
+   below it stays a row of presses. An empty body (no thread to open) is not a target. */
+.as-task-body { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.as-task-body[data-as-qopen] { cursor: pointer; }
+.as-task-head { display: flex; align-items: center; gap: 7px; }
+.as-task-mark { font-size: 13px; line-height: 1; width: 12px; text-align: center; flex: 0 0 auto; }
+.as-task-mark.is-queued { color: var(--dim); }
+.as-task-mark.is-running { color: #7ee787; }
+.as-task-mark.is-parked { color: #e0b341; }
+.as-task-mark.is-done { color: #6fcf97; }
+.as-task-title { flex: 1; min-width: 0; font-weight: 500; }
+.as-task-meta { color: var(--dimmer); font-size: 9.5px; line-height: 1.4; margin: 0 0 0 19px; display: flex; gap: 8px; flex-wrap: wrap; }
+.as-task-meta code { font-family: var(--mono); }
+.as-task-note { margin: 0 0 0 19px; font-size: 10.5px; color: #e0b341; line-height: 1.35; }
+.as-task-note.is-bad { color: var(--red); }
+/* The stopped chip's own answer. Green is the panel's "something happened and it worked" colour (the RUNNING pill and
+   a merged row use it); the dim one is the honest no-op — nothing was wedged, so nothing was started, and that is not a
+   failure to paint red. */
+.as-task-note.is-good { color: #7ee787; }
+.as-task-note.is-info { color: var(--dim); }
+/* WHO FILED a row, when it was not the reader and not the queue's own assistant: one small line where the note
+   goes, so a row that arrived from another assistant says so without looking like a different KIND of card. Dimmer
+   than the note because it is provenance, not a reason the row is or is not moving. */
+.as-task-filed { margin: 0 0 0 18px; font-size: 9.5px; line-height: 1.35; color: var(--dimmer); }
+/* Anchored at the card's bottom, over a hairline: the presses do not float up under a long title, and a reader
+   scanning a column of cards finds them in the same place on every one. */
+.as-task-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: auto 0 0; padding: 7px 0 0 19px; border-top: 1px solid #1f2530; }
+.as-task-actions button { font-size: 10.5px; padding: 2px 7px; }
+/* One agent per task: a sub-row per thread that carried it, wearing the card's own pill. The line itself is the opener
+   (it opens that agent's card AND the console of its current turn), so it takes a pointer and a focus ring. */
+.as-task-agents { margin: 3px 0 0 19px; display: flex; flex-direction: column; gap: 2px; }
+.as-task-agent { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 1px 4px 1px 2px; border-radius: 5px; cursor: pointer; }
+.as-task-agent:hover { background: rgba(255, 255, 255, .045); }
+.as-task-agent:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 0; }
+.as-task-agent.is-none { cursor: default; }
+.as-task-agent.is-none:hover { background: none; }
+.as-task-agent .as-task-agent-thread { font-family: var(--mono); font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-task-agent .as-task-agent-label { font-size: 10.5px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The RUN ID beside the current thread: the record the row's verdict was read from. Amber when it is a guess
+   (`guessing`), because a guess and an id must never look the same on a row a reader counts in flight. */
+.as-task-agent .as-task-agent-run { font-family: var(--mono); font-size: 9.5px; color: #8fb8d8; background: #16222c; border: 1px solid #24404f; border-radius: 999px; padding: 0 5px; white-space: nowrap; flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.as-task-agent .as-task-agent-run.is-guess { color: #e0b341; background: #2b2413; border-color: #4d3f1c; }
+.as-task-agent .pill { margin-left: auto; flex: none; }
+.as-agent-mark { font-size: 11px; line-height: 1; width: 11px; text-align: center; flex: 0 0 auto; }
+.as-agent-mark.is-queued { color: var(--dim); }
+.as-agent-mark.is-running { color: #7ee787; }
+.as-agent-mark.is-parked { color: #e0b341; }
+.as-agent-mark.is-done { color: #6fcf97; }
+/* The row's presses are glyphs — the real word is in title= and aria-label=, so a narrow row stays readable. */
+.as-task-actions .as-qglyph { font-size: 11px; line-height: 1; padding: 3px 6px; min-width: 22px; }
+/* ➡️ opens the picker rather than standing beside a select: the list is as wide as the assistant names, so it floats
+   over the row above instead of laying the row out around it. */
+.as-qmove-wrap { position: relative; display: inline-flex; }
+.as-qmove-pop { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 8; display: flex; flex-direction: column; min-width: 150px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 24px #000a; }
+.as-qmove-pop[hidden] { display: none; }
+.as-qmove-pop .as-qmove-pick { text-align: left; font-size: 11px; padding: 4px 8px; border: 0; background: transparent; color: var(--text); border-radius: 5px; }
+.as-qmove-pop .as-qmove-pick:hover { background: #20262f; }

@@ -12,6 +12,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { readStyleSheets } from "./style-sheets.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8");
@@ -21,7 +22,7 @@ const html = read("public/index.html");
 // The card that re-emits the zoom is drawn by renderConversation, which moved to public/render-jobs.js with step 7
 // of docs/reports/module-map-2026-11-07.html; the wheel handler itself stayed in app.js.
 const jobs = read("public/render-jobs.js");
-const css = read("public/style.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const css = readStyleSheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- text styles");
 const end = src.indexOf("// ---- end text styles");

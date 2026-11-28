@@ -8,9 +8,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const src = readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const css = readStyleSheets().replace(/\r\n/g, "\n");
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 

@@ -14,6 +14,7 @@ import { ClarifyHistory, CLARIFY_HISTORY_KEEP, clarifyHistoryEntry, clarifyItems
 import { createClarifyHistoryRoutes } from "../routes/clarify-history.js";
 import { Jobs } from "../lib/jobs.js";
 import "../public/core/clarify-history.js";
+import { readStyleSheets } from "./style-sheets.js";
 
 const Core = globalThis.wtClarifyHistory;
 const quiet = () => {};
@@ -540,7 +541,7 @@ test("the route answers items, the item total, the attempt count and the outstan
 test("the header markup carries the clarify badge, hidden at zero, and every counting button is painted by one function", () => {
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  const css = readStyleSheets();
   assert.match(html, /<span id="clarify-badge" hidden>0<\/span>/, "the badge is in the button and starts hidden");
   assert.equal(html.indexOf('id="human-badge"'), -1, "the Human badge this test was written against is gone");
   assert.equal((app.match(/function paintCountBadge\(/g) || []).length, 1, "one painter, not two");

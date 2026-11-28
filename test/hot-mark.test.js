@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readStyleSheets } from "./style-sheets.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
@@ -156,7 +157,7 @@ test("the markup is a header control of the same family, immediately before the 
 });
 
 test("the button's amber is the panel's amber, not the lock's and not the turnover's", () => {
-  const css = read("public/style.css");
+  const css = readStyleSheets();
   const rule = css.slice(css.indexOf("#btn-hot {"));
   assert.ok(rule.length > 0, "public/style.css styles #btn-hot");
   const block = rule.slice(0, rule.indexOf("#hot-badge") > 0 ? 1200 : 600);
