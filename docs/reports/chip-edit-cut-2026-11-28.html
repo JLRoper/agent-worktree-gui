@@ -49,7 +49,7 @@
   <dt>the chip module's own surface</dt><dd>9 names, every one of them re-exported</dd>
   <dt>node --check</dt><dd class="ok">clean on both files</dd>
   <dt>the chip tests</dt><dd>22 tests, 22 pass, 0 fail on the merged head</dd>
-  <dt>the paste gate</dt><dd>125 checks, 123 pass, 2 fail; both reds are the (i) Ctrl+Enter steer pair, and the same two are red on the pre-cut code</dd>
+  <dt>the paste gate</dt><dd>125 checks, 123 pass, 2 fail, run at <code>d08065ee</code>; both reds are the (i) Ctrl+Enter steer pair, and the same two are red on the pre-cut code</dd>
   <dt>the rendered paste</dt><dd>the request the panel sent carried the prose and all 367 lines, in position</dd>
   <dt>the merge</dt><dd>a829384d, parents 1c7cabdd + 88b811fa, 6 files changed, all six owned by the cut</dd>
   <dt>push / PR</dt><dd>none. The merge is local; the turnover is not on the remote.</dd>
@@ -166,7 +166,7 @@ tests 22   pass 22   fail 0   cancelled 0   skipped 0</pre>
 <p>The same two files answered 22 pass, 0 fail at the turnover head <code>f13db8e3</code> before the merge, so the cut neither fixed nor broke a unit test. They are the two gates the cut edits: <code>test/paste-chip-undo.test.js</code> and <code>test/paste-chip-word-delete.test.js</code>.</p>
 
 <h2>6. The paste gate, and the two reds it already had</h2>
-<p><code>tools/verify-paste-chips.mjs</code> drives a sandbox panel of this checkout plus headless Chromium: real paste events, real key presses, real clicks, and the requests the page makes recorded by a stubbed fetch. On the merged head <code>a829384d</code> it answers:</p>
+<p><code>tools/verify-paste-chips.mjs</code> drives a sandbox panel of this checkout plus headless Chromium: real paste events, real key presses, real clicks, and the requests the page makes recorded by a stubbed fetch. On the merged head <code>a829384d</code> it answers the same thing it answers at <code>d08065ee</code>, whose six cut blobs are identical to <code>a829384d</code>'s:</p>
 <pre>125 checks, 2 failed
 
 PASS  (a) the box holds the whole pasted block after it
