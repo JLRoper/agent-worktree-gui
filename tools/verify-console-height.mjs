@@ -197,12 +197,18 @@ const measure = (page, out) =>
     if (!pre) return null;
     const r = pre.getBoundingClientRect();
     const cs = getComputedStyle(pre);
+    const gripEl = (pre.closest(".out-box") || pre.parentElement)?.querySelector?.("[data-out-grip]");
+    const g = gripEl ? gripEl.getBoundingClientRect() : null;
     return {
       out: pre.dataset.out || "",
       h: +r.height.toFixed(1),
       b: +r.bottom.toFixed(1),
       r: +r.right.toFixed(1),
-      inlineH: pre.style.height || "",
+      // The corner the hand takes is the GRIP's, not the console's: the grip is a sibling in `.out-box` and can sit a
+      // pixel or two outside the console's own edge. A press at the console's corner that misses the grip is a drag
+      // that never starts, which the old native-handle fixture could not tell apart from a box that refused to grow.
+      grip: g ? { r: +g.right.toFixed(1), b: +g.bottom.toFixed(1), w: +g.width.toFixed(1), h: +g.height.toFixed(1) } : null,
+      inlineH: pre.style.getPropertyValue("--out-h") || "",
       inlineMax: pre.style.maxHeight || "",
       max: cs.maxHeight,
       client: pre.clientHeight,
@@ -211,13 +217,26 @@ const measure = (page, out) =>
     };
   }, out);
 
-// Bring the card that holds this console to the top of the window, then read the console. A page scroll does not touch a
-// console's own scrollTop, and a DRAG only means anything while the corner is inside the viewport: the workspace list
-// sits above the board, so scrolling to one card moves the other off screen.
+// Bring the console into the window with room under it for the drag. Scrolling the CARD to the top leaves the console
+// hundreds of pixels down a tall card, where the viewport's edge is only a few hundred px below its top and the 420px
+// target would be outside the band this gate is meant to stay inside. The console is centred instead, so its top is
+// roughly a third of the way down the window and the band has the room the drag needs.
 async function show(page, thread, out) {
-  await page.evaluate((t) => document.querySelector(`.job[data-thread="${t}"]`)?.scrollIntoView({ block: "start" }), thread);
-  await page.waitForTimeout(150);
-  return measure(page, out);
+  await page.evaluate((o) => {
+    document.querySelector(`pre[data-out="${o}"]`)?.scrollIntoView({ block: "center" });
+  }, out);
+  // The board corrects the reader's position for a few frames after a scroll (its anchor repick, then the observer's
+  // answer to it). A press taken inside that window presses a card the correction is about to move, which is
+  // indistinguishable from a box that refused to grow. Read twice, 220ms apart, until the two readings agree.
+  let a = null;
+  let b = await measure(page, out);
+  for (let try_ = 0; try_ < 4; try_ += 1) {
+    await page.waitForTimeout(220);
+    a = b;
+    b = await measure(page, out);
+    if (!a || !b || (Math.abs(a.b - b.b) < 1 && Math.abs(a.h - b.h) < 1)) break;
+  }
+  return b;
 }
 
 // Stamp the node the reader dragged. A rebuild that replaces the console builds a fresh node from HTML, and an attribute
@@ -248,8 +267,8 @@ async function grab(page, thread, out) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const m = await show(page, thread, out); // the corner has to be on screen for the press to reach the box
     if (!m) return { x: 0, y: 0, from: null, after: null, pinned: false };
-    const x = m.r - HANDLE;
-    const y = m.b - HANDLE;
+    const x = (m.grip ? m.grip.r : m.r) - HANDLE;
+    const y = (m.grip ? m.grip.b : m.b) - HANDLE;
     last = { x, y, from: m };
     const onBox = await page.evaluate(
       ({ px, py }) => {
@@ -421,12 +440,29 @@ async function main() {
         const homeOut = await page.evaluate((t) => document.querySelector(`.job[data-thread="${t}"] pre.job-out`)?.dataset.out || "", HOME);
 
         // ---- 0. the fixture: two consoles, each on the cap its host draws it under, each overflowing it
+        // THE BAND'S EDGE IS THE VIEWPORT HERE, and the fixture has to be inside it. A row card's `.job-body` is not a
+        // scrollport (the grip reads a pane only on a maximized card or the docked Chat pane), so the room is
+        // `innerHeight - top - 8`; a console left low in the window has less than the 420px target and a drag would
+        // stop on the viewport edge - correctly, but it would measure the fixture's scroll position, not the dragged
+        // height's survival. show() centres one console, so each room is read right after its own show: the workspace
+        // list sits above the board, and centring one moves the other off screen.
+        const roomOf = (thread) =>
+          page.evaluate((t) => {
+            const pre = document.querySelector(`.job[data-thread="${t}"] pre.job-out`);
+            if (!pre) return 0;
+            return Math.round(window.innerHeight - pre.getBoundingClientRect().top - 8);
+          }, thread);
         const rowStart = await show(page, ROW, rowOut);
+        const rowRoom = await roomOf(ROW);
         const homeStart = await show(page, HOME, homeOut);
+        const homeRoom = await roomOf(HOME);
         if (!rowStart || !homeStart) {
           check(false, "the fixture painted both consoles", `row=${Boolean(rowStart)} home=${Boolean(homeStart)}`);
           return;
         }
+        check(rowRoom > ARM + 20 && homeRoom > ARM + 20,
+          "each console has viewport room under it for the 420px drag the band must allow",
+          `row ${rowRoom}px home ${homeRoom}px want > ${ARM + 20}px`);
         check(near(rowStart.h, CAP_ROW) && rowStart.max === `${CAP_ROW}px`, "the row console starts on the 320px cap its row draws",
           `h=${rowStart.h} max=${rowStart.max}`);
         check(near(homeStart.h, CAP_HOME) && homeStart.max === `${CAP_HOME}px`, "the workspace console starts on the 230px cap",
