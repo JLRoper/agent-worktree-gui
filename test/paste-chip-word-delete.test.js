@@ -25,6 +25,9 @@ import vm from "node:vm";
 import { createDom } from "./fixtures/mini-dom.js";
 
 const SOURCE = readFileSync(new URL("../public/board/paste-chips.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// Row 517 cut the chip itself (build, insert, fold, remove, the word delete these cases state) out into
+// board/chip-edit.js. The page loads it before paste-chips.js, so this page does the same.
+const CHIP_EDIT = readFileSync(new URL("../public/board/chip-edit.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const PASTE = Array.from({ length: 6 }, (_, i) => `pasted line ${i + 1} of the block`).join("\n");
 
 // One page's worth of the module: its own document, its own selection, and the state the panel would hold.
@@ -49,6 +52,7 @@ function page() {
   };
   sandbox.globalThis = sandbox;
   const ctx = vm.createContext(sandbox);
+  vm.runInContext(CHIP_EDIT, ctx, { filename: "public/board/chip-edit.js" });
   vm.runInContext(SOURCE, ctx, { filename: "public/board/paste-chips.js" });
   return { dom, ctx, state, document: dom.document };
 }
