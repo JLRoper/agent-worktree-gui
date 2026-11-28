@@ -21,6 +21,10 @@ import { readStyleSheets } from "./style-sheets.js";
 const lf = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const projects = lf("../public/render-projects.js");
 const css = readStyleSheets();
+// The legend's own rules live with the chart now: chart.css draws the age column, the poll ring and the legend, and
+// test/style-sheets.js excludes chart.css from the split's concatenation (it was always its own file). While the legend
+// was a late override its rules sat in late.css; the board table's cut gave them back to the chart's sheet.
+const chartCss = lf("../public/chart.css");
 
 const code = sliceRegion(projects, "the legend");
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -89,7 +93,7 @@ test("the section draws the helper, not a paragraph of its own", () => {
 });
 
 test("the sheet keeps the strip on one line and the popover out of the page's flow", () => {
-  const rule = (selector) => (new RegExp(`(^|\\n)${selector.replace(/[.[\]]/g, "\\$&")} \\{([^}]*)\\}`).exec(css) || [])[2] || "";
+  const rule = (selector) => (new RegExp(`(^|\\n)${selector.replace(/[.[\]]/g, "\\$&")} \\{([^}]*)\\}`).exec(chartCss) || [])[2] || "";
   const line = rule(".legend-line");
   assert.match(line, /flex-wrap:\s*nowrap/, "the strip cannot wrap");
   assert.match(line, /white-space:\s*nowrap/);
@@ -98,6 +102,6 @@ test("the sheet keeps the strip on one line and the popover out of the page's fl
   const pop = rule(".legend-pop");
   assert.match(pop, /position:\s*absolute/, "the popover does not take layout space");
   assert.match(pop, /top:\s*calc\(100% - 4px\)/, "it hangs under the strip");
-  assert.match(css, /\.legend-pop\[hidden\] \{ display: none; \}/);
-  assert.match(css, /\.legend-toggle:focus-visible \{ outline:/, "the focus ring is drawn");
+  assert.match(chartCss, /\.legend-pop\[hidden\] \{ display: none; \}/);
+  assert.match(chartCss, /\.legend-toggle:focus-visible \{ outline:/, "the focus ring is drawn");
 });

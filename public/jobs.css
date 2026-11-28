@@ -193,3 +193,12 @@ button.pill-continue:disabled { cursor: progress; }
 /* While the nudge is being sent the glyph turns: "starting" without pretending to a status the panel does not know. */
 button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
 @keyframes pill-again-spin { to { transform: rotate(360deg); } }
+
+/* ---- the job card's jump flash, moved out of public/chart.css -------------------------------------
+   The card pulses when a search or a jump lands on it; it was the chart's only non-chart rule. */
+
+@keyframes jumpflash {
+  from { box-shadow: 0 0 0 3px #2ea043cc; }
+  to { box-shadow: 0 0 0 3px rgba(46, 160, 67, 0); }
+}
+.job.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }

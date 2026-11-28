@@ -252,7 +252,8 @@ test("the popup is clamped to the window, so neither card is clipped at 768", ()
   assert.match(place, /Math\.min\(ROWCHIP_POP_MAX, vw - gutter \* 2\)/, "never wider than the window minus its gutter");
   assert.match(place, /if \(left \+ width > vw - gutter\) left = vw - gutter - width/);
   assert.match(place, /if \(top \+ height > vh - gutter\) top = Math\.max\(gutter, rect\.top - 6 - height\)/, "flips above the chip");
-  const css = read("public/chart.css");
+  // The row chips and their popup came out of chart.css with the board table: board-table.css owns them.
+  const css = read("public/board-table.css");
   assert.match(css, /\.rowchip-pop \{[^}]*position: fixed;/);
   assert.match(css, /\.rowchip-pop \{[^}]*overflow: auto;/);
   // The diamond's two inks and its 24x24 box: filled violet while a pair is open, outlined and quieter when every one

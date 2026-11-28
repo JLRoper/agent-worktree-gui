@@ -1,174 +1,18 @@
 /* public/rowstrips.css
-   The worktree row's strips: git, description, release and TODO.
+   The console head's buttons and the panel's type and status utilities.
 
-   The git/commit/diff detail, the description block, the release block, the TODO list with its journal and
-   attachments, and the small utilities (.mono, .dim, .name) that sit between them in the source file.
+   The agent mark, the forget/rename session buttons and the attach control are the console's, not
+   the row's. .mono, .name, .branch, .dim, .dimmer, .nowrap, .clean and .dirty are read by the
+   console, Settings and the assistant rail as well as by the board's cells, and their place in the
+   cascade is deliberate (see the block at the foot). The row's own strips - git, description,
+   release and TODO - moved to public/board-table.css with the rest of the row.
 
-   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
-   order below are that file's own text. public/index.html loads the sheets in the order the rules had in
-   style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by rule and pane by
-   pane.
+   Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments
+   and order below are that file's own text. public/index.html loads the sheets in the order the
+   rules had in style.css, so the cascade is unchanged. tools/verify-css-split.mjs proves it rule by
+   rule and pane by pane.
    ------------------------------------------------------------------------------------------------ */
 
-/* git / commit / diff detail: one summary line, body only when unfolded */
-.git-block { margin-bottom: 6px; }
-.git-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
-.git-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
-/* Same heading treatment as LIVENESS EVIDENCE below it: tr.detail h4 already supplies the small caps
-   size, tracking and colour, so this only stops the flex row from squashing it. */
-.git-head h4 { margin: 0; flex: none; }
-.git-head:hover .chev, .git-head:hover h4, .git-head:hover .git-summary { color: var(--text); }
-.git-summary { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.git-block.collapsed .git-body { display: none; }
-.git-body { padding: 4px 0 0 28px; }
-/* The merge-state facts are a bullet list, one fact per line: as a single "·"-joined run the reader had to find
-   "cherry" inside it, and the head's summary (first bullet when open) is just another fact in the same list. The
-   description's bullets are the SAME list — one sentence per line — and are styled from here rather than from a rule
-   of their own, which is what keeps the two strips' bullets identical in family, size and colour. The first bullet of
-   each carries `git-summary-line`: it is the same role in both, the line the head shows while folded, repeated as the
-   list's first item, and it is the brighter of the two colours. */
-.git-body .git-list, .desc-body .git-list { margin: 0 0 6px; padding-left: 15px; }
-.git-body .git-list li, .desc-body .git-list li { font: 11.5px/1.6 var(--mono); color: var(--dim); }
-.git-body .git-list li.git-summary-line, .desc-body .git-list li.git-summary-line { color: #c8d1dc; }
-/* Folded, the summary rides on the head line. Unfolded, it drops into the list as its first bullet and the head
-   keeps just its title - done in CSS so the toggle stays a class flip and the detail is not re-rendered to
-   rearrange one span. */
-.git-block:not(.collapsed) .git-head .git-summary { display: none; }
-/* The commits this tree carries off remote main: the row's own full-width list, one commit per line. The three-column
-   flex row that used to hold this, Modified and Untracked is gone — a long commit list was clipped there and a long
-   file list was squeezed into 300px beside its neighbours. Nothing here caps the height: a tree with fifty commits
-   extends and the panel scrolls, rather than hiding the tail. */
-.git-body .git-commits { margin: 2px 0 8px; }
-.git-body .git-commits-list { margin: 3px 0 0; padding-left: 15px; }
-.git-body .git-commits-list li { font: 11.5px/1.6 var(--mono); color: #c8d1dc; overflow-wrap: anywhere; }
-/* Modified and Untracked: one-line strips under the commit list, each with its own fold. Folded, a strip is a
-   chevron, its title and its count and nothing else; opened, its names indent under it like the commit list's. */
-.git-sub { margin: 0 0 2px; }
-.git-sub-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
-.git-sub-head .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 13px; flex: none; }
-.git-sub-head h4 { margin: 0; flex: none; }
-.git-sub-head:hover .chev, .git-sub-head:hover h4 { color: var(--text); }
-.git-sub.collapsed > ul { display: none; }
-.git-sub > ul { margin: 2px 0 6px; padding-left: 15px; }
-.git-sub > ul li { font: 11.5px/1.6 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
-/* WHAT THIS BRANCH WAS STARTED TO DO: the strip ABOVE merge state. Same shape as the two under it — a chevron, a
-   small-caps title, a one-line peek while folded, and, open, a bullet list of its own sentences — because it is the
-   same kind of thing, and the three strips a worktree's detail opens with should read as one column. What differs is
-   the fold: it starts FOLDED (the peek is what a reader wants without opening anything) and the UNFOLD is remembered
-   per row (localStorage), so the rows a reader opened stay open across a reload. */
-.desc-block { margin-bottom: 6px; }
-.desc-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
-.desc-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
-.desc-head h4 { margin: 0; flex: none; }
-.desc-head:hover .chev, .desc-head:hover h4, .desc-head:hover .desc-first { color: var(--text); }
-.desc-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.desc-block.collapsed .desc-body { display: none; }
-.desc-block:not(.collapsed) .desc-head .desc-first { display: none; }
-.desc-body { padding: 2px 0 4px 28px; }
-/* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
-.desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
-/* A RELEASE request (lib/worktrees.js) is one line at the top of the detail: the verdict the panel's executor wrote
-   back and the reason the worker gave. The left rule carries the state colour — green removed, amber refused, blue
-   still waiting on the executor — and the gate that said no is part of the sentence, so a refusal needs no second
-   line. Signal colours, so they stay out of the contrast slider's surface map. */
-.release-block {
-  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0;
-  margin: 0 0 5px; padding: 2px 0 2px 9px; border-left: 2px solid var(--line);
-  font: 11.5px/1.6 var(--mono); color: var(--dim);
-}
-.release-block .release-mark { flex: none; color: var(--dimmer); }
-.release-block .release-word { flex: none; color: var(--dim); }
-.release-block .release-state { flex: none; color: var(--text); }
-.release-block .release-when { flex: none; color: var(--dimmer); }
-.release-block .release-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
-.release-block.removed { border-left-color: var(--green); }
-.release-block.removed .release-state { color: var(--green); }
-.release-block.refused { border-left-color: var(--amber); }
-.release-block.refused .release-state { color: var(--amber); }
-.release-block.requested { border-left-color: var(--blue); }
-.release-block.requested .release-state { color: var(--blue); }
-
-/* ---- the worktree's TODO list ------------------------------------------------------------------------------------ */
-/* The third strip in the row's family, with the description above it and MERGE STATE under it. FOLDED it reads the
-   OLDEST item still open (the lowest id whose status is todo or doing — NOT the last one that moved) with a done/total
-   count; UNFOLDED it lists every item with its status glyph, owner and age, and offers the reader the four things they
-   can do to one. The head is a real <button>, so the section is keyboard reachable, and so is every control inside it
-   — the two strips beside it are click-only. */
-.todo-block { margin-bottom: 6px; }
-.todo-head {
-  display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0;
-  width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left;
-}
-.todo-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
-.todo-head .todo-title { flex: none; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
-.todo-head:hover .chev, .todo-head:hover .todo-title, .todo-head:hover .todo-first { color: var(--text); }
-.todo-head:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
-.todo-count { font-size: 11.5px; color: var(--dim); flex: none; }
-/* What the last ⟳ thought looked closed — a question, not a change. Amber like the panel's other "this wants your
-   judgement" signals, and quiet in size so it never outranks the counts it sits beside. */
-.todo-proposal {
-  flex: none; font-size: 10px; line-height: 1.5; padding: 0 6px; border-radius: 999px;
-  border: 1px solid #5a4a22; background: #221d10; color: #e0b341;
-}
-.todo-head:hover .todo-proposal { border-color: #7a6327; color: #f0c674; }
-.todo-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.todo-block.collapsed .todo-body { display: none; }
-.todo-block:not(.collapsed) .todo-head .todo-first { display: none; }
-.todo-body { padding: 2px 0 4px 28px; }
-.todo-body .todo-list { margin: 0 0 6px; padding-left: 15px; list-style: none; }
-.todo-body .todo-list li { font: 11.5px/1.7 var(--mono); color: var(--dim); }
-/* One item is a LINE — glyph, id, its words, its controls — and, UNDER it, the facts about the item as a nested
-   bullet list: its owner, who touched it, when, and its optional note and files. The facts used to ride the far right
-   of that line (`margin-left:auto` on a full-width flex row), so on a 1,400px row a three-word item and its owner sat
-   a screen apart and the reader had to zoom out to read one row. Nothing about the line itself changed; only where its
-   facts sit. The left rule is what makes the nesting visible at a glance: bullets hang off the item they describe. */
-.todo-item { display: block; padding: 1px 0 3px; }
-/* Inline flow lets the words share their first line with the status and their last with the action buttons.
-   Flex wrapping would move the entire text span onto a line of its own. Keep flex only for the inline editor. */
-.todo-line { display: block; min-width: 0; overflow-wrap: anywhere; }
-.todo-line:has(.todo-edit) { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-/* The disclosure that folds ONE item's facts away, in front of its line so what it opens starts at the same left edge
-   as the words it belongs to. FOLDED is an item's default: the facts are up to three bullets about one item and two of
-   them carry the same worker string, so a twelve-item list was thirty-six lines of repetition around the twelve lines
-   worth reading. Each item opens on its own, and the choice is remembered per worktree + item (localStorage,
-   `wm.openTodoFacts`). The chevron takes the UI font on purpose: `▸`/`▾` in the mono stack render as nothing on
-   Windows, and the item's line is set in mono. */
-.todo-item .todo-facts-btn {
-  flex: none; font: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: var(--dimmer);
-  line-height: 1;
-}
-.todo-item .todo-facts-btn .chev { font-family: var(--ui); font-size: 11px; line-height: 1; display: inline-block; width: 11px; }
-.todo-item .todo-facts-btn:hover .chev { color: var(--text); }
-.todo-item .todo-facts-btn:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
-.todo-item.collapsed .todo-meta { display: none; }
-.todo-item .todo-glyph { flex: none; color: var(--dimmer); }
-.todo-item.todo-done .todo-text, .todo-item.todo-dropped .todo-text { color: var(--dimmer); text-decoration: line-through; }
-.todo-item.todo-doing .todo-glyph { color: var(--text); }
-.todo-item .todo-id { flex: none; }
-/* The fact list: indented under the item's words, one bullet per fact, and no wider indent than the text it belongs
-   to. `list-style: disc` draws the bullet in the list's own padding, so the markers line up in a column beside the
-   left rule rather than drifting with the length of each fact. */
-.todo-item .todo-meta {
-  margin: 1px 0 1px 22px;
-  padding: 1px 0 1px 14px;
-  list-style: disc;
-  border-left: 1px solid var(--line);
-}
-.todo-body .todo-list .todo-meta li { font: 10.5px/1.55 var(--mono); color: var(--dimmer); overflow-wrap: anywhere; }
-.todo-fact-label { margin-right: 1px; color: var(--dim); }
-.todo-body .todo-list .todo-meta .todo-note { color: var(--dim); }
-.todo-btn { background: none; border: 0; color: var(--dimmer); cursor: pointer; font: inherit; padding: 0 2px; }
-.todo-btn:hover { color: var(--text); }
-.todo-btn.on { color: var(--text); }
-.todo-btn.add { color: var(--dim); }
-.todo-edit, .todo-add-input {
-  flex: 1 1 320px; min-width: 160px; background: #20242c; border: 1px solid var(--line); color: var(--text);
-  font: 11.5px/1.5 var(--mono); padding: 2px 6px; border-radius: 4px;
-}
-.todo-add { margin-top: 2px; display: flex; gap: 6px; align-items: baseline; }
-.todo-journal { margin-top: 4px; font-size: 10.5px; }
-.todo-journal ul { margin: 0; padding-left: 15px; }
-.todo-journal li { font-size: 10.5px; color: var(--dimmer); }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
 .job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
@@ -278,3 +122,4 @@ body.modal-open { overflow: hidden; }
 .nowrap { white-space: nowrap; }
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }
+
