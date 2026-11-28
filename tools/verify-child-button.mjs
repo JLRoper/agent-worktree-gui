@@ -16,8 +16,10 @@
 //   3. NO BRANCH, NO BUTTON. A detached-HEAD row draws nothing: there is no branch to cut from.
 //   4. THE ATTRS THE HANDLER READS. data-child-tree (the row key), -project, -path and -branch all ride the button;
 //      the handler reads exactly those, so a renamed attribute is a dead control.
-//   5. THE HANDLER POSTS THE ROUTE. `cutChildTree` must call /api/worktree/child with the row's project and path, and
-//      the delegated listener must answer `[data-child-tree]` — a template with no wiring is the same dead button.
+//   5. THE HANDLER OPENS THE DIALOG. `cutChildTree` must read the row's project, path, parent and key, ask the branch
+//      kinds, and open the cut dialog with them; the POST lives in `cutSubmit`, behind the dialog's own Cut press, so
+//      a press on the row cannot cut before the reader has answered. `cancel` must close the dialog and reach nothing.
+//      The delegated listener must answer `[data-child-tree]` - a template with no wiring is the same dead button.
 //   6. THE INK IS ITS OWN. `.btn-child-tree` exists in the stylesheet, quiet at rest and coloured on hover, and the
 //      actions column is wide enough to hold three controls (74px) rather than clipping the third.
 import { readFileSync } from "node:fs";
@@ -75,16 +77,41 @@ ok("its face is a plus the mono stack actually has", /<button[^>]*>\+<\/button>/
 ok("its tooltip says what it cuts and what rolls back", /cut a child worktree off/.test(btn) && /rolls back into/.test(btn));
 
 // ---- 5: the handler, and the listener that reaches it -------------------------------------------------------------
+// THE PRESS OPENS THE DIALOG, it does not cut (queue row #489). `cutChildTree` reads the row's four attributes, asks
+// /api/branch-kinds what that branch offers, and calls `openCutDialog` with the project, the path, the parent and the
+// row key; the POST lives in `cutSubmit`, behind the dialog's Cut press. The two assertions below are re-pointed at
+// that shape: the old ones demanded a JSON.stringify of `{ project, path, name }` inside the handler and a prompt()'s
+// null return, which described a handler that no longer exists. Neither is weaker than what it replaces - every
+// attribute the dialog needs is named, the POST's own body is pinned, and the handler is required to carry NO route
+// call, so a press cannot cut a tree before the reader has answered.
+const cutAt = src.indexOf("async function cutChildTree(btn)");
+const cutStop = src.indexOf("// ---- end a child worktree off this row's branch", cutAt);
+const cutSrc = cutAt < 0 || cutStop < 0 ? "" : src.slice(cutAt, cutStop);
+const submitAt = src.indexOf("async function cutSubmit(dialog)");
+const submitSrc = submitAt < 0 || cutAt < 0 ? "" : src.slice(submitAt, cutAt);
 ok("the handler exists", /async function cutChildTree\(btn\)/.test(src));
-ok("the handler posts the cut route", /"\/api\/worktree\/child"/.test(src));
 ok(
-  "it sends the project, the row's path and the name",
-  /JSON\.stringify\(\{ project, path, name: String\(asked\)\.trim\(\) \}\)/.test(src),
+  "the route is posted from the dialog's Cut press, not from the row",
+  /"\/api\/worktree\/child"/.test(submitSrc) && !/"\/api\/worktree\/child"/.test(cutSrc),
+  submitSrc ? "cutSubmit carries the route; cutChildTree does not" : "no cutSubmit",
 );
 ok(
-  "cancel cuts nothing",
-  /if \(asked === null\) return;/.test(src),
-  "a dismissed prompt must not reach the route",
+  "it sends the project, the row's path and the name",
+  /openCutDialog\(\{ project, path, parent, key, choices, parents \}\)/.test(cutSrc) &&
+    /const project = btn\.dataset\.childProject/.test(cutSrc) &&
+    /const path = btn\.dataset\.childPath/.test(cutSrc) &&
+    /const parent = btn\.dataset\.childBranch/.test(cutSrc) &&
+    /const key = btn\.dataset\.childTree/.test(cutSrc) &&
+    /JSON\.stringify\(\{ project: dialog\.project, path: dialog\.path, name, kind: chosen \|\| undefined, parent: parent \|\| undefined \}\)/.test(submitSrc),
+  cutSrc ? cutSrc.match(/openCutDialog\([^)]*\)/)?.[0] || "no openCutDialog call" : "no cutChildTree",
+);
+ok(
+  "cancel cuts nothing - a dismissed prompt must not reach the route",
+  /el\.querySelector\("\.cut-cancel"\)\?\.addEventListener\("click", closeCutDialog\)/.test(src) &&
+    /el\.querySelector\("\.cut-go"\)\?\.addEventListener\("click", \(\) => cutSubmit\(cutDialog\)\)/.test(src) &&
+    /if \(!dialog\) return;/.test(submitSrc) &&
+    !/JSON\.stringify\(\{ project/.test(cutSrc),
+  "Cancel closes the dialog; only Cut reaches /api/worktree/child, and a closed dialog submits nothing",
 );
 ok("the delegated listener answers the attribute", /e\.target\.closest\("\[data-child-tree\]"\)/.test(src));
 const wireAt = src.indexOf('e.target.closest("[data-child-tree]")');
