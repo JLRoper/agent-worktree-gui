@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// THE NOTES SECTION FOLDS, and the count stays readable while it is shut.
+// THE NOTES SECTION IS FOLDED UNTIL THE READER OPENS IT, and the count stays readable while it is shut.
 //
 //   node tools/verify-initiative-notes-fold.mjs [--shots <dir>]
 //
@@ -13,24 +13,23 @@
 //
 // WHAT THIS GATE PROVES:
 //
-//   1. DEFAULT OPEN. A card first painted draws its log: the head reads aria-expanded "true", the list holds the
-//      notes the store holds, the write box is there, and the count reads N.
-//   2. A PRESS FOLDS IT. The head is a real <button type="button">, a press on it turns aria-expanded to "false",
-//      the body carries `hidden`, the list and the write row have no box at all (getClientRects() is empty, so this
-//      is a measurement rather than a class name), the section is materially shorter, and .init-notes-count still
-//      reads N and is still visible in the folded head.
-//   3. A SECOND PRESS UNFOLDS IT, with the same list and the same write row back.
+//   1. DEFAULT FOLDED. A card first painted draws its head with the count and nothing else: aria-expanded "false",
+//      the body carries `hidden` and has no box at all, the list and the write row are in the DOM but laid out as
+//      nothing, and the count still reads N in the folded head.
+//   2. A PRESS UNFOLDS IT. A press on the head turns aria-expanded to "true", the body loses `hidden`, the list and
+//      the write row are laid out, and the section is materially taller.
+//   3. A SECOND PRESS FOLDS IT AGAIN, with the count still on the head.
 //   4. ENTER AND SPACE BOTH PRESS IT. Focus lands on the head and a real Enter, then a real Space, each flip
 //      aria-expanded and the body's hidden attribute - the browser's own button activation, not a key handler this
 //      pane had to grow.
-//   5. TWO INITIATIVES FOLD APART. Folding init_sso leaves init_release open, folding init_release leaves init_sso
-//      shut, and unfolding one does not move the other: the book is keyed by the initiative id.
+//   5. TWO INITIATIVES FOLD APART. Unfolding init_sso leaves init_release folded, unfolding init_release leaves
+//      init_sso as it was, and folding one does not move the other: the book is keyed by the initiative id.
 //   6. A NOTE WHILE FOLDED BUMPS THE COUNT AND LEAVES IT SHUT. A note is written through the real
 //      POST /api/initiatives/notes/add route (the writer an assistant's turn uses), the tab is re-read with its own
 //      Refresh press, and the folded head goes 2 -> 3 while aria-expanded stays "false" and the body stays hidden:
 //      the fold is module state, not a DOM detail the repaint would lose.
-//   7. ZERO NOTES STILL DRAWS THE EMPTY WORDING under a pressable head, and that head folds and unfolds like any
-//      other.
+//   7. ZERO NOTES STILL CARRIES THE EMPTY WORDING under a pressable head, and that head unfolds onto it and folds
+//      again like any other.
 //
 // Exit codes: 0 every check held; 1 one failed; 2 the run could not measure what it claims (no Playwright, no
 // fixture, no card). Nothing here needs the reader's panel, a gateway or a network.
@@ -189,86 +188,84 @@ try {
 
       await openCard(SSO_CARD);
 
-      // ---- 1. DEFAULT OPEN SHOWS THE LIST AND THE COUNT ---------------------------------------------------------
+      // ---- 1. DEFAULT FOLDED: THE HEAD AND ITS COUNT, NOTHING ELSE -------------------------------------------------
       const first = await readSection(SSO);
       ok("the notes section is drawn on the open card", !first.missing, JSON.stringify({ missing: first.missing || false }));
       ok("the head is a real button, so a press and the keyboard can both reach it", first.head?.tag === "BUTTON" && first.head?.type === "button", `${first.head?.tag} type=${first.head?.type} tabIndex=${first.head?.tabIndex}`);
-      eq("a card first painted shows its notes expanded", first.head?.expanded, "true");
+      eq("a card first painted shows its notes FOLDED", first.head?.expanded, "false");
       ok("aria-controls names the body the fold hides", first.controlsBody === true, `${first.head?.controls}`);
-      eq("the default body is not hidden and is laid out", [first.body?.hidden, first.body?.visible], [false, true]);
-      eq("the default list holds every note the store holds", first.list?.notes, SSO_NOTES);
-      ok("the default list is visible", first.list?.visible === true, `visible=${first.list?.visible}`);
-      eq("the default count reads N", first.count?.text, String(SSO_NOTES));
-      ok("the default count is visible", first.count?.visible === true, `visible=${first.count?.visible}`);
-      ok("the write row is drawn open with the list", first.write?.visible === true && first.write?.textareaVisible === true && first.write?.saveVisible === true, JSON.stringify(first.write));
-      const openH = first.sectionH;
+      eq("the default body carries hidden and is laid out as nothing", [first.body?.hidden, first.body?.display, first.body?.visible], [true, "none", false]);
+      eq("the folded body still holds every note the store holds", first.list?.notes, SSO_NOTES);
+      ok("the folded list is laid out as nothing", first.list ? first.list.visible === false : true, first.list ? `visible=${first.list.visible}` : "no note rows drawn");
+      eq("the folded count reads N", first.count?.text, String(SSO_NOTES));
+      ok("the folded count is visible in the head", first.count?.visible === true && first.head?.visible === true, `count visible=${first.count?.visible}, head visible=${first.head?.visible}`);
+      ok("the write row is out of sight with the log", first.write?.visible === false && first.write?.textareaVisible === false, JSON.stringify(first.write));
+      ok("the folded head says the log is folded", /folded|unfold/i.test(first.head?.text || ""), first.head?.text);
+      const foldedH = first.sectionH;
       await page.evaluate((sel) => document.querySelector(sel).scrollIntoView({ block: "start" }), `${SSO_CARD} [data-init-notes]`);
-      await page.screenshot({ path: shot("01-notes-expanded") });
+      await page.screenshot({ path: shot("01-notes-folded-default") });
 
-      // ---- 2. A PRESS FOLDS IT, AND THE COUNT STAYS ON THE HEAD -------------------------------------------------
-      await page.click(headSel(SSO_CARD));
-      await waitExpanded(SSO_CARD, "false");
-      const folded = await readSection(SSO);
-      eq("a press turns aria-expanded to false", folded.head?.expanded, "false");
-      eq("the body carries hidden, and the browser lays it out as nothing", [folded.body?.hidden, folded.body?.display, folded.body?.visible], [true, "none", false]);
-      ok("the list has no box while folded", folded.list ? folded.list.visible === false : true, folded.list ? `visible=${folded.list.visible}` : "no note rows on the folded card");
-      ok("the write row and its box have no box while folded", folded.write?.visible === false && folded.write?.textareaVisible === false && folded.write?.saveVisible === false, JSON.stringify(folded.write));
-      eq("the folded head still reads N", folded.count?.text, String(SSO_NOTES));
-      ok("the folded count is still visible in the head", folded.count?.visible === true && folded.head?.visible === true, `count visible=${folded.count?.visible}, head visible=${folded.head?.visible}`);
-      ok("the fold takes the log's height out of the section", folded.sectionH < openH - 80, `${openH}px open -> ${folded.sectionH}px folded`);
-      ok("the folded head names the fold in its hint", /folded/i.test(folded.head?.text || ""), folded.head?.text);
-      await page.screenshot({ path: shot("02-notes-folded") });
-
-      // ---- 3. A SECOND PRESS UNFOLDS IT ------------------------------------------------------------------------
+      // ---- 2. A PRESS UNFOLDS IT, AND THE COUNT IS STILL ON THE HEAD ---------------------------------------------
       await page.click(headSel(SSO_CARD));
       await waitExpanded(SSO_CARD, "true");
-      const again = await readSection(SSO);
-      eq("a second press turns aria-expanded back to true", again.head?.expanded, "true");
-      eq("the body is drawn again", [again.body?.hidden, again.body?.visible], [false, true]);
-      eq("the same note rows come back", again.list?.notes, SSO_NOTES);
-      ok("the same write row comes back", again.write?.textareaVisible === true && again.write?.saveVisible === true, JSON.stringify(again.write));
-      eq("the count never moved for a fold", again.count?.text, String(SSO_NOTES));
+      const opened = await readSection(SSO);
+      eq("a press turns aria-expanded to true", opened.head?.expanded, "true");
+      eq("the body is drawn and laid out", [opened.body?.hidden, opened.body?.visible], [false, true]);
+      eq("the unfolded list holds every note the store holds", opened.list?.notes, SSO_NOTES);
+      ok("the unfolded list is visible", opened.list?.visible === true, `visible=${opened.list?.visible}`);
+      ok("the write row comes back with the list", opened.write?.visible === true && opened.write?.textareaVisible === true && opened.write?.saveVisible === true, JSON.stringify(opened.write));
+      eq("the count never moved for an unfold", opened.count?.text, String(SSO_NOTES));
+      ok("unfolding adds the log's height to the section", opened.sectionH > foldedH + 80, `${foldedH}px folded -> ${opened.sectionH}px open`);
+      await page.screenshot({ path: shot("02-notes-unfolded") });
 
-      // ---- 4. ENTER AND SPACE BOTH PRESS IT --------------------------------------------------------------------
+      // ---- 3. A SECOND PRESS FOLDS IT AGAIN -----------------------------------------------------------------------
+      await page.click(headSel(SSO_CARD));
+      await waitExpanded(SSO_CARD, "false");
+      const again = await readSection(SSO);
+      eq("a second press folds it", [again.head?.expanded, again.body?.hidden, again.body?.visible], ["false", true, false]);
+      ok("the folded head keeps the count reading N", again.count?.text === String(SSO_NOTES) && again.count?.visible === true, JSON.stringify(again.count));
+
+      // ---- 4. ENTER AND SPACE BOTH PRESS IT ----------------------------------------------------------------------
       await page.locator(headSel(SSO_CARD)).focus();
       eq("the head takes focus like a button", await page.evaluate((sel) => document.activeElement === document.querySelector(sel), headSel(SSO_CARD)), true);
       await page.keyboard.press("Enter");
-      await waitExpanded(SSO_CARD, "false");
+      await waitExpanded(SSO_CARD, "true");
       const afterEnter = await readSection(SSO);
-      eq("Enter folds it", [afterEnter.head?.expanded, afterEnter.body?.hidden, afterEnter.body?.visible], ["false", true, false]);
+      eq("Enter unfolds it", [afterEnter.head?.expanded, afterEnter.body?.hidden, afterEnter.body?.visible], ["true", false, true]);
       ok("Enter leaves the count reading N", afterEnter.count?.text === String(SSO_NOTES) && afterEnter.count?.visible === true, JSON.stringify(afterEnter.count));
       await page.keyboard.press("Space");
-      await waitExpanded(SSO_CARD, "true");
+      await waitExpanded(SSO_CARD, "false");
       const afterSpace = await readSection(SSO);
-      eq("Space unfolds it", [afterSpace.head?.expanded, afterSpace.body?.hidden, afterSpace.body?.visible], ["true", false, true]);
+      eq("Space folds it", [afterSpace.head?.expanded, afterSpace.body?.hidden, afterSpace.body?.visible], ["false", true, false]);
       ok("Space leaves the count reading N", afterSpace.count?.text === String(SSO_NOTES) && afterSpace.count?.visible === true, JSON.stringify(afterSpace.count));
 
-      // ---- 5. TWO INITIATIVES FOLD APART -----------------------------------------------------------------------
+      // ---- 5. TWO INITIATIVES FOLD APART --------------------------------------------------------------------------
       await openCard(RELEASE_CARD);
       await page.evaluate((sel) => document.querySelector(sel).scrollIntoView({ block: "start" }), `${RELEASE_CARD} [data-init-notes]`);
       const releaseFirst = await readSection(RELEASE);
-      eq("the second card starts expanded with its own count", [releaseFirst.head?.expanded, releaseFirst.count?.text, releaseFirst.list?.notes], ["true", String(RELEASE_NOTES), RELEASE_NOTES]);
-
-      await page.click(headSel(SSO_CARD));
-      await waitExpanded(SSO_CARD, "false");
-      const releaseWhileSsoShut = await readSection(RELEASE);
-      eq("folding one initiative leaves the other open", [releaseWhileSsoShut.head?.expanded, releaseWhileSsoShut.body?.visible, releaseWhileSsoShut.list?.visible], ["true", true, true]);
-
-      await page.click(headSel(RELEASE_CARD));
-      await waitExpanded(RELEASE_CARD, "false");
-      const both = { sso: await readSection(SSO), release: await readSection(RELEASE) };
-      eq("folding the second leaves the first exactly as it was", [both.sso.head?.expanded, both.sso.body?.hidden], ["false", true]);
-      eq("and the second is shut", [both.release.head?.expanded, both.release.body?.hidden], ["false", true]);
+      eq("the second card starts folded with its own count", [releaseFirst.head?.expanded, releaseFirst.count?.text, releaseFirst.list?.notes], ["false", String(RELEASE_NOTES), RELEASE_NOTES]);
 
       await page.click(headSel(SSO_CARD));
       await waitExpanded(SSO_CARD, "true");
-      const afterSsoOpen = await readSection(RELEASE);
-      eq("unfolding one does not unfold the other", [afterSsoOpen.head?.expanded, afterSsoOpen.body?.hidden], ["false", true]);
+      const releaseWhileSsoOpen = await readSection(RELEASE);
+      eq("unfolding one initiative leaves the other folded", [releaseWhileSsoOpen.head?.expanded, releaseWhileSsoOpen.body?.visible], ["false", false]);
 
-      // ---- 6. A NOTE WHILE FOLDED BUMPS THE COUNT AND LEAVES IT SHUT -------------------------------------------
-      // init_sso is open again; fold it, then write through the route a turn uses and refresh the tab with its own
-      // control. The count must move and the fold must not.
+      await page.click(headSel(RELEASE_CARD));
+      await waitExpanded(RELEASE_CARD, "true");
+      const both = { sso: await readSection(SSO), release: await readSection(RELEASE) };
+      eq("unfolding the second leaves the first open", [both.sso.head?.expanded, both.sso.body?.hidden], ["true", false]);
+      eq("and the second is open", [both.release.head?.expanded, both.release.body?.visible], ["true", true]);
+
       await page.click(headSel(SSO_CARD));
+      await waitExpanded(SSO_CARD, "false");
+      const afterSsoShut = await readSection(RELEASE);
+      eq("folding one does not fold the other", [afterSsoShut.head?.expanded, afterSsoShut.body?.hidden], ["true", false]);
+
+      // ---- 6. A NOTE WHILE FOLDED BUMPS THE COUNT AND LEAVES IT SHUT ---------------------------------------------
+      // init_release is open and init_sso shut; shut init_release too, then write through the route a turn uses and
+      // refresh the tab with its own control. The count must move and the fold must not.
+      await page.click(headSel(RELEASE_CARD));
+      await waitExpanded(RELEASE_CARD, "false");
       await waitExpanded(SSO_CARD, "false");
       const beforeArrival = await readSection(SSO);
       const addRes = await fetch(`${panel.base}/api/initiatives/notes/add`, {
@@ -294,28 +291,28 @@ try {
       ok("the fold survived a repaint, and the count moved without one", beforeArrival.head?.expanded === "false" && beforeArrival.count?.text === String(SSO_NOTES), `${beforeArrival.count?.text} -> ${arrived.count?.text}`);
       await page.screenshot({ path: shot("03-note-arrived-folded") });
 
-      // ---- 7. ZERO NOTES: THE EXISTING EMPTY WORDING UNDER A PRESSABLE HEAD ------------------------------------
+      // ---- 7. ZERO NOTES: THE EXISTING EMPTY WORDING UNDER A PRESSABLE HEAD --------------------------------------
       await openCard(SWEEPER_CARD);
       await page.evaluate((sel) => document.querySelector(sel).scrollIntoView({ block: "start" }), `${SWEEPER_CARD} [data-init-notes]`);
       const none = await readSection(SWEEPER);
-      eq("a card with no notes draws its count as zero", none.count?.text, "0");
-      ok("the empty wording is the existing one", /Nothing remembered here yet/.test(none.empty?.text || "") && /ticket/.test(none.empty?.text || "") && /pull request/.test(none.empty?.text || "") && /decision/.test(none.empty?.text || "") && /version/.test(none.empty?.text || ""), (none.empty?.text || "").slice(0, 100));
-      ok("the empty card's head is a pressable button, expanded", none.head?.tag === "BUTTON" && none.head?.type === "button" && none.head?.expanded === "true" && none.head?.tabIndex >= 0, JSON.stringify(none.head));
+      eq("a card with no notes draws its count as zero, folded", [none.count?.text, none.head?.expanded, none.body?.hidden], ["0", "false", true]);
+      ok("the folded empty card's head is a pressable button", none.head?.tag === "BUTTON" && none.head?.type === "button" && none.head?.tabIndex >= 0, JSON.stringify(none.head));
+      ok("the zero stays visible on the folded head", none.count?.visible === true, JSON.stringify(none.count));
       await page.click(headSel(SWEEPER_CARD));
-      await waitExpanded(SWEEPER_CARD, "false");
+      await waitExpanded(SWEEPER_CARD, "true");
       const noneShut = await readSection(SWEEPER);
-      eq("the empty card folds too", [noneShut.head?.expanded, noneShut.body?.hidden, noneShut.empty?.visible], ["false", true, false]);
-      ok("and its zero stays visible on the folded head", noneShut.count?.text === "0" && noneShut.count?.visible === true, JSON.stringify(noneShut.count));
+      eq("the empty card unfolds onto its wording", [noneShut.head?.expanded, noneShut.body?.hidden, noneShut.empty?.visible], ["true", false, true]);
+      ok("the empty wording is the existing one", /Nothing remembered here yet/.test(noneShut.empty?.text || "") && /ticket/.test(noneShut.empty?.text || "") && /pull request/.test(noneShut.empty?.text || "") && /decision/.test(noneShut.empty?.text || "") && /version/.test(noneShut.empty?.text || ""), (noneShut.empty?.text || "").slice(0, 100));
       await page.locator(headSel(SWEEPER_CARD)).focus();
       await page.keyboard.press("Enter");
-      await waitExpanded(SWEEPER_CARD, "true");
+      await waitExpanded(SWEEPER_CARD, "false");
       const noneOpen = await readSection(SWEEPER);
-      eq("and unfolds onto the empty wording again", [noneOpen.head?.expanded, noneOpen.body?.visible, noneOpen.empty?.visible], ["true", true, true]);
+      eq("Enter folds it again onto the bare head", [noneOpen.head?.expanded, noneOpen.body?.visible, noneOpen.empty?.visible], ["false", false, false]);
       await page.screenshot({ path: shot("04-empty-card") });
 
-      // ---- 8. HEALTH ------------------------------------------------------------------------------------------
+      // ---- 8. HEALTH ----------------------------------------------------------------------------------------------
       ok("zero page errors and zero console errors", pageErrors.length === 0 && consoleErrors.length === 0, [...pageErrors, ...consoleErrors].slice(0, 3).join(" | "));
-      return { openH, foldedH: folded.sectionH, counts: { sso: arrived.count?.text, release: releaseFirst.count?.text, sweeper: noneOpen.count?.text } };
+      return { foldedH, openH: opened.sectionH, counts: { sso: arrived.count?.text, release: releaseFirst.count?.text, sweeper: noneOpen.count?.text } };
     },
     { viewport: { width: 1440, height: 900 } },
   );
