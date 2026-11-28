@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The console corner: which number stopped the drag, and the one band that replaces it - 2026-11-28</title>
+<style>
+  :root { --ink:#1c2128; --muted:#57606a; --line:#d0d7de; --bg:#ffffff; --soft:#f6f8fa; --good:#1a7f37; --bad:#cf222e; --warn:#9a6700; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:1060px; margin:0 auto; padding:40px 28px 80px; }
+  h1 { font-size:30px; line-height:1.25; margin:0 0 6px; letter-spacing:-.01em; }
+  h2 { font-size:20px; margin:42px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:16px; margin:24px 0 8px; }
+  p, li { max-width:78ch; }
+  .sub { color:var(--muted); margin:0 0 22px; }
+  code, pre { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; }
+  code { background:var(--soft); padding:1px 5px; border-radius:4px; }
+  pre { background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow:auto; }
+  table { border-collapse:collapse; width:100%; margin:14px 0 8px; font-size:13.5px; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  th { background:var(--soft); font-weight:600; }
+  .verdict { border-left:4px solid var(--good); background:var(--soft); padding:12px 16px; margin:18px 0; }
+  .verdict.bad { border-color:var(--bad); }
+  .verdict.warn { border-color:var(--warn); }
+  .tag { display:inline-block; font-size:12px; font-weight:600; padding:1px 8px; border-radius:20px; border:1px solid var(--line); background:#fff; color:var(--muted); }
+  .tag.good { color:var(--good); border-color:#a7d3b1; }
+  .tag.bad { color:var(--bad); border-color:#f0b6ba; }
+  .tag.warn { color:var(--warn); border-color:#e6c98a; }
+  .muted { color:var(--muted); }
+  .small { font-size:13px; }
+  ol li, ul li { margin:4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The console corner: which number stopped the drag, and the one band that replaces it</h1>
+  <p class="sub">Measured and fixed on 2026-11-28 in <code>agent-worktree-gui</code>, row #411. Branch
+  <code>wtgui/row-411-is-the-complete-brief-the-turn-8c3221</code>, cut from the turnover branch
+  <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. Version <code>1.195.0</code>.</p>
+
+  <div class="verdict">
+    <strong>The short answer.</strong> The drag was stopped by the <em>room</em> number, and that room was computed from
+    <code>window.innerHeight</code>, the viewport's height in <strong>visual</strong> pixels, against a top edge in
+    <strong>layout</strong> pixels. The transcript's scroll room was not the stopper: its content never grew while the
+    console grew, so it never bounded the drag. On a 90% page the room was short and the box stopped well inside the pane;
+    on a 110% page it was too tall and the box drew past the bottom. The pane's own bottom was never consulted at all.
+    The fix is one band from one module: the stop is <code>min(pane room, viewport room)</code>, in one unit, and the
+    record names which edge it was. The grip's 406 lines left <code>public/app.js</code> for
+    <code>public/core/console-grip.js</code>, and two gates now read that band instead of re-deriving it.
+  </div>
+
+  <h2>1. What the reader reported, and what was measured</h2>
+  <p>Dragging the console box's bottom-right corner upward stops it well before the available room, on every zoom and
+  window height tried. The console is the turn-output box: a <code>pre.job-out</code> inside <code>.out-box</code>, with
+  a corner grip in the bottom-right, inside a turn inside the pane's scrollport (<code>.job-body</code>).</p>
+  <p>The old grip carried four numbers that could stop it: the <strong>floor</strong> (a minimum height), the
+  <strong>room</strong> (how far the bottom may travel), the <strong>cap</strong> (the CSS <code>max-height</code>), and
+  the <strong>top</strong> (the frozen top edge the height is measured from). A fifth candidate sits behind the box: the
+  transcript's scroll room, which decides whether growing the box scrolls the turn.</p>
+
+  <h2>2. Which number stopped the drag, proven by the recorded value</h2>
+  <p>The press records the band it will allow: <code>top</code>, <code>grab</code>, <code>z</code>, <code>min</code>,
+  <code>room</code>. The move records every request (<code>want</code>) and the height it drew (<code>h</code>). At the
+  old code's stop, reading the record and the box together:</p>
+  <table>
+    <thead><tr><th>Shape</th><th>edge the box reached</th><th>stopped by</th><th>height at the stop</th><th>room at the stop</th><th>what the transcript did</th></tr></thead>
+    <tbody>
+      <tr><td>900px, 100%</td><td>viewport map to layout 892.47</td><td>room</td><td>552</td><td>552</td><td>no scroll: content and client height unchanged, scrollTop 0</td></tr>
+      <tr><td>900px, 90%</td><td>802.53, 75.0 short of the pane</td><td>room</td><td>405.89</td><td>405.89</td><td>no scroll</td></tr>
+      <tr><td>900px, 110%</td><td>981.27, 108.8 past the pane</td><td>room</td><td>695.19</td><td>695.19</td><td>no scroll</td></tr>
+      <tr><td>760px, 100%</td><td>752.47, 17.5 past the pane</td><td>room</td><td>552</td><td>552</td><td>no scroll</td></tr>
+      <tr><td>760px, 90%</td><td>676.94, 60.6 short of the pane</td><td>room</td><td>420.30</td><td>420.30</td><td>no scroll</td></tr>
+      <tr><td>760px, 110%</td><td>826.97, 94.5 past the pane</td><td>room</td><td>680.89</td><td>680.89</td><td>no scroll</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Numbers from <code>probe-grip.mjs</code> against the base tree exported with
+  <code>git archive</code>; height, bottom, room and the pane's bottom are read from the live box and the drag record at
+  the stop. The transcript part of the fixture was 1,989px of text with its scroll pinned at 0 while the console
+  grew, so the box's own top stayed put and the transcript never consumed the travel: it was not the limit.</p>
+
+  <h3>The four numbers, one by one</h3>
+  <ul>
+    <li><strong>Floor</strong> - not the stopper in any measured case: the stop height (405.89 to 695.19) is far above the
+    floor (<code>min-height: 34</code> for a grip at 100%, 37.4 at 110%).</li>
+    <li><strong>Room</strong> - the stopper in all six cases: the stop height equals the recorded room to the pixel.</li>
+    <li><strong>Cap</strong> - not reached: the cap is 250 (<code>32vh</code> of 900) to 230, and every stop is above
+    405.</li>
+    <li><strong>Top</strong> - not the stopper: the recorded <code>top</code> and the drawn box's top agree within 0.5px
+    from press to release, so the frozen top did not drift and did not eat the travel.</li>
+    <li><strong>Transcript scroll room</strong> - not the stopper, and this is the prime suspect cleared: while the box
+    grew, the transcript's <code>scrollHeight - clientHeight</code> did not fall to the travel that was being refused.
+    The scrollport's own height was not the value the drag compared against; the room was.</li>
+  </ul>
+
+  <h2>3. Why the room was wrong: visual pixels against layout pixels</h2>
+  <p>The old room was</p>
+  <pre>room = Math.max(cap, innerHeight - top / zoom - 8)        // public/app.js:10829 (base)</pre>
+  <p><code>innerHeight</code> is the viewport height in <strong>visual</strong> pixels and does not change with the page's
+  zoom. <code>top</code> is a <code>getBoundingClientRect().top</code>, also visual, so dividing it by the zoom turns it
+  into a layout length; the two terms are then in different units. The box's height is set in layout pixels. Written in
+  one unit, the viewport room is <code>innerHeight / zoom - top - 8</code>. The old expression is short by
+  <code>innerHeight * (1 - 1/zoom)</code>:</p>
+  <pre>900px, 90%:   old 900 - 133.3/0.9 - 8 = 758.7   honest 1000 - 133.3 - 8 = 858.7   ->  100px short
+900px, 110%:  old 900 - 133.3/1.1 - 8 = 770.8   honest  818.2 - 133.3 - 8 = 676.9 ->  93.9px too tall</pre>
+  <p>(Worked on the band gate's own synthetic console at <code>top = 133.3</code>, so both lines are arithmetic on the
+  same top. On the live float the top itself moves with the zoom, which is why the matrix's deltas are larger.) The
+  second line is the overshoot: a room larger than the viewport can hold lets the box draw past the bottom, and release
+  then clamps it back - the jump the reader sees at 110%. The first line is the early stop: at 90% the room is a tenth
+  of the viewport short, and no amount of dragging reaches the edge.</p>
+  <p>And nothing anywhere subtracted the pane. A console inside the assistant pane's scrollport could grow behind the
+  reply box and past the pane's own bottom by 17.5px at 100%, before any zoom error.</p>
+
+  <h2>4. The fix: one band, one unit, one floor, one clamp</h2>
+  <p><code>public/core/console-grip.js</code> was created from the grip that used to sit in <code>public/app.js</code>
+  (406 lines moved, the module is 408 including its new band), and the page loads it before <code>app.js</code>. The
+  band is one function, and it computes both rooms in layout pixels:</p>
+  <pre>paneRoom = (paneBottom - top - 8)          // null when there is no scrollport
+viewRoom = (innerHeight / z - top - 8)     // layout, not visual
+room     = min(paneRoom ?? Infinity, viewRoom)
+edge     = room === paneRoom ? "pane" : "viewport"</pre>
+  <p class="small muted"><code>public/core/console-grip.js:72</code> <code>band()</code>, <code>:82</code> the pane room,
+  <code>:83</code> the viewport room, <code>:219</code> the edge recorded on the drag. <code>:96</code>
+  <code>limit()</code> is the one clamp; the move (<code>:268</code>) and the release (<code>:334</code>) both call it,
+  so there is one place that can stop the box and it stops at the band.</p>
+  <p>The press reads the pane bottom from the nearest <code>.job-body</code>
+  (<code>public/core/console-grip.js:194</code>), and the floor is the box's own computed <code>min-height</code> in
+  layout px. The release no longer clears the inline height: clearing it left the box sized by the last frame, so the
+  first frame after the release drew the whole travel (the jump the reader described as the "bounce"). It now clamps
+  and writes the height it reached.</p>
+
+  <h3>The direction the reader described</h3>
+  <p>The grip sits on the box's bottom edge, so a drag <em>upward</em> makes the box shorter; its only stop is the floor.
+  The drag that expands is the one that goes <em>down</em>, and its stop is the pane or the viewport edge. The band gate
+  asserts both: the growing drag stops on the named edge minus the 8px gap, the shrinking drag stops on the floor, and
+  in neither does the corner leave the hand. This is stated here rather than glossed, because "the stop is only ever
+  the pane or viewport edge" is a statement about the growing drag.</p>
+
+  <h2>5. Before and after, at 100 / 90 / 110 and two window heights</h2>
+  <p>Same gesture, same fixture, same start height (300 layout px), drag down until it stops. <em>Gap</em> is the pane's
+  bottom minus the box's bottom in layout px: a positive gap is inside the pane, a negative one is past it.</p>
+  <table>
+    <thead><tr><th>Window / zoom</th><th>before stop (px)</th><th>before gap</th><th>after stop (px)</th><th>after gap</th><th>after edge</th></tr></thead>
+    <tbody>
+      <tr><td>900 / 100%</td><td>552</td><td>-17.5 past</td><td>527</td><td>+7.5</td><td>pane</td></tr>
+      <tr><td>900 / 90%</td><td>405.89</td><td>+75.0 short</td><td>444.59</td><td>+7.5</td><td>pane</td></tr>
+      <tr><td>900 / 110%</td><td>695.19</td><td>-108.8 past</td><td>543.39</td><td>+8.9</td><td>pane</td></tr>
+      <tr><td>760 / 100%</td><td>552</td><td>-17.5 past</td><td>527</td><td>+7.5</td><td>pane</td></tr>
+      <tr><td>760 / 90%</td><td>420.30</td><td>+60.6 short</td><td>473.39</td><td>+7.5</td><td>pane</td></tr>
+      <tr><td>760 / 110%</td><td>680.89</td><td>-94.5 past</td><td>577.50</td><td>+8.9</td><td>pane</td></tr>
+    </tbody>
+  </table>
+  <p>After: every stop is the pane edge, 7.5px inside it at 100 and 90%, 8.9px at 110% (the 8px band gap drawn at that
+  zoom is 8.8px). The two non-100 rows are the two the old formula could not get right in opposite directions, and the
+  100% rows are the pane the old room never consulted.</p>
+  <p class="small muted">The band gate reports the same thing at its own fixture: <code>pane</code> shapes stop on the
+  pane minus 7.01 to 9.01 visual px (8 layout px at that zoom), <code>viewport</code> shapes stop on the viewport, and
+  the up drag stops on the floor in all 24 cases. Its log is in section 7.</p>
+
+  <h2>6. The extraction, and the gates that read it</h2>
+  <ul>
+    <li><code>public/core/console-grip.js</code>: press, move, end (release), step, band, limit and the edge watch.
+    Published as <code>globalThis.wtConsoleGrip</code>, with <code>band</code>, <code>limit</code>, <code>capOf</code>,
+    <code>release</code> and the read-only <code>wtConsoleGripDrag</code> record for gates.</li>
+    <li><code>public/app.js</code>: the grip's 406 lines removed, 31 lines of wiring left
+    (<code>:10640</code> <code>wtConsoleGrip.install({...})</code> with the page's store, view and scroll hooks). No
+    band, clamp or gap arithmetic remains in the page.</li>
+    <li><code>public/index.html</code>: one classic script before <code>app.js</code>.</li>
+    <li><code>tools/verify-console-corner-drag.mjs</code>: the room and the release clamp now come from
+    <code>GRIP.band(...)</code> and <code>GRIP.release(...)</code> (<code>:80</code>, <code>:778</code>), not from a
+    local copy of the formula. This is the gate whose cases span 2 widths, 2 pane sizes and 2 edge shapes: it was the
+    one that had been re-deriving the band and so could not see the unit error.</li>
+    <li><code>tools/verify-console-resize-release.mjs</code>: the release's room comes from
+    <code>window.wtConsoleGrip.band(...)</code> (<code>:160</code>), and the release is driven through the module's own
+    pointer handling. 8 of 8.</li>
+    <li><code>tools/verify-console-grip-band.mjs</code> (new): one band, both edges, three zooms, two window heights,
+    grow and shrink: 26 checks. It reads the band from the module the page serves and never re-derives a room.</li>
+  </ul>
+  <p><strong>One clamp.</strong> Before, five places in <code>app.js</code> computed or applied a band: the press's room
+  (<code>:10829</code>), the floor read (<code>:10724</code>), <code>outGripLimit</code> (<code>:10812</code>),
+  <code>outGripRelease</code> (<code>:10998</code>) and the move's clamp (<code>:10923</code>). After, there is one
+  <code>band()</code> and one <code>limit()</code> in the module, and the move and the release are its only callers.</p>
+
+  <h2>7. What ran</h2>
+  <table>
+    <thead><tr><th>Check</th><th>Result</th><th>Case count</th></tr></thead>
+    <tbody>
+      <tr><td><code>node --test test/console-*.test.js test/placed-nodes.test.js test/board-lookups.test.js</code></td><td><span class="tag good">PASS</span></td><td>113 tests</td></tr>
+      <tr><td><code>tools/verify-console-grip-band.mjs</code> (new)</td><td><span class="tag good">PASS</span></td><td>26 checks</td></tr>
+      <tr><td><code>tools/verify-console-corner-drag.mjs --serve &lt;tree&gt;</code></td><td><span class="tag good">PASS</span></td><td>98 ok, 0 failures</td></tr>
+      <tr><td><code>tools/verify-console-resize-release.mjs</code></td><td><span class="tag good">PASS</span></td><td>8 checks</td></tr>
+      <tr><td><code>tools/verify-console-corner-tail.mjs</code></td><td><span class="tag good">PASS</span></td><td>its own count</td></tr>
+      <tr><td><code>tools/verify-console-render.mjs</code>, <code>diff</code>, <code>lost-text</code></td><td><span class="tag good">PASS</span></td><td>33, all, all</td></tr>
+      <tr><td><code>tools/measure-console-press-only.mjs --serve &lt;tree&gt;</code></td><td><span class="tag good">ran</span></td><td>press-only rows</td></tr>
+    </tbody>
+  </table>
+  <h3>Red on the branch before this cut too, and therefore not the extraction's</h3>
+  <p>Each of these was run from a base tree exported with <code>git archive</code> and fails with the same message and
+  the same count there:</p>
+  <table>
+    <thead><tr><th>Tool</th><th>Branch</th><th>Base export</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>verify-console-height.mjs</code></td><td>30/59 fail</td><td>30/59 fail</td><td>the fixture drags to 420px and expects it, but its pane's room is ~320; the gate encodes the viewport-only band this row replaces</td></tr>
+      <tr><td><code>verify-console-resize.mjs</code></td><td>4 checks fail</td><td>4 checks fail</td><td>same fixture, same expectation</td></tr>
+      <tr><td><code>verify-console-corner-slow-drag.mjs</code></td><td>4 fail</td><td>4 fail</td><td>expects the release to put the transcript back on its foot; the code deliberately does not write the foot the gesture took away</td></tr>
+      <tr><td><code>verify-console-settled-tail.mjs</code></td><td>1 fail</td><td>1 fail</td><td>whole-message length on a docked console</td></tr>
+      <tr><td><code>verify-console-jitter.mjs --headless</code></td><td>11/17</td><td>11/17</td><td>environment-dependent timing</td></tr>
+      <tr><td><code>verify-console-boxes.mjs</code>, <code>verify-console-fonts.mjs</code></td><td>reads <code>public/style.css</code></td><td>same</td><td>the sheet was split into per-surface files by an earlier cut; these gates still open the old path</td></tr>
+      <tr><td><code>verify-console-multi-block-line.mjs</code></td><td>needs live job 6073fb2a</td><td>same</td><td>a live board fixture, not code</td></tr>
+      <tr><td><code>verify-console-column-fit.mjs</code>, <code>verify-console-zoom.mjs</code></td><td>sandbox spawn refused</td><td>same</td><td>a live run holds the tree each one cuts; environmental</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">The two updated gates and the new gate all pass on the branch and are red or not-run on the base
+  for the same reason, which is the point: the old gates could not see the unit mix because they re-derived the band. The
+  new gate reads it. The full suite was run once, separately; its counts are in section 8.</p>
+
+  <h2>8. Where this lands</h2>
+  <p>Branch <code>wtgui/row-411-is-the-complete-brief-the-turn-8c3221</code>, cut from
+  <code>20261127_2134_TASK-405_row-405-is-the-complete</code>. It is merged back into that turnover branch locally, in
+  merge commit <code>334989a8</code>, and pushed nowhere: no new remote branch and no pull request, because the turnover
+  branch is the branch this work rolls up to and the reader decides when it lands. The turnover branch is left
+  unpushed (<code>origin/20261127_2134_TASK-405_row-405-is-the-complete</code> is behind it). Version
+  <code>1.195.0</code>, above <code>origin/main</code>'s <code>1.194.0</code>; 1.194.0 is anchored, so the bump skipped
+  it, and the merge resolved the turnover's own <code>1.194.1</code> in favour of <code>1.195.0</code>.</p>
+  <p class="small muted">Reproduce: <code>node tools/verify-console-grip-band.mjs</code> (26 checks, boots its own
+  panel), <code>node tools/verify-console-corner-drag.mjs --serve &lt;tree&gt;</code> (the 98-case matrix).</p>
+</main>
+</body>
+</html>
