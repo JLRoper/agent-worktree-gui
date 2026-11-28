@@ -218,6 +218,47 @@ test("the same refusal through the harvest is one line, not a refusal plus a gen
   assert.equal(refused.length, 1, "the refusal is written once");
   assert.equal(failed.length, 0, "and not repeated as a generic spawn failure");
   assert.ok(refused[0].text.includes(first.thread), `naming the holder: ${refused[0].text}`);
+
+  // THE CARD (queue row 419): a refusal the reader cannot see is the absence this row is about. One red alert,
+  // carrying the reason AND the remedy, on the assistant whose line it refused.
+  const cards = p.assistant.alerts.filter((a) => a.rule === "spawn-refused" && a.status === "open");
+  assert.equal(cards.length, 1, `one refusal card: ${JSON.stringify(p.assistant.alerts.map((a) => a.rule))}`);
+  const card = cards[0];
+  assert.equal(card.severity, "bad", "a refusal is red");
+  assert.equal(card.level, "alert");
+  assert.match(card.title, /^SPAWN refused: /);
+  assert.match(card.title, /busy-tree/, "the card names the tree the line named");
+  assert.match(card.detail, /already has a live run/, "the reason");
+  assert.match(card.detail, /the fix: wait for job/, "and the remedy, in the same card");
+  assert.ok(card.evidence.find((e) => e.label === "remedy" && e.value.includes(first.thread)), "the remedy is labelled evidence");
+  assert.match(card.evidence.find((e) => e.label === "what happened").value, /nothing was cut/, "and says nothing exists behind the line");
+  // The card is on the assistant's own board, not only in the store: this is the list the page draws.
+  const shown = p.assistant.state().alerts.find((a) => a.id === card.id);
+  assert.ok(shown, "the card is in the state the page reads");
+  assert.equal(shown.assistantId, "assistant-1", "filed on the assistant whose line was refused");
+  assert.ok(p.assistant.journal.find((e) => e.kind === "spawn-refused-card"), "the card's creation is journalled too");
+});
+
+test("the refusal card is settled when the same tree is finally carried out", async (t) => {
+  const p = await panel(t);
+  const first = await p.assistant.startSpawn({ existing: true, target: p.tree, prompt: "hold this tree" }, { source: "assistant" });
+  p.hold(first);
+  await assert.rejects(
+    () => p.assistant.startSpawn({ existing: true, target: p.tree, prompt: "a second worker in the same tree" }, { source: "assistant" }),
+    (e) => e?.code === "tree_busy",
+  );
+  const card = p.assistant.alerts.find((a) => a.rule === "spawn-refused" && a.status === "open");
+  assert.ok(card, "the refusal raised a card");
+
+  // The holder ends, the same tree is fit again, and the line now runs: the card must not read as still true.
+  // The record stays in the store (its `t.after` is what stops a live card's clocks); `done` is what makes it not
+  // a holder.
+  p.jobs.jobs.get(first.id).status = "done";
+  const second = await p.assistant.startSpawn({ existing: true, target: p.tree, prompt: "the tree is free now" }, { source: "assistant" });
+  assert.ok(second?.id, "the same tree was carried out once it was free");
+  assert.equal(card.status, "done", "the refusal card is closed by the successful cut");
+  assert.ok(card.closedAt);
+  assert.ok(p.assistant.journal.find((e) => e.kind === "spawn-refused-cleared"));
 });
 
 test("the single-dispatch path is unchanged, and a different tree is still free", async (t) => {

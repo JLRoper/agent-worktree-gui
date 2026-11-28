@@ -1,7 +1,13 @@
 // The pre-flight a SPAWN gets BEFORE its line is written: would the cut refuse it, and what would fix it.
 //
 //   GET /api/assistant/spawn-check?task=<id>&project=<name>&tree=<path>&assistantId=<id>
-//     -> { ok, reason, remedy, checks: [{check, code, reason, remedy}], task, project, tree, resolved }
+//     -> { ok, reason, remedy, checks: [{check, code, reason, remedy}], task, project, tree, resolved, treeState }
+//
+// `treeState` is the NAMED TREE measured by `Assistant#spawnCheck`: `{path, branch, ahead, dirty, behind, mainRef,
+// read, source, baseCheckout, holder}`. `ahead` is the commits the tree holds that the project's main does not,
+// `dirty` the uncommitted files, `holder` the live run standing in it (null when free), and `source` which read
+// produced them ("git", "board row", or "unmeasured"). The counts are quoted in `reason`/`checks` as well; the
+// object is there so a caller never has to parse a sentence to get a number.
 //
 // Why the route exists: on 2026-11-21 a SPAWN naming parked row 184 was refused with "task #184 is parked" AFTER the
 // manager had already told the reader the run had started, and the same evening two SPAWNs were cut inside worktrees
