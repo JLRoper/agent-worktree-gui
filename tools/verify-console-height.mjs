@@ -16,6 +16,11 @@
 //
 // WHAT IS DRIVEN, AND WHAT IS ONLY INSPECTED
 //
+// THE BAND IS THE MODULE'S. How far a console may grow is `band()` in public/core/console-grip.js, in LAYOUT px, and
+// this gate asks that function with the values the press reads instead of subtracting a viewport room of its own. The
+// drawn foot is then asserted against the viewport edge at 100, 90 and 110 zoom: a room that mixed the visual
+// viewport with a layout top reads the same as the right one at 100 and lands 10% off the edge at the other two.
+//
 //   driven    a throwaway panel of this checkout (tools/panel-testkit.mjs: spare port, own PANEL_CONFIG / HERMES_HOME /
 //             jobs store, assistant off) holding a real project with a real worktree, so one card is drawn in a worktree
 //             row (cap 320 px) and one in the unattached workspace (cap 230 px)
@@ -258,15 +263,18 @@ async function armed(page, thread, out) {
 
 // Press the bottom-right corner and hand back the point, so every later move is the reader's own pointer.
 //
-// The press is checked before it is trusted: the board's own anchor sweep runs on a clock and can move the page between
-// the scroll that puts the card at the top of the window and the press a few milliseconds later, which lands the pointer
-// on whatever ended up under it. A press that did not pin the height it found is released and taken again, and after
-// three tries the drag is reported as not taken rather than measured as if it had been.
+// The press is checked before it is trusted, twice. The board's own anchor sweep runs on a clock and can move the page
+// between the scroll that puts the console in the window and the press a few milliseconds later, which lands the pointer
+// on whatever ended up under it. A press that did not pin the height it found is released and taken again, and so is one
+// that pinned a height but froze a TOP the reading did not measure: the gesture freezes the top edge at the press and the
+// band's room is measured from it (public/core/console-grip.js band), so a press on a console the page had already moved
+// would obey a room this gate never read - a real stop, reported as a short drag. After three tries the drag is reported
+// as not taken rather than measured as if it had been.
 async function grab(page, thread, out) {
   let last = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const m = await show(page, thread, out); // the corner has to be on screen for the press to reach the box
-    if (!m) return { x: 0, y: 0, from: null, after: null, pinned: false };
+    if (!m) return { x: 0, y: 0, from: null, after: null, held: null, pinned: false };
     const x = (m.grip ? m.grip.r : m.r) - HANDLE;
     const y = (m.grip ? m.grip.b : m.b) - HANDLE;
     last = { x, y, from: m };
@@ -287,11 +295,16 @@ async function grab(page, thread, out) {
     await page.mouse.down();
     await page.waitForTimeout(60);
     const after = await measure(page, out);
-    if (after && after.inlineH === `${m.h}px`) return { ...last, after, pinned: true }; // the grab pinned what it found
+    const froze = await page.evaluate(() => {
+      const d = window.wtConsoleGripDrag;
+      return d ? { top: d.top, z: d.z, room: d.room, min: d.min, edge: d.edge } : null;
+    });
+    const sameTop = Boolean(froze && after) && Math.abs(froze.top * froze.z - (m.b - m.h)) <= 2;
+    if (after && after.inlineH === `${m.h}px` && sameTop) return { ...last, after, held: froze, pinned: true }; // the grab pinned what it found, where it found it
     await page.mouse.up();
     await page.waitForTimeout(250);
   }
-  return { ...(last || { x: 0, y: 0, from: null }), after: null, pinned: false };
+  return { ...(last || { x: 0, y: 0, from: null }), after: null, held: null, pinned: false };
 }
 
 // Drag the console to `target` px. The step is derived from the height the box is ACTUALLY at (so an interrupted or
@@ -302,7 +315,7 @@ async function dragTo(page, thread, out, target) {
   const g = await grab(page, thread, out);
   if (!g.pinned) {
     console.log(`DRAG-NOT-TAKEN  the press never landed on the console's corner (${out})`);
-    return { from: g.from, pressed: null, after: await measure(page, out), pinned: false };
+    return { from: g.from, pressed: null, held: null, after: await measure(page, out), pinned: false };
   }
   let py = g.y;
   let stall = 0;
@@ -321,9 +334,16 @@ async function dragTo(page, thread, out, target) {
   }
   await page.waitForTimeout(40);
   const pressed = await measure(page, out);
+  // The band the gesture is obeying, while it is still down: `want` is the pointer's own last request, `room` and `edge`
+  // are the stop, so a drag that ends short says WHERE it stopped instead of printing a number the reader has to
+  // reverse-engineer.
+  const held = await page.evaluate(() => {
+    const d = window.wtConsoleGripDrag;
+    return d ? { want: d.want, room: d.room, min: d.min, edge: d.edge } : null;
+  });
   await page.mouse.up();
   await page.waitForTimeout(120);
-  return { from: g.from, pressed, after: await measure(page, out), pinned: true };
+  return { from: g.from, pressed, held, after: await measure(page, out), pinned: true };
 }
 
 // ---- the triggers, all through the page's own functions ------------------------------------------------
@@ -441,28 +461,103 @@ async function main() {
 
         // ---- 0. the fixture: two consoles, each on the cap its host draws it under, each overflowing it
         // THE BAND'S EDGE IS THE VIEWPORT HERE, and the fixture has to be inside it. A row card's `.job-body` is not a
-        // scrollport (the grip reads a pane only on a maximized card or the docked Chat pane), so the room is
-        // `innerHeight - top - 8`; a console left low in the window has less than the 420px target and a drag would
-        // stop on the viewport edge - correctly, but it would measure the fixture's scroll position, not the dragged
-        // height's survival. show() centres one console, so each room is read right after its own show: the workspace
-        // list sits above the board, and centring one moves the other off screen.
-        const roomOf = (thread) =>
-          page.evaluate((t) => {
-            const pre = document.querySelector(`.job[data-thread="${t}"] pre.job-out`);
-            if (!pre) return 0;
-            return Math.round(window.innerHeight - pre.getBoundingClientRect().top - 8);
-          }, thread);
+        // scrollport (the grip reads a pane only on a maximized card or the docked Chat pane), so the room is the
+        // viewport's own edge; a console left low in the window has less than the 420px target and a drag would stop on
+        // that edge - correctly, but it would measure the fixture's scroll position, not the dragged height's survival.
+        // show() centres one console, so each room is read right after its own show: the workspace list sits above the
+        // board, and centring one moves the other off screen.
+        //
+        // THE ROOM IS THE MODULE'S, NOT THIS FILE'S. `band()` (public/core/console-grip.js) is the one function that
+        // answers the floor and the room in LAYOUT px, and the gesture obeys it. This gate used to subtract
+        // `innerHeight - rect.top - 8` itself: a second copy in MIXED units (the viewport is visual, the rect is visual,
+        // and the gesture divides both into layout px at the press), which only agreed with the module at 100% zoom -
+        // so the gate would have failed the tree for agreeing with the module on a zoomed page. The inputs below are the
+        // press's own (`top: rect.top / z`, `z`, the sheet's floor, the pane edge when there is one, the viewport, the
+        // 8px gap), and the answer is the number the drag will really stop on. `stop` is that room through the module's
+        // own `limit`, which is what the move and the release call.
+        const bandOf = (thread, atZoom) =>
+          page.evaluate(
+            ({ t, zw, arm }) => {
+              const pre = document.querySelector(`.job[data-thread="${t}"] pre.job-out`);
+              const grip = window.wtConsoleGrip;
+              if (!pre || !grip || typeof grip.band !== "function") return null;
+              const r = pre.getBoundingClientRect();
+              const cs = getComputedStyle(pre);
+              const z = Number(zw) > 0 ? Number(zw) : grip.zoom();
+              // The press finds a pane only on a maximized card or the docked Chat pane (public/core/console-grip.js
+              // press); a board card has none, and the check below says so before a null pane edge is believed.
+              const body = pre.closest(".job-body");
+              const pane = body && (body.closest(".job.maximized") || body.closest('[data-subpane="chat"]')) ? body : null;
+              const b = grip.band({
+                top: r.top / z,
+                z,
+                floor: typeof outFloor === "function" ? outFloor(cs) : 0,
+                paneBottom: pane ? pane.getBoundingClientRect().bottom : null,
+                viewport: window.innerHeight,
+                gap: grip.GAP_PX,
+              });
+              return {
+                min: b.min,
+                room: b.room,
+                edge: b.edge,
+                paneRoom: b.paneRoom,
+                viewRoom: b.viewRoom,
+                z,
+                top: r.top,
+                gap: grip.GAP_PX,
+                viewport: window.innerHeight,
+                pane: Boolean(pane),
+                // The module's own clamp, at the room the band just answered: the height a drag to ARM lands on.
+                stop: grip.limit(Number(arm), b.min, b.room),
+              };
+            },
+            { t: thread, zw: atZoom, arm: ARM },
+          );
+
+        // The one thing a room in LAYOUT px has to satisfy: the console's foot, drawn back in VISUAL px, is the
+        // viewport edge less the gap the gesture keeps under it. `top` is the rect's visual top and the room and gap are
+        // layout lengths, so the scale is applied once, to the sum. The old mixed-unit room put this foot a tenth of the
+        // viewport short at 90% and drew past the edge at 110% - the two readings the zoom cases below are here to catch.
+        const footOnEdge = (b, tol = 1) => Boolean(b) && near(b.top + (b.room + b.gap) * b.z, b.viewport, tol);
+        const foot = (b) => (b ? `${(b.top + (b.room + b.gap) * b.z).toFixed(1)}` : "?");
+
         const rowStart = await show(page, ROW, rowOut);
-        const rowRoom = await roomOf(ROW);
+        const rowBand = await bandOf(ROW);
+        // Read while THIS console is the one in the window: the workspace list sits above the board, so centring the
+        // other console leaves this one below the viewport and its room on the floor.
+        const rowZooms = [];
+        for (const probeZoom of [0.9, 1.1]) rowZooms.push([probeZoom, await bandOf(ROW, probeZoom)]);
         const homeStart = await show(page, HOME, homeOut);
-        const homeRoom = await roomOf(HOME);
+        const homeBand = await bandOf(HOME);
         if (!rowStart || !homeStart) {
           check(false, "the fixture painted both consoles", `row=${Boolean(rowStart)} home=${Boolean(homeStart)}`);
           return;
         }
-        check(rowRoom > ARM + 20 && homeRoom > ARM + 20,
+        check(Boolean(rowBand && homeBand) && rowBand.room > ARM + 20 && homeBand.room > ARM + 20,
           "each console has viewport room under it for the 420px drag the band must allow",
-          `row ${rowRoom}px home ${homeRoom}px want > ${ARM + 20}px`);
+          `row ${rowBand ? rowBand.room : "(the band did not answer)"}px home ${homeBand ? homeBand.room : "(none)"}px want > ${ARM + 20}px`);
+        check(
+          Boolean(rowBand && homeBand) && rowBand.edge === "viewport" && homeBand.edge === "viewport" && !rowBand.pane && !homeBand.pane,
+          "each is the board-card shape: no scrollport, so the viewport is the band's only edge",
+          `row edge=${rowBand ? rowBand.edge : "?"} pane=${rowBand ? rowBand.pane : "?"} | home edge=${homeBand ? homeBand.edge : "?"} pane=${homeBand ? homeBand.pane : "?"}`);
+        check(
+          near(rowBand && rowBand.room, rowBand && rowBand.viewRoom) && near(homeBand && homeBand.room, homeBand && homeBand.viewRoom),
+          "the room is the band's own viewRoom, not a second subtraction in this file",
+          `row room=${rowBand ? rowBand.room : "?"} viewRoom=${rowBand ? rowBand.viewRoom : "?"} | home room=${homeBand ? homeBand.room : "?"} viewRoom=${homeBand ? homeBand.viewRoom : "?"}`);
+        check(footOnEdge(rowBand) && footOnEdge(homeBand),
+          "the room is LAYOUT px: the console's foot lands on the viewport edge less the gap",
+          `row foot ${foot(rowBand)} of ${rowBand ? rowBand.viewport : "?"} | home foot ${foot(homeBand)} of ${homeBand ? homeBand.viewport : "?"}`);
+        // THE UNIT ITSELF, at two zooms the tree does not draw. The top is held at the pixel it was measured at, so this
+        // is about the units and not about the reflow: a room that mixed a visual viewport with a layout top lands the
+        // foot 10% off the edge here, and no 100% reading can see it.
+        for (const [probeZoom, b] of rowZooms) {
+          check(footOnEdge(b),
+            `the band's room is layout px at ${Math.round(probeZoom * 100)}% zoom: the console's foot is still the viewport edge`,
+            b ? `room=${b.room} top=${b.top} z=${b.z} foot=${foot(b)} viewport=${b.viewport}` : "the band did not answer");
+        }
+        check(Boolean(rowBand) && rowBand.stop === ARM,
+          "so the 420px the drag lands on is the height the module's limit keeps",
+          rowBand ? `limit(${ARM}, ${rowBand.min}, ${rowBand.room}) = ${rowBand.stop}` : "the band did not answer");
         check(near(rowStart.h, CAP_ROW) && rowStart.max === `${CAP_ROW}px`, "the row console starts on the 320px cap its row draws",
           `h=${rowStart.h} max=${rowStart.max}`);
         check(near(homeStart.h, CAP_HOME) && homeStart.max === `${CAP_HOME}px`, "the workspace console starts on the 230px cap",
@@ -474,7 +569,7 @@ async function main() {
         // ---- 1. the drag: 320 -> 420 px, and the height is recorded against the turn
         const dragged = await dragTo(page, ROW, rowOut, ARM);
         check(near(dragged.after && dragged.after.h, ARM), "the drag carries the console to 420px and leaves it there",
-          `h ${dragged.from ? dragged.from.h : "(no press)"} -> ${dragged.after ? dragged.after.h : "(gone)"}`);
+          `h ${dragged.from ? dragged.from.h : "(no press)"} -> ${dragged.after ? dragged.after.h : "(gone)"} (band room ${dragged.held ? Math.round(dragged.held.room) : "?"} on the ${dragged.held ? dragged.held.edge : "?"} edge, pointer asked ${dragged.held && dragged.held.want != null ? Math.round(dragged.held.want) : "?"})`);
         check(dragged.after && dragged.after.inlineH === `${ARM}px` && dragged.after.inlineMax === "none",
           "the drag pinned that height and lifted the cap", `inlineH=${dragged.after ? dragged.after.inlineH : "(none)"} inlineMax=${dragged.after ? dragged.after.inlineMax : ""}`);
         const stored = await page.evaluate((o) => ({ store: (state.outHeights || {})[o], stored: localStorage.getItem("wm.outHeights") }), rowOut);
