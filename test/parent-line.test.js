@@ -257,10 +257,10 @@ test("the page's template is the renderer's, byte for byte", () => {
   assert.ok(detail.includes("<li class=\"git-summary-line\">${esc(gitSummary)}</li>\n          ${parentItem}"), "the item sits in the Merge state block's own list");
   assert.ok(detail.includes("<h4>Merge state</h4>"), "the block it is drawn in is the Merge state one");
   // No stylesheet rule was added for it: the classes it wears are the panel's existing utilities.
-  const css = ["public/board-table.css", "public/chart.css", "public/rowstrips.css", "public/base.css"].map((p) => read(p).replace(/\r\n/g, "\n")).join("\n");
+  const css = ["public/board-table.css", "public/chart.css", "public/utilities.css", "public/base.css"].map((p) => read(p).split("\r\n").join("\n")).join("\n");
   assert.ok(!/\.git-parent\b/.test(css), "no stylesheet rule names the parent item");
-  assert.ok(/\.dim \{ color: var\(--dim\); \}/.test(read("public/rowstrips.css")), "the dim class is the existing one");
-  assert.ok(/\.mono \{ font-family: var\(--mono\); font-size: 12px; \}/.test(read("public/rowstrips.css")), "the mono class is the existing one");
+  assert.ok(/\.dim \{ color: var\(--dim\); \}/.test(read("public/utilities.css")), "the dim class is the existing one");
+  assert.ok(/\.mono \{ font-family: var\(--mono\); font-size: 12px; \}/.test(read("public/utilities.css")), "the mono class is the existing one");
 });
 
 test("the server stamps the line on every row from one read of the cut book, and leaves the checkout alone", () => {
