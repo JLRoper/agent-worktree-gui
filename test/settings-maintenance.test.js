@@ -76,8 +76,8 @@ function makePanel({ get, post } = {}) {
   for (const id of ids) doc[id] = new El(id);
   doc.getElementById = (id) => doc[id] || null;
 
-  const calls = { gets: 0, posts: [] };
-  const apiFetch = async (url, opts = {}) => {
+  const calls = { gets: 0, posts: [], postOpts: [] };
+  const apiFetch = async (url, opts = {}, extra = {}) => {
     if (url === "/api/maintenance" && (!opts.method || opts.method === "GET")) {
       calls.gets += 1;
       return get(calls.gets);
@@ -85,6 +85,7 @@ function makePanel({ get, post } = {}) {
     if (url === "/api/maintenance/clean" && opts.method === "POST") {
       const body = JSON.parse(opts.body);
       calls.posts.push(body);
+      calls.postOpts.push(extra);
       return post(body);
     }
     return { ok: false, status: 404, json: async () => ({ error: "no route in this stub" }) };
@@ -252,4 +253,5 @@ test("the sessions card offers the unused-for window and the press carries it", 
   doc["maintenance-window-hermes-sessions"].value = "168";
   await api.runMaintenance("hermes-sessions", true);
   assert.deepEqual(calls.posts[0], { target: "hermes-sessions", dryRun: true, olderThanHours: 168 }, "the chosen window rides the press");
+  assert.ok(Number(calls.postOpts[0] && calls.postOpts[0].timeoutMs) >= 300000, "a Hermes prune waits past its VACUUM, not 60 s");
 });
