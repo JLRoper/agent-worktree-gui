@@ -21,7 +21,13 @@ import { readStyleSheets } from "./style-sheets.js";
 const here = (p) => new URL(p, import.meta.url);
 const css = (await readStyleSheets()).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\r/g, "");
 const html = (await readFile(here("../public/index.html"), "utf8")).replace(/\r/g, "");
-const js = (await readFile(here("../public/assistant.js"), "utf8")).replace(/\r/g, "");
+// The watch row moved out of public/assistant.js into public/assistant/watches.js (cut 1 of the file's four), so
+// the source facts below are read from both scripts as one text: the markup that draws a deadline and the rule
+// that says what may carry `.as-bar` are the same facts wherever the pane lives.
+const js =
+  (await readFile(here("../public/assistant.js"), "utf8")).replace(/\r/g, "") +
+  "\n" +
+  (await readFile(here("../public/assistant/watches.js"), "utf8")).replace(/\r/g, "");
 
 // Every rule of the sheet as {selector, body} — top level and inside @media alike.
 function rules(sheet) {

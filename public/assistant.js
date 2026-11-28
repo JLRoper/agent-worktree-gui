@@ -2849,107 +2849,28 @@
     host.innerHTML = `${whoBar}${banner}${parts.join("")}`;
   }
 
-  // ---- watches --------------------------------------------------------------------------------
-
-  // One row of the watchlist. The list is already filtered to one assistant, so the row does not repeat whose it is:
-  // the section (and the session tab above it) says that once.
-  function watchRowHtml(w) {
-    // A watch with a deadline carries a live clock, not a fixed "deadline 30m": the number that matters is
-    // how long is left, and the bar is that number running out. Both are painted in place by
-    // paintWatchClocks() once a second — a re-render per tick would take the reader's scroll and selection.
-    const clock =
-      w.state === "done"
-        ? `<span class="as-until">done</span>`
-        : w.minutes
-          ? `<span class="as-watch-timer" data-watch-timer="${esc(w.id)}" data-watch-at="${esc(w.at || "")}" data-watch-min="${esc(w.minutes)}">
-                   <span class="as-watch-left" data-watch-left>…</span>
-                   <span class="as-watchbar"><i data-watch-bar style="width:100%"></i></span>
-                 </span>`
-          : `<span class="as-until">no deadline</span>`;
-    return `<div class="as-row${w.state === "done" ? " is-done" : ""}">
-          <button class="as-thread" data-as-open="${esc(w.thread)}" type="button">${esc(assistantThreadName(w.thread))}</button>
-          <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}</span>
-          ${clock}
-          <button type="button" data-as-unwatch="${esc(w.id)}" title="stop watching this">✕</button>
-        </div>`;
-  }
-
-  // Each assistant's Watches pane is ONE assistant's list: the watches it set itself (its turn's WATCH line, its
-  // spawned workers) and the ones the reader added from its pane. A watch made by #2 is on #2's pane, not here — the
-  // owner is stamped on the record, so switching session switches the list. The add form makes the watch for the
-  // assistant whose pane it is in.
-  function renderAssistantWatches(force = false, id = selectedSessionId()) {
-    const host = hostFor(id, "watches");
-    if (!host || !state.assistant) return;
-    if (!force && typingInside(`#${paneIdFor(id, "watches")}`)) return;
-    const watches = state.assistant.watches || [];
-    // Whose list this is: the pane's own assistant. There is no fallback left to make — a watch list is never the
-    // panel's, it is the session's whose tab holds it.
-    const who = id;
-    const owner = sessionById(who);
-    const name = owner?.name || "Assistant #1";
-    const mine = watches.filter((w) => (w.assistantId || FIRST_ASSISTANT) === who);
-    const options = conversations()
-      .map((c) => `<option value="${esc(c.thread)}">${esc(String(c.latest.label || c.latest.title || c.thread).slice(0, 60))}</option>`)
-      .join("");
-    host.innerHTML = `${mine.map(watchRowHtml).join("") || `<div class="as-empty">Nothing on ${esc(name)}'s watchlist. Tell it in Chat (“keep an eye on…”), or add one here.</div>`}
-      <div class="as-form">
-        <div class="as-line">
-          <select id="as-w-thread" title="which agent to watch">${options || '<option value="">(no agents yet)</option>'}</select>
-          <input id="as-w-title" class="as-grow" placeholder="what to watch for — e.g. the deploy finishes" />
-        </div>
-        <div class="as-line">
-          <label>deadline <input id="as-w-min" type="number" min="1" max="1440" placeholder="minutes" /></label>
-          <button id="btn-as-watch" type="button" class="primary">Add watch</button>
-          <span class="as-hint">${esc(name)} will be told when that thread finishes, or when the deadline passes</span>
-        </div>
-        <span class="as-err" id="as-w-err"></span>
-      </div>`;
-    paintWatchClocks();
-  }
-
-  // "18:42" under an hour, "2h 05m" above it: a countdown is read at a glance, so it is the clock's own shape
-  // rather than the panel's precise 18m42s duration.
-  function leftText(ms) {
-    const s = Math.max(0, Math.ceil(ms / 1000));
-    if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-    return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
-  }
-
-  // The countdown and its reverse bar, painted once a second in place. Deliberately not a re-render: this pane
-  // holds a form the reader may be typing into, and rebuilding it on every tick would take the caret, the scroll
-  // and the selection with it. The bar is the fraction of the deadline still to run, so it empties as time goes.
-  function paintWatchClocks() {
-    const view = state.assistantView;
-    if (!state.assistantOpen || view?.subTab !== "watches" || !isAssistant(view.assistant)) return;
-    const host = hostFor(view.assistant, "watches");
-    if (!host) return;
-    const now = Date.now();
-    for (const el of host.querySelectorAll("[data-watch-timer]")) {
-      const at = Date.parse(el.dataset.watchAt || "");
-      const mins = Number(el.dataset.watchMin);
-      if (!Number.isFinite(at) || !Number.isFinite(mins) || mins <= 0) continue;
-      const total = mins * 60_000;
-      const left = at + total - now;
-      const over = left <= 0;
-      const frac = over ? 0 : Math.max(0, Math.min(1, left / total));
-      const deadline = new Date(at + total);
-      el.classList.toggle("is-over", over);
-      const label = el.querySelector("[data-watch-left]");
-      if (label) {
-        label.textContent = over ? "overdue" : `${leftText(left)} left`;
-        label.title = `${over ? "deadline passed" : "deadline"} ${deadline.toLocaleString()}`;
-      }
-      const bar = el.querySelector("[data-watch-bar]");
-      if (bar) {
-        bar.style.width = `${Math.round(frac * 100)}%`;
-        bar.className = frac <= 0.2 ? "is-low" : frac <= 0.5 ? "is-mid" : "";
-      }
-      el.title = `${over ? "past its deadline" : "counting down"} · deadline ${deadline.toLocaleString()}`;
-    }
-  }
-
-  // ---- end watches ------------------------------------------------------------------------------
+  // ---- the watchlist lives in public/assistant/watches.js, and is handed back here -------------------------
+  //
+  // The watchlist was cut out of this file into public/assistant/watches.js: one row of a watchlist, the pane
+  // that draws one ASSISTANT's list and its add form, the countdown's text, and the clock that runs each deadline
+  // down in place once a second. Cut 1 of the four cuts public/assistant.js's card names, and a move rather than
+  // a rewrite: the block left this file line for line and nothing was renamed. The new file's header names the
+  // range it took, the seam it hands over and the rule that chose it.
+  //
+  // This file is an IIFE and the pane reads this file's own helpers, so the cut is a factory rather than a set of
+  // page globals - the same contract public/queue-cards.js uses. public/assistant/watches.js is a classic script
+  // the shell loads before this one, and the helpers are handed in here, once. esc, state and conversations are
+  // page-wide already, so the pane reads them itself.
+  const { renderAssistantWatches, paintWatchClocks } = window.WMApp.assistantWatches({
+    selectedSessionId,
+    hostFor,
+    paneIdFor,
+    typingInside,
+    sessionById,
+    isAssistant,
+    assistantThreadName,
+    FIRST_ASSISTANT,
+  });
 
   // ---- scratchpad -----------------------------------------------------------------------------
 
