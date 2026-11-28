@@ -46,7 +46,8 @@
 <div class="sub">
   The shipped drawing for row 491, measured on the real panel at the real 1304px wave column and at the 900px panel.
   Source of the numbers it answers: <code>docs/reports/initiatives-wave-lane-options-2026-11-28.html</code> section 5 and
-  <code>docs/reports/wave-lane-options/lane-scaling.json</code>. Written 2026-11-28. Version unchanged at 1.196.1.
+  <code>docs/reports/wave-lane-options/lane-scaling.json</code>. Written 2026-11-28. This row adds no version of its
+  own: the branch carries the turnover's 1.197.0, which moved with the board sheet split.
 </div>
 
 <h2>1. What was read before the code</h2>
@@ -251,8 +252,9 @@
   <li>A wave with one lane (or none) draws exactly the flat member list it drew before, at every width.</li>
   <li>A lane set that shares a tree still draws its refusal and no join sentence. The table is drawn for 2+ lanes only,
       so a single implicit lane never gains a lane column.</li>
-  <li>No version bump: <code>package.json</code> stays at 1.196.1. No push, no pull request: the work merges into this
-      project's turnover branch.</li>
+  <li>No version bump from this row: the branch carries the turnover's 1.197.0 (the board sheet split's version), and
+      this change adds no version of its own. No push, no pull request: the work merges into this project's turnover
+      branch.</li>
 </ul>
 
 <h2>8. Files, and how to rerun</h2>
@@ -262,7 +264,7 @@
   <tr><td>public/initiatives.css</td><td>the lane column (<code>--tab-lane-col: 162px</code>), the summary strip, the manifest grid and its head, the two-line card rule, and the card fallback below a 760px container.</td></tr>
   <tr><td>test/waves-lane.test.js</td><td>four tests for the count rule, the card's DOM order, the table's columns and short labels, and the boundary at three lanes.</td></tr>
   <tr><td>tools/verify-wave-lane-counts.mjs</td><td>the gate: four counts, two widths, the per-character predicate and its own failure check.</td></tr>
-  <tr><td>package.json</td><td><code>verify:wave-lane-counts</code>. Version untouched.</td></tr>
+  <tr><td>package.json</td><td><code>verify:wave-lane-counts</code>, and nothing else: the version is the turnover's.</td></tr>
   <tr><td>docs/reports/wave-lane-counts/</td><td>the eight captures and <code>lane-counts.json</code>, written by the gate.</td></tr>
 </table>
 <p class="mono muted">
