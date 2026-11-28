@@ -150,7 +150,7 @@ $ node tools/style-sheets.mjs | wc -l
 22
 $ node tools/style-sheets.mjs --text | wc -c
 613223</pre>
-<p>The suite that reads this stylesheet (<code>test/style-sheets.js</code> and the ~100 test files importing it) runs on the same helper and the same filter as before: the 45 test files that import it answered 506 tests, 506 pass, 0 fail in 4.5 s. <code>npm test</code> over all 466 test files was started twice and cancelled at 20 and again at 36 minutes without a summary; what it had run was green in both, and the changed module's consumers were run directly instead. That is the one thing this page cannot claim: a full-suite total.</p>
+<p>The suite that reads this stylesheet (<code>test/style-sheets.js</code> and every test file importing it) runs on the same helper and the same filter as before: the 45 files that import it answered <b>506 tests, 506 pass, 0 fail</b> in 4.5 s. <code>npm test</code> over all 466 files was started twice and cancelled at 20 and 36 minutes without a summary; the second run's log reached 3,732 passing tests and 20 failures, and the failures are not this branch's: a sample of four (<code>test/paths.test.js</code>, <code>test/settle-wake.test.js</code>, <code>test/tree-cache.test.js</code>, <code>test/harness.test.js</code>) fail identically on this branch before the merge, and the harness one is pre-existing on the base (tools/verify-queue-agents.mjs declares LIVE GATE and no package.json script runs it). The one thing this page cannot claim is a complete <code>npm test</code> summary.</p>
 
 <h2>7. What is left</h2>
 <ul>
