@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 412: the watchdog names the owning assistant, and delivers to it</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 24px 64px; background: #14161a; color: #d7dbe0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: #f2f5f8; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f2f5f8; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  .sub { color: #8b949e; margin: 0 0 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 6px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #242a31; vertical-align: top; }
+  th { color: #9aa4af; font-weight: 600; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { color: #9ecbff; }
+  pre { background: #1b1f25; border: 1px solid #262c34; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #cfd6dd; }
+  .met { color: #7ee787; } .unmet { color: #ff9c94; } .warn { color: #f0c674; }
+  .cite { color: #7d8791; font-size: 12.5px; }
+  .box { background: #1b1f25; border: 1px solid #262c34; border-left: 3px solid #4d7ea8; border-radius: 4px; padding: 12px 14px; margin: 12px 0; }
+  .quote { border-left: 3px solid #3a424c; padding-left: 12px; color: #b3bcc6; margin: 10px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .foot { margin-top: 40px; color: #7d8791; font-size: 12.5px; border-top: 1px solid #242a31; padding-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 412: the watchdog names the owning assistant, and delivers to it</h1>
+  <p class="sub">1.193.1 - the owner resolved four ways, one alert id on every copy, and the queuesweep's stale check repaired.</p>
+
+  <div class="box">
+    The panel still has <b>one</b> sentry, and Assistant #1's page is still its ledger. What changed is that every
+    watchdog line now says whose run it is, and the assistant whose queue holds the row gets the alert on its own
+    page and a wake carrying the same id. An owner nothing can prove says <code>(owner unknown)</code> - it is
+    never Assistant #1 by default.
+  </div>
+
+  <h2>The defect, in the reader's own measurement</h2>
+  <div class="quote">
+    row #401 sits in Assistant #3's queue, so why did the watchdog alert Assistant #1 about it? ... its alerts are
+    posted as turns on Assistant #1's page whatever queue or thread the run came from. Nothing routes them by
+    owner ... and the alert text names only the run id, the title and the duration:
+    <code>LONG RUN a7df9a57 - Investigate dropped SPAWN lines in row 401 has been running 64 min</code>
+    ... with no word about whose row it is.
+  </div>
+  <p>
+    Two different failures in one line: the words carried no owner, so a reader filled the gap with the page they
+    were on; and the delivery was one turn on an assistant that could not act on the row. The same shape reported
+    Assistant #3's other work on #1's page (<code>watch: [quiet] no new output for 4m - Merge row-403 worktree into
+    turnover branch is still marked running</code>).
+  </p>
+
+  <h2>Whose run it is: four recorded answers, in order</h2>
+  <table>
+    <tr><th>Rung</th><th>Where it is read</th><th>What answers</th><th>What does not</th></tr>
+    <tr>
+      <td>1. The queue row the run carried</td>
+      <td><code>queueOwnerForJob</code> <span class="cite">lib/assistant.js:3266</span>, through the same
+        <code>queueRowForJob</code> <span class="cite">lib/assistant.js:5794</span> the settle driver uses</td>
+      <td>a row whose <code>threads</code> holds the run's thread, or whose <code>worktree</code> is the run's tree</td>
+      <td>a row already <code>done</code>; a queue that cannot be read</td>
+    </tr>
+    <tr>
+      <td>2. The run's thread</td>
+      <td><code>assistantIdForThread</code> <span class="cite">lib/assistant.js:3146</span></td>
+      <td>an assistant's own thread, including a previous thread a hard restart left behind</td>
+      <td>a worker thread, which belongs to no assistant</td>
+    </tr>
+    <tr>
+      <td>3. The tree's recorded owner</td>
+      <td><code>ownerOfTree</code> <span class="cite">lib/assistant.js:3215</span>, the reader's handover store</td>
+      <td>a tree the reader handed to another assistant</td>
+      <td>a tree nobody moved; a stored id no longer on the board</td>
+    </tr>
+    <tr>
+      <td>4. The run's own stamp</td>
+      <td><code>job.assistantId</code></td>
+      <td>the assistant that started the run</td>
+      <td>a run started before the split, which carries none</td>
+    </tr>
+    <tr>
+      <td>Nothing</td>
+      <td><code>sentryOwnerOf</code> <span class="cite">lib/assistant.js:3289</span></td>
+      <td><code>(owner unknown)</code> in the words, and no wake</td>
+      <td>Assistant #1 by absence - the defect this row removes</td>
+    </tr>
+  </table>
+  <p>
+    The label is one function, <code>ownerSuffix</code> <span class="cite">lib/panel-watch.js:81</span> and
+    <code>withOwner</code> <span class="cite">lib/panel-watch.js:91</span>, so the tool that decides a line is news
+    and the panel that delivers it cannot disagree about the words. The panel re-resolves the owner from its own
+    board and re-labels the line (<code>announceWatchdog</code> <span class="cite">lib/assistant.js:3413</span>), so
+    a caller's map can never decide where an alert goes.
+  </p>
+
+  <h2>Where one alert goes</h2>
+  <table>
+    <tr><th>Recipient</th><th>What it gets</th><th>Code</th></tr>
+    <tr>
+      <td>Assistant #1, the ledger</td>
+      <td>the turn the reader has always seen: <code>Watchdog: &lt;line&gt; | &lt;line&gt;</code>, naming every
+        alert id in the turn's origin</td>
+      <td><code>announceWatchdog</code> <span class="cite">lib/assistant.js:3413</span>; the say is refused while a
+        turn is live, which is the tool's retry signal</td>
+    </tr>
+    <tr>
+      <td>The owner</td>
+      <td>the alert row on its own Alerts page, and a wake with the same alert id</td>
+      <td><code>openWatchdogAlert</code> <span class="cite">lib/assistant.js:3365</span>;
+        <code>wake(..., { assistantId: who, exact: true })</code></td>
+    </tr>
+    <tr>
+      <td>The owner's <code>escalateTo</code></td>
+      <td>an EXTRA wake recipient, never a replacement: the owner and the ledger still get their copy</td>
+      <td><code>watchdogRecipients</code> <span class="cite">lib/assistant.js:3342</span></td>
+    </tr>
+  </table>
+  <p>
+    One record per run, one id on every copy, so a later settle closes the one record both pages point at. A long
+    run is a live condition: every pass says it again with the same id, and the sentry pass that sees the run stop
+    (or leave the board) closes it - <span class="cite">lib/assistant.js:4988</span>. A wake the door refuses
+    (assistant switched off) is journalled and is not counted as a delivery.
+  </p>
+
+  <h2>The queuesweep text, repaired in the same change</h2>
+  <p>
+    Step 2 told the sweep to requeue a RUNNING row unless <code>/api/jobs</code> held a job for its thread. A row
+    whose thread was never recorded satisfies that check <i>vacuously</i>, so the text told an assistant to requeue
+    work that was actually running - how rows #403 and #405 sat STALE while their jobs ran.
+  </p>
+  <pre>2. Every RUNNING row: does /api/jobs hold a live job for its thread? A row with NO thread is not
+   proven stale - look for a live job whose prompt carries the row id or whose thread slug matches the
+   row's brief, and link it onto the row with a queue edit that sets thread and runId. Requeue it, or
+   mark it done if its deliverable is already on main, only when nothing matches.
+3. Every QUEUED row: is its deliverable already on main? ... And a QUEUED row that already has a live
+   job is linked to that job, never started a second time.</pre>
+  <p class="cite">
+    <code>QUEUE_SWEEP_CHECKS</code> lib/assistant/wakes.js:60. The constant's remaining em dashes became plain
+    hyphens, and test/queue-sweep.test.js:166 pins both new sentences and the ASCII rule.
+  </p>
+
+  <h2>Proof, as run</h2>
+  <table>
+    <tr><th>Command</th><th>Answer</th></tr>
+    <tr>
+      <td><code>node --test test/watchdog-owner-routing.test.js test/panel-watch.test.js test/queue-sweep.test.js</code></td>
+      <td><span class="met">29 tests, 29 pass, 0 fail</span></td>
+    </tr>
+    <tr>
+      <td><code>node --test test/watchdog-owner-routing.test.js</code></td>
+      <td><span class="met">5 tests, 5 pass</span> - both pages and one id; #1's own run unchanged; owner unknown
+        without naming #1; escalateTo as an extra; the record closes when the run stops</td>
+    </tr>
+    <tr>
+      <td><code>node --test test/worktree-assistant.test.js</code></td>
+      <td><span class="warn">8 pass, 3 fail - pre-existing</span>. The same three fail on a clean
+        <code>git archive</code> of 20261127_2134_TASK-405_row-405-is-the-complete (scratch export, no local
+        changes), so they are not this row's</td>
+    </tr>
+    <tr>
+      <td><code>npm test</code> (full suite, once)</td>
+      <td><span class="warn">killed at 20 min, the standing rule for a suite run</span>: 3,624 passing test blocks,
+        13 unique failures. Every one re-judged: <b>2 were this row's own</b> (the new fixture's absolute path,
+        fixed and re-proven by test/absolute-paths.test.js at 17 of 17); <b>7 reproduce on a clean
+        <code>git archive</code> of the base</b> (harness, three initiative-tier-route tests, the queue-reattach
+        refusal, the junctioned node_modules walk, and gateway-permissions, which wants a local config.json);
+        <b>4 pass alone</b> (harvest-gate, build-version, assistant-director's cadence, child-route), so they were
+        load flakes. The three worktree-assistant state-path failures also reproduce on the base export.</td>
+    </tr>
+    <tr>
+      <td><code>node tools/version.mjs check --base origin/main</code></td>
+      <td><span class="met">ok</span> - branch 1.193.1, origin/main 1.192.0</td>
+    </tr>
+  </table>
+  <p>
+    The tests drive the assistant directly with <code>say</code> captured and the wake queue inspected
+    (<span class="cite">test/watchdog-owner-routing.test.js:99</span>), so the routing decision is what is under
+    test rather than the HTTP route or the turn a wake would eventually send. The sweep's own half is pinned in
+    <span class="cite">test/panel-watch.test.js:148</span> and <span class="cite">test/panel-watch.test.js:170</span>:
+    a resolver that throws, or answers blank, says <code>(owner unknown)</code>.
+  </p>
+
+  <h2>Version and landing state</h2>
+  <table>
+    <tr><th>Fact</th><th>Value</th></tr>
+    <tr><td>Branch version</td><td><code>1.193.1</code>, taken above the base's 1.193.0 and origin/main's 1.192.0</td></tr>
+    <tr><td>Annotated tag</td><td><code>v1.193.1</code> at the bump commit</td></tr>
+    <tr><td>Branch</td><td><code>wtgui/row-412-is-the-complete-brief-a-watchdog-dfe6da</code></td></tr>
+    <tr><td>Push / PR</td><td>none: the LANDING rule for this tree says the base has not landed, so a remote branch
+      would publish work the reader has not asked to publish</td></tr>
+    <tr><td>Local merge</td><td>into <code>20261127_2134_TASK-405_row-405-is-the-complete</code>, merge commit reported
+      on the row card</td></tr>
+  </table>
+
+  <h2>Files</h2>
+  <table>
+    <tr><th>File</th><th>Change</th></tr>
+    <tr><td><code>lib/assistant.js</code></td><td>owner resolution, one record per run, announce, wake routing,
+      escalateTo, the close on settle</td></tr>
+    <tr><td><code>lib/panel-watch.js</code></td><td>the owner label, labelled FAILED and LONG RUN lines, items in
+      the sweep answer</td></tr>
+    <tr><td><code>lib/assistant/wakes.js</code></td><td>step 2 and step 3 of the queuesweep text</td></tr>
+    <tr><td><code>server.js</code></td><td><code>GET /api/assistant/watchdog/owners</code>,
+      <code>POST /api/assistant/watchdog</code></td></tr>
+    <tr><td><code>tools/panel-watch.mjs</code></td><td>labels from the owner map, posts items rather than one
+      joined say</td></tr>
+    <tr><td><code>docs/panel-watch.md</code></td><td>the owner rungs and the delivery, for the tool's reader</td></tr>
+    <tr><td><code>test/watchdog-owner-routing.test.js</code></td><td>the new contract: five tests</td></tr>
+    <tr><td><code>test/panel-watch.test.js</code></td><td>owner label and owner unknown on the sweep's own answer</td></tr>
+    <tr><td><code>test/queue-sweep.test.js</code></td><td>the two repaired steps, and no long dash in the checks</td></tr>
+  </table>
+
+  <p class="foot">
+    Row 412, assistant-3. Evidence is the commands above and the cited lines; the report is one file and opens
+    without a server, a build step or this transcript.
+  </p>
+</main>
+</body>
+</html>
