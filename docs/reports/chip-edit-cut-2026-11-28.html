@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 517: the chip cut out of public/board/paste-chips.js, and the proof that no name left the surface</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  .names { columns:3; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+  .methods { columns:2; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 517: the chip cut out of public/board/paste-chips.js, and the proof that no name left the surface</h1>
+<p class="sub">agent-worktree-gui, branch <code>wtgui/row-512-is-the-second-cut-of-lib-restart-9cdf37</code>, the cut committed on <code>88b811fa</code>, cut from the turnover's <code>485079ba</code>, landed into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>a829384d</code>. All line numbers are on that merge.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#517, the first cut of public/board/paste-chips.js (landed by row 512's tree)</dd>
+  <dt>the commit</dt><dd>88b811fa, one commit on the tree's branch, clean before landing</dd>
+  <dt>the cut</dt><dd>public/board/paste-chips.js (1,192 lines at 485079ba) to paste-chips.js (916) + chip-edit.js (330)</dd>
+  <dt>the moved block</dt><dd>base lines 505 to 794, 290 lines, sha256 d2738e5664b00a0d93b19d3e6784185868532701560d4ecd5328315a65dec05f</dd>
+  <dt>the re-export</dt><dd>paste-chips.js:879 publishes window.WMApp.board.pasteChips; :896 to :905 read nine names off chip-edit.js:320</dd>
+  <dt>exports</dt><dd>36 before, 36 after, same order, 0 missing, 0 added</dd>
+  <dt>the chip module's own surface</dt><dd>9 names, every one of them re-exported</dd>
+  <dt>node --check</dt><dd class="ok">clean on both files</dd>
+  <dt>the chip tests</dt><dd>22 tests, 22 pass, 0 fail on the merged head</dd>
+  <dt>the paste gate</dt><dd>125 checks, 123 pass, 2 fail; both reds are the (i) Ctrl+Enter steer pair, and the same two are red on the pre-cut code</dd>
+  <dt>the rendered paste</dt><dd>the request the panel sent carried the prose and all 367 lines, in position</dd>
+  <dt>the merge</dt><dd>a829384d, parents 1c7cabdd + 88b811fa, 6 files changed, all six owned by the cut</dd>
+  <dt>push / PR</dt><dd>none. The merge is local; the turnover is not on the remote.</dd>
+</dl>
+
+<h2>1. What moved, and what stayed</h2>
+<p>The row cut the chip itself out of <code>public/board/paste-chips.js</code>: the atom's construction, the insert helpers, fold and toggle and remove, and the Ctrl+Backspace / Ctrl+Delete word delete. The paste policy stayed: the 300-character / 5-line threshold, the box model, <code>readBox</code> and its writers, the caret, the paste listener and the composer's undo stack. <code>paste-chips.js</code> is still the entry point the page loads and still publishes the one object every caller and probe reads.</p>
+<p>The nine names that moved are on the new file's own surface, <code>public/board/chip-edit.js:320</code>, and <code>public/board/paste-chips.js:896</code> to <code>:905</code> reads each back:</p>
+<div class="methods">
+  insertTextAt<br>
+  insertNewlineAt<br>
+  makeChip<br>
+  chipEl<br>
+  removeChipEl<br>
+  toggleChip<br>
+  foldChip<br>
+  openChips<br>
+  chipBesideCaret<br>
+</div>
+<p>The other twenty-seven names never left <code>paste-chips.js</code> and are literal property values there, not re-exports:</p>
+<div class="names">
+  readBox<br>
+  writeBox<br>
+  writeBoxModel<br>
+  serializeBox<br>
+  restoreBoxDraft<br>
+  restorePersistedBox<br>
+  restoreChipBoxes<br>
+  transferBoxModel<br>
+  rememberBoxModel<br>
+  clearBoxDraft<br>
+  forgetReplyDraft<br>
+  chipBoxOf<br>
+  boxKeyOf<br>
+  caretOffset<br>
+  setCaretOffset<br>
+  caretAtEnd<br>
+  pasteInto<br>
+  loadPasteChipState<br>
+  modelText<br>
+  chipText<br>
+  shouldChip<br>
+  pasteText<br>
+  saveChipDrafts<br>
+  composerUndo<br>
+  composerRedo<br>
+  composerActionDepth<br>
+  clearComposerActions<br>
+</div>
+<p>The word-delete helpers moved as ordinary classic-script globals and are deliberately not published: <code>chipBoxChars</code>, <code>chipCaretPoint</code>, <code>chipWordSpan</code>, <code>chipWidenSpan</code>, <code>chipPointAt</code>, <code>chipDeleteChars</code>. <code>paste-chips.js</code> calls them by name, which is why the page loads <code>chip-edit.js</code> first: <code>public/index.html:1435</code>, then <code>:1440</code>, then <code>app.js</code> at <code>:1715</code>.</p>
+
+<h2>2. The surface is the same thirty-six names, in the same order</h2>
+<p>Both files were read as text and the object assigned to <code>window.WMApp.board.pasteChips</code> was parsed to its keys, at the cut's base <code>485079ba</code> and on the merged head. The two lists are equal, element for element, so the order is unchanged too:</p>
+<div class="names">
+  readBox<br>
+  writeBox<br>
+  writeBoxModel<br>
+  serializeBox<br>
+  restoreBoxDraft<br>
+  restorePersistedBox<br>
+  restoreChipBoxes<br>
+  transferBoxModel<br>
+  rememberBoxModel<br>
+  clearBoxDraft<br>
+  forgetReplyDraft<br>
+  chipBoxOf<br>
+  boxKeyOf<br>
+  caretOffset<br>
+  setCaretOffset<br>
+  caretAtEnd<br>
+  insertTextAt<br>
+  insertNewlineAt<br>
+  pasteInto<br>
+  makeChip<br>
+  chipEl<br>
+  removeChipEl<br>
+  toggleChip<br>
+  foldChip<br>
+  openChips<br>
+  chipBesideCaret<br>
+  loadPasteChipState<br>
+  modelText<br>
+  chipText<br>
+  shouldChip<br>
+  pasteText<br>
+  saveChipDrafts<br>
+  composerUndo<br>
+  composerRedo<br>
+  composerActionDepth<br>
+  clearComposerActions<br>
+</div>
+<p>Counts: 36 at 485079ba, 36 on the merged head, 0 base-only, 0 head-only, order identical. The nine re-exported properties resolve only if <code>window.WMApp.board.chipEdit</code> is built, and it is: 9 keys at <code>public/board/chip-edit.js:320</code>, every one of them in the 36.</p>
+
+<h2>3. The moved block, hashed</h2>
+<p>The block was not described, it was measured. A line diff of <code>git show 485079ba:public/board/paste-chips.js</code> against the merged <code>public/board/paste-chips.js</code> finds one run of 290 lines that is removed and not replaced. That run is the moved block:</p>
+<pre>base lines 505 to 794, 290 lines
+sha256 d2738e5664b00a0d93b19d3e6784185868532701560d4ecd5328315a65dec05f
+first line: // ---- building and editing chips
+last line:  the closing brace of the last word-delete helper</pre>
+<p>The same 290-line string occurs <span class="ok">1</span> time in <code>public/board/chip-edit.js</code> and <span class="ok">0</span> times in the merged <code>public/board/paste-chips.js</code>. Nothing in the block was retyped, reindented or renamed, which is what makes the nine re-exports safe.</p>
+
+<h2>4. What only the source can say</h2>
+<table>
+  <tr><th>check</th><th>answer</th></tr>
+  <tr><td class="n">node --check public/board/paste-chips.js</td><td class="ok">clean</td></tr>
+  <tr><td class="n">node --check public/board/chip-edit.js</td><td class="ok">clean</td></tr>
+  <tr><td>script order in public/index.html</td><td>chip-edit.js:1435, paste-chips.js:1440, app.js:1715</td></tr>
+  <tr><td>chipEdit keys re-exported</td><td class="ok">9 of 9</td></tr>
+</table>
+
+<h2>5. The chip tests, on the merged head</h2>
+<pre>node --test test/paste-chip-undo.test.js test/paste-chip-word-delete.test.js
+tests 22   pass 22   fail 0   cancelled 0   skipped 0</pre>
+<p>The same two files answered 22 pass, 0 fail at the turnover head <code>f13db8e3</code> before the merge, so the cut neither fixed nor broke a unit test. They are the two gates the cut edits: <code>test/paste-chip-undo.test.js</code> and <code>test/paste-chip-word-delete.test.js</code>.</p>
+
+<h2>6. The paste gate, and the two reds it already had</h2>
+<p><code>tools/verify-paste-chips.mjs</code> drives a sandbox panel of this checkout plus headless Chromium: real paste events, real key presses, real clicks, and the requests the page makes recorded by a stubbed fetch. On the merged head <code>a829384d</code> it answers:</p>
+<pre>125 checks, 2 failed
+
+PASS  (a) the box holds the whole pasted block after it
+PASS  (a) the caret sits immediately after the chip: 10602
+PASS  (e) THE REQUEST CARRIES THE WHOLE PASTED BLOCK, IN POSITION, BETWEEN THE QUOTES
+FAIL  (i) Ctrl+Enter steers the live turn             got 0         want 1
+FAIL  (i) with the chip's text in position            got undefined, want the 5-line block</pre>
+<p>The two reds are the Ctrl+Enter steer pair: the gate presses Ctrl+Enter and expects one steer request carrying the chip's text, and the page sends none. They are not this cut's. The same gate run against the pre-cut module answers 122 pass and 3 fail, with these same two among them; the third red there is the page-error check, because the stand-in <code>chip-edit.js</code> in that comparison tree is a 404. Nothing else differs, so the cut adds no red and clears none.</p>
+<h3>How the gate was run, and the one harness patch</h3>
+<p>Run as shipped, the same gate answers 99 pass and 26 fail on the merged head, and 98 pass and 27 fail against the pre-cut module (the 27th being the script-order inspection, which a tree without <code>chip-edit.js</code> cannot pass). The cause of the 26 is the sandbox, not the module: with no worktree row on the board, the card's host container is <code>display:none</code>, so <code>box.focus()</code> is a no-op, <code>document.activeElement</code> stays on <code>&lt;body&gt;</code>, and every keystroke lands nowhere while paste events, dispatched at the element, still work. The run quoted above reveals the hidden chain inside the probe's <code>focusBox</code> before focusing, and changes nothing else:</p>
+<pre>probe.focusBox = (sel) =&gt; {
+  const box = document.querySelector(sel);
+  if (box) {
+    for (let n = box; n &amp;&amp; n !== document.documentElement; n = n.parentElement) {
+      if (getComputedStyle(n).display === "none") n.style.display = "block";
+    }
+    box.focus();
+  }
+  return Boolean(box);
+};</pre>
+<p>With the patch, 24 of the 26 keyboard-dependent reds go green and the same two (i) reds remain. Both counts are quoted so the reader can see the patch's whole effect: 99 to 123 pass, 26 to 2 fail.</p>
+
+<h2>7. One rendered paste, from the request the panel sent</h2>
+<p>The check that matters for a pure move is that the text a chip swallows still arrives where it sat. The gate types prose, dispatches a real paste of 367 lines into the box, and then reads the POST body the page actually sends, never the markup:</p>
+<pre>PASS  (e) Enter sends exactly one reply
+PASS  (e) THE REQUEST CARRIES THE WHOLE PASTED BLOCK, IN POSITION, BETWEEN THE QUOTES:
+      here is the pasted spec: "THIS-IS-THE-PREVIEW-START and more characters to fill the preview out</pre>
+<p>The same run reads back <code>Quote this: </code> before the chip and the whole block after it (<code>readBox</code> length 10,602, caret at 10,602), and finds exactly one chip in the box with the prose around it intact. That is the same string the textarea gave before the chip existed, which is the contract the file's header states at <code>public/board/paste-chips.js:10</code>.</p>
+
+<h2>8. The merge into the turnover</h2>
+<p>The cut's branch was merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally, with <code>--no-ff</code>, from inside that branch's own worktree. It is merge commit <code>a829384d</code>, whose parents are the turnover's <code>1c7cabdd</code> and the cut's <code>88b811fa</code>. Its diff against its first parent is six files, and all six are the cut's:</p>
+<pre>A  public/board/chip-edit.js
+M  public/board/paste-chips.js
+M  public/index.html
+M  test/paste-chip-undo.test.js
+M  test/paste-chip-word-delete.test.js
+M  tools/verify-paste-chips.mjs</pre>
+<p>No file the cut does not own changed in the merge, so the turnover's version stands for every other path: the commits it gained since the cut's base (<code>lib/initiatives.js</code>, <code>lib/initiative-tag-ops.js</code>, <code>routes/initiatives.js</code>, <code>lib/pipelines.js</code>, <code>public/board/queue-row.js</code> and the rest) are untouched. There were no conflicts to resolve. The turnover was at <code>1c7cabdd</code> when the merge ran.</p>
+<p>The report page itself is a second, docs-only merge on the same branch, so the turnover gains this page and nothing else.</p>
+
+<h2>9. What this row did not do</h2>
+<ul>
+  <li>No push and no PR: the turnover branch has not landed, so a remote branch would be a ref nobody asked for.</li>
+  <li>No version bump and no changelog entry.</li>
+  <li>No full suite. The two chip test files and the one gate that drives them are the proof, and both are quoted above with their counts.</li>
+  <li>Nothing rebuilt: the cut's commit was already on the branch and clean, so the landing used it as it stood.</li>
+</ul>
+</main>
+</body>
+</html>
