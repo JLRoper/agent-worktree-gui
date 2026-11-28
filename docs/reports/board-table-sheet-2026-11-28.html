@@ -57,6 +57,7 @@ never the board's (the page footer, the clipboard flash, the job card's jump fla
 <code>public/chart.css</code> gives up the 190 board rules it had accumulated and keeps 47: the poll ring, the age
 column and the legend.
 <br /><br />
+<b>Where it landed.</b> Merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> as <code>25329e26</code>, with <code>c4b62e16</code> carrying the branch's kind-rule edit into the new sheet; the branch is not pushed and no pull request was opened.<br /><br />
 <b>What proves it.</b> The rule set is identical, not merely similar: 3,380 rule blocks before and 3,380 after, keyed by
 at-rule context, selector and declarations, with 0 missing and 0 extra. The cascade is identical: the same 4
 (selector, property) pairs across sheets, in the same sheets, with the same winners, and none of them involves a moved
@@ -172,6 +173,13 @@ moved:</p>
 <tr><td><code>rowstrips.css</code></td><td class="num">133</td><td class="num">48</td><td><code>total</code></td><td class="num">3,380</td><td class="num">3,380</td></tr>
 </table>
 
+<p>Against the turnover branch's tip at merge time (<code>d1fcadab</code>, 22 sheets) the same comparison reads
+<b>3,398 rule blocks and 3,398</b>, with 0 missing and 0 extra: the branch had gained 18 rules from other rows since
+this tree was cut, and the merged tree carries all of them. One of those had to be ported by hand - the branch's
+<code>5c84c3e5</code> made an upgraded R or I read T and deleted <code>.kind-tick</code> from
+<code>chart.css</code>, and the rule now lives in <code>board-table.css</code>, so the same two edits landed there in the
+merge (<code>c4b62e16</code>). Without that, the rollup would have re-introduced a rule the branch had just deleted.</p>
+
 <h2>4. The cascade: no new tie, and the four that exist are untouched</h2>
 
 <p>Moving a rule between sheets changes what it beats. The review tool lists every (selector, property) pair that two
@@ -222,6 +230,13 @@ have content.</li>
 <tr><td>1160 px</td><td class="num">2,768</td><td class="num">67</td><td class="mono">ecee7c9a84d07330</td><td class="mono">ecee7c9a84d07330</td><td class="mono">ecee7c9a84d07330</td><td class="ok">identical</td></tr>
 <tr><td>420 px</td><td class="num">2,768</td><td class="num">67</td><td class="mono">a976b731f346344a</td><td class="mono">a976b731f346344a</td><td class="mono">a976b731f346344a</td><td class="ok">identical</td></tr>
 </table>
+
+<p>On the rolled-up branch the gate is run with the branch's own pre-merge tip as the baseline,
+<code>--old d1fcadab</code>, because <code>895e7282</code> predates 18 rules other rows added: 2,839 elements and 71
+pseudo boxes, digests <code>aba97a05</code> at 1160 px and <code>07d80f77</code> at 420 px, all three readings equal,
+PASS. A baseline older than the tree's own neighbours is the one way this gate fails without a style difference: run it
+against <code>895e7282</code> on the rolled-up branch and it names the <code>maintenance</code> elements another row
+added to <code>settings.css</code>. The baseline is the commit the move replaced, never an older one.</p>
 
 <p class="sub">These are the readings from the run recorded here: <code>--old 895e7282</code>, the cut base, on
 the merged tree. An earlier run of the same harness, before the catch-up merge brought the branch's other work in, read
@@ -374,7 +389,7 @@ the new <code>npm run verify:board-table-sheet</code>, plus the suite's own styl
 <p><code>public/board-table.css</code> is the board table's sheet and nothing else's: the horizontal scroll container,
 the project card and its head, the rail and the row indent, the row's cells and action buttons, the git strip, the
 row chips and their popup, the child ticks and guide lines, the live block, the legend, the approvals dock, the agents
-block and the new-agent form. It holds 798 of the page's 3,380 rule blocks in 2,339 lines, it names
+block and the new-agent form. It holds 798 of the page's rule blocks (3,380 at the cut, 3,398 at the branch's tip) in 2,339 lines, it names
 <code>#projects</code> 15 times, and every one of those rules computes exactly what it computed in the six sheets it
 came from.</p>
 
@@ -415,6 +430,10 @@ and <code>test/worktree-naming.test.js</code> failed before it and pass after it
 
 <p>The 45 test files that read the page's sheets - every CSS assertion in the project - were run together after the
 merge: <b>506 tests, 506 pass, 0 fail</b>.</p>
+
+<p>On the rolled-up branch the same 45 files plus the branch's own kind and column tests were run again after the
+merge: 83 tests across the eight files most exposed to this move (legend, row chips, branch kind, chart columns, text
+styles, report footer, report tracking, the shared tail chip), <b>83 pass, 0 fail</b>.</p>
 
 <h2>11. Reproduce every number</h2>
 
