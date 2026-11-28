@@ -34,6 +34,7 @@
     "verify:turnover-policy": "node tools/verify-turnover-policy.mjs",
     "verify:legend": "node tools/verify-legend.mjs",
     "verify:css-split": "node tools/verify-css-split.mjs",
+    "verify:late-dissolve": "node tools/verify-late-dissolve.mjs",
     "verify:board-table-sheet": "node tools/verify-board-table-sheet.mjs",
     "review:css-split": "node tools/css-split-review.mjs",
     "verify:store-atomic": "node tools/verify-store-atomic.mjs",

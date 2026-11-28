@@ -827,7 +827,13 @@ function exportRoot(rev, dir) {
   const shell = path.join(dir, "public", "index.html");
   const lines = readFileSync(shell, "utf8").split("\n");
   const from = lines.findIndex((l) => l.includes("style.css is split by surface"));
-  const to = lines.findIndex((l) => l.includes('href="/late.css"'));
+  // The block ends at the LAST split sheet the page links. That line used to be late.css's, and row 446
+  // dissolved that file, so the end is found from the sheets the page actually loads rather than from one
+  // name that a later row could delete. A sheet the page stops linking moves the anchor with it.
+  let to = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (sheets.some((name) => lines[i].includes(`href="/${name}"`))) to = i;
+  }
   if (from < 0 || to < from) throw new Error("the before root cannot find the shell's sheet block to undo");
   const crlf = readFileSync(shell, "utf8").includes("\r\n");
   lines.splice(from, to - from + 1, '  <link rel="stylesheet" href="/style.css" />' + (crlf ? "\r" : ""));

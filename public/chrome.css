@@ -278,3 +278,12 @@ thead th,
 
 /* ---- moved verbatim from public/rowstrips.css (row 445, the console sub-sheets) ---- */
 body.modal-open { overflow: hidden; }
+
+/* ---- the sliver window (max-height: 300 px): the header stops being a sticky band ------------------------
+   Moved verbatim from public/late.css by row 446, which dissolved that file. This is the sliver block's only header
+   rule; the page's and the board's rules are in public/board-table.css, and the page row's two rules are in
+   public/assistant.css. In late.css it beat .topbar's own position, padding and flex by loading last; it is written
+   after those rules here, so it still does. */
+@media (max-height: 300px) {
+  .topbar { position: static; flex: none; padding: 4px 12px; }
+}
