@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.197.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.197.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-787 releases from v0.1.0 (2026-10-20) to v1.197.1 (2026-11-28), 2819 commits between the tags. Every release is anchored by an
+788 releases from v0.1.0 (2026-10-20) to v1.197.2 (2026-11-28), 2823 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version on main; `npm run verify:version-tags` fails when a
 bump has no tag, or when a version tag names a commit main never carried.
+
+## v1.197.2 — 2026-11-28 · 4 commits
+
+[`360d35c`](https://github.com/JLRoper/agent-worktree-gui/commit/360d35ceb5161c9f36e5883bf91ee35e47c6ebc8) · [compare v1.197.1...v1.197.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.197.1...v1.197.2)
+
+### Fixed
+
+- fix(settings): the cleanup section reads on demand, and its census is memoised ([`fc50782`](https://github.com/JLRoper/agent-worktree-gui/commit/fc50782d24cbe553ab54ebf91933ab4203534866))
+
+### Docs & tests
+
+- docs: render the changelog - 787 releases ([`57e0fb4`](https://github.com/JLRoper/agent-worktree-gui/commit/57e0fb44c670a94ea8ccd011fd423d681f816738))
+- docs(reports): the chip cut's page records the landing, PR #954 at 8a73cbbb and the tag move ([`0c03e16`](https://github.com/JLRoper/agent-worktree-gui/commit/0c03e169effda91bf15125e2b9c13feae980a8fe))
+
+### Other
+
+- chore: 1.197.2 - the version this landing carries ([`360d35c`](https://github.com/JLRoper/agent-worktree-gui/commit/360d35ceb5161c9f36e5883bf91ee35e47c6ebc8))
 
 ## v1.197.1 — 2026-11-28 · 2 commits
 
