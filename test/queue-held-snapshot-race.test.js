@@ -19,9 +19,12 @@ import test from "node:test";
 import vm from "node:vm";
 
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const app = page("public/app.js");
+// The reply queue was cut out of app.js into public/board/replies.js (cut 2 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so both scripts are read, in page order.
+const app = `${page("public/app.js")}\n${page("public/board/replies.js")}`;
 
-// One top-level function from public/app.js, by name. `async` is part of some of them, so the prefix is optional.
+// One top-level function from the page's classic scripts, by name. `async` is part of some of them, so the prefix is
+// optional.
 function grab(src, name) {
   const m = new RegExp(`(?:^|\\n)(?:async )?function ${name}\\(`).exec(src);
   assert.ok(m, `the page carries ${name}()`);

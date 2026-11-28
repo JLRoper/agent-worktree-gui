@@ -11,7 +11,9 @@
 //                 per stage, one arrow per sequence handoff (labelled with the gate that ends the stage it leaves), one
 //                 dashed loop per loop handoff with its cap, and the gates list.
 //
-// The dropdown's own markup and the dialog's wiring are pinned by slicing public/app.js and public/pipeline-modal.js;
+// The dropdown's own markup and the dialog's wiring are pinned by slicing public/settings-window.js (where the
+// Settings window was cut out of app.js, cut 8 of the eight in docs/reports/module-separation-2026-11-28.html) and
+// public/pipeline-modal.js;
 // tools/verify-pdl-pipelines.mjs is the browser proof that the control and the card actually paint.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -119,7 +121,7 @@ test("every PDL pipeline draws at its own stage count, and the mermaid source ca
 });
 
 test("the dropdown offers the PDL pipelines first, tagged PDL, above the built-in ladders", () => {
-  const app = read("public/app.js");
+  const app = read("public/settings-window.js");
   const pdlGroup = app.indexOf('<optgroup label="PDL pipelines">');
   const ladderGroup = app.indexOf('<optgroup label="built-in ladders">');
   assert.ok(pdlGroup > 0, "the PDL group is in the dropdown's markup");
@@ -134,11 +136,11 @@ test("the dropdown offers the PDL pipelines first, tagged PDL, above the built-i
 });
 
 test("the flow press draws a selected PDL pipeline with the shared card, from its stages, gates and handoffs", () => {
-  const app = read("public/app.js");
+  const app = read("public/settings-window.js");
   const flow = app.slice(app.indexOf("function openPipelineFlow("), app.indexOf("function openPdlFlow("));
   assert.match(flow, /const pdl = selectedPdlPipeline\(\)/, "the press asks for the PDL selection first");
   assert.match(flow, /openPdlFlow\(pdl\)/, "and hands it to the PDL drawing");
-  const pdlFlow = app.slice(app.indexOf("function openPdlFlow("), app.indexOf("// Wired once, at load"));
+  const pdlFlow = app.slice(app.indexOf("function openPdlFlow("), app.indexOf("function openPipelineEditor("));
   assert.match(pdlFlow, /pdl: true/, "the dialog is told this is a PDL document");
   assert.match(pdlFlow, /definition: pdl/, "and is handed the document itself");
   assert.match(pdlFlow, /label: "gates"/, "the facts name the gates");
@@ -151,7 +153,7 @@ test("the flow press draws a selected PDL pipeline with the shared card, from it
 });
 
 test("the map link hands the map page this panel's own catalogue when a PDL pipeline is selected", () => {
-  const app = read("public/app.js");
+  const app = read("public/settings-window.js");
   assert.match(app, /mapLink\.href = pipelinePdlId \? "\/pipeline-map\.html\?doc=\/api\/assistant\/pipeline-catalogue" : "\/pipeline-map\.html"/);
   // The page's importer reads `{pipelines: [...]}` as one card per definition, which is the catalogue's shape.
   const importer = read("public/core/pipeline-import.js");

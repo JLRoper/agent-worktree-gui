@@ -19,7 +19,9 @@ import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 import { readStyleSheets } from "./style-sheets.js";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The owner cell moved out of app.js into public/board/merge.js (cut 5 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
+const src = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "owner cell", "owner cell");
 
 const esc = (s) =>

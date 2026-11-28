@@ -6,7 +6,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The cells and the merge control were cut out of app.js into public/board/merge.js (cut 5 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so both regions are read from the file that carries them.
+const src = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 // The chart's columns moved to public/charts.js in step 3 of docs/reports/module-map-2026-11-07.html's order of
 // work, so the section pin below reads the file that carries it now; the row's cells moved to
 // public/render-projects.js in step 7, which is where the one-cell-per-column map is read.

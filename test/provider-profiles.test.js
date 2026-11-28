@@ -246,6 +246,9 @@ test("the profile routes save, apply and delete through writeProviderSettings, a
 test("the Gateway tab carries the picker, its four presses, and TWO independent restart buttons", async () => {
   const html = readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
+  // The Settings window was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+  // docs/reports/module-separation-2026-11-28.html): restartFromSettings lives there, the two presses stay here.
+  const settingsWindow = readFileSync(path.join(ROOT, "public", "settings-window.js"), "utf8");
   for (const id of [
     "provider-profile",
     "provider-profile-name",
@@ -275,7 +278,7 @@ test("the Gateway tab carries the picker, its four presses, and TWO independent 
   assert.ok(gatewayAt > 0 && panelAt > gatewayAt, "both buttons are bound, gateway first");
   assert.match(app.slice(gatewayAt, panelAt), /restartFromSettings\("gateway", e\.currentTarget\)/);
   assert.match(app.slice(panelAt, panelAt + 220), /restartFromSettings\("panel", e\.currentTarget\)/);
-  const handler = app.slice(app.indexOf("async function restartFromSettings"), app.indexOf("// ---- the model menu's prices"));
+  const handler = settingsWindow.slice(settingsWindow.indexOf("async function restartFromSettings"), settingsWindow.indexOf("// ---- the model menu's prices"));
   assert.match(handler, /apiFetch\("\/api\/restart"/);
   assert.match(handler, /\btarget,/);
   assert.match(handler, /\breason:/);

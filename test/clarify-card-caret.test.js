@@ -4,9 +4,11 @@
 // card, and both paths take the node the caret was in out of the page. The draft map already kept every WORD (the box
 // came back full), so the defect was the other half: the box came back unfocused with the caret at 0, mid-sentence.
 //
-// WHAT IS DRIVEN: the shipped `captureTyping` and `restoreTyping` sliced out of public/app.js and run against
-// test/fixtures/mini-dom.js - the page's own functions, with only the card's free variables supplied. Nothing here
-// re-implements the capture or the restore.
+// WHAT IS DRIVEN: the shipped `captureTyping` and `restoreTyping` and run against test/fixtures/mini-dom.js - the
+// page's own functions, with only the card's free variables supplied. Nothing here re-implements the capture or the
+// restore. `captureTyping` was cut out of app.js into public/board/replies.js (cut 2 of the eight in
+// docs/reports/module-separation-2026-11-28.html) and `restoreTyping` stayed in app.js, so the two halves are sliced
+// from the files that now carry them.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -14,7 +16,11 @@ import { createDom } from "./fixtures/mini-dom.js";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
-const SOURCE = sliceBetween(app, "function captureTyping(root) {", "// After a repaint: the inline add-agent field");
+const replies = readFileSync(new URL("../public/board/replies.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const SOURCE =
+  sliceBetween(replies, "function captureTyping(root) {", "function turnPrompts(") +
+  "\n" +
+  sliceBetween(app, "function restoreTyping(", "// After a repaint: the inline add-agent field");
 
 // The panel's own caret escape is a browser built-in; the fixture has no CSS object, and the two names the capture
 // path uses are these.

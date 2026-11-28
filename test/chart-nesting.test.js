@@ -473,10 +473,11 @@ test("the indent counts rows that are DRAWN, so a held-back row cannot step its 
 // ---- the TITLE each of those rows paints ---------------------------------------------------------------------------
 //
 // The grouping above decides WHERE a round's trees are drawn; the title decides what each row is CALLED. That half is
-// `treeTitleOf` in public/app.js, a pure read of the row plus the page's stores, so it is proved at the same seam: the
-// real function, sliced out of the page, with a stub `state` under it. The case that matters is the one a fresh browser
-// is in - an EMPTY `wtgui.treenames` map - where the row must still read the round's own name.
-const appSource = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// `treeTitleOf`, a pure read of the row plus the page's stores, so it is proved at the same seam: the real function,
+// sliced out of the page, with a stub `state` under it. It was cut out of app.js into public/board/spawn.js (cut 3 of
+// the eight in docs/reports/module-separation-2026-11-28.html). The case that matters is the one a fresh browser is
+// in - an EMPTY `wtgui.treenames` map - where the row must still read the round's own name.
+const appSource = readFileSync(new URL("../public/board/spawn.js", import.meta.url), "utf8");
 const namingRegion = sliceRegion(appSource, "what a worktree is called on the board");
 const nameState = { projects: new Map(), treeNames: new Map() };
 const { treeTitleOf } = new Function("state", "keyOf", "agentsFor", "normPath", `${namingRegion}; return { treeTitleOf };`)(

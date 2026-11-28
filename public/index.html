@@ -1609,6 +1609,68 @@
        which calls them by bare name and re-exports them on window.WMApp.scaffold; it declares only, so that order
        costs nothing and nothing here waits on boot. -->
   <script src="/board-scaffold.js"></script>
+  <!-- The approval dock, cut out of app.js (cut 1 of the eight in docs/reports/module-separation-2026-11-28.html's
+       card for public/app.js): the permission box and its choices table, the one-flight answer per request, a run's
+       own parked question and its answer path, the dock's list with the gestures that walk the reader to the agent
+       that asked, and the panel's own remote-write permission with its receipts, its review and its clock. Loaded
+       before app.js, which calls them by bare name and re-exports them on window.WMApp.approvals; it declares only,
+       so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/approvals.js"></script>
+  <!-- The reply box's queue, cut out of app.js (cut 2 of the eight in docs/reports/module-separation-2026-11-28.html's
+       card for public/app.js): the draft a send consumed, the session's own prompts, the held reply and its
+       write-through, the queue's offers and waits, the ghost editor that can only revert on a click-away, and the
+       send and steer paths. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.replies; it declares only, so that order costs nothing and nothing here waits on boot. The two
+       delegated listeners the editor owns stay in app.js, with the page's other load-time wiring. -->
+  <script src="/board/replies.js"></script>
+  <!-- The add-agent bar, the model picker and the spawn recovery, cut out of app.js (cut 3 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the name a tree is called on the board,
+       the shell-style history both composers recall, a settled card's Continue and re-attach controls, the inline
+       add-agent bar, the one model list every model field reads, and the recovery that lands the reader on a card a
+       spawn has just made. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.spawn; it declares only, so that order costs nothing and nothing here waits on boot. The inline
+       field's own delegated events stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/spawn.js"></script>
+  <!-- The tree list, its delete and rename, and the child tree's cut, out of app.js (cut 4 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): what the server says about the list,
+       the row's lookups and the two homeless-card kinds, the delete and the reader's lock, the rename by hand, the +
+       that cuts a child from the ROW's branch with its kind-and-parent dialog, and the R or I that lifts a local-only
+       kind. Loaded before app.js, which calls them by bare name and re-exports them on window.WMApp.worktrees; it
+       declares only, so that order costs nothing and nothing here waits on boot. The delegated presses that open the
+       dialog and the lift stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/worktrees.js"></script>
+  <!-- The merge control, its chooser and the row's own cells, out of app.js (cut 5 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the UNMERGED chip and the label that
+       says a merge agent already works that tree, the verdict badge, the chooser between a rebase and a merge into the
+       parent, start-merge, and the row's branch, base, ahead/behind, PR and owner cells. Loaded before app.js, which
+       calls them by bare name and re-exports them on window.WMApp.merge; it declares only, so that order costs nothing
+       and nothing here waits on boot. The delegated presses that open the chooser stay in app.js with the page's other
+       load-time wiring. -->
+  <script src="/board/merge.js"></script>
+  <!-- The liveness ranking, the reading anchor and the board's hygiene, out of app.js (cut 6 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the sliding average every "life" figure
+       is built on and the windows it prunes, the one ranked sequence and its ticks, the contexts and the seeding, the
+       project hue, the anchor flag and its seconds, the flash durations, the compensation that keeps a repaint from
+       jumping, and the board sweep that holds the reader's place. Loaded before app.js, which calls them by bare name and
+       re-exports them on window.WMApp.anchor; it declares only, so that order costs nothing and nothing here waits on
+       boot. The 1 s clock and the observers that start them stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/anchor.js"></script>
+  <!-- The chart's column widths, the fit and the grips, out of app.js (cut 7 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): what this browser remembers about the
+       columns, the header cells, the natural width of each column, the plan that fits them into the room the page has,
+       and the grip on each header edge. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.columns; it declares only, so that order costs nothing and nothing here waits on boot. The drag
+       handlers themselves stay in app.js and read the same colDrag binding. -->
+  <script src="/board/columns.js"></script>
+  <!-- The Settings window, out of app.js (cut 8 of the eight in docs/reports/module-separation-2026-11-28.html's card for
+       public/app.js): the tab strip, release notes, settings search, the Skills tab, Permissions, pipeline, bundles, the
+       window's place and size, the provider endpoint and its profiles, the two restarts, model prices and ratings, the
+       assistant reset, the approval window, the Matrix bridge, the small rows, the folders the board scans, agent cleanup
+       and the initiative tier. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.settingsWindow; it declares only, so that order costs nothing and nothing here waits on boot. The
+       window's own load-time wiring (the buttons, the tab and search wiring, the reads that fill each tab, the drag, the
+       display rows and the two switches) stays in app.js, because it reads `state` while it runs. -->
+  <script src="/settings-window.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
