@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The lane covers every claimed file</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:13px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap:anywhere; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul, ol { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>The lane covers every claimed file</h1>
+<p class="sub">agent-worktree-gui 1.197.1. One LANE over the whole <code>files</code> array of every open row: membership, the head, the wait, and the cut's refusal. All line numbers are on this branch, at <code>fdf81395</code>.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#483 in assistant-3's queue ("A lane guards only a row's head file")</dd>
+  <dt>branch</dt><dd>wtgui/row-444-is-the-complete-brief-the-board-9e1458</dd>
+  <dt>base</dt><dd>20261127_2134_TASK-405_row-405-is-the-complete</dd>
+  <dt>the change</dt><dd>lib/assistant/queue.js:1609 <code>laneInfo</code>, :1873 <code>laneNote</code>; public/board/queue-row.js:293 <code>queueLaneChip</code>; lib/assistant.js:10510 <code>queueText</code></dd>
+  <dt>the cut</dt><dd>lib/spawn-check.js:178 <code>liveRowHolders</code>, :249 <code>laneRefusal</code>; lib/assistant.js:2832 <code>taskLaneCheck</code> (pre-flight route and cut, unchanged)</dd>
+  <dt>the card</dt><dd>lib/assistant.js <code>raiseSpawnRefusalCard</code> (row 419), raised from the cut's refusal</dd>
+  <dt>the proof</dt><dd>test/spawn-lane.test.js:312, test/queue-holds.test.js:355, test/assistant-queue-ui.test.js:462</dd>
+  <dt>what it measured</dt><dd>a forced overlap on a NON-head file refused by name; the live row heads the lane; the wait names the file</dd>
+</dl>
+
+<h2>1. What row #483 asked for</h2>
+<p>The row's own words, abridged to the four requirements:</p>
+<pre>(1) laneRefusal and the lane-head computation must intersect EVERY file a row claims, not just the head,
+    and name the shared file in the refusal;
+(2) the existing allow-overlap door is the escape ... so generalise it rather than adding a second mute;
+(3) a test that cuts two rows whose overlap is a NON-head file and proves the second is refused with
+    that file named;
+(4) keep the head-file lane exactly as strict as it is, the change is additive.
+Do not delete the 14 kept collision notices as part of this row: they are the evidence.</pre>
+
+<h2>2. What the code did before this branch</h2>
+<p>The cut's predicate was already the whole-set one. <code>liveRowHolders</code> (lib/spawn-check.js:178) intersects this row's entire <code>files</code> array with each candidate holder's entire <code>files</code> array through <code>intersectingFiles</code> (lib/queue-files.js:28), and <code>laneRefusal</code> (lib/spawn-check.js:249) names every shared file it finds. That is why the forced overlap below was refused even on the base: a check that matched one file per row was never in the cut.</p>
+<p>The head-file limitation lived in the lane's ORDER, and that order is what the pane and the digest print. <code>laneInfo</code> gave each row ONE lane name - the first file it shared with its lowest-id peer - and then grouped rows BY THAT NAME. Three consequences, all measured on this tree against the base:</p>
+<ul>
+  <li>a row that shared file x with a live peer but whose lane was named y (from a different peer) sat OUTSIDE the lane and was told to wait for nobody;</li>
+  <li>a row with a lower id than the live peer was printed as <code>(head)</code> - "the one that goes first" - while the live row it shared a file with was already running;</li>
+  <li>the live row itself printed no order note at all, so nothing on the line said it had overtaken the row the lane told to go first.</li>
+</ul>
+<p>The base, on three rows: #1 queued on <code>public/app.js</code>, #2 RUNNING on <code>public/app.js, public/console.css</code>, #3 queued on <code>public/console.css</code>. #1 and #3 share nothing, so only a lane built from whole filesets holds all three.</p>
+<pre>BASE  ROWS
+  {"id":1,"state":"queued","lane":"public/app.js","laneHead":true,"laneHeadId":1,"waitingOn":null}
+  {"id":2,"state":"running","lane":"public/app.js","laneHead":false,"laneHeadId":1,"waitingOn":null}
+  {"id":3,"state":"queued","lane":null,"waitingOn":null}
+
+BASE  DIGEST
+  - ○ #1 queued · waits on the live one · ... · SKIP: files in use by #2 (...) · lane public/app.js (head)
+  - ○ #3 queued · shares the second file · ... · SKIP: files in use by #2 (...)
+  - ● #2 running · already going · ... (no lane note at all)</pre>
+<p class="note">Read #1's line against #2's state: the digest says #1 goes first while #2 is live on the same file, and #3 - which shares <code>public/console.css</code> with the live run - carries no lane sentence at all. That is the "order rulings overtaken by the very pairs they ordered" the row measured: the row told to wait was already running.</p>
+
+<h2>3. The change</h2>
+<table>
+  <tr><th>piece</th><th>before</th><th>after</th></tr>
+  <tr>
+    <td>lane membership<br><code>laneInfo</code> (lib/assistant/queue.js:1609)</td>
+    <td>one name per row; group rows by that name</td>
+    <td>a UNION-FIND over every pair of open rows, joining them when <code>intersectingFiles</code> over their WHOLE files arrays is non-empty. The lane is the connected set: A-B share x and B-C share y puts A, B and C in one lane even though A and C share nothing.</td>
+  </tr>
+  <tr>
+    <td>the lane's name</td>
+    <td>the shared file with the lowest-id peer</td>
+    <td>a stored <code>lane</code>, if any member carries one (lowest id wins, so every member agrees), else the lowest path the set shares. Unchanged for a two-row pair that shares one file.</td>
+  </tr>
+  <tr>
+    <td>the head</td>
+    <td>the lowest id, full stop</td>
+    <td>the lowest-id LIVE member when there is one - a row whose run is already going goes first, whatever its id - else the lowest id, as before.</td>
+  </tr>
+  <tr>
+    <td>the wait<br><code>laneInfo</code>:1672, <code>laneNote</code>:1873</td>
+    <td><code>{id, lane}</code> against the head only, suppressed when an exception named the lane</td>
+    <td><code>{id, lane, file}</code> against the lowest-id live peer that shares a file no recorded exception covers. The digest prints <code>waiting on #N (lane X on FILE)</code> when the file is not the lane's own name, and a wait is printed BEFORE the head claim so a waiting row is never also called "the head".</td>
+  </tr>
+  <tr>
+    <td>the card chip<br>public/board/queue-row.js:293</td>
+    <td>"#N heads this lane (X)"</td>
+    <td>"#N is live on FILE: this row claims the same file, so it waits until #N ends and lands". The holder is not called the head, because the new head rule makes that false exactly when the wait appears on a lower-id row.</td>
+  </tr>
+  <tr>
+    <td>the chat's queue list<br>lib/assistant.js:10510</td>
+    <td>"lane head" before the wait</td>
+    <td>the wait first, naming the file; the head claim only when there is no live peer.</td>
+  </tr>
+  <tr>
+    <td>the cut<br><code>liveRowHolders</code> / <code>laneRefusal</code></td>
+    <td>whole filesets already</td>
+    <td><span class="ok">unchanged</span>, and now PINNED by a forced overlap on a non-head file (section 4). The module header says why: lib/spawn-check.js:45.</td>
+  </tr>
+</table>
+<p>Nothing else moved. The per-file <code>allow-overlap</code> door (lib/assistant.js:2539) is the same door - it stores the file, the live holder row, who allowed it, when and why, and one exception still covers one holder and one file. The per-tree guard (<code>heldTreeRefusal</code>) is untouched. The 14 kept collision notices were not deleted. The head-file case is exactly as strict as it was: two rows sharing their head file produce the same lane, the same head and the same wait they did before.</p>
+
+<h2>4. The forced overlap: two rows, a shared NON-head file</h2>
+<p>#1 RUNNING claims <code>public/app.js, public/index.html, public/console.css</code>. #2 claims <code>docs/notes.md, public/index.html, public/console.css</code>. Neither names a shared file as its head: #1's head is <code>public/app.js</code>, #2's is <code>docs/notes.md</code>. The shared files are behind both.</p>
+<h3>the pre-flight answer (GET /api/assistant/spawn-check?task=2)</h3>
+<pre>HTTP 200
+{"ok": false,
+ "reason": "files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims public/index.html, public/console.css, so starting it would put two workers in those files",
+ "remedy": "wait for job run_holder to end and land #2, or record an explicit overlap first (queue action allow-overlap, which stores who allowed it and the file)",
+ "checks": [{"check": "lane", "code": "file_busy",
+             "files": ["public/index.html", "public/console.css"]}]}</pre>
+<h3>the cut, attempted anyway</h3>
+<pre>startSpawn({ taskId: 2, existing: true, target: "free-tree" })
+  -> threw { code: "spawn-task",
+             message: "files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims
+                       public/index.html, public/console.css, so starting it would put two workers in those
+                       files. wait for job run_holder to end and land #2, or record an explicit overlap first
+                       (queue action allow-overlap, which stores who allowed it and the file)." }
+  -> the injected spawner was never called (0 calls), and #2 still reads queued</pre>
+<h3>the card the refusal raises (row 419)</h3>
+<pre>{"rule": "spawn-refused", "severity": "bad", "status": "open", "taskId": 2,
+ "title": "SPAWN refused: SPAWN IN #2 C:/.../checkout/.worktrees/f...",
+ "detail": "files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims public/index.html,
+            public/console.css, so starting it would put two workers in those files - the fix: wait for job
+            run_holder to end and land #2, or record an explicit overlap first (queue action allow-overlap,
+            which stores who allowed it and the file)",
+ "evidence": [
+   {"label": "reason",   "value": "files in use by #1 (job run_holder on thread t-holder, running) - #2 also claims public/index.html, public/console.css, so starting it would put two workers in those files"},
+   {"label": "remedy",   "value": "wait for job run_holder to end and land #2, or record an explicit overlap first (queue action allow-overlap, which stores who allowed it and the file)"},
+   {"label": "row",      "value": "#2"},
+   {"label": "line",     "value": "the second row"},
+   {"label": "what happened", "value": "nothing was cut: no tree, no job and no thread exist for this line"}]}</pre>
+<h3>the row and the digest after the refusal</h3>
+<pre>{"id":2,"state":"queued",
+ "lane":"public/console.css","laneHead":false,"laneHeadId":1,
+ "waitingOn":{"id":1,"lane":"public/console.css","file":"public/console.css"}}
+
+- ○ #2 queued · the second row · thread (none) · tree (none) · PR none · files docs/notes.md,
+  public/index.html, public/console.css · SKIP: files in use by #1 (job run_holder on thread t-holder,
+  running) - #2 also claims public/index.html, public/console.css, so starting it would put two workers in
+  those files. wait for job run_holder to end and land #2, or record an explicit overlap first (queue
+  action allow-overlap, which stores who allowed it and the file). · waiting on #1 (lane public/console.css)</pre>
+<p>Both shared files are named by the refusal, the cut throws the pre-flight's sentence word for word, the card carries the reason and the remedy as its own labelled evidence, and the row is in the holder's lane waiting on it. A head-only guard would have answered <code>ok: true</code> on <code>docs/notes.md</code> or <code>public/app.js</code> and cut a second worker.</p>
+
+<h2>5. The order case, red then green</h2>
+<p>The same three rows as section 2, after the change. #2 (live) heads the lane; #1 and #3 wait on it by name; #3 is in the lane although it shares nothing with the head.</p>
+<pre>AFTER  ROWS
+  {"id":1,"state":"queued","lane":"public/app.js","laneHead":false,"laneHeadId":2,
+   "waitingOn":{"id":2,"lane":"public/app.js","file":"public/app.js"}}
+  {"id":2,"state":"running","lane":"public/app.js","laneHead":true,"laneHeadId":2,"waitingOn":null}
+  {"id":3,"state":"queued","lane":"public/app.js","laneHead":false,"laneHeadId":2,
+   "waitingOn":{"id":2,"lane":"public/app.js","file":"public/console.css"}}
+
+AFTER  DIGEST
+  - ○ #1 queued · waits on the live one · ... · waiting on #2 (lane public/app.js)
+  - ○ #3 queued · shares the second file · ... · waiting on #2 (lane public/app.js on public/console.css)
+  - ● #2 running · already going · ... · lane public/app.js (head)</pre>
+<p>#3's wait names <code>public/console.css</code>, the file it actually shares with #2, although its lane is named <code>public/app.js</code>. That is the sentence the row asked for: the file it found, not the lane's own name.</p>
+<p>The two new assertions fail on the base and pass here:</p>
+<pre>test/queue-holds.test.js:355 - "the lane covers EVERY claimed file: a live peer heads it, and a wait names the file it found"
+BASE   AssertionError: a live row heads its lane whatever its id: it is already going
+       false !== true
+AFTER  ok
+
+test/spawn-lane.test.js:312 - "the lane covers EVERY claimed file: an overlap behind both rows' heads is refused by name, and the card says it"
+BASE   AssertionError: the wait carries the file the pair collide on
+       actual undefined, expected 'public/console.css'   (the refusal half already passed; the lane half did not)
+AFTER  ok</pre>
+<p class="note">The base failure on the spawn-lane test is honest about scope: the cut already refused the non-head overlap, so the test's refusal assertions are green on the base. What was missing was the lane's half - the row outside the order, the head claim over a live run, and the wait that did not carry a file. The test pins both halves together so the refusal cannot drift while the order is fixed.</p>
+
+<h2>6. What stays exactly as strict as it was</h2>
+<ul>
+  <li><span class="ok">the head-file lane</span>: two rows that share their head file produce the same lane, the same head and the same <code>waiting on #N (lane X)</code> sentence as before. test/queue-holds.test.js:322 and :341 are unchanged and green.</li>
+  <li><span class="ok">the allow-overlap door</span>: one exception covers one holder and one file (lib/assistant.js:2539; test/spawn-lane.test.js:256). An exception on one of two shared files still leaves the other as a refusal, which is the point of a recorded decision rather than a mute.</li>
+  <li><span class="ok">the per-tree guard</span>: <code>heldTreeRefusal</code> and <code>jobs.create</code>'s tree checks are untouched. The lane is a second check beside it, never a replacement.</li>
+  <li><span class="ok">a parked row</span>: still takes no part in a lane - it is waiting for a person, not for a run.</li>
+  <li><span class="ok">nothing is started</span>: the lane is a read. The digest, the pane and the chat list render what the store derived; no state, id, thread or attempt is touched (test/queue-holds.test.js:387).</li>
+</ul>
+
+<h2>7. What was run</h2>
+<table>
+  <tr><th>run</th><th>result</th></tr>
+  <tr><td><code>node --test test/queue-holds.test.js</code></td><td class="ok">22/22 pass</td></tr>
+  <tr><td><code>node --test test/spawn-lane.test.js</code></td><td class="ok">9/9 pass</td></tr>
+  <tr><td>the ten files that name or import the queue: assistant-queue, assistant-queue-ui, spawn-check, spawn-check-wiring, spawn-busy, queue-order, queue-drag-ui, element-assist, assistant-queue-pane, waves-lane</td><td class="ok">200/200 pass</td></tr>
+  <tr><td><code>node tools/verify-queue-holds.mjs</code> (the lane's own browser gate)</td><td class="ok">49/52</td></tr>
+  <tr><td><code>npm test</code>, one sweep</td><td>cancelled at 26 min per the 20-minute worker budget: 3,732 assertions printed, 24 failures, <span class="small">see the note below; no summary line was reached</span></td></tr>
+</table>
+<p>The sweep was started once and read as it ran. Of its 24 failures, the three that could touch this row were opened: <code>absolute-paths</code> names five pre-existing files (docs/reports/console-gate-band-452.html, landing-cut-2026-11-28.html, wave-lane-counts/lane-counts.json, wave-views-cut-2026-11-28.html, test/maintenance.test.js:63) and not this page; <code>queue-state-hold-route</code> expects a hold-kind list without <code>permission</code> in it, which the code has carried since another row (the refusal reads "thread, job, task, path, permission, manual"); and <code>reports-are-tracked</code> named this page, because a report under <code>docs/reports</code> is excluded by <code>.git/info/exclude</code> and has to be force-added - it is green once the page is in the index. The remaining failures are in permissions and settings routes, hold wording, junction removal and panel timing, none of which this diff touches.</p>
+<p>The three red checks in <code>verify-queue-holds.mjs</code> are not this change. They expect the old parked line suffix <code>· PARKED: &lt;reason&gt;</code> (tools/verify-queue-holds.mjs:225, :274, :335), while the code has written <code>· PARKED, and a SPAWN carrying this id is refused until it is unparked: &lt;reason&gt;</code> since 9a3b57ec (lib/assistant/queue.js:1848). All three are textual assertions about a PARKED line; a parked row takes no part in a lane, so the lane change cannot move them. They are left for the gate's owner rather than re-pinned inside this row.</p>
+<p>This page was rendered in headless Chromium at 1160 wide before it was committed: 8 sections, 8 <code>&lt;pre&gt;</code> blocks, 2 tables, no console error and no horizontal overflow. The card quoted in section 4 is the alert record the cut persisted, not a mock.</p>
+
+<h2>8. What is still open</h2>
+<ul>
+  <li><strong>The lane reads ONE assistant's queue.</strong> <code>taskLaneCheck</code> is handed <code>out.tasks</code> - the queue of the assistant carrying the SPAWN - so a row in assistant-1 and a row in assistant-3 that claim the same file are two lanes, not one. That is outside row 483's words ("every file a row claims"), but it is the next hole of the same shape now that the fileset half is closed.</li>
+  <li><strong>The claims are a promise, not a measurement.</strong> The lane knows what a row CLAIMS; a worker that edits a file it did not claim is still found by the collision pass after the fact. Covering every claimed file does not make the claim complete.</li>
+  <li><strong>The gate above needs its parked-line expectations re-pinned</strong> (section 7) before it can be trusted as a green gate again.</li>
+</ul>
+
+<p class="small">Evidence on this page was produced by driving the real <code>Assistant</code> over a throwaway data directory and a seeded job store (the shape test/spawn-lane.test.js uses), reading the answer from the pre-flight route and the queue view. No browser was launched for it; the card is quoted from the alert record the cut persisted. Line numbers are for <code>fdf81395</code>; the report itself lands in a second commit on the same branch.</p>
+</main>
+</body>
+</html>
