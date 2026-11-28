@@ -111,7 +111,7 @@
    *
    * A `<div>`, not the `<span>` this row used to be: it holds block content (the button, the reports list).
    */
-  function memberHtml(member, esc = defaultEsc) {
+  function memberHtml(member, esc = defaultEsc, opts = {}) {
     const abandoned = member && member.abandoned && String(member.abandoned.reason || "").trim() ? String(member.abandoned.reason).trim() : "";
     const state = abandoned ? "abandoned" : MEMBER_STATES.includes(member && member.state) ? member.state : "queued";
     const id = member && member.id != null ? `#${member.id}` : "#";
@@ -134,7 +134,15 @@
     const why = [title, project ? `project ${project}` : "", ownName ? `owned by ${ownName}` : "", pipeline ? `pipeline ${pipeline}${member.pipelineFrom === "wave" ? " (the wave's template)" : ""}` : "", abandoned ? `abandoned: ${abandoned}` : ""]
       .filter(Boolean)
       .join(" - ");
-    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${own ? ` data-member-owner="${esc(own)}"` : ""}${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""}${openAttrs} title="${esc(why)}"><b class="wave-member-id">${esc(id)}</b>${ownerChip}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${titleEl}${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
+    // WHICH DRAWING THIS ROW IS PART OF, when it is one of the two lane drawings: `cards` on the two-lane asset, `table`
+    // in a three-or-more-lane manifest. It is an attribute rather than a class so a restyle cannot change which drawing
+    // a row belongs to, and a row in the flat member list carries none at all - that list is drawn exactly as before.
+    const draw = opts.draw === "table" || opts.draw === "card" ? opts.draw : "";
+    const drawAttr = draw ? ` data-member-draw="${draw}"` : "";
+    // THE LANE CELL LEADS THE MANIFEST ROW (O3 only). The member's own columns are untouched: the lane is a fact ABOUT
+    // where the row runs, so it comes before the id, and every other cell keeps the order the reader asked for.
+    const laneCell = opts.laneCell ? String(opts.laneCell) : "";
+    return `<div class="wave-member" data-wave-member="${esc(member && member.id != null ? member.id : "")}" data-member-state="${esc(state)}"${own ? ` data-member-owner="${esc(own)}"` : ""}${abandoned ? ` data-member-abandoned="${esc(abandoned)}"` : ""}${drawAttr}${openAttrs} title="${esc(why)}">${laneCell}<b class="wave-member-id">${esc(id)}</b>${ownerChip}<span class="chip wave-mstate ${MEMBER_WORDS.includes(state) ? `is-${state}` : ""}">${esc(state)}</span>${titleEl}${project ? `<span class="wave-member-project">${esc(project)}</span>` : ""}${reportsChipHtml(member, esc)}${reportsListHtml(member, esc)}</div>`;
   }
 
   // ---- the reports chip: a task's .html reports, listed under its member row ----------------------------------------
@@ -282,13 +290,97 @@
     return `<div class="wave-lane" data-wave-lane="${esc(label)}" data-lane-state="${esc(state)}" data-lane-read="${ok ? "ok" : "cannot-tell"}" title="${esc(why)}">
         <span class="chip wave-mstate is-${esc(state)}">lane ${esc(label)} - ${esc(state)}</span>
         <span class="as-hint wave-lane-read">${esc(say)}</span>
-        <div class="wave-members">${members.map((m) => memberHtml(m, esc)).join("")}</div>
+        <div class="wave-members">${members.map((m) => memberHtml(m, esc, { draw: "card" })).join("")}</div>
+      </div>`;
+  }
+
+  // ---- which drawing a lane count gets ------------------------------------------------------------------------------
+  // TWO LANES ARE THE ASSET'S TWO-LINE CARD (O4): the lanes sit side by side and each member's title takes the lane's
+  // whole content width, with its id, owner, state, project and reports on the line under it. The 2026-11-28 report's
+  // O4 row is the template: 475px titles, two wraps, a 288px box at the real column, and 707px / one wrap / 413px at
+  // the 900px panel.
+  //
+  // THREE OR MORE LANES ARE THE MANIFEST TABLE (O3): the lane stops being a box and becomes a column, one row per
+  // member, with each lane's state and read sentence kept in a summary strip above the table. The same report's O3 row
+  // is the template: 711px titles and one wrap at every count, a 403px box at four lanes and 493px at six.
+  //
+  // WHY THE COUNT DECIDES IT, and not a media query: the report's section 5 measured the same wave at 2, 4 and 6 lanes
+  // and the ranking flips with the count. Two lanes in the card drawing is the best of the five; at four lanes the card
+  // drawing gives 299px titles and three wraps while the table keeps 711px and one line. Nothing here measures the
+  // pane - the pane decides whether lanes sit side by side, the COUNT decides which drawing they are.
+  const LANE_CARDS = "cards";
+  const LANE_TABLE = "table";
+  const laneDrawingOf = (count) => (Number(count) >= 3 ? LANE_TABLE : LANE_CARDS);
+
+  /**
+   * A lane's SHORT LABEL: the last path segment. A lane is usually a file path ("public/index.html"), and a Java lane
+   * is a 55-character path whose last segment still names the file. The table's lane column is a fixed track, so the
+   * cell draws the segment and keeps the whole path on its `title` - and the summary strip above the table keeps the
+   * whole path in words, so nothing is lost, it is one hover or one line away. See public/initiatives.css for the
+   * column's width and why it is not sized to the full path.
+   */
+  function laneLabel(lane) {
+    const full = String((lane && (lane.name || lane.label)) || "unlaned").trim();
+    if (!full) return "unlaned";
+    const parts = full.split(/[\\/]+/).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : full;
+  }
+
+  const laneStateOf = (lane) => (MEMBER_STATES.includes(lane && lane.state) ? lane.state : "queued");
+
+  /** One lane's cell in the manifest: a state dot and the short label, the whole path on the hover. */
+  function laneCellHtml(lane, esc = defaultEsc) {
+    const full = String((lane && (lane.name || lane.label)) || "unlaned");
+    const state = laneStateOf(lane);
+    return `<span class="wave-lane-cell" data-lane-full="${esc(full)}" title="${esc(`${full} - lane ${state}`)}"><i class="wave-lane-dot is-${esc(state)}" aria-hidden="true"></i><span class="wave-lane-name">${esc(laneLabel(lane))}</span></span>`;
+  }
+
+  /** A member that continues its lane: the name is not repeated, and the row keeps the column's rule. */
+  function laneRepeatHtml(lane, esc = defaultEsc) {
+    return `<span class="wave-lane-cell is-rep" aria-hidden="true"><i class="wave-lane-dot is-rep"></i></span>`;
+  }
+
+  /**
+   * The manifest table (O3): a summary strip keeping each lane's chip and read sentence, then one row per member,
+   * grouped by lane, with the lane as the first column. The member row is the SAME `memberHtml` the other drawings
+   * use - same id, owner, state, title, project and reports, in that order - so the words, the presses and the reports
+   * chip are one implementation across all three drawings, and only the lane's cell is added in front.
+   */
+  function laneTableHtml(lanes, esc = defaultEsc) {
+    const readOf = (lane) => {
+      const read = lane && lane.read && typeof lane.read === "object" ? lane.read : null;
+      const trees = Array.isArray(lane && lane.trees) ? lane.trees.length : 0;
+      return { ok: Boolean(read && read.ok), say: read && read.ok ? `runs in ${trees} tree${trees === 1 ? "" : "s"}` : String((read && read.why) || "") };
+    };
+    const sums = lanes
+      .map((lane) => {
+        const full = String((lane && (lane.name || lane.label)) || "unlaned");
+        const state = laneStateOf(lane);
+        const read = readOf(lane);
+        return `<span class="wave-lane-sum" data-lane-state="${esc(state)}" data-lane-read="${read.ok ? "ok" : "cannot-tell"}"><span class="chip wave-mstate is-${esc(state)}">lane ${esc(full)} - ${esc(state)}</span><span class="as-hint wave-lane-read">${esc(read.say)}</span></span>`;
+      })
+      .join("");
+    const rows = lanes
+      .map((lane) =>
+        (Array.isArray(lane && lane.members) ? lane.members : [])
+          .map((m, i) => memberHtml(m, esc, { draw: "table", laneCell: i === 0 ? laneCellHtml(lane, esc) : laneRepeatHtml(lane, esc) }))
+          .join(""),
+      )
+      .join("");
+    return `<div class="wave-lane-sums" role="group" aria-label="each lane's state and what its read answered">${sums}</div>
+      <div class="wave-manifest">
+        <div class="wave-manifest-head" aria-hidden="true"><span>lane</span><span>id</span><span>owner</span><span>state</span><span>title</span><span>project</span><span>reports</span></div>
+        ${rows}
       </div>`;
   }
 
   /**
    * A wave's lanes, and the sentence when two of them hold one tree. Empty for one lane: a wave with no lane of its
    * own holds the one implicit lane and is drawn as it always was.
+   *
+   * `data-lane-drawing` is which drawing the count got: `cards` for two lanes, `table` for three or more. A test reads
+   * it, and so does a gate that measures the title width at each count, so the drawing is never inferred from a class
+   * name that a restyle could change.
    */
   function lanesHtml(wave, esc = defaultEsc) {
     const lanes = Array.isArray(wave && wave.lanes) ? wave.lanes : [];
@@ -296,7 +388,9 @@
     const refused = wave && wave.laneRefused ? String(wave.laneRefused) : "";
     const bad = refused ? `<div class="as-ask is-bad wave-lanes-bad" role="alert"><b>The lanes cannot be isolated, so this wave cannot close.</b> ${esc(refused)}</div>` : "";
     const isolation = wave && wave.laneIsolation ? ` data-lane-isolation="${esc(wave.laneIsolation)}"` : "";
-    return `${bad}<div class="wave-lanes" data-wave-lanes="${lanes.length}"${isolation}>${lanes.map((lane) => laneRowHtml(lane, esc)).join("")}</div>`;
+    const drawing = laneDrawingOf(lanes.length);
+    const body = drawing === LANE_TABLE ? laneTableHtml(lanes, esc) : lanes.map((lane) => laneRowHtml(lane, esc)).join("");
+    return `${bad}<div class="wave-lanes" data-wave-lanes="${lanes.length}" data-lane-drawing="${drawing}"${isolation}>${body}</div>`;
   }
 
   /**
@@ -412,7 +506,12 @@
     // THE LANES AND THE NOTE THEY CARRY are one block, so the note can stand beside them where the pane is wide
     // enough for both. A wave with lanes but no owed join (a refused set) keeps the lanes alone: the refusal is
     // already a sentence, and the join would contradict it.
-    const closeBlock = lanesRow && joined ? `<div class="wave-close">${lanesRow}${joined}</div>` : `${joined}${lanesRow}`;
+    //
+    // TWO LANES PUT THE NOTE BESIDE THEM (the report's O4: a 196px column); THREE OR MORE PUT IT UNDER THE TABLE (its
+    // O3). The table's title is the reason it exists, and every pixel the note takes beside it comes out of that
+    // title: beside a 1304px column the 711px title it was chosen for drops to about 490px.
+    const tableDrawing = laneCount >= 3;
+    const closeBlock = lanesRow && joined ? (tableDrawing ? `${lanesRow}${joined}` : `<div class="wave-close">${lanesRow}${joined}</div>`) : `${joined}${lanesRow}`;
     const actions = opts.canWrite ? waveActionsHtml(wave, opts.initiativeId, Number(opts.index) || 0, Number(opts.count) || 0, esc) : "";
     const membersRow =
       laneCount >= 2
@@ -718,6 +817,13 @@
     REPORTS_CSS,
     laneRowHtml,
     lanesHtml,
+    // Which drawing a lane count gets, and the whole path a table cell keeps under its short label.
+    LANE_CARDS,
+    LANE_TABLE,
+    laneDrawingOf,
+    laneLabel,
+    laneCellHtml,
+    laneTableHtml,
     waveActionsHtml,
     gateFieldHtml,
     waveFormHtml,

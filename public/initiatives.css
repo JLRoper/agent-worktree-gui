@@ -1074,8 +1074,10 @@
 #as-initiatives .wave-switch input { margin: 0; }
 #as-initiatives .wave-form-error { grid-column: 1 / -1; margin: 0; }
 
-/* ---- 6. THE LANES: parallel blocks, members as a manifest ---------------------------------------- */
+/* ---- 6. THE LANES: three drawings, chosen by the lane count --------------------------------------- */
 #as-initiatives .wave-lanes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--tab-s2); margin-top: var(--tab-s3); }
+/* The table drawing is ONE column at every width: its lanes are rows in a table, not boxes. */
+#as-initiatives .wave-lanes[data-lane-drawing="table"] { grid-template-columns: minmax(0, 1fr); gap: var(--tab-s1); }
 /* Lanes run SIDE BY SIDE wherever the pane can hold two; below 900px of pane they stack, because a squeezed lane is
    two lanes nobody can read. */
 @container (min-width: 900px) {
@@ -1093,6 +1095,104 @@
 #as-initiatives .wave-lane .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
 #as-initiatives .wave-lane-read { margin-left: var(--tab-s2); font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
 #as-initiatives .wave-lanes-bad { margin-bottom: var(--tab-s2); }
+
+/* ---- 6a. THE MANIFEST TABLE (O3): the lane as a column, one row per member ------------------------ */
+/* THE LANE COLUMN is 162px. 120px is the report's number and it breaks a 25-character Java basename mid-token (the
+   six-lane fixture's `eventhubscertificate.java` measures 133px before the dot's gap, the rule and the padding); sizing
+   the column to a whole path would ask for about 330px and take that width out of the title that is the reason this
+   drawing exists. So the cell draws the file's own name (`waves-lane.js` `laneLabel`) with the whole path on its title,
+   and the summary strip keeps the whole path in words. 162px holds the longest basename in this wave with nothing
+   clipped, measured by tools/verify-wave-lane-counts.mjs. */
+#as-initiatives { --tab-lane-col: 162px; }
+#as-initiatives[data-density="compact"] { --tab-lane-col: 142px; }
+#as-initiatives .wave-lane-sums { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tab-s1) var(--tab-s3); min-width: 0; }
+#as-initiatives .wave-lane-sum { display: inline-flex; align-items: center; min-width: 0; }
+#as-initiatives .wave-lane-sum .chip { height: 18px; padding: 0 6px; border-radius: var(--tab-r-pill); font-family: var(--tab-font-ui); font-size: 10px; }
+#as-initiatives .wave-lane-sum .wave-lane-read { font-size: var(--tab-fs-meta); color: var(--tab-ink-3); }
+#as-initiatives .wave-manifest {
+  min-width: 0;
+  border: 1px solid var(--tab-line);
+  border-radius: var(--tab-r2);
+  background: var(--tab-surface);
+  overflow: hidden;
+}
+#as-initiatives .wave-manifest-head,
+#as-initiatives .wave-member[data-member-draw="table"] {
+  display: grid;
+  grid-template-columns: var(--tab-lane-col) 44px auto 80px minmax(0, 1fr) 150px auto;
+  gap: var(--tab-s2);
+  align-items: center;
+  min-width: 0;
+}
+#as-initiatives .wave-manifest-head {
+  padding: 3px var(--tab-s2);
+  border-bottom: 1px solid var(--tab-line);
+  background: var(--tab-sunken);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tab-ink-3);
+}
+/* A TABLE ROW IS THE SAME BAR the other drawings draw, minus the box around each row: the manifest's own border is the
+   box, and one line between rows is what makes two members compare down a column. */
+#as-initiatives .wave-member[data-member-draw="table"] {
+  width: 100%;
+  padding: 4px var(--tab-s2);
+  border: 0;
+  border-bottom: 1px solid var(--tab-line);
+  border-radius: 0;
+  background: var(--tab-surface);
+}
+#as-initiatives .wave-member[data-member-draw="table"]:last-child { border-bottom: 0; }
+#as-initiatives .wave-member[data-member-draw="table"] .chip,
+#as-initiatives .wave-member[data-member-draw="table"] .wave-owner { justify-self: start; }
+#as-initiatives .wave-member[data-member-draw="table"] .wave-reports { margin-left: 0; justify-self: start; }
+#as-initiatives .wave-member[data-member-draw="table"] .wave-reports-list { grid-column: 1 / -1; }
+#as-initiatives .wave-lane-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding-left: 6px;
+  border-left: 2px solid var(--tab-line-strong);
+  font-family: var(--tab-font-mono);
+  font-size: 10px;
+  color: var(--tab-ink-3);
+}
+#as-initiatives .wave-lane-cell.is-rep { border-left-color: var(--tab-line); }
+#as-initiatives .wave-lane-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#as-initiatives .wave-lane-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--tab-idle); }
+#as-initiatives .wave-lane-dot.is-queued { background: var(--tab-idle); }
+#as-initiatives .wave-lane-dot.is-running { background: var(--tab-run); }
+#as-initiatives .wave-lane-dot.is-parked { background: var(--tab-warn); }
+#as-initiatives .wave-lane-dot.is-done { background: var(--tab-accent); }
+#as-initiatives .wave-lane-dot.is-abandoned { background: var(--tab-bad); }
+#as-initiatives .wave-lane-dot.is-rep { background: var(--tab-line-strong); }
+
+/* ---- 6b. THE TWO-LINE CARD (O4): two lanes, the title takes the lane's width ----------------------- */
+/* ONE MEMBER RULE BLOCK, and the title moves to its own line with `order`: the DOM keeps the reader's order (id, owner,
+   state, title, project, reports), so a screen reader still hears the id before the words, and the drawing puts the
+   title first because it is the only thing that needs the width. The meta line keeps the reports chip at its right edge
+   with the auto margin the wrapped bar already used. */
+#as-initiatives .wave-member[data-member-draw="card"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px var(--tab-s2);
+  padding: 5px var(--tab-s2);
+}
+#as-initiatives .wave-member[data-member-draw="card"] .wave-member-title { flex: 1 1 100%; order: -1; }
+#as-initiatives .wave-member[data-member-draw="card"] .wave-reports { margin-left: auto; }
+/* A pane too narrow for seven columns draws the manifest as the card: the lane names its own line, the title takes the
+   next, and the meta line follows. A horizontal scrollbar is never the answer for a table. */
+@container (max-width: 760px) {
+  #as-initiatives .wave-lanes[data-lane-drawing="table"] .wave-manifest-head { display: none; }
+  #as-initiatives .wave-member[data-member-draw="table"] { display: flex; flex-wrap: wrap; gap: 3px var(--tab-s2); padding: 5px var(--tab-s2); }
+  #as-initiatives .wave-member[data-member-draw="table"] .wave-lane-cell { flex: 1 1 100%; order: -2; }
+  #as-initiatives .wave-member[data-member-draw="table"] .wave-member-title { flex: 1 1 100%; order: -1; }
+  #as-initiatives .wave-member[data-member-draw="table"] .wave-reports { margin-left: auto; }
+}
 /* THE BAR IS ONE FULL-WIDTH ROW (row 291): every member of a wave fills its section's content width, at the docked pane
    and at the wide float, so the left inset and the right edge are the same for all of them and a long title wraps
    instead of widening the bar. `flex-direction: column` here is what makes the row fill: a wrapped flex row sizes each

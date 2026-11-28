@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>O3, the lane column: the wave lane at 2, 3, 4 and 6 lanes</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 40px 64px; background: #0d1015; color: #c3c9d3;
+    font: 14px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif;
+    max-width: 1180px;
+  }
+  h1 { margin: 0 0 4px; font-size: 24px; line-height: 1.25; color: #e6e9ef; letter-spacing: -0.01em; }
+  h2 { margin: 40px 0 10px; font-size: 17px; color: #e6e9ef; border-bottom: 1px solid #232830; padding-bottom: 6px; }
+  h3 { margin: 22px 0 8px; font-size: 14px; color: #dfe4ec; }
+  p { margin: 8px 0; }
+  .sub { color: #79818f; font-size: 12.5px; margin-bottom: 26px; }
+  code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; color: #aab6c8; }
+  .muted { color: #79818f; }
+  .good { color: #5fd07a; }
+  .bad { color: #ff8f86; }
+  .warn { color: #e8c268; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #232830; vertical-align: top; }
+  th { color: #79818f; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: nowrap; }
+  tr.hl td { background: #141922; }
+  .card { border: 1px solid #232830; border-left: 2px solid #3a404b; border-radius: 0 6px 6px 0; background: #12161c; padding: 12px 14px; margin: 14px 0; }
+  .card h3 { margin-top: 0; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0 4px; }
+  figure { margin: 0; }
+  figure img { width: 100%; border: 1px solid #232830; border-radius: 6px; display: block; }
+  figcaption { color: #79818f; font-size: 11.5px; margin-top: 5px; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin: 4px 0; }
+  .quote { border-left: 2px solid #3a404b; padding-left: 12px; color: #aab1bd; font-style: italic; margin: 10px 0; }
+  .files td:first-child { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: #aab6c8; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; border: 1px solid #2f3540; color: #79818f; margin-left: 6px; vertical-align: 2px; }
+  .tag.shipped { color: #5fd07a; border-color: #1f4a2a; }
+</style>
+</head>
+<body>
+
+<h1>O3, the lane column: the wave lane at 2, 3, 4 and 6 lanes</h1>
+<div class="sub">
+  The shipped drawing for row 491, measured on the real panel at the real 1304px wave column and at the 900px panel.
+  Source of the numbers it answers: <code>docs/reports/initiatives-wave-lane-options-2026-11-28.html</code> section 5 and
+  <code>docs/reports/wave-lane-options/lane-scaling.json</code>. Written 2026-11-28. This row adds no version of its
+  own: the branch carries the turnover's 1.197.0, which moved with the board sheet split.
+</div>
+
+<h2>1. What was read before the code</h2>
+<p>
+  Section 5 measured one wave at two, four and six lanes and found the ranking flips with the count: two lanes is O4
+  (475px titles, two wraps, 288px box), four is O3 (711px, one wrap, 403px), six is O3 (711px, one wrap, 493px), and O1
+  - today's drawing - stops working at the third lane, where its title track is handed 0px and the words wrap one
+  character per line (75 to 95 lines per member, a 3,226px box at three lanes and 4,972px at four).
+</p>
+<p class="quote">
+  "The lane count is the missing dimension in the first recommendation. It decides: two lanes is O4; three or more is
+  O3, or O2 if the lane has to stay a block; O1 is not a candidate at any count." (section 5)
+</p>
+<p>
+  <code>lane-scaling.json</code> holds the per-run evidence for that sentence: O3 at four lanes is 5 members at 711px
+  each, one line, a 403px box; at six lanes 7 members at 711px, one line, a 493px box. O1 at three lanes is
+  <code>titleW: 0</code> with <code>lines: 75</code> for the first member. Those two runs are the floor and the ceiling
+  this row had to land between.
+</p>
+
+<h2>2. What shipped</h2>
+<p>
+  The count now chooses the drawing, and the module says so in one place: <code>public/core/waves-lane.js:311</code>
+  (<code>laneDrawingOf</code>). Two lanes are the two-line card (O4); three or more are the manifest table (O3). The pane
+  still decides whether two lanes sit side by side - that is a width question and it stays a container query - but the
+  count, not the width, decides which drawing a wave gets. The block carries it as
+  <code>data-lane-drawing="cards|table"</code> on <code>.wave-lanes</code>, so a gate reads the drawing instead of
+  inferring it from a class a restyle could change.
+</p>
+<div class="card">
+  <h3>O4 - two lanes, the two-line card <span class="tag shipped">shipped</span></h3>
+  <p>
+    Each member's title leaves the six-column row and takes the lane's whole content width; the id, owner, state,
+    project and reports chip follow on a meta line under it. The DOM keeps the reader's order (id, owner, state, title,
+    project, reports) and the title is moved to the first line with <code>order: -1</code>, so the drawing changed and
+    the reading order did not (<code>public/initiatives.css:1178</code>).
+  </p>
+</div>
+<div class="card">
+  <h3>O3 - three or more lanes, the manifest table <span class="tag shipped">shipped</span></h3>
+  <p>
+    No lane boxes. A summary strip keeps every lane's chip and its read sentence (the words the lane used to draw inside
+    its box), and under it one table holds every member, grouped by lane and sorted by lane path, with the lane as a
+    column. The member row is the same <code>memberHtml</code> the other drawings use, with one cell added in front, so
+    the id, owner, state, title, project and reports chip are one implementation across all three drawings
+    (<code>public/core/waves-lane.js:349</code>, <code>public/initiatives.css:1119</code>).
+  </p>
+  <p>
+    The closing note moves under the table for this drawing, and beside the lanes for the card drawing. It is not
+    decoration: standing beside a 1304px column, its 196px took the table's title from 711px to about 490px in the first
+    cut - measured, then fixed by moving the note under the table, which is where the O3 sketch draws it.
+  </p>
+</div>
+
+<h2>3. A Java path in the lane column: a short label, and a column sized to the file's name</h2>
+<p>
+  The report's O3 draws a 120px lane column and its four-lane capture shows
+  <code>src/main/java/com/sefl/rating/RatingRetryConsumer.java</code> broken mid-token. The choice made here is a
+  <b>short label</b>: the lane cell draws the file's own name (the last path segment) and keeps the whole path on the
+  cell's <code>title</code> and in the summary strip's chip, which still reads
+  <code>lane src/main/java/.../RatingRetryConsumer.java - queued</code> in full (<code>public/core/waves-lane.js:322</code>).
+</p>
+<p>
+  Why the label rather than the width: the whole path needs about 330px at the column's 10px mono, and every one of those
+  pixels comes out of the title track - the 711px that is the reason O3 exists. A basename is bounded by the file's own
+  name, not by how deep its directory is. The column then moved from 120px to <b>162px</b>
+  (<code>public/initiatives.css:1106</code>): 120px does not hold a 25-character basename either, and 162px is the
+  measured longest label plus the dot, its gap, the rule and the padding. Measured labels at 1304 in the six-lane wave:
+</p>
+<table>
+  <tr><th>lane cell draws</th><th>label width</th><th>column</th><th>clipped</th><th>lines</th><th>whole path kept</th></tr>
+  <tr><td class="mono">late.css</td><td class="n">44px</td><td class="n">162px</td><td class="good">no</td><td class="n">1</td><td class="mono">late.css</td></tr>
+  <tr><td class="mono">dom.js</td><td class="n">33px</td><td class="n">162px</td><td class="good">no</td><td class="n">1</td><td class="mono">public/core/dom.js</td></tr>
+  <tr><td class="mono">waves-lane.js</td><td class="n">71px</td><td class="n">162px</td><td class="good">no</td><td class="n">1</td><td class="mono">public/core/waves-lane.js</td></tr>
+  <tr><td class="mono">index.html</td><td class="n">55px</td><td class="n">162px</td><td class="good">no</td><td class="n">1</td><td class="mono">public/index.html</td></tr>
+  <tr class="hl"><td class="mono">ratingretryconsumer.java</td><td class="n">132px</td><td class="n">162px</td><td class="good">no</td><td class="n">1</td><td class="mono">src/main/java/com/sefl/rating/RatingRetryConsumer.java</td></tr>
+  <tr><td class="mono">unlaned</td><td class="n">39px</td><td class="n">162px</td><td class="good">no</td><td class="n">1</td><td class="mono">unlaned</td></tr>
+</table>
+<p class="muted">
+  The route serves the lane name normalised (<code>ratingretryconsumer.java</code>), which is the word the read owns; the
+  cell draws exactly that, not a case the panel invented. The one caveat of a basename: two lanes in different packages
+  with the same file name read the same in the column - the two summary chips above the table still say which is which,
+  and each cell's hover names the whole path.
+</p>
+
+<h2>4. The rendered proof: 1304px and 900px, 2, 3, 4 and 6 lanes</h2>
+<p>
+  One real panel, one initiative card, four waves on it (2, 3, 4 and 6 lanes), the report's own member titles, in the
+  reader's floating frame: a 1400px window whose wave column measures <b>1304px</b>, and a 900px panel whose wave column
+  measures <b>804px</b>. Every number below is read off the rendered page by
+  <code>tools/verify-wave-lane-counts.mjs</code>; the raw ledger is <code>docs/reports/wave-lane-counts/lane-counts.json</code>.
+</p>
+<table>
+  <tr><th>lanes</th><th>drawing</th><th>title width</th><th>wraps per member</th><th>wave box</th><th>report's number</th><th>overflow</th></tr>
+  <tr class="hl"><td class="n">2</td><td>cards (O4)</td><td class="n">476px</td><td class="n">2 / 2 / 2</td><td class="n">307px</td><td class="n">475px, 2, 288px</td><td class="good">0</td></tr>
+  <tr><td class="n">3</td><td>table (O3)</td><td class="n">683px</td><td class="n">1 / 1 / 1 / 1</td><td class="n">317px</td><td class="muted">not measured at 3</td><td class="good">0</td></tr>
+  <tr><td class="n">4</td><td>table (O3)</td><td class="n">683px</td><td class="n">1 / 1 / 1 / 1 / 1</td><td class="n">344px</td><td class="n">711px, 1, 403px</td><td class="good">0</td></tr>
+  <tr><td class="n">6</td><td>table (O3)</td><td class="n">683px</td><td class="n">1 / 1 / 1 / 1 / 1 / 1 / 1</td><td class="n">420px</td><td class="n">711px, 1, 493px</td><td class="good">0</td></tr>
+</table>
+<p class="muted">At the real column, 1304px. O1 at three lanes would be 0px and 75 to 95 lines here.</p>
+<table>
+  <tr><th>lanes</th><th>drawing</th><th>title width</th><th>wraps per member</th><th>wave box</th><th>report's number</th><th>overflow</th></tr>
+  <tr class="hl"><td class="n">2</td><td>cards (O4)</td><td class="n">709px</td><td class="n">1 / 1 / 1</td><td class="n">436px</td><td class="n">707px, 1, 413px</td><td class="good">0</td></tr>
+  <tr><td class="n">3</td><td>table (O3)</td><td class="n">183px</td><td class="n">3 / 3 / 4 / 3</td><td class="n">469px</td><td class="muted">not measured at 3</td><td class="good">0</td></tr>
+  <tr><td class="n">4</td><td>table (O3)</td><td class="n">183px</td><td class="n">3 / 3 / 4 / 4 / 3</td><td class="n">569px</td><td class="n">211px, 3 / 4 / 3 (2 lanes)</td><td class="good">0</td></tr>
+  <tr><td class="n">6</td><td>table (O3)</td><td class="n">183px</td><td class="n">4 / 3 / 3 / 3 / 4 / 4 / 3</td><td class="n">730px</td><td class="muted">not measured at 6</td><td class="good">0</td></tr>
+</table>
+<p class="muted">At the 900px panel, wave column 804px. No lane width, at either width, has a title below 183px.</p>
+
+<h3>2 lanes, the card drawing</h3>
+<div class="shots">
+  <figure><img src="wave-lane-counts/2lanes-wide.png" alt="Two lanes at the 1304px wave column"><figcaption>2 lanes at 1304px: 476px titles, 2 wraps, a 307px box.</figcaption></figure>
+  <figure><img src="wave-lane-counts/2lanes-narrow.png" alt="Two lanes at the 900px panel"><figcaption>2 lanes at 900px: 709px titles, 1 wrap, a 436px box.</figcaption></figure>
+</div>
+<h3>3 lanes, the manifest table</h3>
+<div class="shots">
+  <figure><img src="wave-lane-counts/3lanes-wide.png" alt="Three lanes at the 1304px wave column"><figcaption>3 lanes at 1304px: 683px titles, 1 line each, a 317px box.</figcaption></figure>
+  <figure><img src="wave-lane-counts/3lanes-narrow.png" alt="Three lanes at the 900px panel"><figcaption>3 lanes at 900px: 183px titles, 3 / 3 / 4 / 3, a 469px box.</figcaption></figure>
+</div>
+<h3>4 lanes, the manifest table</h3>
+<div class="shots">
+  <figure><img src="wave-lane-counts/4lanes-wide.png" alt="Four lanes at the 1304px wave column"><figcaption>4 lanes at 1304px: 683px titles, 1 line each, a 344px box.</figcaption></figure>
+  <figure><img src="wave-lane-counts/4lanes-narrow.png" alt="Four lanes at the 900px panel"><figcaption>4 lanes at 900px: 183px titles, 3 / 3 / 4 / 4 / 3, a 569px box.</figcaption></figure>
+</div>
+<h3>6 lanes, the manifest table</h3>
+<div class="shots">
+  <figure><img src="wave-lane-counts/6lanes-wide.png" alt="Six lanes at the 1304px wave column"><figcaption>6 lanes at 1304px: 683px titles, 1 line each, a 420px box; the summary strip takes two lines.</figcaption></figure>
+  <figure><img src="wave-lane-counts/6lanes-narrow.png" alt="Six lanes at the 900px panel"><figcaption>6 lanes at 900px: 183px titles, 4 / 3 / 3 / 3 / 4 / 4 / 3, a 730px box; the strip takes four lines.</figcaption></figure>
+</div>
+
+<h2>5. Why the numbers differ from the report's, and where they do not</h2>
+<h3>The table's title is 683px, not 711px</h3>
+<p>
+  711px was measured with a 120px lane column. The shipped column is 162px, 42px wider, because the label is the file's
+  name and 120px held neither the name nor the path. The owner column is content-sized here rather than the report's
+  fixed 34px, which gives 14px back: 711 - 42 + 14 = 683. The drawing is otherwise the report's: one row per member, one
+  title line, the same 1 to 7 members.
+</p>
+<h3>The table's box is shorter, not taller: 344px at four lanes against 403px</h3>
+<p>
+  The report's 403px box is tall because its 120px lane column broke <code>public/core/dom.js</code> and the Java path
+  onto two and three lines, and every one of those lines made its member row taller. The short label keeps every row one
+  line: each member row is 27px and the five-member table is 157px tall. The box still grows by one row per member,
+  exactly as section 5 says it should, not by lane headers. At six lanes: 420px here against 493px there.
+</p>
+<h3>The two-lane card's own numbers did not move</h3>
+<table>
+  <tr><th>number</th><th>the report's O4</th><th>shipped, at 1304px</th><th>shipped, at 900px</th></tr>
+  <tr><td>title width</td><td class="n">475px</td><td class="n good">476px</td><td class="n good">709px (report 707px)</td></tr>
+  <tr><td>wraps</td><td class="n">2 / 2 / 2</td><td class="n good">2 / 2 / 2</td><td class="n good">1 / 1 / 1</td></tr>
+  <tr><td>lane box height</td><td class="n">184px</td><td class="n good">183px</td><td class="n good">149px (report 148px)</td></tr>
+  <tr><td>member row height</td><td class="n">69px</td><td class="n good">68px</td><td class="n good">50px (report 51px)</td></tr>
+  <tr><td>whole wave box</td><td class="n">288px</td><td class="n warn">307px</td><td class="n warn">436px (report 413px)</td></tr>
+</table>
+<p>
+  The drawing is the report's O4 to the pixel - the lane box and the member row are within 1px at both widths. The whole
+  wave box reads 19px taller at 1304 and 23px taller at 900, and the ledger's part offsets name every pixel of it: 7px
+  above the lanes (the station's head and gate strip are 2px taller each, its row padding and close margin 2px larger,
+  less 1px on the lane box), and 12px below them (the action row and the row's own padding). The report's stages draw a
+  simplified station; the panel draws the real one, and that chrome is the same under every drawing.
+</p>
+
+<h2>6. The gate that keeps it</h2>
+<p>
+  <code>tools/verify-wave-lane-counts.mjs</code> (<code>npm run verify:wave-lane-counts</code>) boots the fixture panel,
+  draws the four waves above and measures each one at both widths. It fails on 8 things per count and width, of which
+  three are the ones this row is about:
+</p>
+<ul>
+  <li><b>No title wraps per character.</b> A member whose title is narrower than 60px, or longer than 12 rendered lines,
+      is named in its own failure with its width and line count - the O1-at-three-lanes state, not an approximation of
+      it. Healthy here is 183px to 709px and 1 to 4 lines.</li>
+  <li><b>Every title keeps its floor.</b> At least 400px and at most 3 lines at 1304px; at least 180px and at most 5
+      lines at the 900px panel. The gap between the floor and the failure is wide on purpose: a gate whose bound sits
+      next to a healthy number is a gate that fails on a font change.</li>
+  <li><b>The count gets its drawing.</b> 2 lanes must be the card and carry <code>cards</code>; 3, 4 and 6 must be the
+      table and carry <code>table</code>, and 3+ lanes must keep one title width at every count.</li>
+</ul>
+<p>
+  The gate also proves it can fail: after the four counts it injects the O1 collapse into the three-lane manifest (seven
+  fixed columns that leave the title track a few dozen pixels) and requires the same predicate to fire. It does:
+  <b>title 0px, 95 lines, 4 of 4 titles flagged</b>. The run is 105 checks, all passing.
+</p>
+<div class="card">
+  <h3>The O4 numbers are gated too</h3>
+  <p>
+    The two-lane wave's title width (475 +/- 14px), its two wraps, its lane box (184 +/- 4px) and member row (69 +/- 4px)
+    are assertions, and so are the 900px versions. The whole wave box is compared within 26px and printed with its parts,
+    so a drawing that moved cannot hide inside the station chrome.
+  </p>
+</div>
+
+<h2>7. What did not change</h2>
+<ul>
+  <li>The words: every member's state, both gate chips, the lane chip's "lane name - state", the read sentence, the
+      closing note's "closing this wave is ONE commit that names them all" and the refusal alert are the read's own
+      strings, and the tests pin them (<code>test/waves-lane.test.js</code>).</li>
+  <li>The order: id, owner, state, title, project, reports, in the DOM of every drawing. The card draws the title first
+      with CSS <code>order</code>; a screen reader still hears the id first.</li>
+  <li>The presses: the bar opens its task, the owner chip asks its assistant, the reports chip unfolds its list - they are
+      one implementation in <code>memberHtml</code> and the tests and the existing lane gate still drive them.</li>
+  <li>A wave with one lane (or none) draws exactly the flat member list it drew before, at every width.</li>
+  <li>A lane set that shares a tree still draws its refusal and no join sentence. The table is drawn for 2+ lanes only,
+      so a single implicit lane never gains a lane column.</li>
+  <li>No version bump from this row: the branch carries the turnover's 1.197.0 (the board sheet split's version), and
+      this change adds no version of its own. No push, no pull request: the work merges into this project's turnover
+      branch.</li>
+</ul>
+
+<h2>8. Files, and how to rerun</h2>
+<table class="files">
+  <tr><th>file</th><th>what changed</th></tr>
+  <tr><td>public/core/waves-lane.js</td><td><code>laneDrawingOf</code>, <code>laneLabel</code>, the lane cell, the manifest table, and the note moving under the table. <code>memberHtml</code> gains <code>opts.draw</code> and an optional leading lane cell.</td></tr>
+  <tr><td>public/initiatives.css</td><td>the lane column (<code>--tab-lane-col: 162px</code>), the summary strip, the manifest grid and its head, the two-line card rule, and the card fallback below a 760px container.</td></tr>
+  <tr><td>test/waves-lane.test.js</td><td>four tests for the count rule, the card's DOM order, the table's columns and short labels, and the boundary at three lanes.</td></tr>
+  <tr><td>tools/verify-wave-lane-counts.mjs</td><td>the gate: four counts, two widths, the per-character predicate and its own failure check.</td></tr>
+  <tr><td>package.json</td><td><code>verify:wave-lane-counts</code>, and nothing else: the version is the turnover's.</td></tr>
+  <tr><td>docs/reports/wave-lane-counts/</td><td>the eight captures and <code>lane-counts.json</code>, written by the gate.</td></tr>
+</table>
+<p class="mono muted">
+  npm run verify:wave-lane-counts &nbsp;|&nbsp; npm run test:module public/core/waves-lane.js &nbsp;|&nbsp; npm run verify:waves-lane
+</p>
+
+<h2>9. What the next reader can still decide</h2>
+<ul>
+  <li>The lane column could grow past 162px where a project's file names are longer; the cell already truncates with the
+      whole path on its title, so the cost is a clipped label, not a broken row.</li>
+  <li>The 900px panel is the tight case: 183px titles at 3 and 4 lines. If that is too tight, the three content columns
+      (owner, project, reports) can be dropped below 900px and the title gains about 240px; that is a second row's worth
+      of design, not a number this one has to guess.</li>
+  <li>The card drawing is capped at exactly two lanes. A wave that grows a third lane changes drawing on the next read;
+      that switch is atomic with the read because the count comes from the same fold.</li>
+</ul>
+
+</body>
+</html>
