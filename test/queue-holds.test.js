@@ -352,6 +352,38 @@ test("a queued row behind a LIVE lane head says so — the order, not a second w
   assert.match(behind, /· SKIP: files in use by #1/, "the conflict sentence is still there, with the order beside it");
 });
 
+test("the lane covers EVERY claimed file: a live peer heads it, and a wait names the file it found", () => {
+  // #1 queued on public/app.js; #2 RUNNING on public/app.js + public/console.css; #3 queued on public/console.css.
+  // #1 and #3 share NOTHING, so a lane built from one file per row puts #3 outside it - and the row outside the lane
+  // is the row nobody is told to wait for. The live row has the higher id, so the id order alone would call #1 the head
+  // and tell the running row to wait for a start that has not happened.
+  let q = addTask([], { title: "waits on the live one", files: ["public/app.js"] }).tasks;
+  q = addTask(q, { title: "already going", thread: "wtgui-lane-behind-222222", files: ["public/app.js", "public/console.css"] }, { nextId: 2 }).tasks;
+  q = setTaskState(q, 2, "running").tasks;
+  q = addTask(q, { title: "shares the second file", files: ["public/console.css"] }, { nextId: 3 }).tasks;
+
+  const live = [job("wtgui-lane-behind-222222", "running")];
+  const [first, second, third] = decorateTasks(q, { jobs: live, isLive: liveIn(live) });
+  assert.equal(second.laneHead, true, "a live row heads its lane whatever its id: it is already going");
+  assert.equal(first.laneHead, false, "a queued row with the lower id does not go first past a live run");
+  assert.equal(first.lane, "public/app.js");
+  assert.equal(third.lane, "public/app.js", "a row that reaches a member through a shared file is in the lane, though it shares nothing with the head");
+  assert.deepEqual({ id: first.waitingOn?.id, file: first.waitingOn?.file }, { id: 2, file: "public/app.js" });
+  assert.deepEqual(
+    { id: third.waitingOn?.id, file: third.waitingOn?.file },
+    { id: 2, file: "public/console.css" },
+    "the wait names the file that holds it, which is not the lane's own name",
+  );
+
+  const lines = queueDigest(q, { jobs: live, isLive: liveIn(live) });
+  const head = lines.find((l) => /^- ● #2 /.test(l));
+  const one = lines.find((l) => /^- ○ #1 /.test(l));
+  const three = lines.find((l) => /^- ○ #3 /.test(l));
+  assert.match(head, /· lane public\/app\.js \(head\)$/);
+  assert.match(one, /· waiting on #2 \(lane public\/app\.js\)$/, one);
+  assert.match(three, /· waiting on #2 \(lane public\/app\.js on public\/console\.css\)$/, three);
+});
+
 test("a lane orders rows and starts nothing: no state, no id, no thread is touched", () => {
   let q = addTask([], { title: "one", files: ["lib/a.js"] }).tasks;
   q = addTask(q, { title: "two", files: ["lib/a.js"] }, { nextId: 2 }).tasks;

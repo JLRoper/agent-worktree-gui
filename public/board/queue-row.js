@@ -287,15 +287,15 @@ window.WMApp.queueRow = function queueRow(deps) {
             : compact
               ? "queued - not started; its queue is where it is started, parked or put in order"
               : "queued — not started; drag the card to change its place, and a card held by another row cannot go above it";
-  // What a row is waiting on, in the row's head: the lane head that goes first. `waitingOn` and `lane` are DERIVED
-  // by the store (lib/assistant/queue.js's laneInfo) — this draws the fact the digest already carries, in three
-  // words, with the file it shares in title= so the row stays one line.
+  // What a row is waiting on, in the row's head: the LIVE peer it shares a file with. `waitingOn` and `lane` are
+  // DERIVED by the store (lib/assistant/queue.js's laneInfo) - this draws the fact the digest already carries, in three
+  // words, with the file the pair collide on in title= so the row stays one line.
   function queueLaneChip(t) {
     const w = t?.waitingOn;
     const at = Number(w?.id);
     if (!Number.isFinite(at) || at <= 0) return "";
-    const lane = String(w?.lane || "").trim();
-    const title = `waiting on #${at}${lane ? ` — #${at} heads this lane (${lane})` : ""}: both rows touch the same file, and it goes first`;
+    const file = String(w?.file || w?.lane || "").trim();
+    const title = `waiting on #${at}${file ? ` - #${at} is live on ${file}` : ""}: this row claims the same file, so it waits until #${at} ends and lands`;
     return `<span class="as-task-wait" data-as-qwait="${esc(String(at))}" title="${esc(title)}">waiting on #${esc(String(at))}</span>`;
   }
 
