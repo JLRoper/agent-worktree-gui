@@ -47,7 +47,7 @@
   <dt>new files</dt><dd>8, at 9,640 lines together</dd>
   <dt>functions moved</dt><dd>374 (app.js keeps 356)</dd>
   <dt>branch</dt><dd>wtgui/row-525-is-the-complete-brief-split-62ca65</dd>
-  <dt>merge into the turnover</dt><dd>bc0e5253 (recovers the eight), 7186d2ee (the six test repairs), 4d256d3a (the turnover's four later landings merged in), plus the commit that adds this page</dd>
+  <dt>landed on the turnover</dt><dd><code>20261127_2134_TASK-405_row-405-is-the-complete</code> fast-forwarded to 2ad2edf6: bc0e5253 recovers the eight cuts, 7186d2ee repairs six tests, and 4d256d3a and 2ad2edf6 carry the turnover's own later landings. The commit that adds this page follows them.</dd>
 </dl>
 
 <h2>1. The line count, before and after</h2>
@@ -90,7 +90,7 @@
   <tr><td class="tool">public/app.js, block 2</td><td class="n">786</td><td>the General tab's stale-read line, <code>maintenanceLoadedAt</code> / <code>loadMaintenance()</code></td><td>take the cut, and port the three lines into <code>public/settings-window.js:185-187</code>'s <code>selectSettingsTab</code>, beside the tab's other four stale-read rules</td></tr>
 </table>
 <p>Taking the cut was checked rather than assumed: all 164 top-level functions in the two HEAD-side blocks are defined in the eight modules (a script compared every name against every loaded script and found none missing). The 238-line settings &gt; storage &amp; cleanup section the turnover added lives lower in app.js, outside both blocks, and came through the merge intact (<code>public/app.js:9909</code> is its <code>maintenanceLoadedAt</code>).</p>
-<p>The turnover then moved again while this row ran: it went from <code>9e236116</code> to <code>2bbb3755</code> with two more landings (row-497's Merge-state parent line and row-446's <code>late.css</code> dissolution). Those four commits touch no line of <code>public/app.js</code> (<code>git diff --stat 9e236116 2bbb3755 -- public/app.js</code> is empty), so merging them in was clean and produced <code>4d256d3a</code>; the result is a fast-forward for the turnover.</p>
+<p>The turnover then moved again while this row ran: it went from <code>9e236116</code> to <code>2bbb3755</code> with two more landings (row-497's Merge-state parent line and row-446's <code>late.css</code> dissolution), and then to <code>07190702</code> with row-578's wave-status authority. None of those six commits touches a line of <code>public/app.js</code> (<code>git diff --stat 9e236116 07190702 -- public/app.js</code> is empty), so merging them in was clean and produced <code>4d256d3a</code> and <code>2ad2edf6</code>; the turnover then fast-forwarded to <code>2ad2edf6</code>.</p>
 
 <h2>5. The card for public/app.js: the eight cuts</h2>
 <ol>
