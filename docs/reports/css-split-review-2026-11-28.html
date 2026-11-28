@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The 1.191.0 CSS split, reviewed</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --line: #262c37; --text: #e6e9ef; --dim: #9aa4b2;
+    --dimmer: #6b7482; --green: #2ea043; --amber: #d29922; --red: #e5534b; --blue: #4a90d9;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 32px 70px; background: var(--bg); color: var(--text);
+         font: 14px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 23px; margin: 0 0 4px; }
+  h2 { font-size: 16.5px; margin: 36px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 13.5px; margin: 22px 0 6px; color: #c7d0db; }
+  p { margin: 8px 0; color: #d5dbe4; max-width: 96ch; }
+  .sub { color: var(--dim); font-size: 13px; margin: 0 0 18px; max-width: 110ch; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 14px 16px; margin: 14px 0; }
+  .verdict { border-left: 3px solid var(--amber); }
+  .good { color: var(--green); font-weight: 700; }
+  .bad { color: #ff9c94; font-weight: 700; }
+  .note { color: var(--amber); }
+  code { font-family: var(--mono); font-size: 12px; background: #1b2029; border: 1px solid var(--line);
+          border-radius: 4px; padding: 0 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #1d222b; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.tot td { border-top: 1px solid var(--line); color: #fff; font-weight: 600; }
+  .kv { display: grid; grid-template-columns: 250px 1fr; gap: 4px 16px; font-size: 12.8px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0 6px; }
+  figure { margin: 0; background: #12161d; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  figure img { width: 100%; display: block; border-radius: 4px; }
+  figcaption { color: var(--dim); font-size: 11.5px; margin-top: 6px; }
+  ul, ol { margin: 6px 0 8px 20px; padding: 0; }
+  li { margin: 4px 0; color: #d5dbe4; }
+  .tangle { background: #171d27; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+  .tangle h3 { margin: 0 0 4px; color: #fff; }
+  .small { font-size: 12px; color: var(--dim); }
+  a { color: #7cb6f2; }
+</style>
+</head>
+<body>
+
+<h1>The 1.191.0 CSS split, reviewed</h1>
+<p class="sub">PR #940 cut <code>public/style.css</code> into 19 per-surface sheets at main <code>db287788</code>.
+That split proved the cut was faithful. This review asks whether the result is a good split: what each sheet owns,
+what is repeated across them, what the two catch-all sheets still hold, where load order decides a property, which
+rules match nothing in a running page, and how many sheets a lane must open to change one surface. Every number below
+is computed by <code>tools/css-split-review.mjs</code>; the split's own six-pane layout numbers are cited from
+<code>docs/reports/css-split.html</code>, not re-run.</p>
+
+<div class="card verdict">
+  <div class="kv">
+    <div>Verdict</div><div><span class="good">A faithful cut, and a split that is only half done.</span>
+      The rule stream moved with no duplicate rule and no reordering, but several surfaces still have no single home.</div>
+    <div>Rules in the 19 sheets</div><div><span class="num">3,061</span> rules,
+      <span class="num">3,283</span> selector entries,
+      <span class="num">10,711</span> declarations, <span class="num">551,343</span> bytes</div>
+    <div>Duplication</div><div><span class="num">24</span> selectors of
+      <span class="num">3,474</span> live in two sheets;
+      <span class="num">0</span> whole rules are written twice;
+      <span class="num">41</span> declaration blocks of 3+ declarations repeat across sheets</div>
+    <div>Cascade</div><div><span class="num">4</span> (selector, property) pairs are set by two sheets;
+      late.css wins by load order where it collides</div>
+    <div>Catch-alls</div><div>base.css is <span class="good">clean</span> (13 rules, all tokens and resets);
+      late.css holds <span class="num">68</span> rules for four surfaces, of which
+      <span class="num">62</span> are the only definition of their selector</div>
+    <div>Dead</div><div><span class="num">2,244</span> of <span class="num">3,346</span>
+      rules match no element at rest; <span class="num">3</span> are provably stale;
+      <span class="num">25</span> sit in a media block that does not apply here</div>
+    <div>Cost</div><div>A console change touches <span class="num">8</span> sheets;
+      settings <span class="num">8</span>; initiatives <span class="num">6</span>.
+      The board table touches <span class="num">12</span>, and only
+      <span class="num">46</span> of its
+      <span class="num">316</span> rules come from board.css</div>
+  </div>
+</div>
+
+<h2>1. Inventory: what each sheet owns</h2>
+<p>Nineteen sheets, in the order <code>public/index.html:11-29</code> loads them. Lines are the file's lines today,
+including the boundary comment the split added to each sheet; bytes are the working copy. Rule blocks, selector
+entries and declarations are parsed from the sheet text by <code>tools/css-split-review.mjs:238</code>, with comments
+dropped. Shares are of the 19-sheet total, not of the old single file.</p>
+<table>
+<tr><th>Sheet</th><th>Surface the split names</th><th class="num">Lines</th><th class="num">Bytes</th>
+<th class="num">Rules</th><th class="num">Selectors</th><th class="num">Declarations</th>
+<th class="num">Rules %</th><th class="num">Bytes %</th></tr>
+<tr><td><code>base.css</code></td><td>tokens and resets</td><td class="num">97</td><td class="num">4,832</td><td class="num">13</td><td class="num">16</td><td class="num">52</td><td class="num">0.4%</td><td class="num">0.9%</td></tr>
+<tr><td><code>chrome.css</code></td><td>header and status strip</td><td class="num">249</td><td class="num">14,703</td><td class="num">63</td><td class="num">72</td><td class="num">251</td><td class="num">2.1%</td><td class="num">2.7%</td></tr>
+<tr><td><code>settings.css</code></td><td>Settings drawer and its tabs</td><td class="num">428</td><td class="num">43,669</td><td class="num">281</td><td class="num">293</td><td class="num">1,003</td><td class="num">9.2%</td><td class="num">7.9%</td></tr>
+<tr><td><code>board.css</code></td><td>project boxes, folders, agent rows, new-agent form</td><td class="num">486</td><td class="num">30,403</td><td class="num">198</td><td class="num">206</td><td class="num">639</td><td class="num">6.5%</td><td class="num">5.5%</td></tr>
+<tr><td><code>jobs.css</code></td><td>job cards</td><td class="num">195</td><td class="num">15,887</td><td class="num">83</td><td class="num">93</td><td class="num">282</td><td class="num">2.7%</td><td class="num">2.9%</td></tr>
+<tr><td><code>console.css</code></td><td>the console: agent pane and thought rows</td><td class="num">873</td><td class="num">59,021</td><td class="num">265</td><td class="num">285</td><td class="num">806</td><td class="num">8.7%</td><td class="num">10.7%</td></tr>
+<tr><td><code>turns.css</code></td><td>conversation turns</td><td class="num">132</td><td class="num">9,527</td><td class="num">64</td><td class="num">65</td><td class="num">209</td><td class="num">2.1%</td><td class="num">1.7%</td></tr>
+<tr><td><code>rows.css</code></td><td>the jobs table&#x27;s row controls, marks and artifacts</td><td class="num">586</td><td class="num">31,091</td><td class="num">181</td><td class="num">197</td><td class="num">653</td><td class="num">5.9%</td><td class="num">5.6%</td></tr>
+<tr><td><code>overlays.css</code></td><td>deliverables, reply box, question cards, ghost turns</td><td class="num">666</td><td class="num">50,424</td><td class="num">288</td><td class="num">301</td><td class="num">1,104</td><td class="num">9.4%</td><td class="num">9.1%</td></tr>
+<tr><td><code>rowstrips.css</code></td><td>git, description, release and TODO strips</td><td class="num">280</td><td class="num">21,032</td><td class="num">133</td><td class="num">151</td><td class="num">390</td><td class="num">4.3%</td><td class="num">3.8%</td></tr>
+<tr><td><code>boardchips.css</code></td><td>host, rules, turnover, board and cleanup chips</td><td class="num">308</td><td class="num">17,736</td><td class="num">109</td><td class="num">113</td><td class="num">356</td><td class="num">3.6%</td><td class="num">3.2%</td></tr>
+<tr><td><code>assistant.css</code></td><td>the assistant entry, spawn strip and float shell</td><td class="num">281</td><td class="num">20,117</td><td class="num">98</td><td class="num">102</td><td class="num">371</td><td class="num">3.2%</td><td class="num">3.6%</td></tr>
+<tr><td><code>feedback.css</code></td><td>Clarify, Collisions and Permissions controls</td><td class="num">670</td><td class="num">30,977</td><td class="num">226</td><td class="num">235</td><td class="num">774</td><td class="num">7.4%</td><td class="num">5.6%</td></tr>
+<tr><td><code>assistant-panes.css</code></td><td>the float&#x27;s tabs, panes, search and settings</td><td class="num">240</td><td class="num">17,910</td><td class="num">126</td><td class="num">133</td><td class="num">415</td><td class="num">4.1%</td><td class="num">3.2%</td></tr>
+<tr><td><code>initiatives.css</code></td><td>the initiatives tab</td><td class="num">1,461</td><td class="num">87,535</td><td class="num">406</td><td class="num">441</td><td class="num">1,556</td><td class="num">13.3%</td><td class="num">15.9%</td></tr>
+<tr><td><code>panes.css</code></td><td>the assistant&#x27;s Worktrees and Bridge sub-tabs</td><td class="num">184</td><td class="num">16,615</td><td class="num">120</td><td class="num">126</td><td class="num">368</td><td class="num">3.9%</td><td class="num">3.0%</td></tr>
+<tr><td><code>queue.css</code></td><td>the queue cards and the assistant queue pane</td><td class="num">132</td><td class="num">12,924</td><td class="num">76</td><td class="num">83</td><td class="num">255</td><td class="num">2.5%</td><td class="num">2.3%</td></tr>
+<tr><td><code>pipeline.css</code></td><td>pipeline window, messages, flow and modal</td><td class="num">542</td><td class="num">52,512</td><td class="num">263</td><td class="num">287</td><td class="num">964</td><td class="num">8.6%</td><td class="num">9.5%</td></tr>
+<tr><td><code>late.css</code></td><td>late overrides, loaded last</td><td class="num">291</td><td class="num">14,428</td><td class="num">68</td><td class="num">84</td><td class="num">263</td><td class="num">2.2%</td><td class="num">2.6%</td></tr>
+<tr class="tot"><td>19 sheets</td><td></td><td class="num"></td><td class="num">551,343</td><td class="num">3,061</td><td class="num">3,283</td><td class="num">10,711</td><td class="num">100%</td><td class="num">100%</td></tr>
+</table>
+<p class="small">The 19 sheets carry 551,343 bytes. The pre-split working copy was 537,460 bytes
+(the split's own report, section 1), so the new text is 13,883 bytes: exactly the
+13,883 bytes of boundary comments the split named, and nothing else. The largest sheet is
+<code>initiatives.css</code> at 406 rules and
+15.9% of the bytes; the smallest is
+<code>base.css</code> at 13 rules.
+<code>base.css</code> has the highest declaration density at
+4.0 declarations per rule, which is
+what a 13-rule token block looks like; the largest component sheet, <code>settings.css</code>, carries
+3.6.</p>
+
+<h2>2. Duplication: what is written in more than one sheet</h2>
+<p>Measured two ways, both from the parsed rules (<code>tools/css-split-review.mjs:271</code>): a selector entry that
+occurs in more than one sheet, and a declaration block whose normalized text is identical in more than one sheet.
+The second is reported overall and again for blocks of three or more declarations, because a repeated
+<code>display: none</code> is a shared idiom, not a copied component.</p>
+<div class="kv">
+  <div>Selectors in two or more sheets</div><div><span class="num">24</span> of
+    <span class="num">3,474</span> (0.7%),
+    <span class="num">50</span> occurrences in all</div>
+  <div>Identical declaration blocks</div><div><span class="num">178</span> of
+    <span class="num">2,445</span> repeat across sheets:
+    <span class="num">41</span> with 3+ declarations,
+    <span class="num">97</span> with exactly one</div>
+  <div>Whole rules written twice</div><div><span class="num">0</span>
+    (same at-rule context, selector and declarations in two sheets)</div>
+</div>
+
+<h3>The 24 selectors that cross a sheet boundary</h3>
+<table>
+<tr><th>Selector</th><th>Sheets</th><th class="num">Occurrences</th></tr>
+<tr><td><code>.topbar</code></td><td><code>chrome.css</code>, <code>late.css</code></td><td class="num">3</td></tr>
+<tr><td><code>body</code></td><td><code>base.css</code>, <code>late.css</code></td><td class="num">3</td></tr>
+<tr><td><code>:root</code></td><td><code>base.css</code>, <code>overlays.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.agents-block .job:last-child</code></td><td><code>board.css</code>, <code>jobs.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.ap-dock-head</code></td><td><code>chrome.css</code>, <code>board.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.as-subpane[data-subpane=&quot;chat&quot;]&gt;.job</code></td><td><code>assistant-panes.css</code>, <code>pipeline.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.as-subpane[data-subpane=&quot;chat&quot;]&gt;.job&gt;.job-head</code></td><td><code>assistant-panes.css</code>, <code>pipeline.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.as-subtabs button</code></td><td><code>chrome.css</code>, <code>assistant-panes.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.as-tabs button</code></td><td><code>chrome.css</code>, <code>assistant-panes.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.chip</code></td><td><code>chrome.css</code>, <code>board.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.chips</code></td><td><code>chrome.css</code>, <code>board.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.jl-think .think-dot</code></td><td><code>console.css</code>, <code>pipeline.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.job-cmd</code></td><td><code>console.css</code>, <code>rowstrips.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.job-foot</code></td><td><code>console.css</code>, <code>rowstrips.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.job-head</code></td><td><code>jobs.css</code>, <code>overlays.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.job-out</code></td><td><code>console.css</code>, <code>rowstrips.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.legend</code></td><td><code>late.css</code>, <code>chart.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.settings-tabs</code></td><td><code>chrome.css</code>, <code>settings.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.shell</code></td><td><code>assistant.css</code>, <code>late.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.shell&gt;main</code></td><td><code>assistant.css</code>, <code>late.css</code></td><td class="num">2</td></tr>
+<tr><td><code>.spawn-strip-head</code></td><td><code>chrome.css</code>, <code>assistant.css</code></td><td class="num">2</td></tr>
+<tr><td><code>button</code></td><td><code>base.css</code>, <code>chrome.css</code></td><td class="num">2</td></tr>
+<tr><td><code>html</code></td><td><code>base.css</code>, <code>late.css</code></td><td class="num">2</td></tr>
+<tr><td><code>thead th</code></td><td><code>chrome.css</code>, <code>chart.css</code></td><td class="num">2</td></tr>
+</table>
+<p>These are not new duplication created by the cut: each of the two blocks that name the same selector was already
+in the one file, and the cut happened to put them in different sheets. The list is nevertheless the raw material for
+the cascade section: <code>.topbar</code> and <code>.shell</code> are the only two where both sheets set the same
+property.</p>
+
+<h3>The worst pairs, by substantial block</h3>
+<table>
+<tr><th>Sheet pair</th><th class="num">Identical blocks of 3+ declarations</th></tr>
+<tr><td><code>board.css</code> + <code>chart.css</code></td><td class="num">6</td></tr>
+<tr><td><code>board.css</code> + <code>rowstrips.css</code></td><td class="num">5</td></tr>
+<tr><td><code>console.css</code> + <code>jobs.css</code></td><td class="num">5</td></tr>
+<tr><td><code>board.css</code> + <code>overlays.css</code></td><td class="num">4</td></tr>
+<tr><td><code>board.css</code> + <code>console.css</code></td><td class="num">4</td></tr>
+<tr><td><code>board.css</code> + <code>jobs.css</code></td><td class="num">4</td></tr>
+</table>
+<p class="small">Worst pairs by all repeated blocks (including one-liners) are in
+<code>docs/reports/css-split-review/numbers.json</code>; they are dominated by <code>color: var(--dim)</code>,
+<code>display: none</code> and <code>min-width: 0</code> and say little about the split. The substantial blocks are
+component shapes: a 9-declaration inline-flex pill in jobs.css and console.css, an 8-declaration input surface in
+settings.css and pipeline.css, and a 6-declaration ellipsis row repeated four times across overlays.css and
+rowstrips.css. Those are the candidates for a shared block layer, not for a sheet move.</p>
+
+<h2>3. Catch-alls: what base.css and late.css still hold</h2>
+<h3>base.css is clean</h3>
+<p><code>public/base.css</code> holds <span class="num">13</span> rules:
+<span class="num">1</span> token block (<code>:root</code>),
+<span class="num">12</span> resets (two universal rules, seven scrollbar pseudo-elements,
+<code>html</code>, <code>body</code> and the form-control rule) and
+<span class="num">0</span> rules naming a surface. Nothing in it belongs to a surface. Its
+97 lines include the boundary comment; the sheet is the token layer the rest reads, and it is the one
+sheet every lane may need and no lane owns.</p>
+
+<h3>late.css is not an override sheet; it is the only home of four surfaces' states</h3>
+<p><code>public/late.css</code> loads last (<code>public/index.html:29</code>) and holds
+<span class="num">68</span> rules in four blocks. For each block the table gives the surface sheet that
+should own it and how many of the block's rules have no counterpart selector in any other sheet: the "sole" column is
+the part of late.css that is not an override at all.</p>
+<table>
+<tr><th>Block</th><th class="num">Rules</th><th class="num">Sole definitions</th><th>Should live with</th><th class="num">Bytes</th></tr>
+<tr><td>the sliver-window layout: header, shell, agent cards and folders</td><td class="num">22</td><td class="num">17</td><td><code>chrome.css</code>, <code>board.css</code></td><td class="num">1,882</td></tr>
+<tr><td>the cut dialog</td><td class="num">14</td><td class="num">14</td><td><code>overlays.css</code></td><td class="num">1,598</td></tr>
+<tr><td>the chart legend and its popover</td><td class="num">21</td><td class="num">20</td><td><code>chart.css</code></td><td class="num">2,246</td></tr>
+<tr><td>the assistant and hot-agent search popovers</td><td class="num">11</td><td class="num">11</td><td><code>assistant.css</code></td><td class="num">2,058</td></tr>
+</table>
+<ul>
+  <li><strong>The cut dialog</strong> (<code>public/late.css:85</code>): 14
+    rules, all 14 sole. The dialog is created at
+    <code>public/app.js:7884</code>, and <code>overlays.css</code> contains no <code>.cut-</code> selector at all. A
+    surface whose entire styling lives in the last-loaded catch-all has no sheet a lane can open.</li>
+  <li><strong>The sliver layout</strong> (<code>public/late.css:30-80</code>): 22
+    rules, all inside <code>@media (max-height: 300px)</code>, 17 sole.
+    It lays the board and the header out as panes when the window is 300 px tall or less. This is a board and chrome
+    layout, and both sheets are loaded before it; it is in late.css because it must beat them, which is exactly the
+    cascade leverage a per-surface sheet was supposed to remove.</li>
+  <li><strong>The chart legend and its popover</strong> (<code>public/late.css:152</code>):
+    21 rules, 20 sole,
+    for a sheet (<code>chart.css</code>) that was never part of the split.</li>
+  <li><strong>The search popovers</strong> (<code>public/late.css:246</code>):
+    11 rules, all
+    11 sole, for the drag and resize affordances
+    of the assistant and hot-agent search popovers. They are the only styling of those handles anywhere.</li>
+</ul>
+
+<h2>4. Cascade: where load order decides</h2>
+<p>Measured as (selector, property) pairs that two or more sheets set on the same exact selector, with the winner
+chosen by <code>!important</code> first and load order second (<code>tools/css-split-review.mjs:494</code>). The
+selector is the whole key, so specificity is equal on both sides and source order is the only decider. Variant
+selectors (<code>.legend-toggle</code> against <code>.legend-toggle:hover</code>) are not counted as collisions; they
+are a different selector and a different specificity.</p>
+<p><strong>4 pairs exist, across 3 selectors.</strong> There is no
+top ten to print: only four pairs exist, so all four are listed. That is the strongest single result in this review.
+The cut preserved the order of the rules, and a 19-sheet split that adds no new cascade ties is a faithful split by
+the browser's own definition of the cascade.</p>
+<table>
+<tr><th>Selector</th><th class="num">Properties</th><th>Sheets</th><th>Winner</th><th>Context</th></tr>
+<tr><td><code>.topbar</code></td><td class="num">2</td><td><code>chrome.css</code>, <code>late.css</code></td><td><code>late.css</code> (2)</td><td>@media (max-height: 300px)</td></tr>
+<tr><td><code>.jl-think .think-dot</code></td><td class="num">1</td><td><code>console.css</code>, <code>pipeline.css</code></td><td><code>pipeline.css</code> (1)</td><td>@media (prefers-reduced-motion: reduce)</td></tr>
+<tr><td><code>.shell</code></td><td class="num">1</td><td><code>assistant.css</code>, <code>late.css</code></td><td><code>late.css</code> (1)</td><td>@media (max-height: 300px)</td></tr>
+</table>
+<p>The one that is not late.css is worth naming: <code>.jl-think .think-dot</code> is the console's thinking dot,
+defined in <code>console.css:395</code>, and overridden in <code>pipeline.css:541</code> inside a
+<code>prefers-reduced-motion</code> block. A console rule sitting in pipeline.css is a cross-surface leak that only
+shows up when the user asks for reduced motion, and pipeline.css wins because it loads later.</p>
+
+<h2>5. Dead selectors, measured in a browser</h2>
+<p>Every CSSOM rule the page applied was matched against the document after the six panes were driven: board table,
+console, queue, assistant float, initiatives and settings. The harness boots the panel on the same fixture the
+split's proof used (<code>tools/verify-css-split.mjs</code>'s <code>seedFixture</code>, exported for this tool) and
+matches each selector with a real <code>querySelectorAll</code> (<code>tools/css-split-review.mjs:615</code>). Dynamic
+state pseudo-classes (<code>:hover</code>, <code>:focus</code>, <code>:active</code>, <code>:disabled</code> and
+their family) and pseudo-elements are stripped before matching, because a resting page cannot be in a hover state;
+structural pseudo-classes (<code>:not</code>, <code>:is</code>, <code>:where</code>, <code>:has</code>,
+<code>:nth-*</code>) are kept. A rule in a media block that does not apply at 1680x1200 is counted as
+<span class="note">dormant</span>, not dead.</p>
+<div class="kv">
+  <div>Rules measured</div><div><span class="num">3,346</span> style rules across every applied
+    sheet, including chart.css and the two core/ card sheets. This is higher than the split's 3,312 top-level CSSOM
+    nodes because this walk counts the rules inside each media block, which the node count folds into its parent.</div>
+  <div>Zero matches at rest</div><div><span class="num">2,244</span>
+    (67.1%)</div>
+  <div>Provably stale</div><div><span class="num">3</span>: zero matches, and no class or id
+    token in any shipped <code>.js</code>/<code>.html</code> file and no template prefix that could build it</div>
+  <div>Dormant</div><div><span class="num">25</span>: the selector matches, but its media block
+    does not apply at this viewport</div>
+</div>
+<table>
+<tr><th>Sheet</th><th class="num">Rules</th><th class="num">Zero at rest</th><th class="num">Live</th><th class="num">Stale</th></tr>
+<tr><td><code>initiatives.css</code></td><td class="num">403</td><td class="num">323</td><td class="num">80</td><td class="num">0</td></tr>
+<tr><td><code>pipeline.css</code></td><td class="num">259</td><td class="num">224</td><td class="num">34</td><td class="num">0</td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">288</td><td class="num">221</td><td class="num">66</td><td class="num">3</td></tr>
+<tr><td><code>feedback.css</code></td><td class="num">216</td><td class="num">195</td><td class="num">21</td><td class="num">0</td></tr>
+<tr><td><code>console.css</code></td><td class="num">261</td><td class="num">185</td><td class="num">75</td><td class="num">0</td></tr>
+<tr><td><code>rows.css</code></td><td class="num">181</td><td class="num">152</td><td class="num">29</td><td class="num">0</td></tr>
+<tr><td><code>chart.css</code></td><td class="num">238</td><td class="num">125</td><td class="num">106</td><td class="num">0</td></tr>
+<tr><td><code>board.css</code></td><td class="num">198</td><td class="num">110</td><td class="num">87</td><td class="num">0</td></tr>
+<tr><td><code>panes.css</code></td><td class="num">120</td><td class="num">94</td><td class="num">26</td><td class="num">0</td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">133</td><td class="num">88</td><td class="num">45</td><td class="num">0</td></tr>
+<tr><td><code>assistant-panes.css</code></td><td class="num">126</td><td class="num">88</td><td class="num">38</td><td class="num">0</td></tr>
+</table>
+<p class="small">The eleven sheets with the most zero-match rules; the other twelve rows, including
+<code>base.css</code> at 0 dead of 6, are in <code>docs/reports/css-split-review/numbers.json</code>.</p>
+<p><strong>The three stale selectors are all in overlays.css and all from one retired queue list:</strong>
+<code>.queue-list</code>, <code>.queue-item</code> and <code>.queue-text</code> match nothing, and no shipped file
+produces those names, not even as a template prefix. They are the only CSS in the 19 sheets that is provably
+unreachable.</p>
+<p class="note">Read the 67% carefully. The fixture is a resting board: it does not open the deliverables popover, the
+pipeline window or the clarify history, and it does not hover a row. Those states account for most of the
+2,244 zero-match rules: for example <code>.deliver-pop</code> and its children (overlays.css),
+<code>.pipew-*</code> (pipeline.css) and most of the initiatives tab's archived and editor states. The structural scan
+is the number to act on; the zero-match count is the number that shows how much of each sheet is state, not shape.</p>
+
+<h2>6. Cost: sheets a lane must open to change one surface</h2>
+<p>For a surface root, every applied rule whose selector matches an element inside the root is counted, grouped by
+the sheet it lives in (<code>tools/css-split-review.mjs:732</code> and <code>:1029</code>). The universal reset,
+scrollbar pseudo-elements, <code>html</code>/<code>body</code>, and blocks that declare only custom properties are
+excluded from the count and reported as the shared layer: a lane restyling one surface does not open the token layer,
+and counting it once per surface would make every surface look identical. A sheet counts if it contributes at least
+one surface rule.</p>
+<table>
+<tr><th>Surface</th><th class="num">Elements</th><th class="num">Surface rules</th><th class="num">Sheets</th>
+<th class="num">From its own sheet</th><th class="num">From other sheets</th></tr>
+<tr><td><code>#board</code> the board table</td><td class="num">776</td><td class="num">316</td><td class="num">12</td><td class="num">46</td><td class="num">270</td></tr>
+<tr><td><code>#console</code> one agent&#x27;s console</td><td class="num">67</td><td class="num">102</td><td class="num">8</td><td class="num">46</td><td class="num">56</td></tr>
+<tr><td><code>#queue</code> the assistant&#x27;s queue pane</td><td class="num">173</td><td class="num">91</td><td class="num">9</td><td class="num">50</td><td class="num">41</td></tr>
+<tr><td><code>#assistant</code> the assistant float</td><td class="num">342</td><td class="num">330</td><td class="num">15</td><td class="num">16</td><td class="num">314</td></tr>
+<tr><td><code>#initiatives</code> the initiatives tab</td><td class="num">48</td><td class="num">77</td><td class="num">6</td><td class="num">66</td><td class="num">11</td></tr>
+<tr><td><code>#settings</code> the Settings drawer</td><td class="num">1,651</td><td class="num">269</td><td class="num">8</td><td class="num">222</td><td class="num">47</td></tr>
+</table>
+
+<h3>The three examples the row asks for</h3>
+<p><strong>Console: 102 surface rules from 8 sheets; only
+46 are in console.css.</strong> The rest
+are the console's own parts living in other surfaces' sheets: the reply box and thread name in overlays.css,
+the job head and actions in jobs.css, the conversation turn in turns.css, the strips and thread buttons in
+rowstrips.css, and the warning line in board.css.</p>
+<table>
+<tr><th>Sheet</th><th class="num">Rules matching the console</th><th>Examples</th></tr>
+<tr><td><code>console.css</code></td><td class="num">46</td><td><code>button.pill-complete</code>, <code>.out-wrap</code>, <code>.out-box</code></td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">19</td><td><code>.thread-name</code>, <code>.reply</code>, <code>.reply-box</code></td></tr>
+<tr><td><code>jobs.css</code></td><td class="num">16</td><td><code>.job-head</code>, <code>.job-head .spacer</code>, <code>.job-actions</code></td></tr>
+<tr><td><code>turns.css</code></td><td class="num">8</td><td><code>.turn</code>, <code>.job-body &gt; .turn</code>, <code>.turn-head</code></td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">7</td><td><code>.job-head .agent-glyph</code>, <code>button.btn-clear-thread</code>, <code>button.btn-rename</code></td></tr>
+<tr><td><code>board.css</code></td><td class="num">4</td><td><code>.agents-block .job-out</code>, <code>.warnline</code>, <code>.reply-row .warnline:empty</code></td></tr>
+<tr><td><code>base.css</code></td><td class="num">1</td><td><code>button</code></td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">1</td><td><code>button</code></td></tr>
+</table>
+
+<p><strong>Settings: 269 surface rules from 8 sheets; only
+222 are in settings.css.</strong> The
+largest leak is overlays.css with the question-card block (<code>.turn-question</code>, <code>.tq-head</code>,
+<code>.tq-question</code>, <code>.tq-choices</code>), followed by the topbar's dot and zoom controls in chrome.css and
+the pipeline bundle rows in pipeline.css.</p>
+<table>
+<tr><th>Sheet</th><th class="num">Rules matching Settings</th><th>Examples</th></tr>
+<tr><td><code>settings.css</code></td><td class="num">222</td><td><code>.settings-body</code>, <code>.settings-body::-webkit-scrollbar</code>, <code>.settings-body::-webkit-scrollbar-track</code></td></tr>
+<tr><td><code>overlays.css</code></td><td class="num">27</td><td><code>.turn-question</code>, <code>.tq-head</code>, <code>.tq-question</code></td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">10</td><td><code>.dot</code>, <code>.dot.bad</code>, <code>.zoom</code></td></tr>
+<tr><td><code>pipeline.css</code></td><td class="num">4</td><td><code>.pipeline-editor</code>, <code>#bundle-list &gt; .settings-row</code>, <code>#bundle-list &gt; .settings-row:last-child</code></td></tr>
+<tr><td><code>chart.css</code></td><td class="num">3</td><td><code>.kind-mark</code>, <code>.kind-mark.kind-research</code>, <code>.kind-mark.kind-implementation</code></td></tr>
+<tr><td><code>base.css</code></td><td class="num">1</td><td><code>button</code></td></tr>
+<tr><td><code>board.css</code></td><td class="num">1</td><td><code>.empty</code></td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">1</td><td><code>.mono</code></td></tr>
+</table>
+
+<p><strong>Initiatives: 77 surface rules from 6 sheets; only
+66 are in initiatives.css.</strong>
+This is the cleanest of the three: the eleven foreign rules are the float's shared group chrome in
+assistant-panes.css, three topbar buttons and one chip, and one <code>.mono</code>. An initiatives change opens six
+sheets, five of them for the float's own shared furniture.</p>
+<table>
+<tr><th>Sheet</th><th class="num">Rules matching Initiatives</th><th>Examples</th></tr>
+<tr><td><code>initiatives.css</code></td><td class="num">66</td><td><code>#as-initiatives &gt; .as-group.init-shell</code>, <code>#as-initiatives .init-toolbar</code>, <code>#as-initiatives .init-toolbar h4</code></td></tr>
+<tr><td><code>assistant-panes.css</code></td><td class="num">5</td><td><code>.as-hint</code>, <code>.as-actions</code>, <code>.as-group</code></td></tr>
+<tr><td><code>chrome.css</code></td><td class="num">3</td><td><code>button</code>, <code>button:disabled</code>, <code>.chip</code></td></tr>
+<tr><td><code>base.css</code></td><td class="num">1</td><td><code>button</code></td></tr>
+<tr><td><code>board.css</code></td><td class="num">1</td><td><code>.chip</code></td></tr>
+<tr><td><code>rowstrips.css</code></td><td class="num">1</td><td><code>.mono</code></td></tr>
+</table>
+
+<h3>The two containers, and the board's real tangle</h3>
+<p><code>#assistant</code> (330 rules from 15 sheets) and
+<code>#projects</code> (316 rules from 12 sheets) are containers: their roots
+include the panes nested inside them, so their counts are upper bounds on "sheets that can affect this surface", not
+counts of that surface's own rules. The board number is still the important one. <strong>board.css contributes
+46 of the 316 rules, while
+chart.css contributes 87</strong> (the
+countdown rings and poll buttons), rowstrips.css 40
+(the git, description and TODO strips), overlays.css 27
+(the reply and deliverables popovers inside a row), and late.css 25
+(the sliver layout). chart.css is one of the three sheets the split left alone, and it still owns the board table's
+project borders and row guides (<code>public/chart.css:241</code>, <code>:267</code>, <code>:302</code>): 15 of its
+rules name <code>#projects</code> directly.</p>
+
+<h2>7. The split's own six-pane numbers, cited</h2>
+<p>The layout proof was run by the split, not by this review: two trees, the cut undone and the cut committed, the
+same fixture, six panes, every element border box and every text run compared. The table is quoted from
+<a href="css-split.html">docs/reports/css-split.html</a>, section 4. It is cited because re-running it would measure
+this branch's app code against the same cut, not answer a different question; the review's own screenshots are fresh
+and are in section 8.</p>
+<table>
+<tr><th>Pane</th><th>Root</th><th class="num">Elements</th><th class="num">Boxes differ</th><th class="num">Max delta</th>
+<th class="num">Text runs</th><th class="num">Text positions differ</th></tr>
+<tr><td>board table</td><td><code>#projects</code></td><td class="num">778</td><td class="num">0</td><td class="num">0</td><td class="num">438</td><td class="num">0</td></tr>
+<tr><td>console</td><td><code>.job[data-thread]</code></td><td class="num">68</td><td class="num">0</td><td class="num">0</td><td class="num">33</td><td class="num">0</td></tr>
+<tr><td>queue cards</td><td><code>#as-queue</code></td><td class="num">174</td><td class="num">0</td><td class="num">0</td><td class="num">109</td><td class="num">0</td></tr>
+<tr><td>assistant float</td><td><code>#assistant</code></td><td class="num">295</td><td class="num">0</td><td class="num">0</td><td class="num">165</td><td class="num">0</td></tr>
+<tr><td>initiatives</td><td><code>#as-initiatives</code></td><td class="num">49</td><td class="num">0</td><td class="num">0</td><td class="num">33</td><td class="num">0</td></tr>
+<tr><td>settings</td><td><code>#settings</code></td><td class="num">1,652</td><td class="num">0</td><td class="num">0</td><td class="num">1,030</td><td class="num">0</td></tr>
+</table>
+<p>Every pane: zero differing boxes and zero differing text positions. The rule-stream half passed as well:
+3,061 rules against 3,061, the same selector-and-declaration sequence in the same at-rule contexts. The CSSOM carried
+3,312 rule nodes before and after. Five of the six captures are byte-identical; the board differs in ink only, in the
+countdown rings: 1,066 pixels of 7,264,384 (0.015%), in one 37 px column, the one time-driven value the measurement
+excludes.</p>
+
+<h2>8. Fresh captures</h2>
+<p>Six panes from this tree, captured by the review tool at 1680x1200 with a device scale of 2, on the same fixture
+and a frozen clock. These are the review's own pictures, not the split's before/after pair.</p>
+<div class="shots">
+  <figure><img src="css-split-review/board-table.png" alt="the board table" />
+    <figcaption><strong>board table</strong> (<code>#projects</code>, 776 elements in the cost pass).
+    3,296x2,204 at 2x. The poll rings in the last column are chart.css's rules, not board.css's.</figcaption></figure>
+  <figure><img src="css-split-review/console.png" alt="one agent's console" />
+    <figcaption><strong>console</strong> (<code>.job[data-thread]</code>, 67 elements).
+    3,072x902. The output box, thought row, tool call and reply box are styled by four different sheets.</figcaption></figure>
+  <figure><img src="css-split-review/queue-cards.png" alt="the assistant's queue pane" />
+    <figcaption><strong>queue cards</strong> (<code>#as-queue</code>, 173 elements).
+    958x1,172. queue.css owns 50 of
+    91 rules; panes.css owns 24.</figcaption></figure>
+  <figure><img src="css-split-review/assistant-float.png" alt="the assistant float" />
+    <figcaption><strong>assistant float</strong> (<code>#assistant</code>, 342 elements).
+    960x2,226. A container: its count includes every pane it hosts.</figcaption></figure>
+  <figure><img src="css-split-review/initiatives.png" alt="the initiatives tab" />
+    <figcaption><strong>initiatives</strong> (<code>#as-initiatives</code>, 48 elements).
+    958x2,092. The cleanest surface: 66 of 77 rules are its own.</figcaption></figure>
+  <figure><img src="css-split-review/settings.png" alt="the Settings drawer" />
+    <figcaption><strong>Settings</strong> (<code>#settings</code>, 1,651 elements).
+    680x1,014. 222 of 269 rules are its own; overlays.css contributes 27 for question cards.</figcaption></figure>
+</div>
+
+<h2>9. Verdict: the three worst tangles</h2>
+<div class="tangle">
+  <h3>1. The board table has no home sheet</h3>
+  <p><code>board.css</code> is named for the board and owns 46
+  of the 316 rules that match under <code>#projects</code>. <code>chart.css</code> owns
+  87, including 15 selectors that name
+  <code>#projects</code> directly: the project's left border, the row padding and the row guide line
+  (<code>public/chart.css:241</code>, <code>:267</code>, <code>:302</code>). rowstrips.css adds
+  40 rules for the strips inside a row.
+  A change to the board table opens 12 sheets, and the two that matter most are board.css and
+  a sheet the split deliberately left alone.</p>
+</div>
+<div class="tangle">
+  <h3>2. The console is an eight-sheet surface</h3>
+  <p>102 rules match inside one console; 56
+  of them are outside console.css. Its reply box is in overlays.css (19 rules), its head in jobs.css (16), its turns
+  in turns.css (8), its strips and thread buttons in rowstrips.css (7), and its warning line in board.css (4). A lane
+  changing the console's composer has to open overlays.css, a sheet named for deliverables, the reply box and the
+  question cards, which is where the composer was before the split and where it stayed.</p>
+</div>
+<div class="tangle">
+  <h3>3. late.css is the only home of four surfaces' states</h3>
+  <p>68 rules, 62 of them the only definition of their
+  selector. The cut dialog is entirely here (14 rules,
+  created at <code>public/app.js:7884</code>, no <code>.cut-</code> rule in overlays.css). The 300 px-tall window
+  layout is here (22 rules, 17 sole) and must load last
+  to beat the sheets it is laying out. The legend popover (20 sole) and the search popovers' drag handles (11 sole)
+  are here too. "Late overrides" describes what late.css was for; it is not what it holds.</p>
+</div>
+
+<h3>What the split did well</h3>
+<ul>
+  <li><span class="good">No rule was duplicated by the cut.</span> 0 whole rules
+    are written twice; 24 of 3,474 selectors
+    cross a sheet boundary, and the four cascade pairs they produce are inherited from the one file rather than
+    created by the move.</li>
+  <li><span class="good">base.css is exactly what it says it is.</span> 13 rules, one token block and twelve resets,
+    no surface rule.</li>
+  <li><span class="good">The dead tail is tiny.</span> Three stale selectors in 3,061 rules: the retired
+    <code>.queue-list</code>, <code>.queue-item</code> and <code>.queue-text</code> in overlays.css.</li>
+  <li><span class="good">Initiatives is the model to copy.</span> 77 surface rules from six sheets, 66 of them in
+    initiatives.css, with the foreign rules limited to the float's shared group chrome.</li>
+</ul>
+
+<h3>What to do next</h3>
+<ol>
+  <li>Give the cut dialog a home: move <code>public/late.css:85</code> into overlays.css, where the rest of the
+    dialog and question-card styling lives.</li>
+  <li>Move the board table's own rules out of chart.css: the <code>#projects</code> selectors at
+    <code>public/chart.css:241-310</code> are board.css's subject. Keep chart.css for the poll ring's paint if the
+    ring is a chart, but name the split: today the board's border and guides are in a sheet the split did not touch.</li>
+  <li>Move the console's composer from overlays.css (19 rules: <code>.thread-name</code>, <code>.reply</code>,
+    <code>.reply-box</code>, <code>.chipbox</code>) into console.css, and its head from jobs.css (16 rules). That is
+    the difference between an eight-sheet console and a three-sheet one.</li>
+  <li>Leave the 41 substantial repeated blocks alone for now. They are shared idioms (pills, inputs, ellipsis rows),
+    and a shared block layer is a bigger decision than this cut. The split's job was to stop two lanes serialising
+    behind one file; it did that.</li>
+</ol>
+
+<h2>10. Reproduce every number</h2>
+<p>One committed tool computes all seven measurements. The text half takes seconds; the browser half boots the panel
+on the fixture and takes a few minutes.</p>
+<pre><code>npm run review:css-split                       # all seven, captures under docs/reports/css-split-review
+node tools/css-split-review.mjs --static        # inventory, duplication, catch-all, cascade (no browser)
+node tools/css-split-review.mjs --no-shots      # browser measurements, no captures</code></pre>
+<p>The run writes <code>docs/reports/css-split-review/numbers.json</code> (every table in this report is read from it)
+and <code>docs/reports/css-split-review/dead-rules.json</code> (all 3,346 measured rules with their match counts and
+at-rule context). Exit 0 means every measurement ran; 1 means one failed; 2 means Playwright is absent and the browser
+half did not run. The tool imports <code>seedFixture</code> from <code>tools/verify-css-split.mjs</code>, so the
+review and the split's proof use the same board, console, queue, assistant, initiatives and settings panes.</p>
+<p class="small">Measurement limits, stated once: cascade counts exact selectors only, so a variant selector is a
+different rule; cost counts rules that match an element inside the root and excludes the shared token/reset layer, and
+the two container surfaces include their nested panes; dead is a resting-state measurement of a fixture, not an
+exhaustive walk of every hover, open dialog and folded row. The split's six-pane layout numbers are cited, not
+re-measured, and this review makes no new layout claim.</p>
+
+<p class="small">Report written 2026-11-28. Reviewed commit: main <code>db287788</code> (PR #940, version 1.191.0).
+Tool: <code>tools/css-split-review.mjs</code>. Evidence: <code>docs/reports/css-split-review/</code>.</p>
+
+</body>
+</html>
