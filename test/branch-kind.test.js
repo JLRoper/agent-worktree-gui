@@ -169,31 +169,27 @@ test("2. an implementation cut with a main parent auto-cuts the feature's turnov
   assert.equal(childRec.parent, made.container.branch, "the parent recorded is the container");
 });
 
-test("3. under ask the auto-cut raises the permission card and cuts nothing", async (t) => {
+test("3. a landing cut makes its own turnover branch under ask, with no card", async (t) => {
+  // THE READER'S DECISION (2026-11-28): a landing cut never parks on a permission card. It makes its own turnover
+  // branch, keyed to its task id, under every policy - a small landing task must not stall. The card remains for a
+  // caller that plans a container by hand (routes/project-turnover.js), not for the cut.
   const r = repo(t);
   const jobs = jobsAt(r.dir);
   const asked = [];
   jobs.turnoverCutFor = (name, key, opts) =>
-    planTurnoverCut({ project: { turnoverBranches: [], turnoverPolicy: "ask" }, key: key || "task 7", name: opts?.name || "", at: FIXED_AT });
+    planTurnoverCut({ project: { turnoverBranches: [], turnoverPolicy: "ask" }, key: key || "task 7", name: opts?.name || "", at: FIXED_AT, landing: opts?.landing === true });
   jobs.requestTurnoverBranch = async (request) => {
     asked.push(request);
     return { id: "req-7", deadline: null, timeoutSeconds: 300 };
   };
-  await assert.rejects(
-    () => jobs.makeWorktree(r.dir, "fix the permission card", { project: "demo", turnoverKey: "task 7", mainBranch: "main" }),
-    (e) => {
-      assert.match(String(e.message), /implementation tree/, "the refusal says what the cut is");
-      assert.match(String(e.message), /permission card \(req-7\)/, "and names the card that was raised");
-      assert.match(String(e.message), /20261126_1800_TASK-7_/, "and the branch the answer will make");
-      return true;
-    },
-  );
-  assert.equal(asked.length, 1, "exactly one card");
-  assert.equal(asked[0].project, "demo");
-  assert.equal(asked[0].key, "task 7");
-  assert.match(asked[0].branch, /^20261126_1800_TASK-7_/i);
-  assert.equal(asked[0].policy, "ask");
-  assert.equal(existsSync(path.join(r.dir, ".worktrees")), false, "nothing was cut: the tree comes after the answer");
+  const made = await jobs.makeWorktree(r.dir, "fix the permission card", { project: "demo", turnoverKey: "task 7", mainBranch: "main" });
+  assert.equal(made.kind, "implementation");
+  assert.ok(made.container, "the cut made the container itself");
+  assert.match(made.container.branch, /^20261126_1800_TASK-7_/i, "the container's name carries the key");
+  assert.equal(made.parentName, made.container.branch, "the child is cut from the container");
+  assert.equal(asked.length, 0, "no permission card was raised");
+  assert.equal(existsSync(made.container.path), true, "the container's tree stands");
+  assert.equal(existsSync(made.path), true, "and so does the child's");
 });
 
 test("4. planCut never answers turnover: a child of any parent is research or implementation", () => {

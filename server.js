@@ -1464,11 +1464,16 @@ jobs.turnoverBranchFor = turnoverLookup({ registry, config });
 jobs.baseRefKindFor = baseRefKindLookup({ registry, config });
 // WHICH TURNOVER BRANCH A FEATURE'S CONTAINER IS, and the policy that decides whether a cut makes one. Read per cut,
 // like the two lookups above: the settings save updates the record the very next cut reads. `lib/project-turnover.js`
-// `planTurnoverCut` answers reuse (the project files a branch under this key), cut (free) or ask (the card).
+// `planTurnoverCut` answers reuse (the project files a branch under this key), cut (a landing cut makes its own, no
+// ask), ask (a non-landing caller's card) or `ok: false` (a landing cut that names no key).
 jobs.turnoverCutFor = (name, key = "", opts = {}) => {
   const project = (registry.projects || []).find((p) => p && p.name === name) || (config.projects || []).find((p) => p && p.name === name) || null;
-  return planTurnoverCut({ project, key, name: opts.name || "", at: opts.at instanceof Date ? opts.at : new Date() });
+  return planTurnoverCut({ project, key, name: opts.name || "", at: opts.at instanceof Date ? opts.at : new Date(), landing: opts.landing === true });
 };
+// THE REGISTRY'S WRITER, handed to the cut so a landing cut files the turnover branch it just made under its key
+// BEFORE the next cut for that key asks. One entry per key, accumulating: `rememberTurnoverBranch` appends and never
+// overwrites an earlier key, and `jobs.makeWorktree` only calls this for a container it actually cut.
+jobs.rememberTurnoverFor = (name, branch = "", key = "") => rememberTurnoverBranch(name, branch, key);
 // THE CARD a spawn's auto-cut parks on under `ask`/`one-per-feature`: the answer creates the feature's container, and
 // then RESUMES the same queue row as a fresh cut. `allowTurnoverAsk` owns that half (lib/turnover-ask.js): the container
 // is cut and joined to the project's list, the row is released from its park, and the ordinary spawner cuts the child

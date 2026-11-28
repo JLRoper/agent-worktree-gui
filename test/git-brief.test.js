@@ -130,7 +130,9 @@ test("a tree run is told to clone and fetch over ssh, exactly once", async (t) =
     sweep(dir, repo);
   });
 
-  const job = await jobs.create({ prompt: "clone the service and fetch its tests", cwd: repo, existing: false, project: "fixture" });
+  // A research brief, so this cut stands at the root and the paragraph under test is the one every worker gets: the
+  // subject here is the GIT REMOTES block, not the landing shape.
+  const job = await jobs.create({ prompt: "find out how the service clones and fetches its remotes", cwd: repo, existing: false, project: "fixture" });
   assert.notEqual(job.status, "failed", `the run was accepted: ${job.error || ""}`);
   const body = stub.last();
   assert.ok(body.includes("Work in "), `this is a worker's brief, not the assistant's turn:\n${body}`);

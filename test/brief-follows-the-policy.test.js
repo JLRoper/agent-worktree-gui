@@ -175,7 +175,7 @@ test.after(() => {
   if (sharedRepo) sweep(sharedRepo);
 });
 
-test("a tree cut from main with a code brief is an implementation tree: it merges locally and never pushes, on its first turn and after its branch is renamed", async (t) => {
+test("an implementation tree is told to merge into its turnover branch and never push, on its first turn and after its branch is renamed", async (t) => {
   const stub = await stubGateway();
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-jobs-"));
   const repo = sharedRepo;
@@ -188,17 +188,19 @@ test("a tree cut from main with a code brief is an implementation tree: it merge
     sweep(dir);
   });
 
-  // ---- the first turn: the panel cuts the tree from main -------------------------------------------------------
-  const first = await jobsA.create({ prompt: "land a change", cwd: repo, existing: false, project: "fixture", branchPolicy: "allow", remote: "origin" });
+  // ---- the first turn: the panel cuts the child from its feature's turnover branch ------------------------------
+  const TURNOVER = "20261128_1200_DEMO-1_the_feature";
+  git(repo, ["branch", TURNOVER]);
+  const first = await jobsA.create({ prompt: "land the change on lib/jobs.js", cwd: repo, existing: false, project: "fixture", turnoverBranch: TURNOVER, branchPolicy: "allow", remote: "origin" });
   assert.notEqual(first.status, "failed", `the run was accepted: ${first.error || ""}`);
   const body1 = stub.last();
   assert.doesNotMatch(body1, /\[object Object\]/, `the parent is a name, never a stringified record:\n${body1}`);
-  // THE KIND, from the brief: "land a change" names code, so this cut is an implementation tree. It lands by merging
-  // into main LOCALLY, only on the reader's grant, and it never pushes or opens a pull request of its own.
-  assert.match(body1, /cut from `main`/);
+  // THE KIND, from the brief: "land the change" names landing work, so this cut is an implementation tree. It lands by
+  // merging into its turnover branch LOCALLY, and it never pushes or opens a pull request.
+  assert.match(body1, new RegExp("cut from `" + TURNOVER + "`"));
   assert.match(body1, /This is an implementation tree/);
-  assert.match(body1, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
-  assert.match(body1, /do not merge into it on your own, and do not push/);
+  assert.match(body1, new RegExp("merge it into `" + TURNOVER + "` LOCALLY"), "the body says to merge into the parent locally, as an implementation tree");
+  assert.match(body1, /Do not push and do not open a pull request/);
   assert.match(body1, /A push from this tree is not part of this landing: it parks on the reader's permission card/);
   assert.doesNotMatch(body1, /`git push -u origin HEAD`|gh pr create/, "an implementation tree is never told to open a pull request");
   assert.match(body1, /the question is one complete sentence naming the report and the decision wanted/, "the clarify card's wording rule rides the brief");
@@ -215,9 +217,9 @@ test("a tree cut from main with a code brief is an implementation tree: it merge
   await jobsB.create({ prompt: "Keep going", cwd: tree, reply: true, ownerPath: tree, project: "fixture", branchPolicy: "allow", remote: "origin" });
   const body2 = stub.last();
   assert.doesNotMatch(body2, /\[object Object\]/);
-  assert.match(body2, /cut from `main`/, `a renamed tree still reads where it was cut from:\n${body2}`);
+  assert.match(body2, new RegExp("cut from `" + TURNOVER + "`"), `a renamed tree still reads where it was cut from:\n${body2}`);
   assert.match(body2, /This is an implementation tree/, "and the KIND it was cut with, read back off its record");
-  assert.match(body2, /Merge it into `main` LOCALLY only if the reader grants that explicitly/);
+  assert.match(body2, new RegExp("merge it into `" + TURNOVER + "` LOCALLY"));
   assert.doesNotMatch(body2, /will park and then fail/, "the reply is not told the blanket local-only rule");
 
   // ---- a tree whose branch merely LOOKS like another is not the recorded tree --------------------------------
