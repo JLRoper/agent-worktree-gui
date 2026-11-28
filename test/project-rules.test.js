@@ -20,11 +20,14 @@ import { readFile } from "node:fs/promises";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { RULES_MAX, RULE_MAX_CHARS, projectRulesRow, rulesCount, rulesFrom, validateRules } from "../lib/project-rules.js";
 import { RULES_PATH, createProjectRulesRoutes, rulesOut } from "../routes/project-rules.js";
-import { configureRepo, git, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 // ---- 1-2: the read side ----------------------------------------------------------------------------------------
 test("an absent or unreadable rules field reads as an empty list, and a rule is one line", () => {
@@ -187,7 +190,7 @@ test("the route answers the shapes a caller can send, and its read carries the c
     assert.match(h.sent[0].payload.error, /PUT is not allowed/);
   }
   {
-    const h = harness({ body: { project: "alpha", rules: [] }, token: "secret" });
+    const h = harness({ body: { project: "alpha", rules: [] }, token: "tok-test-alpha" });
     h.req.authorised = false;
     await h.routes(h.req, {}, RULES_PATH, new URL(`http://x${RULES_PATH}`));
     assert.equal(h.sent[0].status, 403);
@@ -225,7 +228,7 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
   }
   // `beta` starts WITH a rule (as a hand-edited config would hold it) and `alpha` starts without the key at all, so
   // both halves of "optional, defaulting to empty" are on the board at once.
-  const panel = await startPanel({
+  const panel = await boot({
     dir,
     keep: false,
     config: {

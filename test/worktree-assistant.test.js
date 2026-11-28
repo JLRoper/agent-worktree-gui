@@ -16,15 +16,27 @@
 // The column's own default/visible behaviour is owned by test/chart-columns.test.js and tools/verify-chart-columns.mjs;
 // this file owns the DATA those surfaces draw. The reader-only gate on the route is asserted here too, because that
 // route is the one place an agent could try to reassign a tree.
+//
+// A PANEL BOOTS UNDER THE TEST THAT NEEDS IT, and its `t.after(() => panel.stop())` goes on the line after it, never
+// at the foot of the test body. Node's runner only lets a test FILE exit once its event loop is empty, and a panel is
+// a child process plus three pipes: a test that throws before its own `panel.stop()` line strands that child, the
+// worker never exits, and `node --test` waits on it forever - the whole suite stalls on this file with every test in
+// it already answered. That is not theory: two assertions in this file fail on main (a write lands on the board's
+// next /api/state rebuild, not on the read that follows it), and the two tests that own those panels are exactly the
+// two that used to leave a child behind. That net began here as a local `boot` and a `panels` array; it now lives in
+// tools/panel-testkit.mjs for every panel-booting file, so this file imports it rather than keeping a second copy.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { ownerKey } from "../lib/locks.js";
-import { configureRepo, git, post, slash, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, post, slash, stopBootedPanels, waitForRow } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 
@@ -114,7 +126,7 @@ async function readStream(base, match, { timeoutMs = 45_000 } = {}) {
 test("a tree nobody moved reports Assistant #1, labelled by its role", { timeout: 120_000 }, async (t) => {
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
 
   const row = await waitForRow(panel.base, "proj", board.trees["tree-one-1a2b3c"]);
@@ -131,7 +143,8 @@ test("the setter stores an id, answers with the updated row, and survives a rest
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const tree = board.trees["tree-one-1a2b3c"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
+  t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
   const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   assert.equal(created.status, 201, created.text);
@@ -154,7 +167,7 @@ test("the setter stores an id, answers with the updated row, and survives a rest
   // …and a restart proves it is the panel's, not the tab's.
   const dir = panel.dir;
   await panel.stop();
-  const again = await startPanel({ dir, keep: false, reuseConfig: true });
+  const again = await boot({ dir, keep: false, reuseConfig: true });
   t.after(() => again.stop());
   const after = await waitForRow(again.base, "proj", tree);
   assert.equal(after.assistant.id, "assistant-2", "the owner outlives the process that stored it");
@@ -165,7 +178,7 @@ test("setting Assistant #1 clears the entry instead of writing one", { timeout: 
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const tree = board.trees["tree-one-1a2b3c"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
   await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
@@ -187,7 +200,7 @@ test("an unknown assistant id is refused and the stored owner does not move", { 
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const tree = board.trees["tree-one-1a2b3c"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
   await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
@@ -205,7 +218,7 @@ test("the owner survives a rename of the directory AND the branch", { timeout: 1
   const board = await makeBoard({ prefix: "wtgui-owner-rename-" });
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const tree = board.trees["tree-one-1a2b3c"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
   await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
@@ -243,7 +256,8 @@ test("the label is the role's, read at read time: two roles read as two labels a
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const one = board.trees["tree-one-1a2b3c"];
   const two = board.trees["tree-two-4d5e6f"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
+  t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", one);
   const role = await post(panel.base, "/api/assistant/roles", { body: { name: "Reviewer" } });
   assert.equal(role.status, 201, role.text);
@@ -273,7 +287,7 @@ test("the label is the role's, read at read time: two roles read as two labels a
   for (const rec of stored.roles || []) if (rec.id === reviewerId) rec.name = "Auditor";
   await writeFile(rolesPath, `${JSON.stringify(stored, null, 1)}\n`, "utf8");
 
-  const again = await startPanel({ dir, keep: false, reuseConfig: true });
+  const again = await boot({ dir, keep: false, reuseConfig: true });
   t.after(() => again.stop());
   const renamedRow = await waitForRow(again.base, "proj", two);
   assert.equal(renamedRow.assistant.id, "assistant-2", "the id in the store did not move");
@@ -287,7 +301,8 @@ test("an owner whose assistant is gone falls back to Assistant #1 and says so", 
   const board = await makeBoard({ prefix: "wtgui-owner-gone-" });
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const tree = board.trees["tree-one-1a2b3c"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
+  t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
   await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   const set = await post(panel.base, "/api/worktree/assistant", { body: { project: "proj", path: tree, assistant: "assistant-2" }, ...fromPage(panel) });
@@ -301,7 +316,7 @@ test("an owner whose assistant is gone falls back to Assistant #1 and says so", 
   stored.assistants = (stored.assistants || []).filter((a) => a.id !== "assistant-2");
   await writeFile(file, `${JSON.stringify(stored, null, 1)}\n`, "utf8");
 
-  const again = await startPanel({ dir, keep: false, reuseConfig: true });
+  const again = await boot({ dir, keep: false, reuseConfig: true });
   t.after(() => again.stop());
   const row = await waitForRow(again.base, "proj", tree);
   assert.equal(row.assistant.id, "assistant-1", "the tree falls back to the default owner");
@@ -320,7 +335,7 @@ test("the setter is the reader's: a request with no same-origin Origin is refuse
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
   const tree = board.trees["tree-one-1a2b3c"];
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
   await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
@@ -361,8 +376,8 @@ test("the store's key is the tree's tag, so neither the path nor the branch spel
 test("the owner is drawn from the server's answer, and the wake path consults the same store", async () => {
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   // The worktree row template moved to public/render-projects.js in step 7 of
-  // docs/reports/module-map-2026-11-07.html, so the owner slot is read where the template now lives.
-  const src = `${app}\n${await readFile(new URL("../public/render-projects.js", import.meta.url), "utf8")}\n${await readFile(new URL("../public/board-scaffold.js", import.meta.url), "utf8")}`;
+  // docs/reports/module-map-2026-11-07.html, so the owner slot is read where the template now lives after row 530's cut 2.
+  const src = `${app}\n${await readFile(new URL("../public/board/project-row.js", import.meta.url), "utf8")}\n${await readFile(new URL("../public/board-scaffold.js", import.meta.url), "utf8")}`;
   // Both surfaces come from the owner-cell region, which reads the SERVER's name, label and role; neither maps an id
   // to a sentence of its own, and neither falls back to the role label.
   assert.match(src, /assistant: ownerCellHtml\(row\)/, "the owner column draws the owner cell");
@@ -385,7 +400,7 @@ test("the owner is drawn from the server's answer, and the wake path consults th
 test("a tree's FIRST row event carries the owner, before any snapshot has overlaid it", { timeout: 150_000 }, async (t) => {
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
-  const panel = await startPanel({ keep: true, config: configFor(board) });
+  const panel = await boot({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", board.trees["tree-one-1a2b3c"]);
 

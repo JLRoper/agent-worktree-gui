@@ -174,7 +174,8 @@ test("the expansion starts collapsed, and is remembered per row and per card", (
 });
 
 test("the row's strip draws the result chip and ONE collision diamond, and the detail draws neither card", () => {
-  const rowFile = read("public/render-projects.js");
+  // rowHtml and the name/extra cells moved to public/board/project-row.js in row 530's cut 2.
+  const rowFile = read("public/board/project-row.js");
   const scaffold = read("public/board-scaffold.js");
   // ONE CONTROL PER CELL. The collision diamond rides the name line, where the per-pair marks and the counts chip used
   // to sit; that is the strip that costs no height. The result chip is the chart's `reviewedExtra` column: a cell of
@@ -182,12 +183,12 @@ test("the row's strip draws the result chip and ONE collision diamond, and the d
   // row that carried both.
   const nameCell = sliceBetween(rowFile, 'name: `<td class="name"', 'reviewedExtra: `<td class="reviewed-extra"');
   assert.ok(!nameCell.includes("${resultChipHtml(row, delKey)}"), "the result chip left the name cell");
-  assert.match(nameCell, /\$\{collisionDiamondHtml\(row, delKey\)\}/, "the one collision diamond is in the name line");
+  assert.match(nameCell, /collisionDiamondHtml\(row, delKey\)/, "the one collision diamond is in the name line");
   assert.ok(!nameCell.includes("${collisionChipHtml("), "no counts chip is drawn on the row");
   assert.ok(!nameCell.includes("${collisionRowMarkHtml("), "no per-pair mark is drawn beside it - the diamond replaced both");
-  assert.match(nameCell, /\$\{reviewRowMarkHtml\(row\)\}/, "the amber mark and its press stay in the name line");
+  assert.match(nameCell, /reviewRowMarkHtml\(row\)/, "the amber mark and its press stay in the name line");
   const extraCell = sliceBetween(rowFile, 'reviewedExtra: `<td class="reviewed-extra"', "// Same rule for the branch");
-  assert.match(extraCell, /\$\{resultChipHtml\(row, delKey\)/, "the result chip has a cell of its own");
+  assert.match(extraCell, /resultChipHtml\(row, delKey\)/, "the result chip has a cell of its own");
   assert.ok(!extraCell.includes('class="name"'), "and it is not inside the name cell");
   // Both are buttons with their own state, so a Tab reaches them and Enter presses them.
   const chip = sliceBetween(scaffold, "function resultChipHtml(row, key)", "// The card behind a chip");
@@ -223,7 +224,9 @@ test("the row's strip draws the result chip and ONE collision diamond, and the d
 
 test("an open card survives a re-render, and Escape closes it", () => {
   const scaffold = read("public/board-scaffold.js");
-  const rowFile = read("public/render-projects.js");
+  // placeRow and renderProjectRows, the two paths that repaint a row's chips, moved to public/board/row-order.js
+  // in row 530's cut 3.
+  const rowFile = read("public/board/row-order.js");
   // The popup re-anchors onto the row's NEW chip and repaints its body only when the record it draws moved.
   const paint = sliceBetween(scaffold, "function paintRowChipPops(project = null)", "// ARROWS STEP THE POPUP");
   assert.match(paint, /if \(pop\._anchor !== anchor\)/);
@@ -233,7 +236,9 @@ test("an open card survives a re-render, and Escape closes it", () => {
   // A body redrawn under the reader's caret puts the caret back on the same control.
   assert.match(scaffold, /const at = rowChipFocusables\(pop\)\.indexOf\(document\.activeElement\);/);
   // Every path that replaces a row's chip nodes calls it: placeRow's chip repaint and the project's full rebuild.
-  assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
+  // The full rebuild's call (refreshChips) is cut 1 of row 530, so it is read from the module that carries it now.
+  const order = read("public/board/project-order.js");
+  assert.match(order, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
   assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(name\);/);
   // Keyboard: Escape closes and hands the caret back, the arrows step the card's own controls.
   const keys = sliceBetween(scaffold, 'document.addEventListener("keydown"', "// The popup is fixed");
@@ -252,7 +257,8 @@ test("the popup is clamped to the window, so neither card is clipped at 768", ()
   assert.match(place, /Math\.min\(ROWCHIP_POP_MAX, vw - gutter \* 2\)/, "never wider than the window minus its gutter");
   assert.match(place, /if \(left \+ width > vw - gutter\) left = vw - gutter - width/);
   assert.match(place, /if \(top \+ height > vh - gutter\) top = Math\.max\(gutter, rect\.top - 6 - height\)/, "flips above the chip");
-  const css = read("public/chart.css");
+  // The row chips and their popup came out of chart.css with the board table: board-table.css owns them.
+  const css = read("public/board-table.css");
   assert.match(css, /\.rowchip-pop \{[^}]*position: fixed;/);
   assert.match(css, /\.rowchip-pop \{[^}]*overflow: auto;/);
   // The diamond's two inks and its 24x24 box: filled violet while a pair is open, outlined and quieter when every one

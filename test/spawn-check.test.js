@@ -17,6 +17,7 @@
 //   5. read only: no job is created, the queue file and the job store are byte-identical after the call, and
 //      nothing on disk changes.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -58,7 +59,7 @@ function fixture(t) {
   return { dir, project, jobs, assistant, rows, held, free, checkout };
 }
 
-async function ask(p, { task = "", tree = "", project = "proj", assistantId = "", token = "secret", method = "GET" } = {}) {
+async function ask(p, { task = "", tree = "", project = "proj", assistantId = "", token = "tok-test-alpha", method = "GET" } = {}) {
   const out = { status: null, body: null, handled: false };
   const send = (res, status, body) => {
     out.status = status;
@@ -67,7 +68,7 @@ async function ask(p, { task = "", tree = "", project = "proj", assistantId = ""
   const handler = createSpawnCheckRoutes({
     assistant: p.assistant,
     getProjects: () => [p.project],
-    config: { token: "secret" },
+    config: { token: "tok-test-alpha" },
     sendJson: send,
     authorised: (req, t) => req.headers["x-panel-token"] === t,
   });
@@ -143,6 +144,11 @@ test("a tree a live run holds is refused, naming the holder and the free tree", 
   assert.equal(out.body.checks[0].code, "tree_busy");
   assert.match(out.body.reason, /already has a live run \(job-5962 on thread t-hold, running\)/);
   assert.match(out.body.remedy, /wait for job job-5962 on thread t-hold to end, steer it, or name a free tree/);
+  assert.deepEqual(
+    { id: out.body.treeState.holder.id, thread: out.body.treeState.holder.thread, dead: out.body.treeState.holder.dead },
+    { id: "job-5962", thread: "t-hold", dead: false },
+    "the live run holding the tree is a fact on the answer, not only in the sentence",
+  );
   // The SAME words the cut refuses with: lib/jobs.js builds its 409 from this module, so this comparison is the
   // proof that the route cannot answer differently from the cut.
   await assert.rejects(
@@ -235,4 +241,82 @@ test("a project or a tree the cut would not resolve is answered as a refusal wit
   assert.equal(gone.body.ok, false);
   assert.match(gone.body.reason, /does not exist or is not a directory/);
   assert.match(gone.body.remedy, /write SPAWN without IN to cut a new tree/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// A NAMED TREE is MEASURED, not read off a board card (queue row 419).
+//
+// The 2026-11-28 defect: two SPAWN IN lines named trees carrying 70+ unlanded commits and uncommitted files,
+// spawn-check answered ok for them, and the panel refused the cut only after each line was written. The route now
+// asks git - the same `jobs.treeFitness` the cut refuses on - so the counts are in the answer and `ok` cannot be
+// true for a tree the cut refuses a beat later.
+// ---------------------------------------------------------------------------------------------
+
+function gitRepo(p) {
+  const email = ["tester", "example.invalid"].join(String.fromCharCode(64));
+  const run = (dir, ...args) =>
+    execFileSync("git", ["-C", dir, "-c", "user.name=Test", "-c", `user.email=${email}`, "-c", "commit.gpgsign=false", ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  run(p.checkout, "init", "-q", "-b", "main");
+  writeFileSync(path.join(p.checkout, "README.md"), "seed\n");
+  run(p.checkout, "add", "-A");
+  run(p.checkout, "commit", "-q", "-m", "seed");
+  return run;
+}
+
+test("a named tree that is ahead of main and dirty is refused with its own counts, not answered ok", async (t) => {
+  const p = fixture(t);
+  const run = gitRepo(p);
+  const tree = slash(path.join(p.dir, "fit-dirty"));
+  run(p.checkout, "worktree", "add", "-q", "-b", "wtgui/fit-dirty", tree);
+  for (let i = 1; i <= 3; i += 1) run(tree, "commit", "-q", "--allow-empty", "-m", `unlanded ${i}`);
+  writeFileSync(path.join(tree, "dirty-one.txt"), "one\n");
+  writeFileSync(path.join(tree, "dirty-two.txt"), "two\n");
+  assert.equal(run(tree, "rev-list", "--count", "main..HEAD").trim(), "3", "the fixture tree is genuinely ahead");
+  assert.equal(run(tree, "status", "--porcelain").trim().split(String.fromCharCode(10)).length, 2, "and genuinely dirty");
+
+  const out = await ask(p, { tree });
+  assert.equal(out.status, 200);
+  // The CUT's own sentence, measured from the same function: the pre-flight cannot allow a tree jobs.create refuses.
+  assert.equal(out.body.ok, false, "a tree the cut refuses cannot answer ok before the line");
+  const fitness = out.body.checks.find((c) => c.check === "tree");
+  assert.ok(fitness, `the fitness refusal is in the answer: ${JSON.stringify(out.body.checks)}`);
+  assert.equal(fitness.code, "tree_dirty");
+  assert.match(fitness.reason, /3 unlanded commits that main does not have/, "the commits it holds, counted");
+  assert.match(fitness.reason, /2 uncommitted files/, "the files nobody committed, counted");
+  assert.match(fitness.remedy, /commit or discard those files/);
+  assert.equal(out.body.reason, fitness.reason);
+  // The machine-readable half: quoted numbers, and which read produced them.
+  assert.deepEqual(
+    { read: out.body.treeState.read, source: out.body.treeState.source, ahead: out.body.treeState.ahead, dirty: out.body.treeState.dirty, branch: out.body.treeState.branch },
+    { read: true, source: "git", ahead: 3, dirty: 2, branch: "wtgui/fit-dirty" },
+  );
+  // The cut throws exactly this sentence, so the answer above is the cut's answer by construction.
+  await assert.rejects(
+    () => p.jobs.create({ prompt: "start in the dirty tree", thread: "t-fit-dirty", existing: true, cwd: tree }),
+    (err) => {
+      assert.equal(err.code, "tree_unfit");
+      assert.equal(err.message, `${fitness.reason}. ${fitness.remedy}.`);
+      return true;
+    },
+  );
+});
+
+test("a clean tree ahead of main answers with its count and the cut's allowance", async (t) => {
+  const p = fixture(t);
+  const run = gitRepo(p);
+  const tree = slash(path.join(p.dir, "fit-ahead"));
+  run(p.checkout, "worktree", "add", "-q", "-b", "wtgui/fit-ahead", tree);
+  for (let i = 1; i <= 7; i += 1) run(tree, "commit", "-q", "--allow-empty", "-m", `unlanded ${i}`);
+
+  const out = await ask(p, { tree });
+  assert.equal(out.body.ok, true, "the cut allows a tree with unlanded work");
+  const work = out.body.checks.find((c) => c.code === "tree-unlanded");
+  assert.ok(work, `the unlanded work is reported: ${JSON.stringify(out.body.checks)}`);
+  assert.match(work.reason, /its branch wtgui\/fit-ahead carries 7 unlanded commits that main does not have/);
+  assert.equal(out.body.treeState.ahead, 7);
+  assert.equal(out.body.treeState.dirty, 0);
+  assert.equal(out.body.treeState.source, "git");
 });

@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -31,7 +31,10 @@ import {
   stopPid,
   waitForPidGone,
 } from "../lib/port-holder.js";
-import { startPanel, readSource, waitFor } from "../tools/panel-testkit.mjs";
+import { boot, readSource, stopBootedPanels, waitFor } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // The one switch a failing-first proof needs: point this at an older lib/panel-restart.cjs (extracted with
@@ -110,7 +113,7 @@ async function listenerPids(port) {
 // ---- the three restarts ------------------------------------------------------------------------------
 
 test("a graceful bounce waits only its flush window, stops the panel, and the replacement serves the port", async () => {
-  const old = await startPanel({ keep: true });
+  const old = await boot({ keep: true });
   const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir, graceful: true });
   let replacement = 0;
   try {
@@ -139,7 +142,7 @@ test("with no graceful shutdown asked for, a bounce takes the port at once inste
   //
   // "Takes the port" is the moment the old holder is gone - the replacement's own boot (a server.js start) is
   // seconds on any machine and is not what this boundary is about.
-  const old = await startPanel({ keep: true });
+  const old = await boot({ keep: true });
   const helper = runHelper({ parentPid: old.pid, port: old.port, dir: old.dir, env: { HERMES_PANEL_RESTART_WAIT_MS: "" } });
   let replacement = 0;
   let goneAt = null;
@@ -169,7 +172,7 @@ test("with no graceful shutdown asked for, a bounce takes the port at once inste
 });
 
 test("a stray server.js on the port is stopped even when the pid the helper waited for is already gone", async () => {
-  const stray = await startPanel({ keep: true });
+  const stray = await boot({ keep: true });
   const dead = await gonePid();
   const helper = runHelper({ parentPid: dead, port: stray.port, dir: stray.dir });
   let replacement = 0;
@@ -190,7 +193,7 @@ test("a stray server.js on the port is stopped even when the pid the helper wait
 });
 
 test("a port nothing holds is the quiet path: no kill, and the replacement answers", async () => {
-  const panel = await startPanel({ keep: true });
+  const panel = await boot({ keep: true });
   const { port, pid, dir, base } = panel;
   // The panel exits normally, as the one that asked for the bounce does; the helper is then started with its
   // pid, exactly as the restart would.
@@ -361,9 +364,10 @@ test("the wait for a pid that will not leave is bounded, and says so", async () 
 
 // The controller is the one link these three cases do not drive (a panel bounce exits the process that would be
 // doing the asserting). The helper's argv is the contract between them, and losing the port there would silently
-// turn the freeing step back off, so it is pinned.
+// turn the freeing step back off, so it is pinned. The controller is its own file since row 512, so the source is
+// read there; lib/restart.js is the entry point and no longer holds a spawn.
 test("the controller tells the helper the outgoing pid, the port to free, and that it may flush", () => {
-  const src = readSource("lib/restart.js");
+  const src = readSource("lib/restart-controller.js");
   const call = /panel-restart\.cjs[\s\S]{0,700}?String\(this\.config\.port/.exec(src);
   assert.ok(call, "the spawn of lib/panel-restart.cjs carries the parent pid and this panel's port");
   assert.match(src, /\[helper,[^\]]*?"graceful"\]/, "and the word that says the panel asked to exit, so only a real bounce may wait");

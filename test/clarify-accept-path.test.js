@@ -32,6 +32,9 @@ const PROMPT = "p-accept-1";
 // The page's own functions are what run here, not a rewrite of them. `document`, `state` and `apiFetch` are the
 // only globals the sliced region touches, so each case hands in its own.
 const pageSource = () => readFile(new URL("../public/app.js", import.meta.url), "utf8");
+// The permission box and its answer path were cut out of app.js into public/board/approvals.js (cut 1 of the eight
+// in docs/reports/module-separation-2026-11-28.html), so a slice of that path is read from there.
+const approvalsSource = () => readFile(new URL("../public/board/approvals.js", import.meta.url), "utf8");
 const settingsSource = () => readFile(new URL("../public/settings.js", import.meta.url), "utf8");
 
 // The two appliers that clear the cards were cut out of app.js into settings.js (step 6 of the module
@@ -194,10 +197,11 @@ test("one press answers a question once, greys every copy, and clears both surfa
 // ── 2. the permission card: the same flight, keyed on the gateway's request id ─────────────────
 test("one press answers a permission once, greys every copy, and clears both copies on ok", async () => {
   const page = await pageSource();
+  const approvals = await approvalsSource();
   const settings = await settingsSource();
-  const flights = sliceBetween(page, "const approvalFlights = new Map();", "// The permission box itself:");
-  const sent = sliceBetween(page, "const approvalSent = new Map();", "async function answerApproval(");
-  const handlers = sliceBetween(page, "async function answerRunApproval(", "// Take the decision away from a card");
+  const flights = sliceBetween(approvals, "const approvalFlights = new Map();", "// The permission box itself:");
+  const sent = sliceBetween(approvals, "const approvalSent = new Map();", "async function answerApproval(");
+  const handlers = sliceBetween(approvals, "async function answerRunApproval(", "// Take the decision away from a card");
   const build = pageHarness(
     `${flights}\n${sent}\n${handlers}\n${declaredIn(settings, "applyApprovalAnswered")}`,
     ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "showBanner", "answerRemoteWrite", "closeApprovalCard"],

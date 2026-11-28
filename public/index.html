@@ -4,21 +4,33 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   <title>Worktree Agent Monitor</title>
-  <!-- style.css is split by surface: these nineteen sheets load in the order their rules had inside it, so every
+  <!-- style.css is split by surface: these seventeen sheets load in the order their rules had inside it, so every
        rule keeps the cascade position it held in the one file. tools/verify-css-split.mjs proves the concatenation
        rule for rule, and the six-pane layout delta against the pre-split commit. Add a rule to the sheet that owns
-       its surface, never to a later sheet as a shortcut. -->
+       its surface, never to a later sheet as a shortcut.
+       late.css is gone (row 446): the sliver window's page and board rules are board-table.css's, its page-row two
+       are assistant.css's and its header rule is chrome.css's, each written after the rule it has to beat, and the
+       search popovers' drag and grip chrome is assistant.css's. So no rule on this page depends on a sheet loading
+       last; the order above is the order the surfaces read, not a cascade device. -->
   <link rel="stylesheet" href="/base.css" />
   <link rel="stylesheet" href="/chrome.css" />
   <link rel="stylesheet" href="/settings.css" />
-  <link rel="stylesheet" href="/board.css" />
-  <link rel="stylesheet" href="/jobs.css" />
+  <!-- The board table's own sheet. It stands where board.css stood and now holds every rule that styles the board
+       table and its rows, wherever the 2026-11-27 split had scattered them (chart.css, rows.css, rowstrips.css,
+       boardchips.css, overlays.css). A board-table change opens this file. -->
+  <link rel="stylesheet" href="/board-table.css" />
+  <!-- The console's family, in the order the console draws its parts: the body and the reply composer, the head, the
+       turns, and the model picker the turn head's readout opens. jobs.css and turns.css are gone; what they held is
+       in these four sheets, so a change to an agent's head or its turns opens the sheet that owns that part. -->
   <link rel="stylesheet" href="/console.css" />
-  <link rel="stylesheet" href="/turns.css" />
-  <link rel="stylesheet" href="/rows.css" />
+  <link rel="stylesheet" href="/console-head.css" />
+  <link rel="stylesheet" href="/console-turns.css" />
+  <link rel="stylesheet" href="/model-menu.css" />
   <link rel="stylesheet" href="/overlays.css" />
-  <link rel="stylesheet" href="/rowstrips.css" />
-  <link rel="stylesheet" href="/boardchips.css" />
+  <!-- The panel's type and status utilities: .mono, .name, .branch, .dim, .dimmer, .nowrap, .clean, .dirty. Read by
+       every surface, owned by none, and kept out of the sheets above so a single-class rule cannot be beaten by a
+       surface sheet that happens to load later. -->
+  <link rel="stylesheet" href="/utilities.css" />
   <link rel="stylesheet" href="/assistant.css" />
   <link rel="stylesheet" href="/feedback.css" />
   <link rel="stylesheet" href="/assistant-panes.css" />
@@ -26,10 +38,9 @@
   <link rel="stylesheet" href="/panes.css" />
   <link rel="stylesheet" href="/queue.css" />
   <link rel="stylesheet" href="/pipeline.css" />
-  <link rel="stylesheet" href="/late.css" />
-  <!-- The worktree chart's own rules: the table, its cells and rows, the legend and the row detail. It loads right
-       after the per-surface sheets that now hold style.css's rules, so every rule keeps the cascade position it had
-       when that file was one sheet. -->
+  <!-- The worktree chart's own rules: the age column's ring and figure, its evidence strip, the age arrow and the
+       legend. It loads right after the per-surface sheets, so every rule keeps the cascade position it had when
+       style.css was one sheet; the table itself is board-table.css's. -->
   <link rel="stylesheet" href="/chart.css" />
   <!-- The mermaid pipeline card's own stylesheet, shared with public/pipeline-map.html: the flow dialog's Preview
        draws that page's cards, so the two read one file. -->
@@ -1122,9 +1133,9 @@
         </div>
       </section>
 
-      <section class="project" id="agents">
-        <div class="project-head" data-toggle-fixed="agents" title="minimize this card">
-          <span class="chev">▾</span>
+      <section class="project fixed-collapsed" id="agents">
+        <div class="project-head" data-toggle-fixed="agents" title="expand this card">
+          <span class="chev">▸</span>
           <h2>Unattached agents</h2>
           <span class="path">agents with no worktree of their own — agents started in a worktree are listed under that worktree's row</span>
           <span class="spacer"></span>
@@ -1293,6 +1304,10 @@
        needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
   <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
+  <!-- The git half of the reading below (cut 1, row 523): gitStep and the git subcommand parser, moved verbatim
+       out of the next script, which reads them back off window.wtCommandSummaryGit. It has to be evaluated BEFORE
+       core/command-summary.js, because the entry point destructures that object the moment it runs. -->
+  <script src="/core/command-summary-git.js"></script>
   <!-- The permission card's plain reading of the command: split on &&, ; and |, one short sentence per step, and
        the effects a reader is actually deciding about (deletes, history rewrites, pushes, PROD, a live port, a
        write outside the repo). NO model call and no lookup: a reading of the string, on the page, at paint time.
@@ -1418,9 +1433,14 @@
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->
   <script src="/core/type-stream.js"></script>
   <script src="/board/attachments.js"></script>
+  <!-- The chip itself: its construction and every way the reader edits one (build, insert, fold, remove, the
+       Ctrl+Backspace / Ctrl+Delete word delete), cut out of paste-chips.js at row 517. Loaded BEFORE
+       paste-chips.js, because that file's export object is built at load and re-exports nine of these names. -->
+  <script src="/board/chip-edit.js"></script>
   <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
        attachments.js on purpose: a paste of a FILE belongs to that module (it registers its listener first
-       and prevents the default), and this one steps aside for it. -->
+       and prevents the default), and this one steps aside for it. Still the entry point: its surface is the one
+       every caller and probe reads. -->
   <script src="/board/paste-chips.js"></script>
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>
@@ -1434,10 +1454,16 @@
        wires the Pipeline tab's dropdown and its `open the flow` press at load. -->
   <script src="/pipeline-flow.js"></script>
   <script src="/pipeline-modal.js"></script>
-  <!-- The client console, cut out of app.js: its burst bookkeeping, tool-call rows, row text and markdown,
-       writers, copy/motion and scroll. Loaded BEFORE app.js (app.js's boot IIFE calls its renderers, and
-       app.js reads its top-level consts by bare name); it declares only, so that order costs nothing. -->
+  <!-- The client console, cut out of app.js and then cut four ways (docs/reports/module-separation-2026-11-28.html,
+       card 9). console.js is the entry point and the line vocabulary every cut reads; the cut files beside it hold
+       the stream, the tool groups, the rows and the job lines. They load BEFORE app.js (app.js's boot IIFE calls
+       their renderers, and app.js reads their top-level consts by bare name); they declare only, so the order costs
+       nothing. -->
   <script src="/board/console.js"></script>
+  <script src="/board/console-stream.js"></script>
+  <script src="/board/console-tools.js"></script>
+  <script src="/board/console-rows.js"></script>
+  <script src="/board/job-line.js"></script>
   <!-- The console's bottom-right corner: the press, the move, the release, the step and the ONE limit, plus the one
        band that answers the floor and the room in layout px from the pane's own bottom and the viewport's. Cut out of
        app.js so the arithmetic is one module a gate can import; app.js keeps only the wiring. Published on globalThis
@@ -1543,11 +1569,19 @@
        re-exports them on window.WMApp.charts; it declares (and binds its own settings rows), so that order
        costs nothing and nothing here waits on boot. -->
   <script src="/charts.js"></script>
+  <!-- Cut 1 of public/deliverables.js's two (row 521, from the card for that file in
+       docs/reports/module-separation-2026-11-28.html): the popup's place and size on the page - the DL_* floors,
+       deliverGeo, the zoom and room arithmetic, the clamp and the write-back, the remembered rectangle in
+       localStorage, deliverRestore and deliverPosition - and the popup's two gestures, the head's drag and the
+       corner's resize. Loaded before deliverables.js and app.js, which call them by bare name; it declares only,
+       so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/deliver-frame.js"></script>
   <!-- The deliverables list, cut out of app.js (step 3 of the same order of work): the header button's popover,
        its rows, its text filter and kind chips, its place and size on the page, the store read, the seen
        watermark and the two openers. Loaded before app.js, which calls it by bare name and re-exports it on
        window.WMApp.deliverables; it declares only, and the wiring that runs at load (the button's press, the first
-       read, the poll and the close/place listeners) stays in app.js. -->
+       read, the poll and the close/place listeners) stays in app.js. Since row 521 this file is the entry point: its
+       frame - the place, the size and the two gestures - is the /board/deliver-frame.js above. -->
   <script src="/deliverables.js"></script>
   <!-- The header's Clarify popup: one panel built once, the rows by state, the read of /api/clarify/history, the
        keyboard, and the place/size it remembers in localStorage. public/app.js wires the button and the outside
@@ -1575,18 +1609,45 @@
        re-exports them on window.WMApp.settings; it declares only, so that order costs nothing and nothing here
        waits on boot. -->
   <script src="/settings.js"></script>
+  <!-- Cut 1 of public/render-projects.js's three (row 530, entry 6 of the order of work in
+       docs/reports/module-separation-2026-11-28.html): a project's ordering, a folder's card, the legend
+       and the project section. Loaded before render-projects.js and app.js, which call them by bare name;
+       it declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/project-order.js"></script>
+  <!-- Cut 2 of public/render-projects.js's three (row 530): every turnover branch a project names is a
+       row of its own, the children under their parent with the one fold that hides them, the row template,
+       its kind column and its reviewed chip. Loaded before render-projects.js and app.js, which call them
+       by bare name; it declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/project-row.js"></script>
+  <!-- Cut 3 of public/render-projects.js's three (row 530): the age column and its ring, the stabilise
+       hold, the re-rank with its two move flashes, the SSE batch and the drawing path - placeRow, removeRow
+       and renderProjectRows. Loaded before render-projects.js and app.js, which call them by bare name; it
+       declares only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/row-order.js"></script>
   <!-- The board's projects, sections and rows, cut out of app.js (step 7 of the same order of work): a folder's
        card and its counts, the project section and its head, the worktree row and the age column under it, the
        children under their parent with the one fold that hides them, the ordering that puts a folder, a project
        and a row's cards where they belong, and placeRow / queueRow / renderProjectRows that draw them. Loaded
        before app.js, which calls them by bare name and re-exports them on window.WMApp.projects; it declares
-       only, so that order costs nothing and nothing here waits on boot. -->
+       only, so that order costs nothing and nothing here waits on boot. Since row 530 this file is the header
+       and the record of the surface: its code lives in the three board/ modules above and beside it. -->
   <script src="/render-projects.js"></script>
-  <!-- The job card and its turns, cut out of app.js (step 7 of the same order of work, the second of its two big
-       cuts): the body a turn draws (console lines, reasoning blocks and runs of tool calls), the block a turn sits
-       in, the card template, and the render and update path that keeps a card on the page. Loaded before app.js,
-       which calls them by bare name and re-exports them on window.WMApp.jobs; it declares only, so that order costs
-       nothing and nothing here waits on boot. -->
+  <!-- The body a turn draws, cut out of render-jobs.js (cut 1 of the two in
+       docs/reports/module-separation-2026-11-28.html, section 15): one stream of the panel's console lines,
+       the reasoning rows inside it, the thinking placeholder, and the turn's own block around the body.
+       Loaded before render-jobs.js and app.js, which call them by bare name; it declares only, so that
+       order costs nothing and nothing here waits on boot. -->
+  <script src="/board/stream-body.js"></script>
+  <!-- The card a thread draws, cut out of render-jobs.js (cut 2 of the two in
+       docs/reports/module-separation-2026-11-28.html, section 15): the stuck-turn chip, conversationHtml and
+       jobHtml, the unattached list, the delta's batch and the render and update path. Loaded before
+       render-jobs.js and app.js, which call them by bare name; it declares only, so that order costs nothing. -->
+  <script src="/board/conversation.js"></script>
+  <!-- The job card and its turns, cut out of app.js (step 7 of the same order of work) and then split in two:
+       /board/stream-body.js above is the body a turn draws and the block it sits in, /board/conversation.js is
+       the card, the unattached list and the render and update path. This tag is their load-order anchor and the
+       record of the cut; the file declares nothing. app.js calls both by bare name and re-exports them on
+       window.WMApp.jobs, so that order costs nothing and nothing here waits on boot. -->
   <script src="/render-jobs.js"></script>
   <!-- The cleanup chip's drop-all selection: which plan rows carry the drop label, the count on the button, the
        sentence its confirm shows, the plan re-checked at press time, and the loop that carries on past a refusal.
@@ -1601,6 +1662,68 @@
        which calls them by bare name and re-exports them on window.WMApp.scaffold; it declares only, so that order
        costs nothing and nothing here waits on boot. -->
   <script src="/board-scaffold.js"></script>
+  <!-- The approval dock, cut out of app.js (cut 1 of the eight in docs/reports/module-separation-2026-11-28.html's
+       card for public/app.js): the permission box and its choices table, the one-flight answer per request, a run's
+       own parked question and its answer path, the dock's list with the gestures that walk the reader to the agent
+       that asked, and the panel's own remote-write permission with its receipts, its review and its clock. Loaded
+       before app.js, which calls them by bare name and re-exports them on window.WMApp.approvals; it declares only,
+       so that order costs nothing and nothing here waits on boot. -->
+  <script src="/board/approvals.js"></script>
+  <!-- The reply box's queue, cut out of app.js (cut 2 of the eight in docs/reports/module-separation-2026-11-28.html's
+       card for public/app.js): the draft a send consumed, the session's own prompts, the held reply and its
+       write-through, the queue's offers and waits, the ghost editor that can only revert on a click-away, and the
+       send and steer paths. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.replies; it declares only, so that order costs nothing and nothing here waits on boot. The two
+       delegated listeners the editor owns stay in app.js, with the page's other load-time wiring. -->
+  <script src="/board/replies.js"></script>
+  <!-- The add-agent bar, the model picker and the spawn recovery, cut out of app.js (cut 3 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the name a tree is called on the board,
+       the shell-style history both composers recall, a settled card's Continue and re-attach controls, the inline
+       add-agent bar, the one model list every model field reads, and the recovery that lands the reader on a card a
+       spawn has just made. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.spawn; it declares only, so that order costs nothing and nothing here waits on boot. The inline
+       field's own delegated events stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/spawn.js"></script>
+  <!-- The tree list, its delete and rename, and the child tree's cut, out of app.js (cut 4 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): what the server says about the list,
+       the row's lookups and the two homeless-card kinds, the delete and the reader's lock, the rename by hand, the +
+       that cuts a child from the ROW's branch with its kind-and-parent dialog, and the R or I that lifts a local-only
+       kind. Loaded before app.js, which calls them by bare name and re-exports them on window.WMApp.worktrees; it
+       declares only, so that order costs nothing and nothing here waits on boot. The delegated presses that open the
+       dialog and the lift stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/worktrees.js"></script>
+  <!-- The merge control, its chooser and the row's own cells, out of app.js (cut 5 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the UNMERGED chip and the label that
+       says a merge agent already works that tree, the verdict badge, the chooser between a rebase and a merge into the
+       parent, start-merge, and the row's branch, base, ahead/behind, PR and owner cells. Loaded before app.js, which
+       calls them by bare name and re-exports them on window.WMApp.merge; it declares only, so that order costs nothing
+       and nothing here waits on boot. The delegated presses that open the chooser stay in app.js with the page's other
+       load-time wiring. -->
+  <script src="/board/merge.js"></script>
+  <!-- The liveness ranking, the reading anchor and the board's hygiene, out of app.js (cut 6 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): the sliding average every "life" figure
+       is built on and the windows it prunes, the one ranked sequence and its ticks, the contexts and the seeding, the
+       project hue, the anchor flag and its seconds, the flash durations, the compensation that keeps a repaint from
+       jumping, and the board sweep that holds the reader's place. Loaded before app.js, which calls them by bare name and
+       re-exports them on window.WMApp.anchor; it declares only, so that order costs nothing and nothing here waits on
+       boot. The 1 s clock and the observers that start them stay in app.js with the page's other load-time wiring. -->
+  <script src="/board/anchor.js"></script>
+  <!-- The chart's column widths, the fit and the grips, out of app.js (cut 7 of the eight in
+       docs/reports/module-separation-2026-11-28.html's card for public/app.js): what this browser remembers about the
+       columns, the header cells, the natural width of each column, the plan that fits them into the room the page has,
+       and the grip on each header edge. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.columns; it declares only, so that order costs nothing and nothing here waits on boot. The drag
+       handlers themselves stay in app.js and read the same colDrag binding. -->
+  <script src="/board/columns.js"></script>
+  <!-- The Settings window, out of app.js (cut 8 of the eight in docs/reports/module-separation-2026-11-28.html's card for
+       public/app.js): the tab strip, release notes, settings search, the Skills tab, Permissions, pipeline, bundles, the
+       window's place and size, the provider endpoint and its profiles, the two restarts, model prices and ratings, the
+       assistant reset, the approval window, the Matrix bridge, the small rows, the folders the board scans, agent cleanup
+       and the initiative tier. Loaded before app.js, which calls them by bare name and re-exports them on
+       window.WMApp.settingsWindow; it declares only, so that order costs nothing and nothing here waits on boot. The
+       window's own load-time wiring (the buttons, the tab and search wiring, the reads that fill each tab, the drag, the
+       display rows and the two switches) stays in app.js, because it reads `state` while it runs. -->
+  <script src="/settings-window.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
@@ -1610,8 +1733,28 @@
        question chips, the agents under a task, the window of rows drawn, the reader's order and the drag, and
        the reads and the one write path behind them. Loaded after app.js and before assistant.js, because the
        panel calls its factory when it loads and hands it that file's own helpers; it declares only, so that
-       order costs nothing and nothing here waits on boot. -->
+       order costs nothing and nothing here waits on boot.
+
+       THE ROW is its own file now (entry 8 of docs/reports/module-separation-2026-11-28.html's split plan):
+       the pane's state, the row and its head, the chips, the agents under a task and the reader's order. It is
+       loaded FIRST of the queue's files because /queue-cards.js builds it when its own factory is called; it
+       declares one factory and no page names, so the order among these files is all that matters.
+
+       THE DRAG is next: the pointer gesture, its record and the pane's edge crawl. It reads the row cut and the
+       card cut by name, so it is built last; here it only has to load before /queue-cards.js.
+
+       THE CARD is last of the three: the full card in both modes, the paint, the two reads and the one write path.
+       It reads the row cut and asks the drag one question, so /queue-cards.js is what puts them in build order. -->
+  <script src="/board/queue-row.js"></script>
+  <script src="/board/queue-drag.js"></script>
+  <script src="/board/queue-detail.js"></script>
   <script src="/queue-cards.js"></script>
+  <!-- The watchlist, cut out of the assistant's panel (cut 1 of the four cuts public/assistant.js's card names):
+       one row of a watchlist, the pane that draws one ASSISTANT's list and its add form, the countdown's text,
+       and the clock that runs each deadline down in place once a second. Loaded after app.js and before
+       assistant.js, because the panel calls its factory when it loads and hands it that file's own helpers; it
+       declares one factory and no page names, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/assistant/watches.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
   <script src="/assistant.js"></script>

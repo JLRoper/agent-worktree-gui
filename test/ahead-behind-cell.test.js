@@ -6,12 +6,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The cells and the merge control were cut out of app.js into public/board/merge.js (cut 5 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so both regions are read from the file that carries them.
+const src = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 // The chart's columns moved to public/charts.js in step 3 of docs/reports/module-map-2026-11-07.html's order of
 // work, so the section pin below reads the file that carries it now; the row's cells moved to
-// public/render-projects.js in step 7, which is where the one-cell-per-column map is read.
+// public/render-projects.js in step 7, and on to public/board/project-row.js in row 530's cut 2, which is
+// where the one-cell-per-column map is read.
 const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
-const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
+const projects = readFileSync(new URL("../public/board/project-row.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "ahead / behind cell");
 // The two pins at the bottom of this file are pins on a SECTION, cut the way every other slice in test/ is cut: a
 // `// ---- name … // ---- end name` pair travels as one, so an anchor cannot end up outside the section whose closer
@@ -124,7 +127,10 @@ test("the column header explains the arrows, and the verdict carries the count a
   assert.match(chartColumns, /label: "Ahead \/ Behind"/);
   assert.match(chartColumns, /title:\s*\n?\s*"↑ commits this branch has that its own copy on the remote does not[^"]*"/);
   assert.match(chartColumns, /id: "ahead"/);
-  assert.match(projects, /ahead: `<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>`/);
+  // The ahead cell reads the section that owns it; a CONTAINER ROW (a turnover branch with no worktree) draws the
+  // chart's dash instead, because there is no copy on the remote to count against.
+  assert.match(projects, /ahead: `<td class="mono nowrap">\$\{container \?/);
+  assert.match(projects, /: aheadBehindCellHtml\(row\)\}<\/td>`/);
   // verdictHtml keeps the sentence inline so tools/verify-merge-chip.mjs can read its region on its own.
   assert.match(mergeControl, /function verdictHtml\(row\) \{/, "verdictHtml is not in the merge control section");
   assert.match(mergeControl, /Against \$\{row\.baseRef\}: \$\{Number\(row\.ahead\) \|\| 0\} ahead, \$\{Number\(row\.behind\) \|\| 0\} behind\./);

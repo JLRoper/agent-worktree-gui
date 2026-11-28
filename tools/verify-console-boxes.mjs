@@ -35,6 +35,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 import { readStyleSheets as sheetText } from "./style-sheets.mjs";
+import { consoleSource } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -767,7 +768,8 @@ function sourceChecks() {
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
   // The console's renderers moved out of app.js into board/console.js (the board split), so a source check that
   // reads app.js alone answers 0 for code that IS there and reads as a regression nobody made. Read both.
-  const board = readFileSync(path.join(ROOT, "public", "board", "console.js"), "utf8");
+  // public/board/console.js and its four cuts, in page order.
+  const board = consoleSource();
   const src = `${app}\n${board}`;
   const css = sheetText(ROOT);
   const mod = readFileSync(path.join(ROOT, "public", "core", "console-format.js"), "utf8");

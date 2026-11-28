@@ -204,6 +204,13 @@ export async function startPanel({ token = null, config = {}, env = {}, dir: giv
     home: path.join(dir, "hermes"),
     log: () => out.join(""),
     pid: child.pid,
+    // Let this child stop holding the process open: the process handle and its three pipes are what keep a test
+    // worker's event loop non-empty after its tests answer. `boot()` calls this, because a test file must never be
+    // parked by a panel it forgot; a harness calls stop() itself and never needs it.
+    unref() {
+      child.unref();
+      for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.unref?.();
+    },
     async stop() {
       if (!exited) {
         await new Promise((resolve) => {
@@ -224,6 +231,79 @@ export async function startPanel({ token = null, config = {}, env = {}, dir: giv
     },
   };
 }
+
+// ---- the registry: a booted panel cannot outlive the file that booted it --------------------------------
+//
+// A panel is a child process plus three pipes, and Node's runner only lets a test FILE exit once its event loop is
+// empty. A test that throws between `startPanel()` and its own `panel.stop()` line therefore strands that child: the
+// worker never exits, `node --test` waits on it forever, and the file's summary is the last thing anyone sees. That
+// is the stall docs/reports/npm-test-stall-2026-11-28.html measured - every test answered, nine workers parked on a
+// server.js child they were never told to stop - and row 569 fixed it in ONE file with a local copy of this net.
+//
+// Two things, and the first is the one that cannot fail:
+//
+//   1. `boot()` starts the panel, keeps it in this file's registry, and UNREFS it: the child process handle and its
+//      three pipes stop holding the worker's event loop, so a panel nobody stopped can no longer park the file. The
+//      worker reaches its end whatever the hooks do, and the stranded child sees its stdin close and shuts itself
+//      down (PANEL_PARENT_WATCH_STDIN, the same net row 569 relied on).
+//   2. `stopBootedPanels()` stops everything this file booted and has not stopped itself. The file registers it once,
+//      at module scope, as `after(stopBootedPanels);`. That is the graceful stop: it frees the port and removes a
+//      `keep: false` sandbox at the moment the file ends.
+//
+// Why the registry sweep is not the guarantee: a hook's timing follows where the module being loaded first suspends,
+// not where the hook is written. Measured on test/waves-write.test.js, whose preamble awaits a panel before it
+// declares a single test: a hook registered while the kit was imported ran 2.3 s before that file's first boot, with
+// the registry empty, and swept nothing - and the same line written in the file's own body ran at the same wrong
+// moment. A sweep on `beforeExit` is no better: it fires wherever the loop happens to drain, which with an unref'd
+// child can be between two awaits inside one test, and it stopped a panel a later assertion still used. So the sweep
+// is the graceful path and the unref is the cure.
+//
+// The per-test `t.after(() => panel.stop())` line stays the fast path: it frees the child and the port the moment
+// the test is done, and `stop()` removes the panel from the registry. The file-level sweep is the net for every path
+// that never reaches that line. Prove it with tools/panel-boot-proof.mjs: a copy of a converted file with every
+// per-test hook stripped - and a boot that throws before any stop - still exits on its own.
+const bootedPanels = new Set();
+
+// Stop the panel, then forget it. A stop that throws leaves it registered, so the file-level sweep still tries it.
+function registered(panel) {
+  const stop = panel.stop.bind(panel);
+  panel.stop = async () => {
+    const answer = await stop();
+    bootedPanels.delete(panel);
+    return answer;
+  };
+  return panel;
+}
+
+// Start a panel, and keep it until it is stopped. The one call a test file needs on top of startPanel().
+export async function boot(options = {}) {
+  const panel = registered(await startPanel(options));
+  bootedPanels.add(panel);
+  // The belt under the net: a panel that outlives its sweep must still not be able to hold the worker open.
+  panel.unref();
+  return panel;
+}
+
+// Stop everything this file booted and has not stopped itself, newest first (the newest boot is usually the one a
+// failed test left behind). Failures are collected, never thrown: a throwing hook hides the runner's own summary,
+// which is the one line a stalled file never printed.
+export async function stopBootedPanels() {
+  const live = [...bootedPanels].reverse();
+  bootedPanels.clear();
+  const results = [];
+  for (const panel of live) {
+    try {
+      await panel.stop();
+      results.push({ pid: panel.pid, port: panel.port, dir: panel.dir, stopped: true });
+    } catch (error) {
+      results.push({ pid: panel.pid, port: panel.port, dir: panel.dir, stopped: false, error: String(error?.message || error) });
+    }
+  }
+  return results;
+}
+
+// What this file has booted and not yet stopped, for a test or a tool that wants to say so.
+export const panelsBooted = () => [...bootedPanels].map((panel) => ({ pid: panel.pid, port: panel.port, dir: panel.dir, base: panel.base }));
 
 // Poll `fn()` until it returns a truthy value or `timeoutMs` expires. Used across the verification harnesses
 // so each script does not carry its own copy of the polling loop.
@@ -303,6 +383,65 @@ export function sliceRegion(src, name, endName = name) {
   const end = src.indexOf(`// ---- end ${endName}`);
   if (!(begin >= 0 && end > begin)) throw new Error(`missing region // ---- ${name} in source`);
   return src.slice(src.indexOf("\n", begin) + 1, end);
+}
+
+// EVERY region with one name, from a source that is more than one file. public/queue-cards.js was cut into three
+// files (public/board/queue-{row,drag,detail}.js) and each keeps the `// ---- the queue sub-tab` pair, so a test that
+// drives the whole pane asks for all of them in one text and evaluates the page's own bodies, moved but unchanged.
+export function sliceRegions(src, name, endName = name) {
+  const lines = src.split("\n");
+  const out = [];
+  let open = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    const at = lines[i].indexOf("// ---- ");
+    if (at < 0 || lines[i].slice(0, at).trim() !== "") continue;
+    const body = lines[i].slice(at + "// ---- ".length);
+    if (open < 0) {
+      if (body.startsWith(name)) open = i + 1;
+    } else if (body.startsWith(`end ${endName}`)) {
+      out.push(lines.slice(open, i).join("\n"));
+      open = -1;
+    }
+  }
+  if (!out.length) throw new Error(`missing region // ---- ${name} in source`);
+  return out.join("\n");
+}
+
+// The queue cards' source AS THE PAGE LOADS IT: the three cuts in load order, then the entry point that builds them.
+// A cut that has not landed yet is an empty string rather than an error, so one call serves every stage of the split.
+const QUEUE_CARD_FILES = ["board/queue-row.js", "board/queue-drag.js", "board/queue-detail.js", "queue-cards.js"];
+export function queueCardsSource() {
+  return QUEUE_CARD_FILES.map((rel) => {
+    const abs = path.join(ROOT, "public", rel);
+    return existsSync(abs) ? readFileSync(abs, "utf8") : "";
+  }).join("\n");
+}
+
+// The console's source AS THE PAGE LOADS IT. public/board/console.js was cut four ways (row #533, card 9 of
+// docs/reports/module-separation-2026-11-28.html): the entry point keeps the line vocabulary, and console-stream,
+// console-tools, console-rows and job-line are classic scripts beside it. A cut that has not landed yet is an empty
+// string rather than an error, so one helper serves every stage of the split. CRLF is normalised because every caller
+// treats the source as text and slices it by marker.
+const CONSOLE_FILES = [
+  "board/console.js",
+  "board/console-stream.js",
+  "board/console-tools.js",
+  "board/console-rows.js",
+  "board/job-line.js",
+];
+export function consoleSource() {
+  return CONSOLE_FILES.map((rel) => {
+    const abs = path.join(ROOT, "public", rel);
+    return existsSync(abs) ? readFileSync(abs, "utf8").replace(/\r\n/g, "\n") : "";
+  }).join("\n");
+}
+
+// The same files as <script> tags in the same order, for a fixture page that serves THIS checkout's public/**. The
+// console's cuts are page globals, so a fixture that loads the entry point alone loads a console with holes in it.
+export function consoleScriptTags() {
+  return CONSOLE_FILES.filter((rel) => existsSync(path.join(ROOT, "public", rel)))
+    .map((rel) => `<script src="/public/${rel}"></script>`)
+    .join("\n");
 }
 
 const sourceCache = new Map();

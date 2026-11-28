@@ -13,11 +13,12 @@
 //   the popover          deliverPopEl, openDeliverPop, closeDeliverPop, toggleDeliverPop, deliverKindChipsHtml,
 //                        deliverTabStops, toggleDeliverKind, paintDeliverKinds: one panel built once and reused,
 //                        with one opener per row and a chip per kind.
-//   the place and size   the DL_* floors and DL_RECT_KEY, deliverGeo, deliverZoom, deliverSpace,
-//                        clampDeliverRect, paintDeliverRect, clearDeliverRect, deliverStoredRect,
+//   the place and size   CUT OUT since row 521: the DL_* floors and DL_RECT_KEY, deliverGeo, deliverZoom,
+//                        deliverSpace, clampDeliverRect, paintDeliverRect, clearDeliverRect, deliverStoredRect,
 //                        deliverRemember, deliverForget, deliverStoredFits, deliverRestore, deliverPosition and
-//                        the three gesture handlers. Layout lengths against visual room: every number that says
-//                        where the panel LANDED is divided by the page zoom only when it is written back.
+//                        the three gesture handlers are declared in public/board/deliver-frame.js. Layout lengths
+//                        against visual room: every number that says where the panel LANDED is divided by the
+//                        page zoom only when it is written back. The record of the surface is below.
 //   the list             deliverList, deliverFetch, paintDeliverRows, deliverRowHtml, deliverLinkLabel,
 //                        deliverDayLabel, deliverMarkActive, paintDeliverAges, deliverKeydown.
 //   the count            deliver (the page's own list state), DELIVER_DEFAULT_CAP, deliverUnseenCount,
@@ -46,7 +47,10 @@
 // THE LOAD CONTRACT. public/index.html loads CLASSIC scripts, so the page is one global scope: a top-level
 // `function` here is a window property and a top-level `let` is a binding every other script reads by bare name.
 // This file DECLARES ONLY - nothing in it reads an app.js binding while it loads, so sitting before app.js costs
-// nothing and cannot land in a temporal dead zone. public/app.js re-exports these names on window.WMApp.deliverables.
+// nothing and cannot land in a temporal dead zone. Since row 521 the frame is one file over, in
+// public/board/deliver-frame.js, which the shell loads before this file: its names are page globals by the same
+// rule, and this file keeps the record of them. public/app.js re-exports every name in both files on
+// window.WMApp.deliverables.
 
 // ---- deliverables: one button, one list, everything an agent handed back -------------------------
 // A worker hands something back with one line in its FINAL message — `DELIVER <kind> <target> | <title>` — and
@@ -243,222 +247,24 @@ function paintDeliverKinds(present) {
   }
 }
 
-// ---- the popup's place on the page: LAYOUT lengths, VISUAL room ------------------------------------------------
-// The panel is `position: fixed`, so its `left`/`top`/`width`/`height` are LAYOUT lengths — but every number that
-// says where it LANDED is a VISUAL length: `getBoundingClientRect()` and `window.innerWidth` are CSS px of the
-// screen, and Settings > Display's page zoom (`documentElement.style.zoom`, `applyZoom`) is the factor between the
-// two. This rule used to mix them, and that is the defect the reader measured:
+// ---- the deliver frame is cut out: the record of this surface --------------------------------
+// Row 521 moved the popup's place on the page and its two gestures out of this file into
+// public/board/deliver-frame.js, which public/index.html loads before this file and before app.js. The block was
+// moved line for line (lines 246-460 of f22b1c78:public/deliverables.js, byte for byte): not one body was
+// rewritten and not one call site was touched. The badge below, the rows, the keydown, the openers and this file's
+// header stay here, and that is the second cut the report proposes for this file.
 //
-//     const r = btn.getBoundingClientRect();            // VISUAL px (a zoomed page scales it)
-//     const w = pop.offsetWidth || ...;                 // LAYOUT px (offsetWidth is not zoomed)
-//     const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));   // all three in one sum
+// These names are declared in public/board/deliver-frame.js now, and this file declares none of them twice:
 //
-// A zoomed page scales the button's rect (measured at 200%: x=724, 1120x1260, i.e. 404 px past the right edge and
-// 762 px below the window) while `style.left` is written unzoomed, and the `innerWidth - w` clamp cannot hold it
-// because it subtracts a LAYOUT width (560) from a VISUAL viewport while the drawn width is 560 x zoom. Nothing
-// clamped `top` at all, so a tall list or a short window hung the foot off the bottom too (measured at 130% in a
-// 1280x800 window: the foot sat at y=863). So the placement below is computed entirely in VISUAL px and divided by
-// the zoom only when it is written back as a style length, and the clamp covers all four edges plus the size.
+//   DL_MARGIN, DL_GAP, DL_MIN_W, DL_MIN_H, DL_MAX_W, DL_MAX_H, DL_SLOP, DL_RECT_KEY, deliverGeo,
+//   deliverZoom, deliverSpace, clampDeliverRect, paintDeliverRect, clearDeliverRect, deliverStoredRect,
+//   deliverRemember, deliverForget, deliverStoredFits, deliverRestore, deliverPosition,
+//   deliverGestureStart, deliverGestureMove, deliverGestureEnd
 //
-// The remembered rectangle is the reader's, not the page's: it lives in localStorage, it is restored only while it
-// still FITS this window (a narrowed window or a raised zoom drops it rather than clamping quietly — the next open is
-// then the default under the button, which is a place the reader can see), and a drag or a resize writes it back.
-const DL_MARGIN = 8;       // every side: the panel never touches the viewport edge
-const DL_GAP = 6;          // between the button and the panel, on first open
-const DL_MIN_W = 320;      // narrower than this and a row's title is an ellipsis with an Open tag
-const DL_MIN_H = 180;
-const DL_MAX_W = 900;      // wider than this and a list of rows stops reading as a list
-const DL_MAX_H = 820;
-const DL_SLOP = 3;         // a press that moves less than this is a click on the head, not a drag
-const DL_RECT_KEY = "wtgui.deliverables.rect";
-
-// `rect` is the rectangle the page is drawing (VISUAL px) once the reader has moved or sized the panel; null means
-// CSS still owns the size and the panel hangs under the button. `drag`/`resize` are the live gesture, if any.
-const deliverGeo = { rect: null, sized: false, drag: null, resize: null };
-
-function deliverZoom() {
-  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
-  return Number.isFinite(z) && z > 0 ? z : 1;
-}
-
-// The room the panel may use, in VISUAL px, and the factor that turns a visual length into a style length.
-function deliverSpace() {
-  const vw = Math.max(1, Math.round(window.innerWidth));
-  const vh = Math.max(1, Math.round(window.innerHeight));
-  return { z: deliverZoom(), vw, vh, roomW: Math.max(1, vw - DL_MARGIN * 2), roomH: Math.max(1, vh - DL_MARGIN * 2) };
-}
-
-// A rectangle of VISUAL px, clamped: the size first (the reader's min/max, then the room this window has), then the
-// position, so a panel that no longer fits is SHRUNK into the window instead of hanging off an edge. `max: false` is
-// the DRAG's rule: a page zoom can make the panel wider than the reader's own max, and dragging it must not also
-// shrink it — only the resize handle may take it down to the min or up to the max.
-function clampDeliverRect(g, { max = true } = {}) {
-  const { vw, vh, roomW, roomH } = deliverSpace();
-  const w = max
-    ? Math.min(Math.max(Math.round(g.w), DL_MIN_W), DL_MAX_W, roomW)
-    : Math.min(Math.max(Math.round(g.w), DL_MIN_W), roomW);
-  const h = max
-    ? Math.min(Math.max(Math.round(g.h), DL_MIN_H), DL_MAX_H, roomH)
-    : Math.min(Math.max(Math.round(g.h), DL_MIN_H), roomH);
-  const x = Math.min(Math.max(Math.round(g.x), DL_MARGIN), Math.max(DL_MARGIN, vw - w - DL_MARGIN));
-  const y = Math.min(Math.max(Math.round(g.y), DL_MARGIN), Math.max(DL_MARGIN, vh - h - DL_MARGIN));
-  return { x, y, w, h };
-}
-
-// Write a VISUAL rectangle back as style lengths. Until the reader sizes the panel, `width`/`height` are left to the
-// stylesheet (a flex column that is exactly as tall as its rows): a first open must not pin a height the list then
-// grows out of.
-function paintDeliverRect(g) {
-  const pop = deliver.el;
-  if (!pop) return;
-  const { z } = deliverSpace();
-  pop.style.left = `${Math.round(g.x / z)}px`;
-  pop.style.top = `${Math.round(g.y / z)}px`;
-  pop.style.right = "auto";
-  if (!deliverGeo.sized) return;
-  pop.style.width = `${Math.round(g.w / z)}px`;
-  pop.style.height = `${Math.round(g.h / z)}px`;
-  pop.style.maxHeight = "none";
-}
-
-function clearDeliverRect() {
-  const pop = deliver.el;
-  if (!pop) return;
-  deliverGeo.rect = null;
-  deliverGeo.sized = false;
-  pop.style.width = "";
-  pop.style.height = "";
-  pop.style.maxHeight = "";
-}
-
-function deliverStoredRect() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DL_RECT_KEY) || "null");
-    if (!raw || typeof raw !== "object") return null;
-    const out = { x: Number(raw.x), y: Number(raw.y), w: Number(raw.w), h: Number(raw.h) };
-    return ["x", "y", "w", "h"].every((k) => Number.isFinite(out[k])) ? out : null;
-  } catch {
-    return null; // a corrupt or unreadable store is the same as none
-  }
-}
-
-function deliverRemember(g) {
-  try {
-    localStorage.setItem(DL_RECT_KEY, JSON.stringify(g));
-  } catch {
-    /* private mode: the place just will not persist */
-  }
-}
-
-function deliverForget() {
-  try {
-    localStorage.removeItem(DL_RECT_KEY);
-  } catch {
-    /* nothing to clear */
-  }
-}
-
-// A remembered rectangle is used only while it still fits: on screen with the margin on every side, and inside the
-// sizes the panel draws. Anything else is a place this window does not have any more.
-function deliverStoredFits(g) {
-  const { vw, vh } = deliverSpace();
-  return g.w >= DL_MIN_W && g.w <= DL_MAX_W && g.h >= DL_MIN_H && g.h <= DL_MAX_H
-    && g.x >= DL_MARGIN && g.y >= DL_MARGIN
-    && g.x + g.w <= vw - DL_MARGIN && g.y + g.h <= vh - DL_MARGIN;
-}
-
-// Open: a remembered rectangle when it still fits THIS window, otherwise the default under the button. One that no
-// longer fits is DROPPED, not quietly re-clamped: the open is then the default, which is a place the reader can see,
-// rather than a size they chose for another window.
-function deliverRestore() {
-  const stored = deliverStoredRect();
-  if (stored && deliverStoredFits(stored)) {
-    deliverGeo.rect = stored;
-    deliverGeo.sized = true;
-    paintDeliverRect(clampDeliverRect(stored));
-    return;
-  }
-  if (stored) deliverForget();
-  clearDeliverRect();
-  deliverPosition();
-}
-
-// Open: the reader's remembered rectangle when it still fits, otherwise the default under the button with the whole
-// panel clamped into the window. The default width is the panel's OWN measured box, not a constant, so a narrow
-// window and a zoomed page are answered by the same arithmetic.
-function deliverPosition() {
-  const btn = $("btn-deliver");
-  const pop = deliver.el;
-  if (!btn || !pop || pop.hidden) return;
-  const space = deliverSpace();
-  if (deliverGeo.sized && deliverGeo.rect) {
-    const g = clampDeliverRect(deliverGeo.rect);
-    deliverGeo.rect = g;
-    paintDeliverRect(g);
-    return;
-  }
-  // The stylesheet owns the height here, so the cap is computed from the ROOM the window has — not from the box as
-  // it is this instant. On a first open the list has not painted yet (it is 160 px tall for one frame and grows to
-  // 630 as the rows land), so a cap measured from the box would be answered by the wrong rectangle: that is how the
-  // panel's foot ended up below the window. `70vh` is a LAYOUT length too, so a page zoom multiplied it.
-  pop.style.maxHeight = "";
-  const r = btn.getBoundingClientRect();
-  const room = Math.max(DL_MIN_H, space.vh - Math.round(r.bottom + DL_GAP) - DL_MARGIN);
-  // The sheet's own default (70vh) still caps the panel's first-paint height, so a 900 px window does not get an
-  // 809 px list; the room the window has is the tighter of the two and is what the clamp below is measured against.
-  const cap = Math.min(room, Math.round(space.vh * 0.7), DL_MAX_H);
-  pop.style.maxHeight = `${Math.floor(cap / space.z)}px`;
-  const box = pop.getBoundingClientRect();
-  const w = Math.min(Math.round(box.width), space.roomW);
-  const h = Math.min(Math.round(box.height), space.roomH);
-  const x = Math.min(Math.max(Math.round(r.right - w), DL_MARGIN), Math.max(DL_MARGIN, space.vw - w - DL_MARGIN));
-  const y = Math.min(Math.max(Math.round(r.bottom + DL_GAP), DL_MARGIN), Math.max(DL_MARGIN, space.vh - h - DL_MARGIN));
-  paintDeliverRect({ x, y, w, h });
-}
-
-// ---- the two gestures: the HEAD drags, the CORNER resizes -----------------------------------------------
-// Only the head is a handle. A press on a control inside it (the filter, a chip, the close button) is that control
-// and starts nothing; the body is never a handle, so its text stays selectable and the list keeps scrolling.
-function deliverGestureStart(e, kind) {
-  const pop = deliver.el;
-  if (!pop || pop.hidden || e.button !== 0) return;
-  const box = pop.getBoundingClientRect();
-  deliverGeo[kind] = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, rect: { x: box.left, y: box.top, w: box.width, h: box.height } };
-  e.currentTarget.setPointerCapture?.(e.pointerId);
-  e.preventDefault(); // a drag is not a text selection
-}
-
-function deliverGestureMove(e) {
-  const gesture = deliverGeo.drag || deliverGeo.resize;
-  if (!gesture || gesture.id !== e.pointerId) return;
-  const isDrag = Boolean(deliverGeo.drag);
-  const dx = e.clientX - gesture.x;
-  const dy = e.clientY - gesture.y;
-  if (!gesture.moved && Math.abs(dx) + Math.abs(dy) < DL_SLOP) return;
-  gesture.moved = true;
-  // The first move pins the size the panel already has, so a drag can never resize it and a resize can never move it.
-  if (!deliverGeo.sized) {
-    deliverGeo.sized = true;
-    deliverGeo.rect = { ...gesture.rect };
-  }
-  const g = isDrag
-    ? clampDeliverRect({ x: gesture.rect.x + dx, y: gesture.rect.y + dy, w: gesture.rect.w, h: gesture.rect.h }, { max: false })
-    : clampDeliverRect({ x: gesture.rect.x, y: gesture.rect.y, w: gesture.rect.w + dx, h: gesture.rect.h + dy });
-  deliverGeo.rect = g;
-  deliver.el?.classList.add("is-dragging");
-  paintDeliverRect(g);
-}
-
-function deliverGestureEnd(e) {
-  if (!deliverGeo.drag && !deliverGeo.resize) return;
-  const gesture = deliverGeo.drag || deliverGeo.resize;
-  if (e && gesture.id !== e.pointerId) return;
-  deliverGeo.drag = null;
-  deliverGeo.resize = null;
-  deliver.el?.classList.remove("is-dragging");
-  if (gesture.moved && deliverGeo.rect) deliverRemember(deliverGeo.rect);
-}
-
+// THIS RECORD IS THE RE-EXPORT. A classic script has no export statement: a top-level function over there is the
+// same window property it was here, and a top-level const the same binding every later script reads by bare name.
+// The page's global scope is where these names live, and this file is the one that says where they went.
+// public/app.js:59-72 lists all 23 on window.WMApp.deliverables, by the same names, exactly as before.
 
 // THE BADGE. Rows ABOVE the persisted watermark — so a list that has never been opened counts every row, and a list
 // opened once and then left alone counts nothing until something NEW is delivered. The highlight is a CLASS on the

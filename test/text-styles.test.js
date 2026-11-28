@@ -18,10 +18,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8");
 const src = read("public/app.js");
 const settings = read("public/settings.js");
+// Fonts, text styles and the pickers they fill were cut out of app.js into public/settings-window.js (cut 8 of the
+// eight in docs/reports/module-separation-2026-11-28.html).
+const settingsWindow = read("public/settings-window.js");
 const html = read("public/index.html");
 // The card that re-emits the zoom is drawn by renderConversation, which moved to public/render-jobs.js with step 7
 // of docs/reports/module-map-2026-11-07.html; the wheel handler itself stayed in app.js.
-const jobs = read("public/render-jobs.js");
+const jobs = ["public/board/stream-body.js", "public/board/conversation.js", "public/render-jobs.js"].map((f) => read(f)).join("\n");
 const css = readStyleSheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- text styles");
@@ -245,7 +248,7 @@ test("the page wires every control, fills the pickers at start-up and retires th
   assert.match(src, /addEventListener\("input", \(e\) => applyTextStyle\(kind, \{ color: e\.target\.value \}\)\)/, "the colour follows the picker while it is dragged");
   assert.match(src, /addEventListener\("change", \(e\) => applyTextStyle\(kind, \{ save: true, color: e\.target\.value \}\)\)/, "and is saved when it settles");
   assert.match(src, /\[data-text-reset\]/);
-  const init = src.slice(src.indexOf("function initFonts()"), src.indexOf("// Paint the saved question-box look"));
+  const init = settingsWindow.slice(settingsWindow.indexOf("function initFonts()"), settingsWindow.indexOf("// Paint the saved question-box look"));
   assert.match(init, /<option value="">Default<\/option>/, "the skill size still offers Default");
   assert.match(init, /retireTextStyleSize\(kind\)/, "the retired reasoning size is cleared on start-up");
   assert.match(init, /applyTextStyle\(kind\)/, "the saved look is painted before the first card is drawn");

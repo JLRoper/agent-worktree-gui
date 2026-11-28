@@ -496,15 +496,18 @@ async function browserPhase(pw, base) {
 
     // ============ (7) the source contract ============
     console.log("\n== (7) one operation, ordered after the post and before the repaint ==");
-    const appSrc = readSource("public/app.js");
+    // sendReply, steerTurn and the one clear were cut out of app.js into public/board/replies.js (cut 2 of the eight
+    // in docs/reports/module-separation-2026-11-28.html), so the source contract is read from the file that now
+    // carries them.
+    const repliesSrc = readSource("public/board/replies.js");
     const chipsSrc = readSource("public/board/paste-chips.js");
-    const sendBody = appSrc.slice(appSrc.indexOf("async function sendReply("), appSrc.indexOf("async function steerTurn("));
-    eq("(7) one definition of the clear", (appSrc.match(/function clearSentDraft\(/g) || []).length, 1);
-    ok("(7) it clears the map, the mirror and the DOM", /state\.replyDrafts\[bound\] = ""/.test(appSrc) && /forgetReplyDraft\(bound\)/.test(appSrc) && /writeBox\(el, ""\)/.test(appSrc));
+    const sendBody = repliesSrc.slice(repliesSrc.indexOf("async function sendReply("), repliesSrc.indexOf("async function steerTurn("));
+    eq("(7) one definition of the clear", (repliesSrc.match(/function clearSentDraft\(/g) || []).length, 1);
+    ok("(7) it clears the map, the mirror and the DOM", /state\.replyDrafts\[bound\] = ""/.test(repliesSrc) && /forgetReplyDraft\(bound\)/.test(repliesSrc) && /writeBox\(el, ""\)/.test(repliesSrc));
     ok("(7) the send calls it exactly once", (sendBody.match(/clearSentDraft\(/g) || []).length === 1, sendBody.match(/clearSentDraft\(/g)?.length);
     ok("(7) after the post is accepted", sendBody.indexOf("if (!r.ok) throw") >= 0 && sendBody.indexOf("clearSentDraft(") > sendBody.indexOf("if (!r.ok) throw"));
     ok("(7) and before the response's repaint", sendBody.indexOf("clearSentDraft(") > 0 && sendBody.indexOf("clearSentDraft(") < sendBody.indexOf("updateJob(d.job"));
-    ok("(7) the queue press and both steer paths use the same one", (appSrc.match(/clearSentDraft\(/g) || []).length >= 4, (appSrc.match(/clearSentDraft\(/g) || []).length);
+    ok("(7) the queue press and both steer paths use the same one", (repliesSrc.match(/clearSentDraft\(/g) || []).length >= 4, (repliesSrc.match(/clearSentDraft\(/g) || []).length);
     ok("(7) the mirror clear is keyed on the thread, not a node", /function forgetReplyDraft\(thread\)/.test(chipsSrc) && /const key = `reply:\$\{t\}`/.test(chipsSrc));
 
     // ============ page health ============

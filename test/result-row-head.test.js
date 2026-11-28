@@ -11,9 +11,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceRegion } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceRegion } from "../tools/panel-testkit.mjs";
 
-const code = sliceRegion(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "result row head");
+const code = sliceRegion(consoleSource() + "\n" + readSource("public/app.js"), "result row head"); // public/board/console.js and its cuts
 const { resultRowIndex, shouldPaceResultRow, RESULT_PACED_ROWS } = new Function(
   `${code}\nreturn { resultRowIndex, shouldPaceResultRow, RESULT_PACED_ROWS };`,
 )();

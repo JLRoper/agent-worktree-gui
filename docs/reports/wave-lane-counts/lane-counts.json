@@ -1,0 +1,967 @@
+{
+ "at": "2026-11-28T08:32:07.495Z",
+ "root": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-491-is-the-complete-brief-implement-8844bc",
+ "home": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/wag-wave-lane-counts",
+ "version": "1.197.0",
+ "widths": {
+  "wide": {
+   "viewport": 1400,
+   "float": 1384,
+   "waveColumn": 1304
+  },
+  "narrow": {
+   "viewport": 900,
+   "float": 900,
+   "waveColumn": 804
+  }
+ },
+ "waves": {
+  "wide": {
+   "2": {
+    "drawing": "cards",
+    "lanes": 2,
+    "waveW": 1280,
+    "waveH": 307,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 0,
+    "head": false,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": {
+      "y": 73,
+      "h": 183
+     },
+     "actions": {
+      "y": 264,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 183
+     },
+     "lane": {
+      "y": 73,
+      "h": 183
+     },
+     "sums": null,
+     "manifest": null,
+     "join": {
+      "y": 73,
+      "h": 183
+     }
+    },
+    "members": [
+     {
+      "id": "201",
+      "draw": "card",
+      "titleW": 476,
+      "lines": 2,
+      "overflow": 0,
+      "memberH": 68
+     },
+     {
+      "id": "202",
+      "draw": "card",
+      "titleW": 476,
+      "lines": 2,
+      "overflow": 0,
+      "memberH": 68
+     },
+     {
+      "id": "203",
+      "draw": "card",
+      "titleW": 476,
+      "lines": 2,
+      "overflow": 0,
+      "memberH": 68
+     }
+    ],
+    "laneCells": [],
+    "widestTitle": 476,
+    "maxLines": 2,
+    "maxOverflow": 0
+   },
+   "3": {
+    "drawing": "table",
+    "lanes": 3,
+    "waveW": 1280,
+    "waveH": 317,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 3,
+    "head": true,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": null,
+     "actions": {
+      "y": 274,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 152
+     },
+     "lane": null,
+     "sums": {
+      "y": 73,
+      "h": 18
+     },
+     "manifest": {
+      "y": 95,
+      "h": 130
+     },
+     "join": {
+      "y": 231,
+      "h": 35
+     }
+    },
+    "members": [
+     {
+      "id": "207",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "204",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "205",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "206",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 26
+     }
+    ],
+    "laneCells": [
+     {
+      "full": "public/core/dom.js",
+      "shown": "dom.js",
+      "colW": 162,
+      "labelW": 33,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/index.html",
+      "shown": "index.html",
+      "colW": 162,
+      "labelW": 55,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "unlaned",
+      "shown": "unlaned",
+      "colW": 162,
+      "labelW": 39,
+      "clipped": false,
+      "lines": 1
+     }
+    ],
+    "widestTitle": 683,
+    "maxLines": 1,
+    "maxOverflow": 0
+   },
+   "4": {
+    "drawing": "table",
+    "lanes": 4,
+    "waveW": 1280,
+    "waveH": 344,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 4,
+    "head": true,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": null,
+     "actions": {
+      "y": 301,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 179
+     },
+     "lane": null,
+     "sums": {
+      "y": 73,
+      "h": 18
+     },
+     "manifest": {
+      "y": 95,
+      "h": 157
+     },
+     "join": {
+      "y": 258,
+      "h": 35
+     }
+    },
+    "members": [
+     {
+      "id": "211",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "208",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "209",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "212",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "210",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 26
+     }
+    ],
+    "laneCells": [
+     {
+      "full": "public/core/dom.js",
+      "shown": "dom.js",
+      "colW": 162,
+      "labelW": 33,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/index.html",
+      "shown": "index.html",
+      "colW": 162,
+      "labelW": 55,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "src/main/java/com/sefl/rating/ratingretryconsumer.java",
+      "shown": "ratingretryconsumer.java",
+      "colW": 162,
+      "labelW": 132,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "unlaned",
+      "shown": "unlaned",
+      "colW": 162,
+      "labelW": 39,
+      "clipped": false,
+      "lines": 1
+     }
+    ],
+    "widestTitle": 683,
+    "maxLines": 1,
+    "maxOverflow": 0
+   },
+   "6": {
+    "drawing": "table",
+    "lanes": 6,
+    "waveW": 1280,
+    "waveH": 420,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 6,
+    "head": true,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": null,
+     "actions": {
+      "y": 377,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 255
+     },
+     "lane": null,
+     "sums": {
+      "y": 73,
+      "h": 40
+     },
+     "manifest": {
+      "y": 117,
+      "h": 211
+     },
+     "join": {
+      "y": 334,
+      "h": 35
+     }
+    },
+    "members": [
+     {
+      "id": "218",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "216",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "219",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "213",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "214",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "217",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 27
+     },
+     {
+      "id": "215",
+      "draw": "table",
+      "titleW": 683,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 26
+     }
+    ],
+    "laneCells": [
+     {
+      "full": "late.css",
+      "shown": "late.css",
+      "colW": 162,
+      "labelW": 44,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/core/dom.js",
+      "shown": "dom.js",
+      "colW": 162,
+      "labelW": 33,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/core/waves-lane.js",
+      "shown": "waves-lane.js",
+      "colW": 162,
+      "labelW": 71,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/index.html",
+      "shown": "index.html",
+      "colW": 162,
+      "labelW": 55,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "src/main/java/com/sefl/rating/ratingretryconsumer.java",
+      "shown": "ratingretryconsumer.java",
+      "colW": 162,
+      "labelW": 132,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "unlaned",
+      "shown": "unlaned",
+      "colW": 162,
+      "labelW": 39,
+      "clipped": false,
+      "lines": 1
+     }
+    ],
+    "widestTitle": 683,
+    "maxLines": 1,
+    "maxOverflow": 0
+   }
+  },
+  "narrow": {
+   "2": {
+    "drawing": "cards",
+    "lanes": 2,
+    "waveW": 780,
+    "waveH": 436,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 0,
+    "head": false,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": {
+      "y": 73,
+      "h": 312
+     },
+     "actions": {
+      "y": 393,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 251
+     },
+     "lane": {
+      "y": 73,
+      "h": 149
+     },
+     "sums": null,
+     "manifest": null,
+     "join": {
+      "y": 332,
+      "h": 53
+     }
+    },
+    "members": [
+     {
+      "id": "201",
+      "draw": "card",
+      "titleW": 709,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 50
+     },
+     {
+      "id": "202",
+      "draw": "card",
+      "titleW": 709,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 50
+     },
+     {
+      "id": "203",
+      "draw": "card",
+      "titleW": 709,
+      "lines": 1,
+      "overflow": 0,
+      "memberH": 50
+     }
+    ],
+    "laneCells": [],
+    "widestTitle": 709,
+    "maxLines": 1,
+    "maxOverflow": 0
+   },
+   "3": {
+    "drawing": "table",
+    "lanes": 3,
+    "waveW": 780,
+    "waveH": 469,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 3,
+    "head": true,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": null,
+     "actions": {
+      "y": 426,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 304
+     },
+     "lane": null,
+     "sums": {
+      "y": 73,
+      "h": 18
+     },
+     "manifest": {
+      "y": 95,
+      "h": 282
+     },
+     "join": {
+      "y": 383,
+      "h": 35
+     }
+    },
+    "members": [
+     {
+      "id": "207",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "204",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "205",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 4,
+      "overflow": 0,
+      "memberH": 78
+     },
+     {
+      "id": "206",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 60
+     }
+    ],
+    "laneCells": [
+     {
+      "full": "public/core/dom.js",
+      "shown": "dom.js",
+      "colW": 162,
+      "labelW": 33,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/index.html",
+      "shown": "index.html",
+      "colW": 162,
+      "labelW": 55,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "unlaned",
+      "shown": "unlaned",
+      "colW": 162,
+      "labelW": 39,
+      "clipped": false,
+      "lines": 1
+     }
+    ],
+    "widestTitle": 183,
+    "maxLines": 4,
+    "maxOverflow": 0
+   },
+   "4": {
+    "drawing": "table",
+    "lanes": 4,
+    "waveW": 780,
+    "waveH": 569,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 4,
+    "head": true,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": null,
+     "actions": {
+      "y": 526,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 404
+     },
+     "lane": null,
+     "sums": {
+      "y": 73,
+      "h": 40
+     },
+     "manifest": {
+      "y": 117,
+      "h": 360
+     },
+     "join": {
+      "y": 483,
+      "h": 35
+     }
+    },
+    "members": [
+     {
+      "id": "211",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "208",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "209",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 4,
+      "overflow": 0,
+      "memberH": 78
+     },
+     {
+      "id": "212",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 4,
+      "overflow": 0,
+      "memberH": 78
+     },
+     {
+      "id": "210",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 60
+     }
+    ],
+    "laneCells": [
+     {
+      "full": "public/core/dom.js",
+      "shown": "dom.js",
+      "colW": 162,
+      "labelW": 33,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/index.html",
+      "shown": "index.html",
+      "colW": 162,
+      "labelW": 55,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "src/main/java/com/sefl/rating/ratingretryconsumer.java",
+      "shown": "ratingretryconsumer.java",
+      "colW": 162,
+      "labelW": 132,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "unlaned",
+      "shown": "unlaned",
+      "colW": 162,
+      "labelW": 39,
+      "clipped": false,
+      "lines": 1
+     }
+    ],
+    "widestTitle": 183,
+    "maxLines": 4,
+    "maxOverflow": 0
+   },
+   "6": {
+    "drawing": "table",
+    "lanes": 6,
+    "waveW": 780,
+    "waveH": 730,
+    "waveOverflow": 0,
+    "paneOverflow": 0,
+    "sums": 6,
+    "head": true,
+    "parts": {
+     "head": {
+      "y": 13,
+      "h": 20
+     },
+     "gates": {
+      "y": 41,
+      "h": 20
+     },
+     "close": null,
+     "actions": {
+      "y": 687,
+      "h": 30
+     },
+     "lanes": {
+      "y": 73,
+      "h": 565
+     },
+     "lane": null,
+     "sums": {
+      "y": 73,
+      "h": 62
+     },
+     "manifest": {
+      "y": 139,
+      "h": 499
+     },
+     "join": {
+      "y": 644,
+      "h": 35
+     }
+    },
+    "members": [
+     {
+      "id": "218",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 4,
+      "overflow": 0,
+      "memberH": 78
+     },
+     {
+      "id": "216",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "219",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "213",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 61
+     },
+     {
+      "id": "214",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 4,
+      "overflow": 0,
+      "memberH": 78
+     },
+     {
+      "id": "217",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 4,
+      "overflow": 0,
+      "memberH": 78
+     },
+     {
+      "id": "215",
+      "draw": "table",
+      "titleW": 183,
+      "lines": 3,
+      "overflow": 0,
+      "memberH": 60
+     }
+    ],
+    "laneCells": [
+     {
+      "full": "late.css",
+      "shown": "late.css",
+      "colW": 162,
+      "labelW": 44,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/core/dom.js",
+      "shown": "dom.js",
+      "colW": 162,
+      "labelW": 33,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/core/waves-lane.js",
+      "shown": "waves-lane.js",
+      "colW": 162,
+      "labelW": 71,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "public/index.html",
+      "shown": "index.html",
+      "colW": 162,
+      "labelW": 55,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "src/main/java/com/sefl/rating/ratingretryconsumer.java",
+      "shown": "ratingretryconsumer.java",
+      "colW": 162,
+      "labelW": 132,
+      "clipped": false,
+      "lines": 1
+     },
+     {
+      "full": "unlaned",
+      "shown": "unlaned",
+      "colW": 162,
+      "labelW": 39,
+      "clipped": false,
+      "lines": 1
+     }
+    ],
+    "widestTitle": 183,
+    "maxLines": 4,
+    "maxOverflow": 0
+   }
+  }
+ },
+ "checks": 105,
+ "failures": 0,
+ "selfCheck": {
+  "titleW": 0,
+  "maxLines": 95,
+  "fired": 4,
+  "members": [
+   {
+    "id": "207",
+    "draw": "table",
+    "titleW": 0,
+    "lines": 71,
+    "overflow": 10,
+    "memberH": 1234
+   },
+   {
+    "id": "204",
+    "draw": "table",
+    "titleW": 0,
+    "lines": 75,
+    "overflow": 10,
+    "memberH": 1303
+   },
+   {
+    "id": "205",
+    "draw": "table",
+    "titleW": 0,
+    "lines": 95,
+    "overflow": 8,
+    "memberH": 1648
+   },
+   {
+    "id": "206",
+    "draw": "table",
+    "titleW": 0,
+    "lines": 85,
+    "overflow": 7,
+    "memberH": 1474
+   }
+  ]
+ }
+}

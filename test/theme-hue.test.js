@@ -13,6 +13,9 @@ await import("../public/core/theme-hue.js");
 const hue = globalThis.wtThemeHue;
 
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The board's own hue readers moved to public/board/anchor.js with the liveness and anchor cut (cut 6 of the eight in
+// docs/reports/module-separation-2026-11-28.html); the key stays in app.js.
+const anchor = readFileSync(new URL("../public/board/anchor.js", import.meta.url), "utf8");
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
@@ -83,8 +86,8 @@ test("a re-roll never lands beside the colour it replaces, by the rule the proje
 });
 
 test("both surfaces use this one rule, each with its own key", () => {
-  assert.match(app, /wtThemeHue\.load\(PROJECT_HUE_KEY\)/, "the projects load through the shared rule");
-  assert.match(app, /wtThemeHue\.roll\(state\.projectHues, PROJECT_HUE_KEY, name\)/, "the projects roll through the shared rule");
+  assert.match(anchor, /wtThemeHue\.load\(PROJECT_HUE_KEY\)/, "the projects load through the shared rule");
+  assert.match(anchor, /wtThemeHue\.roll\(state\.projectHues, PROJECT_HUE_KEY, name\)/, "the projects roll through the shared rule");
   assert.match(assistant, /wtThemeHue\.load\(INIT_HUE_KEY\)/, "the initiatives load through the shared rule");
   assert.match(assistant, /wtThemeHue\.roll\(initHues, INIT_HUE_KEY, id\)/, "the initiatives roll through the shared rule");
   assert.match(app, /PROJECT_HUE_KEY = "wm\.projectHues"/);

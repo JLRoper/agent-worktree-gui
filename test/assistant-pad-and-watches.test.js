@@ -293,9 +293,16 @@ test("the notes file's own shape: one path per assistant, beside its charter, ca
   assert.equal(readNotesFile(file).text.length, NOTES_CAP, "and the file on disk is exactly as it was");
 });
 
-// ---- the page: the Watches tab and the Pad tab, driven out of public/assistant.js -------------------
+// ---- the page: the Watches tab and the Pad tab, driven out of the panel's own scripts ---------------
+//
+// The Watches tab moved out of public/assistant.js into public/assistant/watches.js (cut 1 of the file's four),
+// and the region's begin and end markers went with it. Both files are read as one text, so `sliceRegion` below
+// finds the same `// ---- watches` pair it found before the move and evaluates the same bodies.
 
-const page = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
+const page =
+  readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8") +
+  "\n" +
+  readFileSync(new URL("../public/assistant/watches.js", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.js", import.meta.url), "utf8");
 const esc = (v) =>
   String(v ?? "")

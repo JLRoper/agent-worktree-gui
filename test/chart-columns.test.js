@@ -20,10 +20,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { CHART_CHIP_IDS, CHART_COLUMN_IDS, CHART_TOGGLE_IDS, DEFAULT_HIDDEN_COLUMNS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
-import { post, sliceRegion, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, post, sliceRegion, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 // The chart's own code moved out of public/app.js into public/charts.js in step 3 of
@@ -317,13 +320,16 @@ test("every column-spanning row asks for the shown count, never a literal 10", (
   // took the detail row and the refresh offer with it, and this pin kept reading public/app.js alone — so it counted
   // 2 of 4 and failed on a page whose four rows were all correct. Read the file that carries each row.
   const board = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
-  const spanning = `${src}\n${board}`;
+  // Three of the five are the delete confirm, the lock and the cut dialog, which moved to
+  // public/board/worktrees.js in cut 4 of docs/reports/module-separation-2026-11-28.html.
+  const trees = readFileSync(new URL("../public/board/worktrees.js", import.meta.url), "utf8");
+  const spanning = `${src}\n${board}\n${trees}`;
   assert.equal((spanning.match(/colspan="10"/g) || []).length, 0);
   assert.equal((spanning.match(/colspan="\$\{wtColspan\(\)\}"/g) || []).length, 5);
 });
 
 test("POST /api/settings/columns stores the choice in config.json and survives a restart", async (t) => {
-  const panel = await startPanel({ keep: true });
+  const panel = await boot({ keep: true });
   // A sandbox config carries no `hiddenColumns` key: no preference has ever been expressed, so the panel serves the
   // read-time default — EMPTY, because the owner column hides itself from the rows rather than from a config — and
   // NOTHING was written to the file for it.
@@ -346,7 +352,7 @@ test("POST /api/settings/columns stores the choice in config.json and survives a
   await panel.stop();
 
   // A restart with no browser attached: the setting is the panel's, not the tab's.
-  const again = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  const again = await boot({ dir: panel.dir, keep: false, reuseConfig: true });
   t.after(() => again.stop());
   const after = await (await fetch(`${again.base}/api/config`)).json();
   assert.deepEqual(after.hiddenColumns, ["tip", "cherry"]);
@@ -359,7 +365,7 @@ test("POST /api/settings/columns stores the choice in config.json and survives a
 });
 
 test("POST /api/settings/columns stores the chip beside the columns, and a restart reads it back", async (t) => {
-  const panel = await startPanel({ keep: true });
+  const panel = await boot({ keep: true });
   const first = await post(panel.base, "/api/settings/columns", { body: { hidden: ["reviewed", "nonsense"] } });
   assert.equal(first.status, 200, first.text);
   assert.deepEqual(first.json.hidden, ["reviewed"], "the chip is an id this panel knows, and nothing else is stored");
@@ -367,7 +373,7 @@ test("POST /api/settings/columns stores the chip beside the columns, and a resta
   await panel.stop();
 
   // A restart with no browser attached: the chip's choice is the panel's, like the columns'.
-  const again = await startPanel({ dir: panel.dir, keep: true, reuseConfig: true });
+  const again = await boot({ dir: panel.dir, keep: true, reuseConfig: true });
   t.after(() => again.stop());
   assert.deepEqual((await (await fetch(`${again.base}/api/config`)).json()).hiddenColumns, ["reviewed"]);
   // And a chip and a column can be off together without either one being lost.
@@ -382,7 +388,7 @@ test("POST /api/settings/columns stores the chip beside the columns, and a resta
   assert.deepEqual(extra.json.hidden, ["reviewedExtra", "reviewed"], "columns first, then the chip");
   assert.deepEqual(JSON.parse(readFileSync(path.join(panel.dir, "config.json"), "utf8")).hiddenColumns, ["reviewedExtra", "reviewed"]);
   await again.stop();
-  const third = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  const third = await boot({ dir: panel.dir, keep: false, reuseConfig: true });
   t.after(() => third.stop());
   assert.deepEqual((await (await fetch(`${third.base}/api/config`)).json()).hiddenColumns, ["reviewedExtra", "reviewed"]);
 });

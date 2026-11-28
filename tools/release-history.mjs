@@ -55,25 +55,32 @@ export function compareVersions(a, b) {
 
 // The log's own format: a record separator before each commit, then sha, author date and subject, then the
 // patch. Splitting on the record separator keeps a subject that contains a newline (a squash body) out of the
-// parse: only the first line of each block is read as the header.
+// parse: only the first line of each block is read as the header. BOTH SIDES of the version line are read:
+// `read` is the value this commit's patch replaced and `written` the value it put there. A commit's own
+// transition is what `read -> written` says; the ordered walk's neighbour is the previous entry in commit-date
+// order, which across a merge is a sibling lane rather than this commit's parent (v1.76.12 was read that way: its
+// own patch went 1.76.11 -> 1.76.12 while the walk listed the 1.76.13 lane's bump first by commit date).
 export function parseVersionHistory(text) {
   const blocks = String(text || "").split("\x1e").slice(1);
   const commits = blocks.map((block) => {
     const lines = block.split("\n");
     const [sha = "", date = "", subject = ""] = (lines[0] || "").split("\x1f");
     let written = null;
+    let read = null;
     for (const line of lines.slice(1)) {
-      const m = /^\+[ \t]*"version"[ \t]*:[ \t]*"([^"]*)"/.exec(line);
-      if (m) written = m[1];
+      const plus = /^\+[ \t]*"version"[ \t]*:[ \t]*"([^"]*)"/.exec(line);
+      if (plus) written = plus[1];
+      const minus = /^-[ \t]*"version"[ \t]*:[ \t]*"([^"]*)"/.exec(line);
+      if (minus) read = minus[1];
     }
-    return { sha: sha.trim(), date: date.trim(), subject: subject.trim(), written };
+    return { sha: sha.trim(), date: date.trim(), subject: subject.trim(), written, read };
   });
   const out = [];
   let tracked = null;
   // blocks are newest-first; reverse to walk the file forward in time.
   for (const c of commits.slice().reverse()) {
     if (!c.written || c.written === tracked) continue;
-    out.push({ version: c.written, sha: c.sha, date: c.date, subject: c.subject, from: tracked });
+    out.push({ version: c.written, sha: c.sha, date: c.date, subject: c.subject, from: tracked, read: c.read ?? null });
     tracked = c.written;
   }
   return out;

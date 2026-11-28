@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 513: pipeline validation leaves lib/pipelines.js, and every name it exported still comes from that path</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .box { border:1px solid var(--line); border-radius:6px; padding:12px 16px; margin:16px 0; background:#fff; }
+  .cite { color:var(--dim); font-size:13px; }
+  .foot { margin-top:34px; color:var(--dim); font-size:13px; border-top:1px solid var(--line); padding-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 513: pipeline validation leaves lib/pipelines.js, and every name it exported still comes from that path</h1>
+  <p class="sub">One cut of the module-separation plan: 221 lines into <code>lib/pipeline-validate.js</code>, behind the same 54 exports <code>lib/pipelines.js</code> already published.</p>
+
+  <div class="box">
+    <b>Done.</b> The closed vocabularies a definition is checked against (the three kinds and their ranks,
+    <code>EXIT_CHECKS</code> and <code>EXIT_PARAM_SPEC</code>, <code>PROMPT_PLACEHOLDERS</code> and the placeholder
+    scanner) and the two validators are now <code>lib/pipeline-validate.js</code>. <code>lib/pipelines.js</code> keeps the
+    catalogue, the live file, the merge and prune and the tree-keyed record, imports the names its own readers still call,
+    and re-exports the nine names it lost from <code>./pipeline-validate.js</code>, so no import site moved. The module's
+    export set, read off the running module, is the same 54 names before and after: none added, none removed. No body
+    rewritten, no identifier renamed, no call site touched, no version bump, no push, no pull request. The branch merges
+    into the turnover branch locally.
+  </div>
+
+  <h2>1. What moved, in line counts</h2>
+  <table>
+    <tr><th>File</th><th>Before</th><th>After</th><th>What it holds now</th></tr>
+    <tr>
+      <td><code>lib/pipelines.js</code></td>
+      <td class="n">1,216</td>
+      <td class="n">1,012</td>
+      <td>The catalogue and the file: <code>PIPELINES_VERSION</code>, <code>DEFAULT_SEED_FILE</code>,
+        <code>BUILTIN_IDS</code>, <code>DEFAULT_KEYS</code>, <code>rankOf</code> (<code>lib/pipelines.js:54</code>),
+        <code>readPipelinesFile</code> (<code>:67</code>), <code>pruneChains</code> (<code>:130</code>),
+        <code>mergeDocs</code> (<code>:160</code>), the cache, the per-project defaults, the wait and review readers,
+        <code>renderPrompt</code> (<code>:701</code>), and the <code>PipelineRecords</code> / <code>Pipelines</code>
+        records (<code>:811</code>, <code>:931</code>).</td>
+    </tr>
+    <tr>
+      <td><code>lib/pipeline-validate.js</code></td>
+      <td class="n">-</td>
+      <td class="n">230</td>
+      <td>The vocabularies and the validators: <code>PIPELINE_KINDS</code> and <code>KIND_RANK</code> (<code>:11</code>),
+        <code>EXIT_CHECKS</code> (<code>:17</code>), <code>EXIT_PARAM_SPEC</code> (<code>:38</code>),
+        <code>PROMPT_PLACEHOLDERS</code> (<code>:57</code>), <code>PLACEHOLDER_RE</code> (<code>:63</code>),
+        <code>promptPlaceholders</code> (<code>:68</code>), <code>unknownPlaceholders</code> (<code>:74</code>),
+        <code>checkTextParam</code> (<code>:82</code>), <code>checkExit</code> (<code>:92</code>),
+        <code>validatePipeline</code> (<code>:142</code>), <code>validatePipelinesDocument</code> (<code>:197</code>).</td>
+    </tr>
+    <tr><td>both files</td><td class="n">1,216</td><td class="n">1,242</td><td>+26: 9 in the new file (7 header lines, 1 blank, 1 separator blank) and 17 in the parent (18 for the import and re-export block, less the separator blank the two spans left behind); the parent's two header lines were replaced by two.</td></tr>
+  </table>
+<pre>git show 9ad2e3f2:lib/pipelines.js | wc -l          # 1216, the cut's base
+wc -l lib/pipelines.js lib/pipeline-validate.js   # 1012 lib/pipelines.js, 230 lib/pipeline-validate.js
+git show --numstat --format='' 5db4a9fd           # 230 0 lib/pipeline-validate.js; 20 224 lib/pipelines.js</pre>
+  <p class="cite">
+    The arithmetic reconciles: 1,216 - 221 moved - 1 separator blank at base line 32 + 18 (the import and re-export
+    block) = 1,012. The new file is 221 moved lines + 1 separator blank + 7 header lines + 1 blank = 230. The commit's
+    own diffstat reads 224 deletions in the parent because it also counts the two header lines the cut reworded, and 20
+    insertions because they were replaced, 2 for 2.
+  </p>
+
+  <h2>2. The ranges are this base's, and both boundaries were printed before a line moved</h2>
+  <p>
+    The row names the move but carries no line numbers, so the span was measured on this base
+    (<code>9ad2e3f2</code>): base 28-31 and 40-256, 221 lines. Both ends were printed before the cut.
+  </p>
+  <table>
+    <tr><th>Line (base)</th><th>What is there</th><th>Why it decides the boundary</th></tr>
+    <tr><td><code>27</code></td><td>blank, after <code>DEFAULT_SEED_FILE</code></td><td>The start: <code>PIPELINES_VERSION</code> and the seed file name are the file's own, not validation's.</td></tr>
+    <tr><td><code>28-31</code></td><td>the ladder comment, <code>PIPELINE_KINDS</code>, <code>KIND_RANK</code></td><td class="ok">Moved. The validator reads both; <code>rankOf</code> and <code>ladderRefusal</code> keep reading them through the re-export.</td></tr>
+    <tr><td><code>33-38</code></td><td><code>BUILTIN_IDS</code>, <code>DEFAULT_KEYS</code></td><td>Stays: the seed's default ids and the project keys that name them. The validator never reads either.</td></tr>
+    <tr><td><code>40</code></td><td><code>// 1.3, the whole vocabulary.</code></td><td>The start of the validation section, comment included: the section's own words belong with the code.</td></tr>
+    <tr><td><code>256</code></td><td><code>}</code> closing <code>validatePipelinesDocument</code></td><td class="ok">The measured end. Line 257 is blank and 258 is <code>rankOf</code>, which is a reader of a kind, not a validator.</td></tr>
+    <tr><td><code>316</code> / <code>130</code></td><td>the two parent callers left behind</td><td><code>readPipelinesFile</code> and <code>pruneChains</code> stay; they call <code>validatePipeline</code> through the import.</td></tr>
+  </table>
+<pre>git show 9ad2e3f2:lib/pipelines.js | sed -n '27,33p;39,41p;255,259p'</pre>
+
+  <h2>3. The re-export: 54 names, the same set before and after</h2>
+  <p>
+    <code>lib/pipelines.js</code> imports only what its remaining code reads - <code>KIND_RANK</code>,
+    <code>PIPELINE_KINDS</code>, <code>PLACEHOLDER_RE</code> (for <code>renderPrompt</code>),
+    <code>PROMPT_PLACEHOLDERS</code> (same function), <code>clean</code>, <code>isObject</code> and
+    <code>validatePipeline</code> - and re-exports the nine names a caller could already import from it:
+  </p>
+<pre>export {
+  EXIT_CHECKS,
+  EXIT_PARAM_SPEC,
+  KIND_RANK,
+  PIPELINE_KINDS,
+  PROMPT_PLACEHOLDERS,
+  promptPlaceholders,
+  unknownPlaceholders,
+  validatePipeline,
+  validatePipelinesDocument,
+} from "./pipeline-validate.js";</pre>
+  <p>
+    The three helpers the parent still calls (<code>clean</code>, <code>isObject</code> and
+    <code>PLACEHOLDER_RE</code>) were private before the cut. They are exported from the new module, imported back, and
+    deliberately not re-exported, so the parent's surface does not gain a name. The new module publishes 12 names: the 9
+    above plus those 3.
+  </p>
+<pre>node surface.mjs lib/pipelines.js          # base:   {"count":54, ...}
+node surface.mjs lib/pipelines.js          # after:  {"count":54, ...}
+# REMOVED (none)   ADDED (none)   same set true
+node surface.mjs lib/pipeline-validate.js  # 12 names: EXIT_CHECKS, EXIT_PARAM_SPEC, KIND_RANK,
+# PIPELINE_KINDS, PLACEHOLDER_RE, PROMPT_PLACEHOLDERS, clean, isObject, promptPlaceholders,
+# unknownPlaceholders, validatePipeline, validatePipelinesDocument</pre>
+  <p class="cite">
+    The 54 names, sorted, are the base's own list, unchanged: BUILTIN_IDS, DEFAULT_KEYS, DEFAULT_SEED_FILE,
+    EXIT_CHECKS, EXIT_PARAM_SPEC, HOLD_OWNER_MS, KIND_RANK, PIPELINES_VERSION, PIPELINE_KINDS, PROMPT_PLACEHOLDERS,
+    PipelineRecords, Pipelines, QUIET_WAKE_AFTER_MS, REVIEW_WAIT_CHECKS, REVIEW_WAIT_KIND, RUN_WAIT_KIND,
+    WAIT_CLAIM_GRACE_MS, WAIT_FIRST_MS, WAIT_MAX_MS, advanceStage, changePipeline, claimWait, cutPipeline,
+    defaultForProject, defaultsForProject, ensurePipelinesFile, holdOwnerFrom, isRunWait, ladderRefusal, mergeDocs,
+    observeBitbucketPr, observeGithubPr, observePullRequest, pipelinesDoc, presumedPipeline, promptPlaceholders, rankOf,
+    readPipelinesFile, readReviewExit, renderPrompt, resetPipelinesCache, reviewExitOf, reviewGateFor, reviewReadOf,
+    reviewWaitFor, settleWait, stageRunWaitFor, storeSwitch, unknownPlaceholders, validatePipeline,
+    validatePipelinesDocument, waitDueAt, waitIsDue, waitKind.
+  </p>
+
+  <h2>4. The moved block reappears verbatim</h2>
+  <p>
+    The new file was assembled from the base blob (<code>git show 9ad2e3f2:lib/pipelines.js</code>), not from the
+    part-edited parent. The block that follows the new header equals base 28-31 and 40-256 with exactly four textual
+    changes: <code>export</code> added to <code>PLACEHOLDER_RE</code>, <code>clean</code> and <code>isObject</code>,
+    and one blank line between <code>KIND_RANK</code> and the 1.3 comment.
+  </p>
+<pre>moved lines: 221
+new block lines: 222 (the 221 moved lines + 1 separator blank)
+sha256(base 28-31 + 40-256, LF): 71b9e8e6180346782cfdc76b85ea463de076edfd89a85e32a59ec80be982f109
+sha256(new block, LF):           77d7d689593ed8356f1cd6907bcb7eb9a5d3d4e41655915b3728fe6ce07ef196
+textual changes: 7 diff lines -> + (blank) ; -const PLACEHOLDER_RE = ... ; +export const PLACEHOLDER_RE = ...
+  -const clean = ... ; +export const clean = ... ; -const isObject = ... ; +export const isObject = ...
+distinctive moved lines still in parent: 2
+  SURVIVOR:   for (const [id, rec, index] of records) {
+  SURVIVOR:     const name = id || `#${(index ?? 0) + 1}`;</pre>
+  <p class="cite">
+    The two survivors are not duplicate code: they are the loop <code>readPipelinesFile</code> runs for itself
+    (<code>lib/pipelines.js:104-105</code>) and the validator's own document loop used the same two lines. No moved
+    declaration remains in the parent: <code>EXIT_CHECKS</code>, <code>EXIT_PARAM_SPEC</code>,
+    <code>PROMPT_PLACEHOLDERS</code>, <code>PLACEHOLDER_RE</code>, <code>SLUG_RE</code>, <code>clean</code>,
+    <code>isObject</code>, <code>promptPlaceholders</code>, <code>unknownPlaceholders</code>,
+    <code>checkTextParam</code>, <code>checkExit</code>, <code>validatePipeline</code> and
+    <code>validatePipelinesDocument</code> are declared zero times there.
+  </p>
+
+  <h2>5. The focused tests, at the base and after the cut</h2>
+  <p>
+    Five files, chosen because they are the ones that import <code>lib/pipelines.js</code> directly or drive its route:
+    <code>test/pipelines.test.js</code>, <code>test/pipeline-wait.test.js</code>,
+    <code>test/task-pipeline-drive.test.js</code>, <code>test/pipeline-review-loop.test.js</code> and
+    <code>test/pipeline-catalogue-route.test.js</code>.
+  </p>
+<pre>node --test --test-concurrency=4 test/pipelines.test.js test/pipeline-wait.test.js \
+  test/task-pipeline-drive.test.js test/pipeline-review-loop.test.js \
+  test/pipeline-catalogue-route.test.js
+# base 9ad2e3f2: tests 112, pass 112, fail 0, cancelled 0, skipped 0
+# after 5db4a9fd: tests 112, pass 112, fail 0, cancelled 0, skipped 0</pre>
+  <p>
+    Nothing was red on either side, so there is no failure to compare against the turnover head. The browser harness
+    for the catalogue and the pipeline picker was also run: <code>node tools/verify-pipeline-catalogue.mjs</code>
+    answered <span class="ok">38 passed, 0 failed</span>. The full suite was not run; the row's gate is this focused set.
+  </p>
+
+  <h2>6. One end-to-end check of a two-stage chain</h2>
+  <p>
+    The moved code validates the ladder's <code>next</code> link - a chain may not go backwards - so the cut was driven
+    through the real HTTP route and a real <code>pipelines.json</code>, not only through unit tests. The document holds
+    two chained definitions: <code>local</code> (kind <code>local</code>, 1 stage) with <code>next: "investigate"</code>,
+    and <code>investigate</code> (kind <code>investigation</code>, 2 stages).
+  </p>
+<pre>GET  chain in force: local (local) -> investigate (investigation), stages 1 + 2
+PUT  two-definition chain accepted: 200 | live file local.next = investigate
+     | title = Local work, chained into the investigation
+GET  chain read back: local.next = investigate, investigate present = true, dropped = 0
+PUT  reversed chain refused: 422 | pipeline "investigate": next names "local", a local pipeline
+     - a chain may not go backwards (investigation -> local)
+GET  dangling link dropped by id: {"id":"local","why":"next names \"no-such-pipeline\", which is not in the catalogue"}
+CHAIN CHECK PASSED</pre>
+  <p class="cite">
+    The script starts the panel on a spare port with <code>tools/panel-testkit.mjs</code>, writes the two definitions to
+    the live file, and calls <code>PUT</code> and <code>GET /api/pipelines</code> with the real transport. Step 2 proves
+    the moved <code>validatePipelinesDocument</code> accepts the chain and the save reaches the file with the link
+    intact; step 4 proves <code>validatePipeline</code>'s cross-reference refuses the reversed link with its own
+    sentence; step 5 proves the loader's half of the chain rule (<code>pruneChains</code>, still in the parent) still
+    drops a dangling link by id. The chain's two rungs are read back from the merged catalogue, not from the fixture.
+  </p>
+
+  <h2>7. The landing</h2>
+  <p>
+    The cut is <code>5db4a9fd</code> on <code>wtgui/row-513-is-one-cut-of-the-module-32d2d0</code>, cut from the
+    turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>9ad2e3f2</code>. It merges into
+    the turnover locally with <code>--no-ff</code>; the turnover is where the work rolls up and the reader decides when
+    it lands. No push, no pull request, no version bump.
+  </p>
+  <p>
+    The merge cannot have dropped another row's work on these two files: the turnover had not touched either since the
+    cut's base, which is an empty diff rather than a hope.
+  </p>
+<pre>git merge-base --is-ancestor 9ad2e3f2 67371958      # 0: the base is on the turnover
+git diff --stat 9ad2e3f2 67371958 -- lib/pipelines.js lib/pipeline-validate.js
+# (no output: the turnover never touched either path)</pre>
+
+  <p class="foot">
+    Base <code>9ad2e3f2</code> (<code>20261127_2134_TASK-405_row-405-is-the-complete</code>); the cut is
+    <code>5db4a9fd</code> on <code>wtgui/row-513-is-one-cut-of-the-module-32d2d0</code>; measured 2026-11-28.
+    Every line number in this page is a 1-based line in the file named beside it.
+  </p>
+</main>
+</body>
+</html>

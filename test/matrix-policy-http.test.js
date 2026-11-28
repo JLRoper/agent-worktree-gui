@@ -4,14 +4,17 @@
 // Boots the real server.js (tools/panel-testkit.mjs) against a throwaway data directory, so this asserts what the
 // route answers rather than what its source says. The store's own unit tests are test/matrix-policy.test.js.
 import assert from "node:assert/strict";
-import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import test, { after } from "node:test";
+import { boot, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const TOKEN = "matrix-policy-test-token";
 let panel = null;
 
 test.before(async () => {
-  panel = await startPanel({ token: TOKEN });
+  panel = await boot({ token: TOKEN });
 });
 test.after(async () => {
   if (panel) await panel.stop();

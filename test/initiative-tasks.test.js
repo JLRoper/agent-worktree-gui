@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { initiativesView } from "../routes/initiatives.js";
 import { normTreePath } from "../lib/initiatives.js";
-import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { queueCardsSource, sliceRegions } from "../tools/panel-testkit.mjs";
 
 await import("../public/core/initiative-fold.js");
 const fold = globalThis.wtInitiativeFold;
@@ -193,7 +193,7 @@ test("a task's state is drawn in the reader's four words and the panel's own ton
 // (an id, the whole brief as the row's title, a chip, a thread, a run, a PR). It now draws the QUEUE's card in a
 // compact, read-only mode, from the same function the queue pane calls - so these tests hold the shape the brief
 // asked for: ONE renderer, a row and a mode, the pane calling it in compact mode, and no second copy of the head.
-const cardsSrc = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+const cardsSrc = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
 const escHtml = (s) =>
   String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -208,7 +208,7 @@ const card = new Function(
   "sessionById",
   "assistantThreadName",
   "relTime",
-  `${sliceRegion(cardsSrc, "the queue sub-tab")}
+  `${sliceRegions(cardsSrc, "the queue sub-tab")}
 return { taskCardHtml };`,
 )(escHtml, () => ["assistant-1", "assistant-2"], (id) => ({ id }), (t) => t, () => "5m");
 

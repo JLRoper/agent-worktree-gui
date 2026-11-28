@@ -28,6 +28,7 @@ import test from "node:test";
 
 import { parseActions } from "../lib/assistant/actions.js";
 import { readStyleSheets } from "./style-sheets.js";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 // The frame the page loads first (core/console-format.js) and this module draws with. In a browser it is
 // `window`; here it is the same object, because the module is a classic script and says so.
@@ -40,9 +41,10 @@ const frame = globalThis.WMApp.core.consoleFormat;
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const turns = read("../public/turns.js");
 const assistant = read("../public/assistant.js");
-const jobs = read("../public/render-jobs.js");
+// Cut 1 of render-jobs.js: the turn body is public/board/stream-body.js, loaded first.
+const jobs = `${read("../public/board/stream-body.js")}\n${read("../public/render-jobs.js")}`;
 const markdown = read("../public/core/console-markdown.js");
-const board = read("../public/board/console.js");
+const board = consoleSource(); // public/board/console.js and its four cuts, in page order
 const html = read("../public/index.html");
 const css = readStyleSheets();
 const app = read("../public/app.js");

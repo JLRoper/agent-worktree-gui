@@ -9,7 +9,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { startPanel, waitForState, post } from "../tools/panel-testkit.mjs";
+import { boot, post, stopBootedPanels, waitForState } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sandbox = mkdtempSync(path.join(tmpdir(), "wag-open-route-"));
 const repos = path.join(sandbox, "repos");
@@ -30,7 +33,7 @@ function makeRepo(name, ageDays) {
 makeRepo("old-repo", 20);
 makeRepo("new-repo", 0);
 
-const panel = await startPanel({
+const panel = await boot({
   dir: sandbox,
   config: {
     // One bucket of one second: the gate runs on every tick, so a promotion is observable in a test instead of

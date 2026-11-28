@@ -17,13 +17,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import { AGENT_CLEANUP_DEFAULT, agentCleanupFrom, releasesEnabled } from "../lib/worktrees.js";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, post, stopBootedPanels } from "../tools/panel-testkit.mjs";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
+
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+// The row's two readers and its painter were cut out of app.js into public/settings-window.js (cut 8 of the
+// eight in docs/reports/module-separation-2026-11-28.html); the change listener stayed in app.js.
+const settingsSrc = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
 
 // ---- 1. the normaliser ----------------------------------------------------------------------------------------------
 test("a missing switch is ON, and only the literal `true` keeps it open", () => {
@@ -45,7 +50,7 @@ test("the switch is a veto above the project's grant, never a grant of its own",
 
 // ---- 2. the route ---------------------------------------------------------------------------------------------------
 test("POST /api/settings/cleanup stores the switch in config.json, and it survives a restart", async (t) => {
-  const panel = await startPanel({ keep: true });
+  const panel = await boot({ keep: true });
   const first = await post(panel.base, "/api/settings/cleanup", { body: { agentCleanup: false } });
   assert.equal(first.status, 200, first.text);
   assert.equal(first.json.agentCleanup, false);
@@ -59,7 +64,7 @@ test("POST /api/settings/cleanup stores the switch in config.json, and it surviv
   assert.ok(Array.isArray(live.releaseProjects), "the row is told which projects would actually clean up");
   await panel.stop();
 
-  const again = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  const again = await boot({ dir: panel.dir, keep: false, reuseConfig: true });
   t.after(() => again.stop());
   const after = await (await fetch(`${again.base}/api/config`)).json();
   assert.equal(after.agentCleanup, false, "the switch is the panel's, not the tab's");
@@ -92,10 +97,10 @@ test("the row is in the Board group and names both clean-ups it closes", () => {
 });
 
 // ---- 4. the paint ---------------------------------------------------------------------------------------------------
-const begin = src.indexOf("// ---- whether an agent may clean up after itself");
-const end = src.indexOf("// ---- end agent cleanup");
-assert.ok(begin > 0 && end > begin, "the agent-cleanup region is in public/app.js");
-const region = src.slice(begin, end);
+const begin = settingsSrc.indexOf("// ---- whether an agent may clean up after itself");
+const end = settingsSrc.indexOf("// ---- initiatives: how often a change to the map asks", begin);
+assert.ok(begin > 0 && end > begin, "the agent-cleanup region is in public/settings-window.js");
+const region = settingsSrc.slice(begin, end);
 
 function paint(settings, { note = "", bad = false, checked = null } = {}) {
   const box = { checked, addEventListener() {} };

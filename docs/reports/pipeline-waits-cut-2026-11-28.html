@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 514: the pipeline waits leave lib/pipelines.js, and every name it exported still comes from that path</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .box { border:1px solid var(--line); border-radius:6px; padding:12px 16px; margin:16px 0; background:#fff; }
+  .cite { color:var(--dim); font-size:13px; }
+  .foot { margin-top:34px; color:var(--dim); font-size:13px; border-top:1px solid var(--line); padding-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 514: the pipeline waits leave lib/pipelines.js, and every name it exported still comes from that path</h1>
+  <p class="sub">The second cut of the module-separation work: 402 lines into <code>lib/pipeline-waits.js</code>, behind the same 54 exports <code>lib/pipelines.js</code> already published.</p>
+
+  <div class="box">
+    <b>Done.</b> The wait mechanic (docs/pipelines.md section 6) - the reviewer's hold and the stage's own run hold,
+    the exit read, the due/claim/settle clock - and the two host payloads normalised for it
+    (<code>observeGithubPr</code> and <code>observeBitbucketPr</code>, both through <code>observePullRequest</code>)
+    are now <code>lib/pipeline-waits.js</code>. <code>lib/pipelines.js</code> keeps the catalogue, the live file, the
+    per-project defaults, <code>renderPrompt</code>, the chain prune and the tree-keyed record, and re-exports the 24
+    names it lost from <code>./pipeline-waits.js</code>, so no import site moved. The module's export set, read off the
+    running module, is the same 54 names before and after: none added, none removed. No body rewritten, no identifier
+    renamed, no call site touched, no version bump, no push, no pull request. The branch merges into the turnover
+    branch locally.
+  </div>
+
+  <h2>1. What moved, in line counts</h2>
+  <table>
+    <tr><th>File</th><th>Before</th><th>After</th><th>What it holds now</th></tr>
+    <tr>
+      <td><code>lib/pipelines.js</code></td>
+      <td class="n">1,012</td>
+      <td class="n">640</td>
+      <td>The catalogue and the file: <code>PIPELINES_VERSION</code>, <code>DEFAULT_SEED_FILE</code>,
+        <code>BUILTIN_IDS</code>, <code>DEFAULT_KEYS</code>, <code>rankOf</code> (<code>lib/pipelines.js:55</code>),
+        <code>readPipelinesFile</code> (<code>:68</code>), <code>pruneChains</code> (<code>:131</code>),
+        <code>mergeDocs</code> (<code>:161</code>), <code>pipelinesDoc</code> (<code>:182</code>), the per-project
+        defaults (<code>:241</code>, <code>:289</code>), <code>cutPipeline</code> (<code>:300</code>),
+        <code>advanceStage</code> (<code>:359</code>), the 24-name re-export (<code>:376-405</code>),
+        <code>renderPrompt</code> (<code>:407</code>), and the <code>PipelineRecords</code> / <code>Pipelines</code>
+        records (<code>:439</code>, <code>:559</code>).</td>
+    </tr>
+    <tr>
+      <td><code>lib/pipeline-waits.js</code></td>
+      <td class="n">-</td>
+      <td class="n">424</td>
+      <td>The waits: <code>REVIEW_WAIT_CHECKS</code> (<code>:33</code>), the intervals (<code>:36-42</code>),
+        <code>RUN_WAIT_KIND</code> / <code>REVIEW_WAIT_KIND</code> (<code>:50-51</code>), <code>HOLD_OWNER_MS</code>
+        (<code>:56</code>), <code>waitKind</code> (<code>:60</code>), <code>isRunWait</code> (<code>:67</code>),
+        <code>stageRunWaitFor</code> (<code>:74</code>), <code>holdOwnerFrom</code> (<code>:99</code>),
+        <code>reviewWaitFor</code> (<code>:133</code>), <code>reviewGateFor</code> (<code>:168</code>),
+        <code>reviewExitOf</code> (<code>:185</code>), <code>waitDueAt</code> (<code>:195</code>),
+        <code>waitIsDue</code> (<code>:202</code>), <code>claimWait</code> (<code>:213</code>),
+        <code>readReviewExit</code> (<code>:230</code>), <code>reviewReadOf</code> (<code>:303</code>),
+        <code>settleWait</code> (<code>:323</code>), <code>observePullRequest</code> (<code>:353</code>),
+        <code>observeGithubPr</code> (<code>:372</code>), <code>observeBitbucketPr</code> (<code>:397</code>).</td>
+    </tr>
+    <tr><td>both files</td><td class="n">1,012</td><td class="n">1,064</td><td>+52: the new file's 22 non-moved lines (20 header lines, 1 blank, the join blank) plus the parent's 30-line re-export block.</td></tr>
+  </table>
+<pre>git show 0ce44e77:lib/pipelines.js | wc -l          # 1012, the cut's base, and the turnover tip at cut time
+wc -l lib/pipelines.js lib/pipeline-waits.js       # 640 lib/pipelines.js, 424 lib/pipeline-waits.js
+git show --numstat --format='' c274c85f            # 424 0 lib/pipeline-waits.js; 33 405 lib/pipelines.js</pre>
+  <p class="cite">
+    The arithmetic reconciles: 1,012 - 402 moved - 1 blank line dropped (base 696, which separated
+    <code>settleWait</code> from <code>renderPrompt</code>) - 2 header lines replaced + 3 in their place + 30 for the
+    re-export block = 640. The new file is 402 moved lines + 1 join blank + 20 header lines + 1 blank = 424. The
+    commit's diffstat reads 405 deletions in the parent because it counts the two header lines and the dropped blank
+    beside the 402 moved lines, and 33 insertions because the three header lines and the 30-line block replaced them.
+  </p>
+
+  <h2>2. The ranges are this base's, and both boundaries were printed before a line moved</h2>
+  <p>
+    The row names the move but carries no line numbers, so the span was measured on this base
+    (<code>0ce44e77</code>). The wait is two ranges, because <code>renderPrompt</code> stands between them: base
+    371-695 (325 lines) and 727-803 (77 lines), 402 lines together. Both ends of both ranges were printed before the cut.
+  </p>
+  <table>
+    <tr><th>Line (base)</th><th>What is there</th><th>Why it decides the boundary</th></tr>
+    <tr><td><code>369-370</code></td><td><code>}</code> closing <code>advanceStage</code>, then a blank</td><td>The last line before the section. A stage hop is the record's, not a wait.</td></tr>
+    <tr><td><code>371</code></td><td><code>// ---- §6: the wait mechanic that must not be a sleeping worker</code></td><td class="ok">Moved, comment included: the section's own words belong with the code.</td></tr>
+    <tr><td><code>695</code></td><td><code>}</code> closing <code>settleWait</code></td><td class="ok">The measured end. Line 696 is blank and 697 opens <code>renderPrompt</code>, which is not a wait.</td></tr>
+    <tr><td><code>697-725</code></td><td><code>renderPrompt</code>, with its section comment</td><td>Stays: a prompt is how a stage STARTS. No wait function renders one, and the renderer is the one reader of <code>PLACEHOLDER_RE</code> the parent still has.</td></tr>
+    <tr><td><code>727</code></td><td><code>// ---- the host observations, normalised here so the decision above is testable without a network</code></td><td class="ok">Moved: the decision above it is <code>readReviewExit</code>. The two normalisers exist only to feed it.</td></tr>
+    <tr><td><code>803</code></td><td><code>}</code> closing <code>observeBitbucketPr</code></td><td class="ok">The measured end. Line 804 is blank and 805 is the durable record's header, which stays.</td></tr>
+    <tr><td><code>805-1012</code></td><td>the tree-keyed record, <code>storeSwitch</code>, <code>Pipelines</code></td><td>Stays: the record is read back before anything changes, and it is not a wait.</td></tr>
+  </table>
+<pre>git show 0ce44e77:lib/pipelines.js | sed -n '369,372p;694,698p;725,728p;802,806p'</pre>
+
+  <h2>3. The re-export: 54 names, the same set before and after</h2>
+  <p>
+    Nothing left in <code>lib/pipelines.js</code> calls a wait, so the parent imports nothing back from the new module:
+    the block below is the whole of its involvement with the wait. All 24 names a caller could already import from it
+    are re-exported:
+  </p>
+<pre>export {
+  HOLD_OWNER_MS, QUIET_WAKE_AFTER_MS, REVIEW_WAIT_CHECKS, REVIEW_WAIT_KIND, RUN_WAIT_KIND,
+  WAIT_CLAIM_GRACE_MS, WAIT_FIRST_MS, WAIT_MAX_MS, claimWait, holdOwnerFrom, isRunWait,
+  observeBitbucketPr, observeGithubPr, observePullRequest, readReviewExit, reviewExitOf,
+  reviewGateFor, reviewReadOf, reviewWaitFor, settleWait, stageRunWaitFor, waitDueAt, waitIsDue, waitKind,
+} from "./pipeline-waits.js";</pre>
+  <p class="cite">
+    The block is written one name per line in the file (<code>lib/pipelines.js:376-405</code>); the list above is the
+    same names folded to read. <code>clean</code> and <code>isObject</code> are imported by the new module from
+    <code>./pipeline-validate.js</code> and are deliberately not exported by it, exactly as the validation cut left
+    them: the parent's surface gains no name. The new module publishes 24 names; its three stamp helpers
+    (<code>stampOfMs</code>, <code>hostStamp</code>, <code>msOfStamp</code>) were private before the cut and are
+    private here.
+  </p>
+<pre>node surface.mjs lib/pipelines.js          # base 0ce44e77: {"count":54, ...}
+node surface.mjs lib/pipelines.js          # after c274c85f: {"count":54, ...}
+# REMOVED (none)   ADDED (none)   same set true
+node surface.mjs lib/pipeline-waits.js     # {"count":24, ...} HOLD_OWNER_MS, QUIET_WAKE_AFTER_MS,
+# REVIEW_WAIT_CHECKS, REVIEW_WAIT_KIND, RUN_WAIT_KIND, WAIT_CLAIM_GRACE_MS, WAIT_FIRST_MS, WAIT_MAX_MS,
+# claimWait, holdOwnerFrom, isRunWait, observeBitbucketPr, observeGithubPr, observePullRequest, readReviewExit,
+# reviewExitOf, reviewGateFor, reviewReadOf, reviewWaitFor, settleWait, stageRunWaitFor, waitDueAt, waitIsDue, waitKind</pre>
+  <p class="cite">
+    The 54 names, sorted, are the base's own list, unchanged: BUILTIN_IDS, DEFAULT_KEYS, DEFAULT_SEED_FILE,
+    EXIT_CHECKS, EXIT_PARAM_SPEC, HOLD_OWNER_MS, KIND_RANK, PIPELINES_VERSION, PIPELINE_KINDS, PROMPT_PLACEHOLDERS,
+    PipelineRecords, Pipelines, QUIET_WAKE_AFTER_MS, REVIEW_WAIT_CHECKS, REVIEW_WAIT_KIND, RUN_WAIT_KIND,
+    WAIT_CLAIM_GRACE_MS, WAIT_FIRST_MS, WAIT_MAX_MS, advanceStage, changePipeline, claimWait, cutPipeline,
+    defaultForProject, defaultsForProject, ensurePipelinesFile, holdOwnerFrom, isRunWait, ladderRefusal, mergeDocs,
+    observeBitbucketPr, observeGithubPr, observePullRequest, pipelinesDoc, presumedPipeline, promptPlaceholders, rankOf,
+    readPipelinesFile, readReviewExit, renderPrompt, resetPipelinesCache, reviewExitOf, reviewGateFor, reviewReadOf,
+    reviewWaitFor, settleWait, stageRunWaitFor, storeSwitch, unknownPlaceholders, validatePipeline,
+    validatePipelinesDocument, waitDueAt, waitIsDue, waitKind.
+  </p>
+
+  <h2>4. The moved block reappears verbatim</h2>
+  <p>
+    The new file was assembled from the base blob (<code>git show 0ce44e77:lib/pipelines.js</code>), not from a
+    hand-edited parent, and the assembly script refused to run unless each boundary matched the line it expected. Both
+    ranges are identical to the base: no textual change at all.
+  </p>
+<pre>moved lines: 402 (371-695 = 325, 727-803 = 77)
+371-695: base 325 / new 325 lines
+  sha256 base 4bce2e3c02e8e769fa1b5b19df51200afdcea2a79f955f0e56a56a63471426e1
+  sha256 new  4bce2e3c02e8e769fa1b5b19df51200afdcea2a79f955f0e56a56a63471426e1   identical true
+727-803: base 77 / new 77 lines
+  sha256 base cb4d9417115697f40a1c961079cb36de5f2b3512b21c7bd065a8fc299d86bc48
+  sha256 new  cb4d9417115697f40a1c961079cb36de5f2b3512b21c7bd065a8fc299d86bc48   identical true
+textual changes: 0
+join: the two ranges are one blank line apart (lib/pipeline-waits.js:347), where renderPrompt sat between them
+remaining declarations in the parent: 27 names checked (the 24 exports plus stampOfMs, hostStamp, msOfStamp), 0 found</pre>
+  <p class="cite">
+    The fn moves were checked by declaration, not by eye: <code>REVIEW_WAIT_CHECKS</code>, <code>WAIT_FIRST_MS</code>,
+    <code>WAIT_MAX_MS</code>, <code>QUIET_WAKE_AFTER_MS</code>, <code>WAIT_CLAIM_GRACE_MS</code>,
+    <code>RUN_WAIT_KIND</code>, <code>REVIEW_WAIT_KIND</code>, <code>HOLD_OWNER_MS</code>, <code>waitKind</code>,
+    <code>isRunWait</code>, <code>stageRunWaitFor</code>, <code>holdOwnerFrom</code>, <code>reviewWaitFor</code>,
+    <code>reviewGateFor</code>, <code>reviewExitOf</code>, <code>waitDueAt</code>, <code>waitIsDue</code>,
+    <code>claimWait</code>, <code>readReviewExit</code>, <code>reviewReadOf</code>, <code>settleWait</code>,
+    <code>observePullRequest</code>, <code>observeGithubPr</code>, <code>observeBitbucketPr</code>,
+    <code>stampOfMs</code>, <code>hostStamp</code> and <code>msOfStamp</code> are declared zero times in
+    <code>lib/pipelines.js</code> and once each in <code>lib/pipeline-waits.js</code>. The one new-text line inside the
+    file is the join blank; the only new text anywhere is the new file's 20-line header and the parent's 4-line
+    comment plus 30-line re-export, and the parent's header line that named the wait.
+  </p>
+
+  <h2>5. The focused tests, at the base and after the cut</h2>
+  <p>
+    Five files, chosen because they are the ones that import <code>lib/pipelines.js</code> directly or drive its route:
+    <code>test/pipelines.test.js</code>, <code>test/pipeline-wait.test.js</code>,
+    <code>test/task-pipeline-drive.test.js</code>, <code>test/pipeline-review-loop.test.js</code> and
+    <code>test/pipeline-catalogue-route.test.js</code>.
+  </p>
+<pre>node --test --test-concurrency=4 test/pipelines.test.js test/pipeline-wait.test.js \
+  test/task-pipeline-drive.test.js test/pipeline-review-loop.test.js \
+  test/pipeline-catalogue-route.test.js
+# base 0ce44e77: tests 112, pass 112, fail 0, cancelled 0, skipped 0   (91.7s)
+# after c274c85f: tests 112, pass 112, fail 0, cancelled 0, skipped 0  (99.5s)</pre>
+  <p class="cite">
+    The base run is the same tree with the base's own <code>lib/pipelines.js</code> put back and the new file removed
+    (<code>git checkout 0ce44e77 -- lib/pipelines.js</code>, <code>rm lib/pipeline-waits.js</code>), then
+    <code>git checkout HEAD --</code> restored the cut. Nothing was red on either side, so there is no failure to
+    compare against the turnover head. The browser harness for the catalogue and the pipeline picker was also run:
+    <code>node tools/verify-pipeline-catalogue.mjs</code> answered <span class="ok">38 passed, 0 failed</span>. The
+    full suite was not run; the row's gate is this focused set.
+  </p>
+
+  <h2>6. One two-stage chain whose second stage waits, through the real routes</h2>
+  <p>
+    A wait is what makes a chain hold, so the end-to-end check is not a plain chain: the first definition climbs into a
+    second whose last stage ends only on the reviewer's answer. <code>hold-local</code> (kind <code>local</code>, one
+    stage <code>work</code>, <code>next: "hold-review"</code>) and <code>hold-review</code> (kind
+    <code>investigation</code>, two stages: <code>draft</code> ends on <code>branch-exists</code>, <code>answer</code>
+    ends on <code>pr-comments</code>). The panel was the real <code>server.js</code>, booted against a throwaway config
+    by <code>tools/panel-testkit.mjs</code>; the definitions were written by the route, not by hand into the file.
+  </p>
+<pre>PUT  two-definition chain accepted  [status 200]
+PUT  no definition dropped: a review exit and a {{branch}} prompt are valid  [dropped []]
+GET  catalogue read  [status 200]
+GET  both definitions are in the merged catalogue  [hold-local, hold-review]
+GET  the chain link survived the save and the read  [hold-local.next = hold-review]
+GET  the second definition carries its two stages  [draft -> answer]
+GET  the waiting stage kept its reviewer exit  [{"check":"pr-comments"}]
+GET  the closed vocabularies still travel  [local,investigation,turnover]
+DISK the live file holds the waiting stage and its exit  [{"check":"pr-comments"}]
+WAIT reviewWaitFor registered a wait from the read-back stage  [answer / pr-comments]
+WAIT the wait carries its document and its thread  [hold-review / thread-row-514]
+WAIT its first interval is the one-hour floor  [3600000]
+WAIT it reads as the reviewer's kind, not a run hold
+WAIT not due at the cut, due one interval later
+WAIT the first claim is granted
+WAIT a comment newer than lastSeen matches the exit  [a comment arrived at 2026-11-28T12:01:00.000Z, after 2026-11-28T11:00:00.000Z]
+WAIT the settle advances the stage and closes the wait
+WAIT the Bitbucket payload advances the same exit  [a comment arrived at 2026-11-28T12:02:00.000Z, after 2026-11-28T12:00:00.000Z]
+CHAIN-WAIT PASSED: the chain holds on a stage that waits</pre>
+  <p class="cite">
+    Steps 1-9 prove the save and the read: the chain link, both definitions, the two stages and the reviewer exit come
+    back from the route's own merged catalogue, and the same exit is in the live file on disk. Steps 10-15 are the moved
+    code run against the definition the ROUTE returned: <code>reviewWaitFor</code> registers the
+    <code>pr-comments</code> wait for <code>answer</code>, with its document, thread and one-hour first interval;
+    <code>waitKind</code> reads it as the reviewer's; <code>claimWait</code> grants the first claim. Steps 16-18 drive
+    the read and the settle: a comment newer than <code>lastSeen</code> matches the exit, the settle advances the stage
+    and closes the wait, and a Bitbucket-shaped payload (epoch-millisecond stamps, the real reviewer shape) does the
+    same through the second normaliser. What this does not run is a live run's wake on a thread: that is the sweep, and
+    <code>test/pipeline-wait.test.js</code> drives it with a fake job store.
+  </p>
+
+  <h2>7. The landing</h2>
+  <p>
+    The cut is <code>c274c85f</code> on <code>wtgui/row-514-is-the-second-cut-of-lib-2aca2b</code>, cut from the
+    turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>0ce44e77</code>. It merges into
+    the turnover locally with <code>--no-ff</code>; the turnover is where the work rolls up and the reader decides when
+    it lands. No push, no pull request, no version bump.
+  </p>
+  <p>
+    The turnover moved while this row ran: it is at <code>edd9873c</code> (row 515's initiative-writes cut,
+    <code>74c0af87</code> and its merge) and neither commit touches <code>lib/pipelines.js</code> or
+    <code>lib/pipeline-validate.js</code>, so the merge cannot have dropped another row's work on these paths. The merge
+    commit is the one the row's report names.
+  </p>
+<pre>git rev-parse 0ce44e77                                             # the cut's base
+git rev-parse 20261127_2134_TASK-405_row-405-is-the-complete       # edd9873c, the turnover at merge time
+git diff --stat 0ce44e77 edd9873c -- lib/pipelines.js lib/pipeline-validate.js
+# (no output: neither commit between base and tip touched either path)</pre>
+
+  <p class="foot">
+    Base <code>0ce44e77</code> (<code>20261127_2134_TASK-405_row-405-is-the-complete</code>); the cut is
+    <code>c274c85f</code> on <code>wtgui/row-514-is-the-second-cut-of-lib-2aca2b</code>; measured 2026-11-28.
+    Every line number in this page is a 1-based line in the file named beside it.
+  </p>
+</main>
+</body>
+</html>

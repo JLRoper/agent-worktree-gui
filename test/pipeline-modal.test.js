@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
+import { queueCardsSource } from "../tools/panel-testkit.mjs";
 
 await import("../public/pipeline-modal.js");
 const { keyIntent } = globalThis.PipelineModal;
@@ -151,10 +152,13 @@ test("the header names what is drawn, not an edit this dialog does not offer", (
   assert.match(source, /pipeline flow · position/);
   // The apology caption that explained the absence of marks is gone; the legend says the state once instead.
   const app = dropCR(readFileSync(new URL("../public/app.js", import.meta.url), "utf8"));
+  // The Pipeline tab's control was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+  // docs/reports/module-separation-2026-11-28.html).
+  const settingsSrc = dropCR(readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8"));
   assert.doesNotMatch(app, /each notch is the exit check that ends the stage before it/, "the caption is deleted");
-  const at = app.indexOf("function openPipelineFlow()");
-  assert.ok(at > 0, "the control's handler is in app.js");
-  assert.doesNotMatch(app.slice(at, at + 1400), /\bnote:/, "the modal is opened without a note to explain the picture");
+  const at = settingsSrc.indexOf("function openPipelineFlow()");
+  assert.ok(at > 0, "the control's handler is in public/settings-window.js");
+  assert.doesNotMatch(settingsSrc.slice(at, at + 1400), /\bnote:/, "the modal is opened without a note to explain the picture");
 });
 
 test("the Pipeline tab has the dropdown, the editor and the control that opens the modal", () => {
@@ -162,11 +166,12 @@ test("the Pipeline tab has the dropdown, the editor and the control that opens t
   assert.match(html, /id="pipeline-flow-open" data-pipeline-flow-open/, "the control");
   assert.match(html, /id="pipeline-editor"/, "the editor for the selected definition");
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-  assert.match(app, /PipelineModal\.open\(\{\s*\n?\s*mode: "edit"/, "the tab opens the modal in edit mode");
+  const settingsSrc = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
+  assert.match(settingsSrc, /PipelineModal\.open\(\{\s*\n?\s*mode: "edit"/, "the tab opens the modal in edit mode");
   assert.match(app, /pipeline-select"\)\?\.addEventListener\("change"/, "the dropdown is what changes the selection");
   // The queue row's press moved to public/queue-cards.js when the queue cards were cut out of assistant.js;
   // the handler that opens the modal in position mode stayed in assistant.js.
-  const queue = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+  const queue = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
   assert.match(queue, /data-as-qflow=/, "a queue row carries the position-mode press");
   const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
   assert.match(assistant, /mode: "position"/, "and it opens the modal in position mode");
@@ -300,9 +305,9 @@ test("the preview draws the shared card, and only from a definition the caller s
   assert.match(source, /data-pm-chart-view="preview"><div class="pm-host" data-pm-chart>/);
   assert.match(source, /the chart could not be drawn: \$\{esc\(said\)\}/);
   // The definition travels from the Settings tab as the DRAFT, beside the flow the edit view draws.
-  const app = dropCR(readFileSync(new URL("../public/app.js", import.meta.url), "utf8"));
+  const app = dropCR(readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8"));
   const at = app.indexOf("function openPipelineFlow()");
-  assert.ok(at > 0, "the tab's handler is in app.js");
+  assert.ok(at > 0, "the tab's handler is in public/settings-window.js");
   assert.match(app.slice(at, at + 1200), /definition: def,/, "the modal is handed the definition itself, not only the flow");
 });
 

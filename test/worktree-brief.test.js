@@ -131,7 +131,9 @@ test("a tree run is told to read the map, attach where it plainly fits, and ask 
     sweep(dir, repo);
   });
 
-  const job = await jobs.create({ prompt: "cut a tree and make the change", cwd: repo, existing: false, project: "fixture", assistantId: "scout" });
+  // A research brief: the subject is the INITIATIVES paragraph in the brief, not the landing shape, so the cut stands
+  // at the root as a research tree.
+  const job = await jobs.create({ prompt: "read the board and report what the map says", cwd: repo, existing: false, project: "fixture", assistantId: "scout" });
   assert.notEqual(job.status, "failed", `the run was accepted: ${job.error || ""}`);
   const body = stub.last();
   assert.ok(body.includes("Work in "), `this is a worker's brief, not the assistant's turn:\n${body}`);

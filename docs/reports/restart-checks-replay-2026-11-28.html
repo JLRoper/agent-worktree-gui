@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 511: the restart checks move to lib/restart-checks.js, a cut the turnover already carried</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 24px 64px; background: #14161a; color: #d7dbe0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: #f2f5f8; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f2f5f8; border-bottom: 1px solid #2a2f36; padding-bottom: 6px; }
+  h3 { font-size: 15px; margin: 22px 0 6px; color: #e6ebf0; }
+  .sub { color: #8b949e; margin: 0 0 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 6px; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid #242a31; vertical-align: top; }
+  th { color: #9aa4af; font-weight: 600; }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  code { color: #9ecbff; }
+  pre { background: #1b1f25; border: 1px solid #262c34; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #cfd6dd; }
+  .met { color: #7ee787; } .unmet { color: #ff9c94; } .warn { color: #f0c674; }
+  .cite { color: #7d8791; font-size: 12.5px; }
+  .box { background: #1b1f25; border: 1px solid #262c34; border-left: 3px solid #4d7ea8; border-radius: 4px; padding: 12px 14px; margin: 12px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .foot { margin-top: 40px; color: #7d8791; font-size: 12.5px; border-top: 1px solid #242a31; padding-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 511: the restart checks move to lib/restart-checks.js, a cut the turnover already carried</h1>
+  <p class="sub">Module-separation plan entry 16. 251 lines moved out of <code>lib/restart.js</code> into <code>lib/restart-checks.js</code>, behind the same 17 names the entry point has always exported.</p>
+
+  <div class="box">
+    <b>What this row found, and what it did.</b> The cut was already at the turnover when this branch was opened:
+    commit <code>542c7e49</code> moved these checks from row 510's tree, merge <code>2103bace</code> landed it, and
+    <code>docs/reports/restart-checks-cut-2026-11-28.html</code> is the page that came with it. This branch was cut
+    before that land, so its <code>lib/restart.js</code> still held the checks; the branch replays the identical move
+    (the two files it writes are blob <code>f17ed382</code> and <code>3d5f6f00</code>, the blobs the turnover already
+    holds), proves it here, and merges. The merge changes no code: the only path it adds to the turnover is this page.
+    No version bump, no push, no pull request.
+  </div>
+
+  <h2>1. The tree this row found</h2>
+  <table>
+    <tr><th>What</th><th>What it was</th><th>How it was read</th></tr>
+    <tr>
+      <td>This branch's HEAD before the cut</td>
+      <td><code>459c92eb</code>, the collision-book cut and its page, nothing ahead of the turnover</td>
+      <td><code>git rev-list --count 20261127_2134_TASK-405_row-405-is-the-complete..HEAD</code> printed <code>0</code></td>
+    </tr>
+    <tr>
+      <td><code>lib/restart.js</code> at that HEAD</td>
+      <td>1,254 lines, the checks at 47-207 and 218-307, no <code>lib/restart-checks.js</code> in the tree</td>
+      <td><code>git show HEAD^:lib/restart.js | wc -l</code> printed <code>1254</code></td>
+    </tr>
+    <tr>
+      <td>The turnover</td>
+      <td><code>0ce44e77</code> when the row was read, <code>edd9873c</code> when the merge was made (row 515 landed in between)</td>
+      <td><code>git reflog show 20261127_2134_TASK-405_row-405-is-the-complete</code></td>
+    </tr>
+    <tr>
+      <td><code>lib/restart.js</code> at the turnover</td>
+      <td>1,024 lines, the checks already gone, <code>lib/restart-checks.js</code> at 267 lines</td>
+      <td><code>git show 20261127_2134_TASK-405_row-405-is-the-complete:lib/restart.js | wc -l</code></td>
+    </tr>
+  </table>
+  <p class="cite">
+    The pre-image check is what makes the replay exact: <code>git diff HEAD 542c7e49^ -- lib/restart.js</code> is
+    empty, so the file this branch moved the checks out of is the file <code>542c7e49</code> moved them out of, byte
+    for byte. The patch was then applied with <code>git apply --check</code> before <code>git apply</code>.
+  </p>
+
+  <h2>2. What moved, in line counts, with the command</h2>
+  <table>
+    <tr><th>File</th><th>Before</th><th>After</th><th>What it holds now</th></tr>
+    <tr>
+      <td><code>lib/restart.js</code></td>
+      <td class="met">1,254</td>
+      <td class="met">1,024</td>
+      <td>The entry point: the queue and ledger header, the imports it still reads, the 17-name re-export from
+        <code>./restart-checks.js</code> (62-66), the <code>gatewayIdentity</code> re-export that never left this file
+        (76), and <code>RestartController</code> from line 80.</td>
+    </tr>
+    <tr>
+      <td><code>lib/restart-checks.js</code></td>
+      <td class="met">-</td>
+      <td class="met">267</td>
+      <td>The checks: a 10-line header (1-10), four imports (12-15: <code>node:fs</code>, <code>node:path</code>,
+        <code>readBlockValue</code> from <code>./hermes-config.js</code>, <code>statePaths</code> from
+        <code>./paths.js</code>), and the moved block at 17-267.</td>
+    </tr>
+    <tr>
+      <td>both files</td>
+      <td class="met">1,254</td>
+      <td class="met">1,291</td>
+      <td>+37 lines net: 267 for the new file, 1,024 for the entry point. The commit's diffstat is 287 insertions
+        and 250 deletions because git reads 20 of the entry point's lines as unchanged context.</td>
+    </tr>
+  </table>
+<pre>git show --numstat --format='' 0654d6e2     # 267  0  lib/restart-checks.js; 20  250  lib/restart.js
+wc -l lib/restart.js lib/restart-checks.js   # 1024 lib/restart.js; 267 lib/restart-checks.js
+git show HEAD^:lib/restart.js | wc -l        # 1254, the file before the cut</pre>
+  <p class="cite">
+    <code>lib/restart.js</code> has no trailing newline, before and after the cut: <code>wc -l</code> says 1,254 and
+    1,024 while splitting the bytes on newlines gives 1,255 and 1,025. Every count on this page is
+    <code>wc -l</code>'s, the same measure the module-separation report uses.
+  </p>
+
+  <h2>3. The boundary is this base's, not the row's line numbers</h2>
+  <table>
+    <tr><th>Line</th><th>What is there</th><th>Why it decides the boundary</th></tr>
+    <tr><td><code>HEAD^:47</code></td><td><code>// The token the proof turn must produce.</code></td><td class="met">The first line of the checks, and the first line of the moved block.</td></tr>
+    <tr><td><code>HEAD^:207</code></td><td><code>}</code> closing <code>providerKeyCheck</code></td><td class="met">The end of the provider-key check and the served-version checks.</td></tr>
+    <tr><td><code>HEAD^:208-217</code></td><td>The <code>gatewayIdentity</code> comment and <code>export { gatewayIdentity };</code></td><td>Stays. The reader lives in <code>lib/hermes-runtime.js</code>; this path is where callers have always got it from, and it is not a restart check.</td></tr>
+    <tr><td><code>HEAD^:218</code></td><td><code>// ---- the proof ----</code></td><td class="met">The second range begins here, because the <code>gatewayIdentity</code> block above it stays.</td></tr>
+    <tr><td><code>HEAD^:307</code></td><td><code>}</code> closing <code>proveGatewayTurn</code></td><td class="met">The last line of the moved block.</td></tr>
+    <tr><td><code>HEAD^:309</code></td><td><code>// ---- the controller ----</code></td><td>Stays. The controller queues, stops, starts and records; it is not a check.</td></tr>
+  </table>
+  <p class="cite">
+    The row numbers written when the plan was filed describe a longer file; this base is 1,254 lines because the
+    earlier restart cuts moved the queue and the ledger out. The two ranges were printed before a line moved, which
+    is what fixes them at 161 and 90 lines.
+  </p>
+
+  <h2>4. The export surface: 17 names, the same set before and after</h2>
+  <p>
+    The list is read off the running module, not grepped out of the source: a temporary ESM import of
+    <code>lib/restart.js</code> at each side, <code>Object.keys()</code>, sorted, written to a file. The two files
+    diff clean at 17 lines each.
+  </p>
+<pre>node --input-type=module -e 'const m = await import("./lib/restart.js"); console.log(Object.keys(m).sort().join("\n"))'
+diff exports-before.txt exports-after.txt &amp;&amp; echo CLEAN    # CLEAN</pre>
+  <table>
+    <tr><th>Side</th><th>Count</th><th>The names</th></tr>
+    <tr>
+      <td>before, <code>HEAD^</code></td>
+      <td class="met">17</td>
+      <td><code>NEVER_CHANGED_REASON PROOF_PROMPT PROVIDER_KEY_NAMES REASON_REQUIRED RESTART_SHAPE RestartController compareVersions gatewayIdentity gatewayLaunchPlan gatewayRestartLogPath proveGatewayTurn providerKeyCheck restartFilePath sameVersion servedVersionFromDisk versionParts versionsNamed</code></td>
+    </tr>
+    <tr>
+      <td>after, <code>HEAD</code></td>
+      <td class="met">17</td>
+      <td>the same names, in the same order</td>
+    </tr>
+  </table>
+  <p class="cite">
+    <code>lib/restart-checks.js</code> itself exports 20 names: the 15 it re-exports through the entry point plus
+    <code>MAX_CONSUMED</code>, <code>TERMINAL_RUN</code>, <code>clip</code>, <code>nowIso</code> and <code>sleep</code>.
+    Those five were module-private before the cut; they are exported so <code>RestartController</code> can import them
+    back, and they are not re-exported, which is why the entry point's surface is unchanged.
+  </p>
+
+  <h2>5. The move is a move: 251 lines, 246 identical, five named differences</h2>
+  <p>
+    The moved block is <code>HEAD^:47-207</code> plus <code>HEAD^:218-307</code>, 161 plus 90 lines. Each line was
+    compared with its counterpart in <code>lib/restart-checks.js:17-267</code>, in order.
+  </p>
+  <table>
+    <tr><th>Result</th><th>Lines</th><th>What they are</th></tr>
+    <tr><td class="met">identical</td><td>246</td><td>Copied verbatim, including the comments and the blank lines.</td></tr>
+    <tr><td class="warn">gained <code>export </code></td><td>5</td><td><code>TERMINAL_RUN</code>, <code>MAX_CONSUMED</code>, <code>sleep</code>, <code>nowIso</code>, <code>clip</code>: the five names the controller reads back, module-private before the cut.</td></tr>
+    <tr><td class="unmet">changed any other way</td><td>0</td><td>None.</td></tr>
+  </table>
+  <p>
+    The hash closes it: the 251 lines as they stood before the cut hash to
+    <code>8df0835440f4c2f240821f721ad310ebaf8b76ff55f807a7c1ce5db41b5d89bf</code>. The 251 lines in
+    <code>lib/restart-checks.js</code> hash to <code>1786cca8aded79ae21a933091c772f26efb2da6f22b750037f0728e2a9cc0ed4</code>,
+    and the same 251 lines with the five <code>export </code> prefixes stripped hash to
+    <code>8df0835440f4c2f240821f721ad310ebaf8b76ff55f807a7c1ce5db41b5d89bf</code> again. Nothing else was retyped.
+  </p>
+  <p class="cite">
+    One constant moved that a plan written against the old file would leave behind: <code>PROOF_PROMPT</code> at
+    <code>HEAD^:50</code>. The proof turn defaults to it, so leaving it in the entry point would have made
+    <code>lib/restart-checks.js</code> import <code>lib/restart.js</code> while the entry point imports it back. It
+    moved with the turn and is re-exported, so the surface stays 17.
+  </p>
+
+  <h2>6. What ran, and what it answered</h2>
+<pre>node --check lib/restart.js         # no output, exit 0
+node --check lib/restart-checks.js  # no output, exit 0</pre>
+  <table>
+    <tr><th>Run</th><th>Trees / tests</th><th>Tests</th><th>Pass</th><th>Fail</th></tr>
+    <tr><td><code>npm run test:module lib/restart.js</code>, before the cut</td><td>6 test files</td><td>92</td><td class="met">90</td><td class="unmet">2</td></tr>
+    <tr><td><code>npm run test:module lib/restart.js</code>, after the cut</td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
+    <tr><td><code>npm run test:module lib/restart.js -- --root &lt;turnover archive&gt;</code>, at <code>0ce44e77</code></td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
+    <tr><td>the same, at <code>edd9873c</code></td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
+    <tr><td>the same, at <code>03191284</code>, the tip this note was written against</td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
+    <tr><td><code>npm run test:module lib/restart-checks.js</code>, after the cut</td><td>4 test files</td><td>44</td><td class="met">44</td><td class="met">0</td></tr>
+    <tr><td><code>node --test test/panel-restart.test.js</code> alone, after the cut</td><td>1 file</td><td>12</td><td class="met">12</td><td class="met">0</td></tr>
+  </table>
+  <h3>The three failures, by name</h3>
+  <ul>
+    <li><code>test/panel-restart.test.js:134</code>, "with no graceful shutdown asked for, a bounce takes the port at
+      once instead of waiting". It failed in the concurrent module run after the cut ("the outgoing panel let go of the
+      port at 8398ms, not after a 20 s wait") and in both turnover-head runs, and passed 12 of 12 when the file was run
+      alone: a timing assertion under the module run's four-way concurrency, not a behaviour the cut touches.</li>
+    <li><code>test/paths.test.js:221</code>, "every *File / *Dir / *Log config key the panel reads is derived by
+      lib/paths.js, or is source rather than state". Red before the cut and at both turnover heads; the diff names
+      <code>pipelineBundleSeedFile</code> at <code>lib/pipeline-bundle-import.js:321</code>.</li>
+    <li><code>test/paths.test.js:728</code>, "every spawn prompt states the scratch path, and the card still shows only
+      what the reader wrote". Red before the cut and at both turnover heads; its temp tree reports
+      <code>tree_dirty</code> with one uncommitted file.</li>
+  </ul>
+  <p class="cite">
+    The third failure is the only difference between the before run and the after run, and it reproduces at the
+    turnover head at both revisions, which is the comparison the brief asks for. The two <code>test/paths.test.js</code>
+    failures are the same two the row 510 commit recorded at <code>835db929</code>.
+  </p>
+
+  <h2>7. The duplicate, in blob ids</h2>
+  <table>
+    <tr><th>Revision</th><th><code>lib/restart.js</code></th><th><code>lib/restart-checks.js</code></th></tr>
+    <tr><td>this branch, <code>0654d6e2</code></td><td><code>f17ed382</code></td><td><code>3d5f6f00</code></td></tr>
+    <tr><td><code>542c7e49</code>, the row 510 cut</td><td><code>f17ed382</code></td><td><code>3d5f6f00</code></td></tr>
+    <tr><td>the turnover, <code>0ce44e77</code> and <code>edd9873c</code></td><td><code>f17ed382</code></td><td><code>3d5f6f00</code></td></tr>
+  </table>
+  <p>
+    Three revisions, two blob ids. The merge therefore adds one path to the turnover, this page, and changes no code:
+    both restart files are already exactly what this branch writes. That is the finding worth the reader's time, and
+    it is also why the row was cheap to close: there was no second design decision to make.
+  </p>
+
+  <h2>8. What this cut did not do</h2>
+  <ul>
+    <li>No import site moved. <code>server.js</code>, <code>lib/jobs.js</code> and the restart tests still read <code>lib/restart.js</code>.</li>
+    <li>No behaviour change: <code>RestartController</code>, the queue, the ledger and the proof turn run the same code they ran before.</li>
+    <li>No version bump (<code>1.197.1</code>), no push, no pull request.</li>
+    <li>No full suite. The focused module sets above are the evidence.</li>
+  </ul>
+
+  <h2>9. Landed: the merge, and the head that moved under it</h2>
+  <p>
+    The branch was merged into <code>20261127_2134_TASK-405_row-405-is-the-complete</code> locally at
+    <code>f9bd6509</code>, whose parents are <code>59097534</code> (the turnover) and <code>83e956ef</code> (this
+    branch). The merge adds one path, this page, and changes no code:
+    <code>git diff --stat 59097534 f9bd6509</code> is this file's 235 lines and nothing else.
+  </p>
+  <table>
+    <tr><th>When</th><th>Turnover tip</th><th>What moved it</th></tr>
+    <tr><td>when the row was read</td><td><code>0ce44e77</code></td><td>the row 470 landing</td></tr>
+    <tr><td>08:44</td><td><code>edd9873c</code></td><td>row 515's initiative-write cut</td></tr>
+    <tr><td>08:50</td><td><code>b4f88ad9</code></td><td>row 515's cut page, docs only</td></tr>
+    <tr><td>08:54, the tip the first merge was made against</td><td><code>59097534</code></td><td>row 513's merge, carrying row 534's recheck page</td></tr>
+    <tr><td>08:56, the tip the second merge was made against</td><td><code>c2a6c75f</code></td><td>row 512's second restart cut, the controller moves out</td></tr>
+  </table>
+  <p class="cite">
+    Row 512 landed after the first merge and moved <code>RestartController</code> out of <code>lib/restart.js</code>:
+    the tip's entry point is now blob <code>98782d79</code>, while <code>lib/restart-checks.js</code> is still
+    <code>3d5f6f00</code>, the blob this cut wrote. The blob comparison in section 7 is against the revisions named
+    there, not against whatever the tip holds later.
+  </p>
+
+  <p class="cite">
+    The first merge was made with <code>git merge-tree --write-tree</code> and <code>git commit-tree</code> rather
+    than a <code>git merge</code> in the turnover worktree: that worktree held another run's nine staged files, and a
+    plain merge is refused while the index is dirty. The merge tree was read back against the tip before the ref moved,
+    the new page was checked out into the turnover worktree and staged on its own, and the other nine files' staged
+    diff hashed the same before and after: <code>0383e2fa</code>. The final merge found the same nine files staged
+    again, and a plain <code>git merge</code> was refused a second time, so it took the same merge-tree and
+    commit-tree route; those nine files' staged diff hashed <code>0383e2fa</code> before and after that one too.
+  </p>
+  <p class="cite">
+    No push, no pull request, no version bump. The turnover stays local and unpushed, and the reader decides when it
+    lands.
+  </p>
+
+
+  <p class="foot">Row 511, module-separation plan entry 16. Measured on this tree at <code>0654d6e2</code>, with the turnover read at <code>0ce44e77</code>, <code>edd9873c</code>, <code>b4f88ad9</code>, <code>59097534</code>, <code>c2a6c75f</code> and <code>03191284</code>.</p>
+</main>
+</body>
+</html>

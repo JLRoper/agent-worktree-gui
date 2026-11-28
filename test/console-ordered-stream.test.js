@@ -19,6 +19,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { consoleSource } from "../tools/panel-testkit.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8");
@@ -35,7 +36,7 @@ const CF = context.window.WMApp.core.consoleFormat;
 const CM = context.window.WMApp.core.consoleMarkdown;
 
 // The console's own answer to "how much of this line may be shown", sliced out of the shipped file.
-const consoleSrc = read("public/board/console.js");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
 function between(a, b) {
   const i = consoleSrc.indexOf(a);
   const j = consoleSrc.indexOf(b, i);

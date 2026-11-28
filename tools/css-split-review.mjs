@@ -3,17 +3,20 @@
 // became per-surface sheets. It is not a proof that the cut is faithful (tools/verify-css-split.mjs is
 // that proof); it asks the next question: is the RESULT a good split of the work, or only a good copy?
 //
-// Seven measurements, each one computed, never typed in:
+// Eight measurements, each one computed, never typed in:
 //
+//   map            every sheet the cut produced has a surface in the SURFACES map, and every entry names a
+//                  sheet public/index.html links today. A rename fails here by name.
 //   inventory      lines, bytes, rule blocks, selector entries and declarations per sheet, and each
 //                  sheet's share of the whole.
 //   duplication    selectors that live in more than one sheet, identical declaration blocks repeated
 //                  across sheets, and the same rule written twice.
-//   catch-all      what public/base.css and public/late.css still hold that belongs to a surface.
-//                  base.css is classified rule by rule as token, reset or surface. late.css is small
-//                  enough to name by BLOCK (the sliver layout, the cut dialog, the legend, the search
-//                  popovers), and each block is checked against the sheet that should own it: a rule
-//                  whose exact selector no other sheet carries is a sole definition, not an override.
+//   catch-all      what public/base.css still holds that belongs to a surface, classified rule by rule
+//                  as token, reset or surface - and the record of public/late.css, dissolved by row 446.
+//                  The four blocks late.css held at the 1.191.0 split (the sliver layout, the cut dialog,
+//                  the legend, the search popovers' chrome) are each checked against the sheet that owns
+//                  that surface now: a rule there whose exact selector no other sheet carries is a sole
+//                  definition, which is why it belonged in a surface sheet and not in a catch-all.
 //   cascade        (selector, property) pairs set by two or more sheets, and the sheet that wins by load
 //                  order (with !important taken first). The top ten by conflict count are listed.
 //   dead           rules whose selector matches zero elements in the running page, measured in a real
@@ -62,37 +65,52 @@ const num = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : v);
 
 // Every local sheet public/index.html loads, in load order. chart.css and the two core/ card sheets
 // were never part of the one panel sheet; they are still in the order because the cascade measurement needs the
-// whole list, but a "split sheet" is one of the nineteen the cut produced. The list is parsed from the page by
-// tools/style-sheets.mjs, so a sheet added there is reviewed without an edit here.
+// whole list, but a "split sheet" is one of the sheets the cut produced and the page still links. The list is
+// parsed from the page by tools/style-sheets.mjs, so a sheet added there is reviewed without an edit here, and
+// the SURFACES map below is checked against it (mapFindings).
 export function stylesheetsInLoadOrder(root = ROOT) {
   return styleSheetFiles({ root }).map((href) => ({ href, split: !(href === "chart.css" || href.startsWith("core/")) }));
 }
 
-// The surface each sheet owns, as the split's own report names it.
+// The surface each sheet owns, as the split's own reports name it. THE MAP IS CHECKED AGAINST THE PAGE: a live
+// sheet the cut produced with no entry, or an entry naming a sheet that is gone, fails `npm run review:css-split`
+// (see mapFindings). Rows 445 and 446 dissolved jobs.css, turns.css, rowstrips.css and late.css into the sheets
+// below, and added console-head.css, console-turns.css, model-menu.css and utilities.css, so this is the list of
+// sheets that exist today - not the list the cut produced in 1.191.0.
 export const SURFACES = {
-  "base.css": "tokens and resets",
+  "base.css": "tokens and page resets",
   "chrome.css": "header and status strip",
   "settings.css": "Settings drawer and its tabs",
-  "board.css": "project boxes, folders, agent rows, new-agent form",
-  "jobs.css": "job cards",
-  "console.css": "the console: agent pane and thought rows",
-  "turns.css": "conversation turns",
-  "rows.css": "the jobs table's row controls, marks and artifacts",
+  "board-table.css": "the board table, its rows, controls, chips and strips",
+  "console.css": "the console's frame, body, output box and composer",
+  "console-head.css": "the console's head: title, meta, cwd, pipeline chip, status and controls",
+  "console-turns.css": "the console's turns: rail, head, prompt, peek and origin chips",
+  "model-menu.css": "the model picker the console head's readout opens",
   "overlays.css": "deliverables, reply box, question cards, ghost turns",
-  "rowstrips.css": "git, description, release and TODO strips",
-  "boardchips.css": "host, rules, turnover, board and cleanup chips",
-  "assistant.css": "the assistant entry, spawn strip and float shell",
+  "utilities.css": "the panel's type and status utilities",
+  "assistant.css": "the assistant entry, spawn strip, float shell and search chrome",
   "feedback.css": "Clarify, Collisions and Permissions controls",
   "assistant-panes.css": "the float's tabs, panes, search and settings",
   "initiatives.css": "the initiatives tab",
   "panes.css": "the assistant's Worktrees and Bridge sub-tabs",
   "queue.css": "the queue cards and the assistant queue pane",
   "pipeline.css": "pipeline window, messages, flow and modal",
-  "late.css": "late overrides, loaded last",
+  "chart.css": "the age column and the legend",
 };
 
-// The two catch-all sheets the review asks about by name.
-const CATCH_ALL = ["base.css", "late.css"];
+// The map against the page. The defect this exists for: rows 445 and 446 deleted four sheets and added four, and the
+// map kept naming three of the deleted ones (late.css was never in it, and the tool's catch-all record already says
+// row 446 dissolved it) while the four that exist read as "no surface". A renamed sheet is the same defect on one
+// name - so the check is the sheet LIST, not only the labels: every sheet the cut produced must have an entry, and
+// every entry must name a sheet the page links.
+export function mapFindings(order = stylesheetsInLoadOrder()) {
+  const live = order.map((entry) => entry.href);
+  const split = order.filter((entry) => entry.split).map((entry) => entry.href);
+  const unmapped = split.filter((name) => !Object.hasOwn(SURFACES, name));
+  const stale = Object.keys(SURFACES).filter((name) => !live.includes(name));
+  const unlabeled = split.filter((name) => Object.hasOwn(SURFACES, name) && !String(SURFACES[name] || "").trim());
+  return { live, split, unmapped, stale, unlabeled, ok: !unmapped.length && !stale.length && !unlabeled.length };
+}
 
 // ---------------------------------------------------------------------------------------------
 // A CSS reader: rules with their at-rule context and declarations, no package needed
@@ -361,11 +379,12 @@ function duplication(sheets) {
   };
 }
 
-// What a catch-all sheet still holds, measured by the BLOCK it holds rather than by a guessed token
-// owner. public/late.css is small enough (68 rules) that each block can be named from the selector
-// family it is written for, and the claim "this block belongs to that surface" can be checked by
-// grepping the sheet that surface owns. public/base.css is checked the same way: a rule that is a
-// token, a reset or a page element is not a surface rule, and there are no others.
+// What a catch-all sheet still holds, measured by the BLOCK rather than by a guessed token owner.
+// public/base.css is classified rule by rule: a rule that is a token, a reset or a page element is not a
+// surface rule, and there are no others. public/late.css is GONE - row 446 dissolved it - and the four
+// blocks it held at the 1.191.0 split are checked against the sheet that owns each surface today: the
+// sliver window against the three sheets its rules split into, the cut dialog against overlays.css, the
+// legend against chart.css, and the search popovers' drag/grip chrome against assistant.css.
 const BASE_RULE_KIND = (sel) => {
   if (sel === ":root") return "token";
   if (sel === "*" || /^\*::?-(webkit|moz)-/.test(sel)) return "reset";
@@ -374,114 +393,84 @@ const BASE_RULE_KIND = (sel) => {
   return "surface";
 };
 
-const LATE_BLOCKS = [
+const DISSOLVED_BLOCKS = [
   {
     id: "sliver",
-    label: "the sliver-window layout: header, shell, agent cards and folders",
-    home: ["chrome.css", "board.css"],
+    label: "the sliver window: the page column, the header and the board",
+    home: ["chrome.css", "board-table.css", "assistant.css"],
     test: (r) => r.ctx.some((c) => /@media\s*\(max-height:\s*300px\)/i.test(c)),
   },
   {
-    id: "cut",
-    label: "the cut dialog",
-    home: ["overlays.css"],
-    test: (r) => r.selectors.some((s) => /^\.cut-/.test(s)),
-    note: "no .cut- rule exists in overlays.css; public/app.js:7884 creates the dialog",
-  },
-  {
-    id: "legend",
-    label: "the chart legend and its popover",
-    home: ["chart.css"],
-    test: (r) => r.selectors.some((s) => /^\.legend/.test(s)),
-  },
-  {
     id: "search",
-    label: "the assistant and hot-agent search popovers",
+    label: "the search popovers' drag strip, close x and resize grip",
     home: ["assistant.css"],
-    test: (r) => r.selectors.some((s) => /^\.(as|ha)-search/.test(s)),
+    // The popovers' own frames are .as-search-pop's (assistant.css) and .ha-search-pop's
+    // (assistant-panes.css), and were never late.css's; the drag/grip chrome is what moved.
+    test: (r) =>
+      r.selectors.some(
+        (s) => /\.(as|ha)-search-(drag|grip|x)\b/.test(s) || /\.(as|ha)-search-pop\.is-(moving|resizing)\b/.test(s),
+      ),
   },
 ];
 
-function catchAll(sheets) {
-  const out = {};
-  for (const name of CATCH_ALL) {
-    const s = sheets.find((x) => x.href === name);
-    const rules = s.rules.filter((r) => !r.keyframe);
-    const entry = {
-      sheet: name,
-      surface: SURFACES[name],
-      lines: s.lines,
-      bytes: s.bytes,
-      rules: rules.length,
-      blocks: [],
-      examples: [],
-      surfaceRules: 0,
-    };
-    if (name === "base.css") {
-      const kinds = { token: 0, reset: 0, surface: 0 };
-      for (const r of rules) {
-        const kind = BASE_RULE_KIND(r.sel);
-        kinds[kind] += 1;
-        if (kind === "surface" && entry.examples.length < 8) entry.examples.push({ selector: r.sel, kind });
+// A rule whose exact selector appears in no sheet but the one holding it: these are the rules that made a
+// catch-all a bad home, because nothing else defined them and nothing had to override them.
+function soleDefinitionIndex(sheets) {
+  const owners = new Map();
+  for (const s of sheets) {
+    for (const r of s.rules) {
+      for (const sel of r.selectors) {
+        if (!owners.has(sel)) owners.set(sel, new Set());
+        owners.get(sel).add(s.href);
       }
-      entry.kinds = kinds;
-      entry.surfaceRules = kinds.surface;
-      entry.verdict = kinds.surface === 0
-        ? "holds nothing but the token layer and page resets"
-        : `${kinds.surface} rules name a surface outside the token layer`;
-    } else {
-      for (const block of LATE_BLOCKS) {
-        const list = rules.filter(block.test);
-        if (!list.length) continue;
-        const tokens = new Set();
-        for (const r of list) {
-          for (const sel of r.selectors) {
-            for (const m of sel.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) tokens.add(`.${m[1]}`);
-            for (const m of sel.matchAll(/#([\w-]+)/g)) tokens.add(`#${m[1]}`);
-          }
-        }
-        // Does the sheet that owns this surface actually name these tokens anywhere in its selectors?
-        const homeRules = sheets.filter((x) => block.home.includes(x.href)).flatMap((x) => x.rules);
-        const defined = new Set();
-        for (const r of homeRules) {
-          for (const sel of r.selectors) {
-            for (const m of sel.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) defined.add(`.${m[1]}`);
-            for (const m of sel.matchAll(/#([\w-]+)/g)) defined.add(`#${m[1]}`);
-          }
-        }
-        const absent = [...tokens].filter((t) => !defined.has(t));
-        // Rules whose exact selector appears in no other sheet at all: late.css is their only
-        // definition, so the "late override" is really the surface's only styling.
-        const elsewhere = new Set();
-        for (const other of sheets) {
-          if (other.href === name) continue;
-          for (const r of other.rules) for (const sel of r.selectors) elsewhere.add(sel);
-        }
-        const sole = list.filter((r) => r.selectors.every((sel) => !elsewhere.has(sel)));
-        entry.blocks.push({
-          id: block.id,
-          soleDefinitions: sole.length,
-          soleExamples: sole.slice(0, 4).map((r) => r.sel),
-          label: block.label,
-          home: block.home,
-          rules: list.length,
-          decls: list.reduce((a, r) => a + r.decls.length, 0),
-          bytes: list.reduce((a, r) => a + Buffer.byteLength(`${r.sel} { ${r.body} }`), 0),
-          selectors: list.map((r) => r.sel).slice(0, 6),
-          tokens: [...tokens].sort(),
-          absentFromHome: absent.sort(),
-          note: block.note || "",
-        });
-        for (const r of list.slice(0, 2)) {
-          if (entry.examples.length < 10) entry.examples.push({ selector: r.sel, block: block.id, ctx: r.ctx });
-        }
-      }
-      const covered = entry.blocks.reduce((a, b) => a + b.rules, 0);
-      entry.surfaceRules = covered;
-      entry.unresolved = rules.length - covered;
-      entry.verdict = `${entry.blocks.length} blocks across ${new Set(entry.blocks.flatMap((b) => b.home)).size} surface sheets; ${entry.blocks.filter((b) => b.absentFromHome.length).length} block(s) name tokens their own sheet never defines`;
     }
-    out[name] = entry;
+  }
+  return (rule, sheet) => rule.selectors.every((sel) => [...(owners.get(sel) || [])].every((owner) => owner === sheet));
+}
+
+function catchAll(sheets) {
+  const isSole = soleDefinitionIndex(sheets);
+  const out = { base: null, dissolved: [] };
+
+  const s = sheets.find((x) => x.href === "base.css");
+  const rules = s.rules.filter((r) => !r.keyframe);
+  const base = {
+    sheet: "base.css",
+    surface: SURFACES["base.css"],
+    lines: s.lines,
+    bytes: s.bytes,
+    rules: rules.length,
+    examples: [],
+    kinds: { token: 0, reset: 0, surface: 0 },
+  };
+  for (const r of rules) {
+    const kind = BASE_RULE_KIND(r.sel);
+    base.kinds[kind] += 1;
+    if (kind === "surface" && base.examples.length < 8) base.examples.push({ selector: r.sel, kind });
+  }
+  base.surfaceRules = base.kinds.surface;
+  base.verdict = base.kinds.surface === 0
+    ? "holds nothing but the token layer and page resets"
+    : `${base.kinds.surface} rules name a surface outside the token layer`;
+  out.base = base;
+
+  for (const block of DISSOLVED_BLOCKS) {
+    const list = [];
+    for (const sheet of sheets) {
+      for (const r of sheet.rules) if (!r.keyframe && block.test(r)) list.push({ rule: r, sheet: sheet.href });
+    }
+    const bySheet = {};
+    for (const x of list) bySheet[x.sheet] = (bySheet[x.sheet] || 0) + 1;
+    out.dissolved.push({
+      id: block.id,
+      label: block.label,
+      home: block.home,
+      rules: list.length,
+      bySheet,
+      sole: list.filter((x) => isSole(x.rule, x.sheet)).length,
+      strays: Object.keys(bySheet).filter((name) => !block.home.includes(name)),
+      selectors: list.map((x) => x.rule.sel).slice(0, 6),
+    });
   }
   return out;
 }
@@ -563,7 +552,8 @@ export function staticHalf() {
   const dup = duplication(sheets);
   const cat = catchAll(sheets);
   const cas = cascade(sheets);
-  return { sheets, inventory: inv, duplication: dup, catchAll: cat, cascade: cas };
+  const map = mapFindings(sheets.map((s) => ({ href: s.href, split: s.split })));
+  return { sheets, inventory: inv, duplication: dup, catchAll: cat, cascade: cas, map };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -571,7 +561,20 @@ export function staticHalf() {
 // ---------------------------------------------------------------------------------------------
 
 function printStatic(result) {
-  const { inventory: inv, duplication: dup, catchAll: cat, cascade: cas } = result;
+  const { inventory: inv, duplication: dup, catchAll: cat, cascade: cas, map } = result;
+
+  line("MAP");
+  if (map.ok) {
+    line(`  ${map.live.length} sheets the page links: ${map.split.length} the cut produced, plus chart.css and the two core/ cards; every one the cut produced has a surface`);
+  } else {
+    line(`  FAIL  map: ${map.unmapped.length} sheet(s) with no surface, ${map.stale.length} entry(ies) naming a sheet that is gone, ${map.unlabeled.length} with an empty label`);
+    for (const name of map.unmapped) line(`    unmapped   ${name}`);
+    for (const name of map.stale) line(`    stale      ${name}`);
+    for (const name of map.unlabeled) line(`    unlabeled  ${name}`);
+    line("    the map in this file must name the sheets public/index.html links today, and no others");
+  }
+  line("");
+
   line("INVENTORY");
   line(`  ${"sheet".padEnd(22)} ${"lines".padStart(6)} ${"bytes".padStart(8)} ${"rules".padStart(6)} ${"sels".padStart(6)} ${"decls".padStart(7)} ${"bytes%".padStart(7)} ${"rules%".padStart(7)}`);
   for (const s of inv.sheets) {
@@ -589,13 +592,15 @@ function printStatic(result) {
   line("");
 
   line("CATCH-ALL");
-  const base = cat["base.css"];
+  const base = cat.base;
   line(`  base.css: ${num(base.rules)} rules; token ${base.kinds.token}, reset ${base.kinds.reset}, surface ${base.kinds.surface} - ${base.verdict}`);
-  const late = cat["late.css"];
-  line(`  late.css: ${num(late.rules)} rules in ${late.blocks.length} blocks, ${num(late.unresolved)} unresolved - ${late.verdict}`);
-  for (const b of late.blocks) {
-    line(`    ${String(b.rules).padStart(3)} rules  ${b.label.padEnd(58)} home ${b.home.join(" + ")}${b.absentFromHome.length ? `  (${b.absentFromHome.length} token(s) never named there)` : ""}`);
+  line(`  late.css: gone (row 446) - ${cat.dissolved.length} blocks checked where they landed, each in a sheet that owns its surface`);
+  for (const b of cat.dissolved) {
+    const where = Object.entries(b.bySheet).map(([sheet, n]) => `${sheet} ${n}`).join(", ");
+    line(`    ${String(b.rules).padStart(3)} rules  ${b.label.padEnd(52)} ${where}${b.strays.length ? `  STRAY ${b.strays.join(", ")}` : ""}  (${b.sole} sole definition${b.sole === 1 ? "" : "s"})`);
   }
+  line("    its cut dialog left for overlays.css in 1.192.0 and its chart legend for chart.css with the board table's cut;");
+  line("    neither is a catch-all any more, and neither test runs here because neither block was this row's to move.");
   line("");
 
   line("CASCADE");
@@ -724,10 +729,25 @@ export function sourceTokens() {
   return tokens;
 }
 
-const COST_JS = (sel) => {
+const COST_JS = ({ sel, nested }) => {
   const roots = document.querySelectorAll(sel);
   const root = roots[0];
   if (!root) return null;
+  const nestedEls = [];
+  for (const n of nested || []) for (const el of document.querySelectorAll(n)) nestedEls.push(el);
+  const inNested = (el) => nestedEls.some((n) => n === el || n.contains(el));
+  // A rule inside a media block that does not apply at this viewport cannot cost a lane anything:
+  // the dead measurement already calls it dormant, and the cost counts it the same way.
+  const mediaApplies = (ctx) =>
+    ctx.every((c) => {
+      if (!/^@media\b/i.test(c)) return true;
+      const q = c.replace(/^@media\s*/i, "").trim();
+      try {
+        return matchMedia(q).matches;
+      } catch {
+        return true;
+      }
+    });
   const out = [];
   for (const sheet of document.styleSheets) {
     let list = [];
@@ -739,16 +759,19 @@ const COST_JS = (sel) => {
     const walk = (rules, ctx) => {
       for (const rule of rules) {
         if (rule.cssRules && !rule.selectorText) {
-          walk([...rule.cssRules], [...ctx, rule.conditionText || rule.name || "?"]);
+          const kind = rule.constructor && rule.constructor.name === "CSSMediaRule" ? "@media" : rule.constructor && rule.constructor.name === "CSSKeyframesRule" ? "@keyframes" : `@${rule.name || "?"}`;
+          walk([...rule.cssRules], [...ctx, `${kind} ${rule.conditionText || rule.name || ""}`.trim()]);
           continue;
         }
         if (!rule.selectorText) continue;
-        if (ctx.some((c) => /^keyframes/i.test(c))) continue;
+        if (ctx.some((c) => /@keyframes/i.test(c))) continue;
         for (const part of rule.selectorText.split(",")) {
           const s = part.trim().replace(/::?(before|after|placeholder|marker|selection|-webkit-[\w-]+|-moz-[\w-]+)(?![\w-])/g, "").trim();
           if (!s) continue;
+          let found = null;
           try {
-            if (!root.querySelectorAll(s).length) continue;
+            found = [...root.querySelectorAll(s)];
+            if (!found.length) continue;
           } catch {
             continue;
           }
@@ -757,6 +780,16 @@ const COST_JS = (sel) => {
             selector: part.trim(),
             declarations: rule.style ? rule.style.length : 0,
             props: rule.style ? [...rule.style] : [],
+            mediaApplies: mediaApplies(ctx),
+            // The surface's OWN rule: it styles an element this surface draws, not one a surface
+            // nested inside it draws. `own` is what a lane must open to change THIS surface.
+            own: found.some((el) => !inNested(el)),
+            // A type-only selector whose rule also matches elements OUTSIDE this root is the
+            // page's element base (`button`, the header typography list); `thead th` alone matches
+            // only here and is the table's own rule. The WHOLE selector list is counted, because a
+            // shared list (`thead th` among `.topbar`, `.settings-tabs`) is page furniture even when
+            // the part this surface matches is a table element.
+            pageWide: document.querySelectorAll(rule.selectorText).length > found.length,
           });
           break;
         }
@@ -769,13 +802,20 @@ const COST_JS = (sel) => {
 
 // Six surfaces, the same six the split proved. The queue is reached through the assistant float,
 // which is the pane the split's own numbers name.
+//
+// `nested` names the roots of the surfaces drawn INSIDE this one. #projects is a container: every
+// board row's detail row holds an agent console (`.job`), so 95 of the rules that match inside
+// #projects are the console's, jobs', turns' and overlays' own rules, and the 300 px sliver layout
+// is a media block that cannot apply at the measured viewport. Counting those as the board's is how
+// the report's 12 sheets became an upper bound instead of the surface's own cost, which is what the
+// `own` figure below measures.
 const COST_ROOTS = [
-  { name: "board", sel: "#projects", what: "the board table" },
-  { name: "console", sel: ".job[data-thread='wtgui-board-table-cut']", what: "one agent's console" },
-  { name: "queue", sel: "#as-queue", what: "the assistant's queue pane" },
-  { name: "assistant", sel: "#assistant", what: "the assistant float" },
-  { name: "initiatives", sel: "#as-initiatives", what: "the initiatives tab" },
-  { name: "settings", sel: "#settings", what: "the Settings drawer" },
+  { name: "board", sel: "#projects", nested: [".job"], what: "the board table" },
+  { name: "console", sel: ".job[data-thread='wtgui-board-table-cut']", nested: [], what: "one agent's console" },
+  { name: "queue", sel: "#as-queue", nested: [], what: "the assistant's queue pane" },
+  { name: "assistant", sel: "#assistant", nested: ["#as-queue", "#as-initiatives"], what: "the assistant float" },
+  { name: "initiatives", sel: "#as-initiatives", nested: [], what: "the initiatives tab" },
+  { name: "settings", sel: "#settings", nested: [], what: "the Settings drawer" },
 ];
 
 const SHOTS = [
@@ -959,7 +999,7 @@ async function browserHalf({ shots }) {
             // The board and the console live on the page; nothing to open.
             await page.waitForTimeout(250);
           }
-          const got = await page.evaluate(COST_JS, surface.sel);
+          const got = await page.evaluate(COST_JS, { sel: surface.sel, nested: surface.nested });
           if (!got) throw new Error(`cost: no element for ${surface.name} (${surface.sel})`);
           cost.push({ ...surface, ...got });
         }
@@ -1021,11 +1061,41 @@ export function deadFindings(rows, tokens, prefixes) {
 // count, never folded into it.
 const SHARED_LAYER = /^(\*|\*::.*|:root|html|body|html,\s*body|button,\s*select,\s*input,\s*textarea)$/i;
 
+// The page's element base: a selector made only of type selectors and pseudo-classes (`button`,
+// `thead th`, `button:disabled`) styles every element of that type on the page. It is the base
+// layer, exactly like the reset above: a lane changing the board does not open chrome.css for its
+// `button` rule.
+export function isElementBase(selector) {
+  const stripped = String(selector)
+    .replace(/::?[\w-]+(\([^)]*\))?/g, "")
+    .replace(/[>+~]/g, " ")
+    .trim();
+  const tokens = stripped.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  return tokens.every((t) => /^[a-zA-Z][\w-]*$/.test(t));
+}
+
+// The panel's type and status vocabulary: ONE class whose whole effect is type or ink (`.mono`,
+// `.dim`, `.clean`, `.dirty`). `public/rowstrips.css` keeps those eight rules together because the
+// console, Settings and the assistant rail read them too; they are not one surface's rule even when
+// that surface is the only one printing the class today.
+export function isTypeInk(selector, props) {
+  if (!/^\.[\w-]+$/.test(String(selector).trim())) return false;
+  if (!props || !props.length) return false;
+  return props.every((p) => /^(font(-.*)?|color|letter-spacing|text-transform|white-space(-collapse)?|text-wrap-mode|font-variant.*)$/.test(p));
+}
+
 export function costFindings(cost) {
   const out = [];
   for (const surface of cost) {
     const bySheet = new Map();
+    const ownBySheet = new Map();
     let sharedRules = 0;
+    let ownRules = 0;
+    let nestedRules = 0;
+    let baseRules = 0;
+    let dormantRules = 0;
+    const baseSeen = new Set();
     for (const r of surface.rules) {
       if (SHARED_LAYER.test(r.selector.trim())) {
         sharedRules += 1;
@@ -1041,17 +1111,48 @@ export function costFindings(cost) {
       s.rules += 1;
       s.decls += r.declarations;
       if (s.examples.length < 6) s.examples.push(r.selector);
+      // The own figure: the surface's own elements, at this viewport, minus the page's base layer.
+      if (!r.mediaApplies) {
+        dormantRules += 1;
+        continue;
+      }
+      if (!r.own) {
+        nestedRules += 1;
+        continue;
+      }
+      if ((isElementBase(r.selector) && r.pageWide) || isTypeInk(r.selector, r.props)) {
+        baseRules += 1;
+        if (baseSeen.size < 20) baseSeen.add(r.selector);
+        continue;
+      }
+      ownRules += 1;
+      if (!ownBySheet.has(name)) ownBySheet.set(name, { sheet: name, rules: 0, decls: 0, examples: [] });
+      const o = ownBySheet.get(name);
+      o.rules += 1;
+      o.decls += r.declarations;
+      if (o.examples.length < 6) o.examples.push(r.selector);
     }
     const sheets = [...bySheet.values()].sort((a, b) => b.rules - a.rules);
+    const ownSheets = [...ownBySheet.values()].sort((a, b) => b.rules - a.rules);
     out.push({
       name: surface.name,
       what: surface.what,
       selector: surface.sel,
+      nested: surface.nested || [],
       elements: surface.elements,
       rules: surface.rules.length - sharedRules,
       sharedRules,
       sheets,
       sheetsTouched: sheets.length,
+      own: {
+        rules: ownRules,
+        sheets: ownSheets,
+        sheetsTouched: ownSheets.length,
+        nestedRules,
+        baseRules,
+        dormantRules,
+        baseSetAside: [...baseSeen],
+      },
     });
   }
   return out;
@@ -1080,6 +1181,7 @@ let failures = 0;
 async function main() {
   const result = staticHalf();
   printStatic(result);
+  if (!result.map.ok) failures += 1;
 
   let browser = null;
   if (!STATIC_ONLY) {
@@ -1116,6 +1218,11 @@ async function main() {
     for (const c of cost) {
       line(`  ${c.name}: ${num(c.elements)} elements, ${num(c.rules)} surface rules from ${c.sheetsTouched} sheets (+${c.sharedRules} shared-layer rules)`);
       for (const s of c.sheets) line(`    ${String(s.rules).padStart(4)} rules  ${s.sheet}`);
+      line(
+        `    own: ${num(c.own.rules)} rules from ${c.own.sheetsTouched} sheets` +
+          ` (set aside: ${num(c.own.nestedRules)} nested-surface, ${num(c.own.baseRules)} base-layer, ${num(c.own.dormantRules)} dormant)`,
+      );
+      for (const s of c.own.sheets) line(`      ${String(s.rules).padStart(4)} rules  ${s.sheet}`);
     }
     line("");
     line("CITED (from docs/reports/css-split.html, not measured here)");
@@ -1134,6 +1241,7 @@ async function main() {
   const payload = {
     generatedAt: new Date().toISOString(),
     generatedFrom: ".", // a repo-relative marker: a committed artifact must not name this machine's folder
+    map: result.map,
     inventory: result.inventory,
     duplication: result.duplication,
     catchAll: result.catchAll,

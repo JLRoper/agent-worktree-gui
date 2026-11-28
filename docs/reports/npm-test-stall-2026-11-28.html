@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 569: the npm test stall is a panel a failed test left running</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 569: the npm test stall is a panel a failed test left running</h1>
+<p class="sub">agent-worktree-gui 1.197.0, Node v26.3.0, branch <code>wtgui/row-569-is-the-complete-brief-npm-test-4d29a0</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>9e236116</code>. The brief asks for the stall to be reproduced on main as it stands, <code>2338e54f</code>, under a timeout. All line numbers are on this branch. The <b>pre-fix</b> test file is byte-identical between this branch's base and a <code>git archive</code> of <code>2338e54f</code> (<code>cmp -s</code>), which is what makes the export a fair measurement of main.</p>
+
+<dl class="facts">
+  <dt>Verdict</dt><dd>the stall is a test-teardown leak, not a product hang: every test answers, then the file's own worker never exits</dd>
+  <dt>The file</dt><dd>test/worktree-assistant.test.js (11 tests, 12 panel boots)</dd>
+  <dt>Where it stops</dt><dd>the <code>node --test</code> worker process for that file, after its last test, holding two live <code>server.js</code> children</dd>
+  <dt>What it is not</dt><dd>not an unresolved await in the file, not a port wait (boot has a 25 s deadline, every row read 30 s)</dd>
+  <dt>Fixed by</dt><dd>commit <code>5329a3c8</code>, three missing <code>t.after</code> hooks plus a file-level net</dd>
+  <dt>Full suite</dt><dd>one run to completion: <code>&#x2139; tests 4114, pass 4080, fail 30, skipped 4</code> in 21 m 58 s</dd>
+</dl>
+
+<h2>1. Reproduced on main, under a timeout</h2>
+<p>The file was exported from main as it stands, so the run measures main's bytes and not the branch:</p>
+<pre>mkdir -p base-main &amp;&amp; git archive 2338e54f | tar -x -C base-main
+cd base-main &amp;&amp; timeout 300 node --test --test-reporter=spec test/worktree-assistant.test.js; echo EXIT=$?</pre>
+<p>All eleven tests answer and the file's own summary prints (the reporter emits it when the tests are done, not when the process exits):</p>
+<pre>...
+&#x2714; a tree's FIRST row event carries the owner, before any snapshot has overlaid it (6181.9956ms)
+&#x2139; tests 11
+&#x2139; suites 0
+&#x2139; pass 8
+&#x2139; fail 3
+EXIT=124</pre>
+<p><span class="no">EXIT=124</span> is the cap killing the run: the file never exited by itself. The instrumented run in section 2 shows the worker still holding the same two children at <code>+30 s</code> and at <code>+240 s</code>, with nothing else in its handle list, so the stall is static rather than slow. The same command in the worktree at <code>HEAD</code>, before the fix, behaved identically; reading the process tree at that moment showed the worker for the file with two <code>server.js</code> children still alive under it, and <code>taskkill /PID</code> on those two made the runner print and exit <code>1</code> within 8 seconds, long before its own cap. That is the whole diagnosis in one line: the file is not waiting on anything, it is holding two children, and it leaves as soon as they are gone.</p>
+<div class="note">This is the same file nine earlier suite runs on this machine are still parked on: nine test workers whose argv names <code>test/worktree-assistant.test.js</code> are alive right now, started between 00:23 and 04:40 today, each waiting on a panel it will never be told to stop. That is what "every full-suite verdict on this board today is a half-run" looks like from the process table.</div>
+
+<h2>2. The stop point, named</h2>
+<p>A probe was injected into the test worker only (<code>NODE_OPTIONS=--import</code>, guarded on <code>argv</code> naming the test file), wrapping <code>child_process.spawn</code> and <code>ChildProcess.prototype.kill</code> and appending to a file, because a hung test file's stdout is silence. The file has twelve panel boots; ten are reached on this run (two restart boots sit behind assertions that throw), eight of the ten are killed, and two are not:</p>
+<table>
+  <tr><th>spawned at</th><th>pid</th><th>killed?</th></tr>
+  <tr><td class="n">test/worktree-assistant.test.js:134 (the setter stores an id)</td><td class="n">18096</td><td class="no">never</td></tr>
+  <tr><td class="n">test/worktree-assistant.test.js:246 (the label is the role's)</td><td class="n">35956</td><td class="no">never</td></tr>
+  <tr><td class="n">the other eight</td><td class="n">35504, 40904, 26344, 22036, 43040, 49888, 37064, 49808</td><td class="ok">SIGTERM at tools/panel-testkit.mjs:216</td></tr>
+</table>
+<p>Every ten seconds the worker dumped <code>process._getActiveHandles()</code>. From <code>+30s</code> to the kill at <code>+240s</code> the dump is the same, with nothing else in it:</p>
+<pre>+240.2s HANDLES res=["PipeWrap","PipeWrap","PipeWrap","PipeWrap","PipeWrap","ProcessWrap","PipeWrap","PipeWrap","PipeWrap","ProcessWrap"]
++240.2s   ChildProcess pid=23320 killed=false exitCode=null signalCode=null
++240.2s   ChildProcess pid=38736 killed=false exitCode=null signalCode=null
++240.5s CHILD-EXIT pid=23320 code=143
++240.8s BEFORE-EXIT
++240.8s EXIT code=1</pre>
+<p>So the point it stops is the worker process for this file: two <code>ChildProcess</code> handles plus their six pipes keep its event loop non-empty, and <code>node --test</code> isolates each file in a child process (<code>--test-isolation=process</code>), so the runner waits for an exit that cannot come. Named precisely:</p>
+<ul>
+  <li><b>The await:</b> none. The last test (<code>:413</code>) resolves and its assertions answer; the file's report is complete.</li>
+  <li><b>The child process:</b> yes, two of them. <code>tools/panel-testkit.mjs:147</code> spawns <code>server.js</code> with three pipes; <code>:216</code> is the only thing that kills it, and it runs only from <code>panel.stop()</code>.</li>
+  <li><b>The port:</b> no. Nothing was waiting on a port: a failed boot throws at <code>tools/panel-testkit.mjs:180</code> after 25 s and every row read throws at <code>:271</code> after 30 s, and all eleven tests had already answered.</li>
+</ul>
+<div class="note">The panel's own parent-watch cannot break the tie. <code>tools/panel-testkit.mjs:154</code> sets <code>PANEL_PARENT_WATCH_STDIN=1</code>, so a panel exits when its stdin closes - but its stdin is the pipe the worker holds, and the worker cannot exit while that pipe is open. Each side is waiting for the other's teardown.</div>
+
+<h2>3. Why those two tests are the two that leak</h2>
+<p>They are the two tests that throw before their own <code>panel.stop()</code> line, and they were the only two of the eleven that booted a panel without tying it to the test's lifetime with <code>t.after(() =&gt; panel.stop())</code>. A thrown assertion therefore skipped the stop, and the child outlived the test. The third failing test (<code>:190</code>) throws too and was cleaned up, because it does register the hook - which is what made the mechanism visible rather than the failure count.</p>
+<p>The three assertions fail on main at the same lines (148, 200, 259) and this branch does not change them. The trigger is a read-freshness contract rather than a lost write: <code>/api/state</code> answers the last built text and rebuilds behind it (<code>server.js:994</code>, <code>SNAPSHOT_REFRESH_FLOOR_MS = 3000</code>; <code>routes/state.js:64</code> answers <code>snapshotText()</code>), so the read that follows a 200 from <code>POST /api/worktree/assistant</code> can still be the previous board. One probe, one sandbox panel, one write, three reads:</p>
+<pre>set: 200 answer.row.assistant={"id":"assistant-2","name":"Assistant #2","label":"Manager 2","role":"Manager"}
+state immediately: {"id":"assistant-1", ...}
+state +1.2s:       {"id":"assistant-1", ...}
+state +4.2s:       {"id":"assistant-2", ...}
+locks.json: { ... "owners": { "proj::1a2b3c": "assistant-2" } }</pre>
+<p>The write is durable, the route's answer is right, and the poll catches up on the next rebuild. The assertions are left exactly as they are: they fail on main, and re-cutting them to pass is the one thing this row must not do.</p>
+
+<h2>4. The fix (commit 5329a3c8)</h2>
+<ul>
+  <li>The three tests that booted a panel with no hook now register one on the line after it, matching the other nine (<code>test/worktree-assistant.test.js:157</code>, <code>:270</code>, <code>:315</code>).</li>
+  <li>All twelve boots go through a local <code>boot()</code> that records the child (<code>:44</code>-<code>:52</code>), and a file-level <code>after</code> stops whatever a failed test leaves behind. That is the part that survives the next edit: a throw between <code>boot</code> and a hook can no longer strand a panel.</li>
+  <li>The file's header now states the rule and the stall it prevents (<code>:19</code>-<code>:27</code>).</li>
+</ul>
+<p>No product code changed and nothing was weakened: same assertions, same timeouts, same eleven tests.</p>
+
+<h2>5. Proof</h2>
+<table>
+  <tr><th>run</th><th>command</th><th>result</th></tr>
+  <tr><td>main, before</td><td class="n">timeout 300 node --test --test-reporter=spec test/worktree-assistant.test.js</td><td><span class="no">EXIT=124</span>; 11/8/3 printed, process never exited</td></tr>
+  <tr><td>branch, before</td><td class="n">same, in the worktree at HEAD</td><td><span class="no">no exit</span> after the last test; two children alive, <code>taskkill</code> on them, then exit 1 in 8 s</td></tr>
+  <tr><td>branch, after</td><td class="n">same, <code>timeout 240</code></td><td><span class="ok">EXIT=1 in 48 s</span>; <code>&#x2139; tests 11 / pass 8 / fail 3</code></td></tr>
+  <tr><td>net only</td><td class="n">copy with every per-test hook deleted, file-level <code>after</code> kept</td><td><span class="ok">EXIT=1 in 71 s</span>; <code>&#x2139; tests 11 / pass 8 / fail 3</code></td></tr>
+  <tr><td>full suite</td><td class="n">npm test</td><td><span class="ok">EXIT=1 in 22 m 03 s</span>; <code>&#x2139; tests 4114 / pass 4080 / fail 30 / skipped 4</code>, and the run printed its own summary instead of stopping at this file</td></tr>
+</table>
+<p>The full suite is the point of the row: before this change it never reached a run summary at all, because the runner was still waiting on one file. The 30 failures are not this branch's. The twenty-one other failing FILES were re-run in the same <code>git archive</code> of main (<code>160 tests, 135 pass, 24 fail</code>), and the base's failing NAMES contain every branch failure except six. Three of those six are this file's pre-existing assertions, shown in section 3 at the same lines on both trees. One was this very page failing <code>test/reports-are-tracked.test.js</code> while the suite ran, because a report that is written and not added to the index is exactly what that gate refuses - it is committed with this page. The last two (<code>job-settle-state-agreement</code>, "it yields to the loop while it writes a large document") are load flakes: this run shared the machine with ten other suites, and both pass on their own.</p>
+<p>The "net only" row is the guarantee, not a second fix: with all twelve per-test hooks stripped, the file still exits on its own, so a future early throw in any test in this file cannot stall the run again. <code>EXIT=1</code> rather than 0 is the three pre-existing assertions, and the summary beside it is the file's own.</p>
+
+<h2>6. What this does not fix</h2>
+<ul>
+  <li><b>46 more files have the same shape.</b> Of the 64 files under <code>test/</code> that boot a panel, 46 call <code>startPanel</code> more often than they register a <code>t.after(...stop())</code> hook (<code>paths-http</code> 5 boots / 1 hook, <code>panel-restart</code> 4/0, <code>push-permissions</code> 3/0, <code>pipeline-source</code> 3/0, <code>port-guard</code> 3/0, and so on). Each can strand a child the moment an assertion throws before its own stop; that is the class this row found, not a defect in one file. The durable cure is one place - a registry inside <code>tools/panel-testkit.mjs</code>, or a <code>boot()</code> every file shares - and that is a separate cut, because the kit is shared by all 64 files and by every live tree on this branch.</li>
+  <li><b>The three assertions.</b> Pre-existing on main at the same lines; named above so the next reader does not read the file's red as this row's work.</li>
+  <li><b>The environment reds on this box.</b> A worktree has no <code>config.json</code> (gitignored), so <code>test/gateway-permissions.test.js</code> dies <code>ENOENT</code> before its first test, and <code>pipelines.test.js</code> / <code>push-permissions.test.js</code> read the same file; the suite's tally below carries them. A <code>git archive</code> of main has the same hole, so they are not the branch's.</li>
+  <li><b><code>npm run absolute-paths</code> is red on this turnover branch</b> for three files this row did not touch (<code>docs/reports/landing-cut-2026-11-28.html</code>, <code>docs/reports/wave-lane-counts/lane-counts.json</code>, <code>test/maintenance.test.js</code>).</li>
+</ul>
+
+<h2>7. Reproduce the finding, or the fix</h2>
+<pre># the stall on main, bounded
+mkdir -p base-main &amp;&amp; git archive 2338e54f | tar -x -C base-main
+cd base-main &amp;&amp; timeout 300 node --test --test-reporter=spec test/worktree-assistant.test.js; echo EXIT=$?
+
+# the same file on this branch: it exits, with the three pre-existing failures
+cd "$(git rev-parse --show-toplevel)" &amp;&amp; timeout 240 node --test --test-reporter=spec test/worktree-assistant.test.js; echo EXIT=$?</pre>
+<p class="small">The probe used for section 2 is not committed: it is a scratch loader that patches <code>child_process</code> and writes to a file, and it changes nothing in the tree. Its shape is described in the table above and the full log is in the row's scratch dir.</p>
+</main>
+</body>
+</html>

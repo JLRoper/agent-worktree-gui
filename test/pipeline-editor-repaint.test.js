@@ -19,7 +19,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The editor's own code was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
+const app = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
 const region = sliceRegion(app, "settings > pipeline");
 
 const esc = (s) =>

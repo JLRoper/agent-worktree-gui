@@ -37,6 +37,10 @@ const IMPLEMENTATION = [
   // A commit, by the word and by a sha written beside it.
   "The commit 4e8c371e is missing from main - cherry-pick it.",
   "Please commit the draft as it stands and report the sha.",
+  // A LANDING VERB makes it a landing brief whatever the opening words say: a row that opens like a research brief
+  // and only says "push and open the PR" at the end used to be cut as research, at the repo root.
+  "Row #402 is the complete brief. When the work is done, push the branch and open the PR.",
+  "Read the report, then land this on the turnover branch.",
 ];
 
 const RESEARCH = [
@@ -46,9 +50,12 @@ const RESEARCH = [
   "Investigate why the permission button stays at zero while a request is parked, and report the cause.",
   "What is the difference between a turnover tree and a research tree? Answer in the chat.",
   // Near-misses a loose stem match would misread as code words.
-  "Write an addendum to the README about the release.",
+  "Write an addendum to the README about the roster.",
   "The testament of the old guard, in prose.",
-  "Ask Chang what the board says about the release.",
+  "Ask Chang what the board says about the roster.",
+  // A landing verb that is naming the MACHINERY, not ordering an action: the word after it is a panel noun.
+  "Research how the push guard decides a branch, and write up what you find.",
+  "Why does the merge status read stale while the row says running?",
   // A brief that says "code" but names nothing to change.
   "Answer a question about the code.",
   // Nothing at all is the quiet answer.

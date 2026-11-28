@@ -5,6 +5,9 @@ import { REASONING_EFFORTS } from "../lib/reasoning.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// formValues and the model picker were cut out of app.js into public/board/spawn.js (cut 3 of the eight in
+// docs/reports/module-separation-2026-11-28.html); resetSpawnDefaults stayed in app.js.
+const spawn = readFileSync(new URL("../public/board/spawn.js", import.meta.url), "utf8");
 
 test("New Agent has a reasoning selector instead of a nonfunctional YOLO checkbox", () => {
   assert.ok(/<select\b[^>]*id="job-reasoning"/.test(html), "New Agent must expose a reasoning selector");
@@ -21,7 +24,7 @@ test("the actual spawn form reads the reasoning choice and the row shortcut rese
     ["job-budget", { value: "1800" }], ["job-maxTurns", { value: "" }],
     ["job-reasoning", { value: "medium", disabled: false }],
   ]);
-  const formSource = app.slice(app.indexOf("function formValues()"), app.indexOf("// ---------------- worktrees", app.indexOf("function formValues()")));
+  const formSource = spawn.slice(spawn.indexOf("function formValues()"), spawn.indexOf("function panelAgentsByPath(", spawn.indexOf("function formValues()")));
   const form = new Function("$", "readBox", `${formSource}; return formValues;`)((id) => fields.get(id), (box) => box.value);
   assert.equal(form().reasoningEffort, "medium");
   fields.get("job-reasoning").disabled = true;
@@ -29,7 +32,7 @@ test("the actual spawn form reads the reasoning choice and the row shortcut rese
   fields.get("job-reasoning").disabled = false;
   fields.get("job-reasoning").value = "";
   assert.equal(form().reasoningEffort, undefined, "default leaves Hermes configuration alone");
-  const resetSource = app.slice(app.indexOf("function resetSpawnDefaults()"), app.indexOf('// The green "+"', app.indexOf("function resetSpawnDefaults()")));
+  const resetSource = app.slice(app.indexOf("function resetSpawnDefaults()"), app.indexOf("\nfunction fillAgentSlots(", app.indexOf("function resetSpawnDefaults()")));
   const reset = new Function("$", `${resetSource}; return resetSpawnDefaults;`)((id) => fields.get(id));
   fields.get("job-reasoning").value = "high";
   reset();

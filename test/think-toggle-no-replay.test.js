@@ -13,12 +13,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
 await import("../public/core/type-stream.js");
 const { createDrawStream } = globalThis.wtType;
 
-const code = sliceBetween(readSource("public/board/console.js"), "// ---- reasoning first", "// ---- console row text");
+const code = sliceBetween(consoleSource(), "// ---- reasoning first", "// ---- console row text"); // public/board/console.js and its cuts
 // `thinkingOn` and `turnLive` are app.js's answers, read from inside a function body in
 // the page; here they are handed in, so the toggle is a value this file can switch mid-run.
 const make = new Function(

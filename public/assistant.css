@@ -279,3 +279,86 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .topbar .ha-search-open:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
 .topbar .ha-search-open[aria-expanded="true"] { color: #ffd479; border-color: #b8860b; background: #221a0c; }
 .topbar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }
+
+/* ---- the sliver window (max-height: 300 px): the page row the board and the rail share ---------------------
+   Moved verbatim from public/late.css by row 446, which dissolved that file. These are the sliver block's page-row
+   half; the board's part of the layout is public/board-table.css's and the header's rule is public/chrome.css's.
+   .shell's own rules sit above: in late.css this rule's align-items: stretch beat their flex-start by load order,
+   and written after them here it still does. */
+@media (max-height: 300px) {
+  .shell { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+  .shell > main {
+    /* `height: 100%`, not just a stretched item: a wrapped flex line is content-sized, so without it the board's
+       content (95 px of card) hangs past the 157 px window and its last rows are below the glass, unreachable. */
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    /* spawn strip, the folded agent pair, then the board taking every pixel that is left */
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "spawn spawn" "newagent agents" "board board";
+    gap: 4px 10px;
+    min-height: 0;
+    padding: 4px 10px 6px;
+    overflow: hidden;
+  }
+}
+
+/* ---- the search popovers' chrome: the drag strip, its close x, and the resize grip -------------------------
+   Moved verbatim from public/late.css by row 446. Both header searches mount the one popover
+   (public/core/search-popover.js) and their frames are in this sheet (.as-search-pop) and in
+   public/assistant-panes.css (.ha-search-pop); the chrome below is the one set of controls that module draws for
+   both, so it lives beside the assistant's popover. late.css wrote it last only because it was last; every
+   selector below is a sole definition, so moving it earlier changes no winner.
+
+/* THE SEARCH POPOVER'S OWN CHROME: a drag strip with a close x across its top, and a resize grip in its bottom-right
+   corner. Both header searches mount the one popover (public/core/search-popover.js), so the controls are drawn once
+   in that module and skinned here; the rules are scoped to the two popover containers so nothing else on the page
+   inherits them. The strip is sticky because `.as-search-pop` is its own scroller: the handle and the x have to stay
+   reachable when the reader walks the list past the fold. The grip is a bottom-right triangle, 14x14, clipped so its
+   hit box is the corner and not the whole row under it. */
+.as-search-pop > .as-search-drag,
+.ha-search-pop > .as-search-drag {
+  position: sticky; top: 0; z-index: 2; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  height: 14px; margin: -2px 0 2px; border-radius: 4px;
+  background: #121821; color: var(--dimmer);
+  cursor: move; touch-action: none; user-select: none;
+}
+.as-search-pop > .as-search-drag::before,
+.ha-search-pop > .as-search-drag::before {
+  content: ""; width: 28px; height: 3px; border-radius: 2px; background: #33404f;
+}
+.as-search-pop > .as-search-drag:hover::before,
+.ha-search-pop > .as-search-drag:hover::before { background: #4f6480; }
+.as-search-pop > .as-search-drag > .as-search-x,
+.ha-search-pop > .as-search-drag > .as-search-x {
+  position: absolute; right: 0; top: -2px; width: 16px; height: 16px; padding: 0;
+  border: 0; border-radius: 3px; background: none;
+  color: var(--dimmer); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer;
+}
+.as-search-pop > .as-search-drag > .as-search-x:hover,
+.ha-search-pop > .as-search-drag > .as-search-x:hover { color: var(--text); background: #1d2734; }
+.as-search-pop > .as-search-grip,
+.ha-search-pop > .as-search-grip {
+  position: sticky; bottom: 0; z-index: 2; flex: 0 0 auto; align-self: flex-end;
+  width: 16px; height: 16px; margin: 0 -3px -3px auto;
+  cursor: nwse-resize; touch-action: none;
+  /* The whole 16x16 box is the hit target; the VISUAL is the bottom-right triangle drawn by ::after. A clip-path on
+     the grip itself would clip the hit test too, and a press at its centre would land on the row underneath. */
+  background: none;
+}
+.as-search-pop > .as-search-grip::after,
+.ha-search-pop > .as-search-grip::after {
+  content: ""; position: absolute; inset: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background-image: repeating-linear-gradient(135deg, #3a4758 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop > .as-search-grip:hover::after,
+.ha-search-pop > .as-search-grip:hover::after {
+  background-image: repeating-linear-gradient(135deg, #6b819f 0 1.5px, transparent 1.5px 4px);
+}
+.as-search-pop.is-moving, .ha-search-pop.is-moving { cursor: move; }
+.as-search-pop.is-resizing, .ha-search-pop.is-resizing { cursor: nwse-resize; }
+/* The drag strip is the popover's first child, so the item header under it is the first ITEM even though it is no
+   longer `:first-child`; the rule that removes its top border has to be repeated for this neighbour. */
+.as-search-pop > .as-search-drag + .as-search-item { margin-top: 0; padding-top: 3px; border-top: 0; }

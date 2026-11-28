@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 534: the task-pipeline-drive cut already landed, and this tree re-read every gate</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .box { border:1px solid var(--line); border-radius:6px; padding:12px 16px; margin:16px 0; background:#fff; }
+  .cite { color:var(--dim); font-size:13px; }
+  .foot { margin-top:34px; color:var(--dim); font-size:13px; border-top:1px solid var(--line); padding-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Row 534: the task-pipeline-drive cut already landed, and this tree re-read every gate</h1>
+  <p class="sub">The row asks for <code>lib/task-pipeline-drive.js</code>, 2,782 lines, in its two cuts. Both cuts were already on the turnover branch when this tree started: this page is the independent re-read, not a second cut.</p>
+
+  <div class="box">
+    <b>Already done, and verified here.</b> The two cuts are <code>f6772ab3</code> (the pipeline document into
+    <code>lib/task-pipeline-document.js</code>) and <code>9c5eb7a5</code> (the tree and the stage brief into
+    <code>lib/task-pipeline-tree.js</code>), merged onto the turnover at <code>c02f48f2</code>. This tree was cut at
+    <code>7d167905</code>, had nothing ahead of the turnover, and was fast-forwarded to the turnover's head
+    <code>0ce44e77</code>, which already contains them. Re-cutting here would have minted a second document module
+    beside the one on the turnover, so no second cut was made. What this run did instead: read the export surface off
+    the running module before and after (46 names, the same list), compared every moved declaration to the base blob
+    (64 moved, no body rewritten), ran the 44 pipeline test files at the base and at the head (436 tests, 436 pass, 0
+    fail on both sides), and drove one two-stage chain end to end through <code>driveTaskPipelines</code> twice. No
+    version bump, no push, no pull request, no full suite. This branch's one commit is this page, merged into the
+    turnover locally.
+  </div>
+
+  <h2>1. Why this tree did not cut again</h2>
+  <table>
+    <tr><th>Fact</th><th>Value</th><th>How it was read</th></tr>
+    <tr><td>This tree's branch, at the start of the run</td><td><code>wtgui/row-513-is-one-cut-of-the-module-32d2d0</code> at <code>7d167905</code></td><td><code>git log --oneline -5</code></td></tr>
+    <tr><td>Turnover branch, at the start of the run</td><td><code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>0ce44e77</code>, 51 commits ahead of this tree, 0 behind</td><td><code>git rev-list --count HEAD..20261127_2134_TASK-405_row-405-is-the-complete</code> = 51; the reverse = 0</td></tr>
+    <tr><td>Fast-forward</td><td><code>7d167905..0ce44e77</code></td><td><code>git merge --ff-only 20261127_2134_TASK-405_row-405-is-the-complete</code></td></tr>
+    <tr><td>The cut's two commits</td><td><code>f6772ab3</code> at 06:41:38, <code>9c5eb7a5</code> at 06:46:40 (2026-11-28, -05:00)</td><td><code>git show -s --format='%h %ad %s' --date=iso-strict f6772ab3 9c5eb7a5</code></td></tr>
+    <tr><td>Where the cut landed</td><td>merge <code>c02f48f2</code>, message "merge: wtgui/row-538-is-one-cut-of-the-module-13f5d5 (the pipeline document and the tree-and-brief cut out of lib/task-pipeline-drive.js, all 46 exported names unchanged)"</td><td><code>git show -s c02f48f2</code></td></tr>
+    <tr><td>How the row's earlier run reported it</td><td>job <code>c4d38f8d</code>, thread <code>wtgui-row-534-is-one-cut-of-the-mo-251ee6</code>, delivered <code>docs/reports/task-pipeline-drive-cut-2026-11-28.html</code></td><td>the panel's job record for this row</td></tr>
+    <tr><td>Touching these files since the cut</td><td>nothing: the whole diff <code>b0ce9aa6..0ce44e77</code> for the three files is the cut itself</td><td><code>git diff --stat b0ce9aa6 0ce44e77 -- lib/task-pipeline-drive.js lib/task-pipeline-document.js lib/task-pipeline-tree.js</code></td></tr>
+  </table>
+  <p>The landed page (<code>docs/reports/task-pipeline-drive-cut-2026-11-28.html</code>) names the same row and the same
+  two cuts. It also names branch <code>wtgui/row-538-is-one-cut-of-the-module-13f5d5</code> as the branch that carried
+  them, which is how the work reached the turnover while this tree stayed empty: the cut was committed on the other
+  worktree's branch. That is the collision this row reports, and it is why redoing the move here would be a duplicate
+  rather than a repair.</p>
+
+  <h2>2. The two cuts as they stand</h2>
+  <table>
+    <tr><th>Commit</th><th>Cut</th><th>New file</th><th>Base ranges (b0ce9aa6)</th><th class="n">Lines</th><th>What moved</th></tr>
+    <tr>
+      <td><code>f6772ab3</code></td><td>1</td><td><code>lib/task-pipeline-document.js</code></td>
+      <td>109-158, 162-1187, 1220-1228</td><td class="n">1,085</td>
+      <td>The named faults and record keys, the graph edges, the input manifest, the routing fingerprint, the decision
+        record, the gate and the verdict, and the two path predicates (<code>isDirectory</code> travels with
+        <code>decisionPathOf</code>).</td>
+    </tr>
+    <tr>
+      <td><code>9c5eb7a5</code></td><td>2</td><td><code>lib/task-pipeline-tree.js</code></td>
+      <td>1217-1218, 1230-1816</td><td class="n">589</td>
+      <td>The tree key, the filed tree, the three-answer tree lookup, the round, the assembly plan, the stage tree, the
+        fan-out state, the tree claims, and <code>stagePrompt</code> with the blocks it prints.</td>
+    </tr>
+  </table>
+  <table>
+    <tr><th>File</th><th class="n">Before</th><th class="n">After</th><th>What it holds now</th></tr>
+    <tr><td><code>lib/task-pipeline-drive.js</code></td><td class="n">2,782</td><td class="n">1,148</td>
+      <td>The header, <code>FAILED_STATUS</code>, <code>moveTo</code> and <code>msOf</code>, the run reading
+        (<code>lastRunFor</code>, <code>unreadSettle</code>, <code>heldByBook</code>, <code>parkRow</code>,
+        <code>artifactCheck</code>), <code>releaseCapPark</code>, <code>restampRoutePark</code>,
+        <code>loadedBundle</code>, <code>driveTaskPipelines</code> and <code>driveTaskPipelinesPass</code>.</td></tr>
+    <tr><td><code>lib/task-pipeline-document.js</code></td><td class="n">-</td><td class="n">1,113</td>
+      <td>Cut 1: 45 declarations.</td></tr>
+    <tr><td><code>lib/task-pipeline-tree.js</code></td><td class="n">-</td><td class="n">631</td>
+      <td>Cut 2: 19 declarations.</td></tr>
+    <tr><td>all three</td><td class="n">2,782</td><td class="n">2,892</td>
+      <td>+110: the two new headers, the imports each side narrowed to, the two internal-export statements and the
+        parent's note on the split.</td></tr>
+  </table>
+  <p class="cite">Measured with <code>wc -l lib/task-pipeline-drive.js lib/task-pipeline-document.js lib/task-pipeline-tree.js</code>
+  on <code>0ce44e77</code>: 1,148 / 1,113 / 631. The base file is <code>git show b0ce9aa6:lib/task-pipeline-drive.js</code>,
+  2,782 lines.</p>
+
+  <h2>3. The export surface, by name</h2>
+  <p>Read from the running module, not from the text: <code>Object.keys(import("./lib/task-pipeline-drive.js"))</code> at
+  the head, and the same read against a temporary copy of the base blob
+  (<code>git show b0ce9aa6:lib/task-pipeline-drive.js</code>) inside <code>lib/</code> so its relative imports resolved.
+  Both reads answered 46 names, sorted, and the two lists are identical: removed <code>[]</code>, added <code>[]</code>,
+  same set <code>true</code>.</p>
+  <pre>base count 46 head count 46
+removed []
+added []
+same set true</pre>
+  <p>The 46 names, sorted, are the base's own list:</p>
+  <pre>ARTIFACT_HASH_MAX, DECISION_TRIGGERS, DRIVE_FAULTS, EDGE_ORDER, INPUTS_MAX,
+PR_ARTIFACT_KIND, STAGE_TOOLS_LINE, STARTING_AT, START_GRACE_MS, WAITING_FOR,
+artifactOf, artifactPathOf, artifactValues, assemblyPlanOf, capOf, capWakeLine,
+decisionOf, decisionPathOf, declaredArtifactOf, driveTaskPipelines, edgeOutOf,
+fanOutStateOf, filedTreeOf, fillHoles, gateAfter, handedOnPinOf, inputManifest,
+loadedBundle, nextStageOf, recordedStageTree, releaseCapPark, renderDecision,
+restampRoutePark, reviewEdgeOutOf, reviewReadAt, roundOf, routeFor,
+routingFingerprint, stageInputsOf, stagePrompt, stageTreeLookup, treeClaims,
+treeLookup, treeRecordOf, verdictOf, writerArtifactOf</pre>
+  <p>The split of that list: 33 names re-exported from <code>./task-pipeline-document.js</code>
+  (<code>lib/task-pipeline-drive.js:137-146</code>), 9 from <code>./task-pipeline-tree.js</code> (<code>:147-151</code>),
+  and 4 declared in the parent (<code>releaseCapPark</code>, <code>restampRoutePark</code>, <code>loadedBundle</code>,
+  <code>driveTaskPipelines</code>). Neither new module adds a public name: the internals its sibling or the parent reads
+  are published in one statement at the foot of each file and deliberately not re-exported, which is why the parent's
+  surface did not grow. Those internals are 8 in the document module (<code>text</code>, <code>isObject</code>,
+  <code>isoOf</code>, <code>landsAsPr</code>, <code>isDirectory</code>, <code>settledArtifactOf</code>,
+  <code>artifactTreeOf</code>, <code>treeFactsRecord</code>, <code>lib/task-pipeline-document.js:1113</code>) and 3 in the
+  tree module (<code>treeKey</code>, <code>roundLandingOf</code>, <code>claimAgainst</code>,
+  <code>lib/task-pipeline-tree.js:631</code>).</p>
+
+  <h2>4. The removed lines reappear verbatim</h2>
+  <p>Each block was taken from the base blob and searched for as an exact consecutive run in the new files. A changed
+  space or a renamed identifier fails this check. All five blocks were found at the offsets below; the hash is over the
+  base block with LF line endings.</p>
+  <table>
+    <tr><th>Base block</th><th class="n">Lines</th><th>sha256 (base block)</th><th>Found in</th></tr>
+    <tr><td><code>base[109:158]</code></td><td class="n">50</td><td><code>9c92392432994beb...</code></td><td><code>lib/task-pipeline-document.js:23</code></td></tr>
+    <tr><td><code>base[162:1187]</code></td><td class="n">1,026</td><td><code>3f076d4689d6da80...</code></td><td><code>lib/task-pipeline-document.js:74</code></td></tr>
+    <tr><td><code>base[1220:1228]</code></td><td class="n">9</td><td><code>d063d8201076df50...</code></td><td><code>lib/task-pipeline-document.js:1101</code></td></tr>
+    <tr><td><code>base[1217:1218]</code></td><td class="n">2</td><td><code>5fdf0b92ad3b03a0...</code></td><td><code>lib/task-pipeline-tree.js:39</code></td></tr>
+    <tr><td><code>base[1230:1816]</code></td><td class="n">587</td><td><code>716ef19a8b074260...</code></td><td><code>lib/task-pipeline-tree.js:42</code></td></tr>
+  </table>
+  <p>The same check at declaration level: the base declares 77 top-level names, the document module holds 45, the tree
+  module 19 and the parent 13, with none shared and none missing. 64 declarations left the parent, and each one was
+  compared to its namesake in the new files: 62 are byte-identical after normalising the leading <code>export</code>
+  keyword, and the other two (<code>isDirectory</code>, <code>mergedLanes</code>) differ only in the trailing comment
+  block that belonged to the next section in the base and was replaced by the module's internal-export statement. No
+  moved body was rewritten. No moved declaration remains in the parent, and the layers are one-way: neither new module
+  imports <code>lib/task-pipeline-drive.js</code>, and the document module does not import the tree module.</p>
+  <p>No class chain crosses either cut, so there is no <code>super()</code> to repair: neither file declares a class or
+  an <code>extends</code>.</p>
+
+  <h2>5. The pipeline tests, at the base and at the turnover head</h2>
+  <p>44 test files, chosen because their names carry <code>pipeline</code>, <code>task-pipeline</code> or the two modules
+  the driver feeds (<code>spawn-stage-landing</code>, <code>word-budget</code>). The base run was made from a
+  <code>git archive</code> of <code>b0ce9aa6</code> in a scratch directory, so the base state is the true pre-cut state
+  and not a working-tree edit; the head run was made in this tree at <code>0ce44e77</code>.</p>
+  <table>
+    <tr><th>State</th><th class="n">Files</th><th class="n">Tests</th><th class="n">Pass</th><th class="n">Fail</th><th class="n">Cancelled</th><th class="n">Skipped</th></tr>
+    <tr><td>base <code>b0ce9aa6</code>, before the cut (archive)</td><td class="n">44</td><td class="n">436</td><td class="n">436</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    <tr><td>head <code>0ce44e77</code>, with both cuts</td><td class="n">44</td><td class="n">436</td><td class="n">436</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+  </table>
+  <p>Neither cut commit touched a test file: <code>git show --name-only f6772ab3</code> lists
+  <code>lib/task-pipeline-document.js</code> and <code>lib/task-pipeline-drive.js</code>;
+  <code>git show --name-only 9c5eb7a5</code> lists <code>lib/task-pipeline-drive.js</code> and
+  <code>lib/task-pipeline-tree.js</code>. The same 436 tests therefore run before and after the move, and both sides are
+  green. Nothing was red on either side, so there is no failure to name against the head.</p>
+
+  <h2>6. One two-stage chain, end to end</h2>
+  <p>The driver exists to turn a settled stage into the next turn, so the check is a full walk of a two-stage pipeline
+  through its only public entry, <code>driveTaskPipelines</code>, with a real parsed bundle, a real task record on disk
+  semantics, a real temp tree and real stage-run entries. The link is simulated with the record's own
+  <code>settleStageRun</code> (the call that fills the thread and job at the link and leaves the entry open), because a
+  real spawner is the panel's job, not this module's.</p>
+  <pre>pass 1: changed #1 running-&gt;queued S2
+pass 1: stage S2, state queued, crossings {"h1":1}, visits {"S1":1,"S2":1}
+pass 1: starts 1: stage S2 position 2/2 visit 1 tree the row's own
+pass 1: ledger two/S1#1(T1):done, two/S2#1(unlinked):open
+
+link: two/S1#1(T1):done, two/S2#1(T2):open, out/2.json written
+
+pass 2: changed #1 running-&gt;done S2, starts 0
+pass 2: state done, doneBy panel, waitingFor null
+pass 2: ledger two/S1#1:done, two/S2#1:done
+
+CHAIN PASSED: two-stage chain S1 -&gt; S2 -&gt; done, through driveTaskPipelines twice, on a real tree and a real bundle</pre>
+  <p>What the run pinned: pass 1 settles S1 on its <code>done</code> run, crosses <code>h1</code> (counted once on the
+  record), enters S2 with <code>enteredAt</code> this pass's clock, increments both visits, and asks for S2 in the same
+  tree with a prompt naming "Work stage 2." and the task. Pass 2, after the link and with S2's artifact written, settles
+  S2, records both stage runs as <code>done</code>, starts nothing after the last stage, and finishes the row on the
+  stage's own verdict (<code>doneBy: "panel"</code>, <code>waitingFor: null</code>) because S2's artifact is a file, not
+  a PR. The row's own sentence names the artifact and says it is not a PR to land.</p>
+
+  <h2>7. What this run did not do</h2>
+  <table>
+    <tr><th>Not done</th><th>Why</th></tr>
+    <tr><td>No second cut of <code>lib/task-pipeline-drive.js</code></td><td>Both cuts are already on the turnover at <code>c02f48f2</code>; a re-cut would duplicate <code>lib/task-pipeline-document.js</code> and <code>lib/task-pipeline-tree.js</code>.</td></tr>
+    <tr><td>No version bump</td><td><code>package.json</code> is <code>1.197.1</code> and is untouched by this branch.</td></tr>
+    <tr><td>No push, no pull request</td><td>The turnover branch has not landed; the reader decides when it does.</td></tr>
+    <tr><td>No full suite</td><td>The row's gate is the 44-file pipeline set above; the full suite is a landing gate.</td></tr>
+    <tr><td>No behaviour change claimed</td><td>The cut is a move; the tests and the chain above are the evidence that the driver still walks a pipeline.</td></tr>
+  </table>
+
+  <h2>8. One finding</h2>
+  <p><code>lib/task-pipeline-document.js:3</code> prints the moved ranges as "109-1,158, 1,162-1,187 and 1,220-1,228",
+  with thousands separators applied to the first range as well. The ranges are 109-158, 1162-1187 and 1220-1228, so the
+  header's first range reads as "109 to 1,158" instead of "109 to 158". It is a comment only, in a header the cut's own
+  commit wrote; the landed page states the ranges correctly, and this run did not edit the file.</p>
+
+  <h2>9. Commands</h2>
+  <pre>git rev-list --count HEAD..20261127_2134_TASK-405_row-405-is-the-complete   # 51
+git merge --ff-only 20261127_2134_TASK-405_row-405-is-the-complete        # 7d167905..0ce44e77
+git log --oneline -1 -- lib/task-pipeline-drive.js                         # 9c5eb7a5
+git show --stat --format='%h %s' f6772ab3 9c5eb7a5
+node -e 'import("./lib/task-pipeline-drive.js").then(m =&gt; console.log(Object.keys(m).sort().length))'
+git show b0ce9aa6:lib/task-pipeline-drive.js &gt; lib/.cut-base-drive.mjs     # read, compared, removed
+node --test --test-concurrency=4 $(ls test/pipeline*.test.js test/task-pipeline*.test.js ...)
+wc -l lib/task-pipeline-drive.js lib/task-pipeline-document.js lib/task-pipeline-tree.js</pre>
+
+  <div class="foot">
+    Base <code>b0ce9aa6</code> (the cut's own base on the turnover branch); this tree
+    <code>wtgui/row-513-is-one-cut-of-the-module-32d2d0</code> fast-forwarded to the turnover head
+    <code>0ce44e77</code>; measured 2026-11-28. Every line number is a 1-based line in the file named beside it. The
+    two-stage chain script is reproduced below so the check can be re-run without this transcript.
+  </div>
+
+  <h2>Appendix: the two-stage chain script</h2>
+  <pre>// One two-stage chain, end to end, through the driver's only public entry.
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { parseBundle } from "./lib/pipeline-bundle.js";
+import { settleStageRun } from "./lib/task-pipeline.js";
+import { driveTaskPipelines, STARTING_AT } from "./lib/task-pipeline-drive.js";
+
+const CLOCK = "2026-11-03T16:00:00.000Z";
+const LATER = "2026-11-03T16:10:00.000Z";
+
+const stage = (n) =&gt; ({
+  id: `S${n}`, title: `Stage ${n}`, prompt: `Work stage ${n}.`,
+  artifact: { id: `artifact-${n}`, path: `out/${n}.json`, schema: "out/1", writer: `worker-${n}` },
+});
+const doc = {
+  id: "two", title: "Two", stages: [stage(1), stage(2)], gates: [],
+  handoffs: [{ id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" }],
+};
+const parsed = parseBundle({ bundleVersion: 1, name: "chain", pipelines: [doc] }, { file: "pipeline-bundle.json" });
+assert.equal(parsed.ok, true, parsed.reason);
+
+const dir = mkdtempSync(path.join(tmpdir(), "wag-chain-"));
+mkdirSync(path.join(dir, "out"), { recursive: true });
+writeFileSync(path.join(dir, "out", "1.json"), JSON.stringify({ stage: 1 }));
+
+const row = {
+  id: 1, title: "carry the contract", detail: "", state: "running", thread: "T1", threads: ["T1"],
+  worktree: dir, project: "agent-worktree-gui", files: [], attempts: 0, reason: "", hold: null,
+  pipelineRun: { pipeline: "two", stage: "S1", enteredAt: "2026-11-03T15:00:00.000Z" },
+};
+const jobs = [{ id: "j1", thread: "T1", status: "done", startedAt: "2026-11-03T15:00:00.000Z", endedAt: "2026-11-03T15:30:00.000Z" }];
+
+// pass 1: S1 settled, S2 asked for
+const one = driveTaskPipelines([row], { bundle: parsed.bundle, jobs, isLive: () =&gt; false, at: CLOCK, unattended: true });
+const afterOne = one.tasks[0];
+assert.equal(afterOne.state, "queued");
+assert.equal(afterOne.pipelineRun.stage, "S2");
+assert.equal(afterOne.pipelineRun.crossings.h1, 1);
+assert.deepEqual(afterOne.pipelineRun.visits, { S1: 1, S2: 1 });
+assert.equal(one.starts.length, 1);
+assert.equal(one.starts[0].stage, "S2");
+assert.equal(one.starts[0].position, 2);
+assert.equal(one.starts[0].count, 2);
+assert.equal(one.starts[0].target, dir);
+assert.match(one.starts[0].prompt, /Work stage 2\./);
+assert.equal(afterOne.pipelineRun[STARTING_AT], CLOCK);
+
+// the link: the record fills in the thread and job and leaves the entry open
+writeFileSync(path.join(dir, "out", "2.json"), JSON.stringify({ stage: 2 }));
+const linked = settleStageRun(
+  { ...afterOne, state: "running", thread: "T2", threads: ["T1", "T2"] },
+  { stage: "S2", visit: 1, thread: "T2", job: "j2", tree: dir },
+);
+
+// pass 2: S2 settled, the pipeline is over
+const two = driveTaskPipelines([linked], {
+  bundle: parsed.bundle,
+  jobs: [...jobs, { id: "j2", thread: "T2", status: "done", startedAt: LATER, endedAt: LATER }],
+  isLive: () =&gt; false, at: LATER, unattended: true,
+});
+const afterTwo = two.tasks[0];
+assert.equal(two.starts.length, 0);
+assert.equal(afterTwo.state, "done");
+assert.equal(afterTwo.doneBy, "panel");
+assert.equal(afterTwo.pipelineRun.waitingFor, null);
+assert.match(afterTwo.reason, /pipeline two is over at S2/);
+assert.match(afterTwo.reason, /artifact "artifact-2"/);
+assert.match(afterTwo.reason, /not a PR to land/);
+assert.deepEqual(afterTwo.pipelineRun.stageRuns.map((r) =&gt; `${r.id}:${r.status}`), ["two/S1#1:done", "two/S2#1:done"]);
+
+rmSync(dir, { recursive: true, force: true });
+console.log("CHAIN PASSED");</pre>
+</main>
+</body>
+</html>

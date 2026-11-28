@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Module separation: public/app.js, entry 1 of the module map's order of work</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap:anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Module separation: public/app.js</h1>
+<p class="sub">agent-worktree-gui 1.197.0. Entry 1 of <code>docs/reports/module-map-2026-11-08.html</code>'s order of work, and the eight cuts row #525 landed. This is the page every new module's header cites: <code>public/board/approvals.js</code>, <code>replies.js</code>, <code>spawn.js</code>, <code>worktrees.js</code>, <code>merge.js</code>, <code>anchor.js</code>, <code>columns.js</code> and <code>public/settings-window.js</code> each name "cut N of the eight in docs/reports/module-separation-2026-11-28.html, section 5, the card for public/app.js". The report was owed and never written: the run that made the cuts was killed at its two-hour cap before it could merge, and this row recovered its eight commits, wrote the page, and landed them.</p>
+
+<dl class="facts">
+  <dt>public/app.js before</dt><dd>20,096 lines (turnover tip 9e236116)</dd>
+  <dt>public/app.js after</dt><dd>11,189 lines</dd>
+  <dt>removed from it</dt><dd>8,907 lines, 44.3% of the file</dd>
+  <dt>new files</dt><dd>8, at 9,640 lines together</dd>
+  <dt>functions moved</dt><dd>374 (app.js keeps 356)</dd>
+  <dt>branch</dt><dd>wtgui/row-525-is-the-complete-brief-split-62ca65</dd>
+  <dt>landed on the turnover</dt><dd><code>20261127_2134_TASK-405_row-405-is-the-complete</code> fast-forwarded to 2ad2edf6: bc0e5253 recovers the eight cuts, 7186d2ee repairs six tests, and 4d256d3a and 2ad2edf6 carry the turnover's own later landings. The commit that adds this page follows them.</dd>
+</dl>
+
+<h2>1. The line count, before and after</h2>
+<table>
+  <tr><th>file</th><th class="n">lines</th><th class="n">functions</th><th>what it carries</th></tr>
+  <tr><td class="tool">public/app.js</td><td class="n">11,189</td><td class="n">356</td><td>the page's boot, its wiring, the board's repaint loop, and the 16 <code>window.WMApp</code> doors</td></tr>
+  <tr><td class="tool">public/settings-window.js</td><td class="n">3,918</td><td class="n">147</td><td>cut 8: the whole Settings window, its tabs, Skills, Permissions, pipeline, bundles, provider profiles, the Matrix bridge and the tier rows</td></tr>
+  <tr><td class="tool">public/board/anchor.js</td><td class="n">1,086</td><td class="n">63</td><td>cut 6: the rank windows, the event life and the anchor that keeps a repaint from jumping</td></tr>
+  <tr><td class="tool">public/board/replies.js</td><td class="n">1,037</td><td class="n">37</td><td>cut 2: the held reply, the reply queue, send and steer</td></tr>
+  <tr><td class="tool">public/board/approvals.js</td><td class="n">994</td><td class="n">33</td><td>cut 1: the permission box, the approvals list, the remote-write review and their clocks</td></tr>
+  <tr><td class="tool">public/board/spawn.js</td><td class="n">875</td><td class="n">36</td><td>cut 3: the add-agent bar, the model picker and the spawn recovery</td></tr>
+  <tr><td class="tool">public/board/worktrees.js</td><td class="n">772</td><td class="n">27</td><td>cut 4: the tree list, delete, rename, cut, child tree and kind</td></tr>
+  <tr><td class="tool">public/board/merge.js</td><td class="n">652</td><td class="n">20</td><td>cut 5: the verdict, the merge chooser, start-merge, and the row cells</td></tr>
+  <tr><td class="tool">public/board/columns.js</td><td class="n">306</td><td class="n">11</td><td>cut 7: natural widths, the column plan, the grips and the fit</td></tr>
+</table>
+<p class="small">Functions are top-level <code>function</code> declarations in the committed file. The new modules carry a header comment naming their cut, so their 9,640 lines are not all moved text: the moved code is the 8,907 lines the app.js diff gives up.</p>
+
+<h2>2. What each cut is, in the order it landed</h2>
+<table>
+  <tr><th>commit</th><th>cut</th><th>module</th><th>what moved out of app.js</th></tr>
+  <tr><td class="tool">214b6952</td><td class="n">1</td><td class="tool">board/approvals.js</td><td>the approval dock, the permission box, a run's own parked question, the remote-write review with its receipts and clock</td></tr>
+  <tr><td class="tool">1dc71dc1</td><td class="n">2</td><td class="tool">board/replies.js</td><td>the reply queue, the held reply and its write-through, the draft a send consumed, the send and steer paths</td></tr>
+  <tr><td class="tool">3fdda8a3</td><td class="n">3</td><td class="tool">board/spawn.js</td><td>the add-agent bar, the spawn history, the model picker, the spawn recovery and the tree's own name</td></tr>
+  <tr><td class="tool">dd5e398b</td><td class="n">4</td><td class="tool">board/worktrees.js</td><td>the tree list, its delete and rename, the cut dialog, the child tree and the kind lift</td></tr>
+  <tr><td class="tool">972a3c6c</td><td class="n">5</td><td class="tool">board/merge.js</td><td>the merge control, its chooser, the base a rebase lands on, and the row's own cells</td></tr>
+  <tr><td class="tool">4bd59882</td><td class="n">6</td><td class="tool">board/anchor.js</td><td>the liveness ranking, the reading anchor, the board's hygiene and the board's hue readers</td></tr>
+  <tr><td class="tool">a80315e1</td><td class="n">7</td><td class="tool">board/columns.js</td><td>the chart's column widths, the fit and the grips</td></tr>
+  <tr><td class="tool">74e349f5</td><td class="n">8</td><td class="tool">settings-window.js</td><td>the Settings window: tabs, Skills, Permissions, pipeline, bundles, provider profiles, the Matrix bridge and the tier rows</td></tr>
+</table>
+<p>Each commit says "moved line for line: not one body was rewritten and not one call site was touched", and that holds: the modules declare with <code>function</code> and <code>const</code> at top level, app.js calls every one of them by bare name, and app.js keeps a <code>window.WMApp.&lt;module&gt;</code> door for each (16 doors in all; the eight new ones start at <code>public/app.js:227</code> for approvals and end at <code>public/app.js:387</code> for settingsWindow).</p>
+
+<h2>3. Load order, and why none of this is an ES module</h2>
+<p>The page is classic scripts and stays classic scripts. <code>public/index.html:1618</code> loads <code>/board/approvals.js</code>, then replies, spawn, worktrees, merge, anchor and columns in cut order, <code>public/index.html:1673</code> loads <code>/settings-window.js</code>, and <code>public/index.html:1674</code> loads <code>/app.js</code> last. Every module only declares at top level, so the order costs nothing and nothing waits on boot; app.js, which runs first in page time, finds them as page-wide bindings. The <code>window.WMApp</code> objects are the one door for a later module that would rather reach a name through an object than a page global.</p>
+
+<h2>4. The merge: the base had moved, and two blocks conflicted</h2>
+<p>The eight commits were cut at <code>265e41f9</code>. The turnover had moved on (<code>9e236116</code>, with the row-509 wave-lane cut and the row-445 console sub-sheets), so <code>public/app.js</code> did not auto-merge: two runs of functions that the cuts deleted were text the turnover had edited inside.</p>
+<table>
+  <tr><th>conflict</th><th class="n">HEAD lines in the block</th><th>what the turnover had changed inside it</th><th>resolution</th></tr>
+  <tr><td class="tool">public/app.js, block 1</td><td class="n">2,628</td><td>the kind-lift comment: the tree's push "stops being parked on the permission card" (the branch said "stops meeting the research refusal")</td><td>take the cut, and port the comment to <code>public/board/worktrees.js:653-656</code>, where it now matches the confirm body at <code>worktrees.js:698</code></td></tr>
+  <tr><td class="tool">public/app.js, block 2</td><td class="n">786</td><td>the General tab's stale-read line, <code>maintenanceLoadedAt</code> / <code>loadMaintenance()</code></td><td>take the cut, and port the three lines into <code>public/settings-window.js:185-187</code>'s <code>selectSettingsTab</code>, beside the tab's other four stale-read rules</td></tr>
+</table>
+<p>Taking the cut was checked rather than assumed: all 164 top-level functions in the two HEAD-side blocks are defined in the eight modules (a script compared every name against every loaded script and found none missing). The 238-line settings &gt; storage &amp; cleanup section the turnover added lives lower in app.js, outside both blocks, and came through the merge intact (<code>public/app.js:9909</code> is its <code>maintenanceLoadedAt</code>).</p>
+<p>The turnover then moved again while this row ran: it went from <code>9e236116</code> to <code>2bbb3755</code> with two more landings (row-497's Merge-state parent line and row-446's <code>late.css</code> dissolution), and then to <code>07190702</code> with row-578's wave-status authority. None of those six commits touches a line of <code>public/app.js</code> (<code>git diff --stat 9e236116 07190702 -- public/app.js</code> is empty), so merging them in was clean and produced <code>4d256d3a</code> and <code>2ad2edf6</code>; the turnover then fast-forwarded to <code>2ad2edf6</code>.</p>
+
+<h2>5. The card for public/app.js: the eight cuts</h2>
+<ol>
+  <li><b>the approval dock</b> - the permission box and the choices table every box shares, the one-flight answer per request, a run's own parked question, the dock's list and the gestures that walk the reader to the agent that asked, and the panel's own remote-write permission with its receipts, review and clock (<code>public/board/approvals.js</code>, cut 1).</li>
+  <li><b>the reply queue</b> - the draft a send consumed, the session's own prompts, the held reply and its write-through, the queue's offers and waits, the ghost editor that can only revert on a click-away, and send and steer (<code>public/board/replies.js</code>, cut 2).</li>
+  <li><b>the add-agent bar</b> - what a tree is called, the spawn history and its recall, the model picker, the reasoning choice, the spawn targets and the recovery when a spawn is lost (<code>public/board/spawn.js</code>, cut 3).</li>
+  <li><b>the tree list</b> - the order hold and its chips, the delete with its confirm, the rename, the cut dialog and its choices, the child tree, and the kind lift with its inline confirm (<code>public/board/worktrees.js</code>, cut 4).</li>
+  <li><b>the merge control</b> - the UNMERGED chip, the label that says a merge agent already works that tree, the base a rebase lands on, the verdict badge, the chooser, and start-merge (<code>public/board/merge.js</code>, cut 5).</li>
+  <li><b>the liveness and the anchor</b> - the sliding rank windows, the event life, the reading anchor that keeps a repaint from jumping, the board's hygiene pass, and the board's hue readers (<code>public/board/anchor.js</code>, cut 6).</li>
+  <li><b>the chart columns</b> - the widths store, the natural widths, the column plan, the grips, the fit and its schedule (<code>public/board/columns.js</code>, cut 7).</li>
+  <li><b>the Settings window</b> - the tab strip and its eight groups, Skills and its folds, Permissions, the pipeline tab with its dropdown and modal, bundles, the provider profiles, the Matrix bridge and the tier rows (<code>public/settings-window.js</code>, cut 8).</li>
+</ol>
+
+<h2>6. What ran, and what it answered</h2>
+<table>
+  <tr><th>gate</th><th>answer</th></tr>
+  <tr><td class="tool">node --check public/app.js and the eight modules</td><td><span class="ok">clean</span> - ten files, no syntax error</td></tr>
+  <tr><td class="tool">dom-format / app.js duplicate top-level names</td><td><span class="warn">one, and it predates the cuts</span> - <code>fmtBytes</code> is declared in both <code>public/core/dom-format.js</code> and <code>public/app.js</code> (it was in the 20,096-line file at <code>19333</code> too); no name the cuts moved is declared twice</td></tr>
+  <tr><td class="tool">npm run absolute-paths</td><td><span class="warn">refused at the turnover tip as well</span> - three files already there name a machine folder (<code>docs/reports/landing-cut-2026-11-28.html</code>, <code>docs/reports/wave-lane-counts/lane-counts.json</code>, <code>test/maintenance.test.js</code>). <code>public/app.js</code> holds its recorded four paths and no more, so this change adds nothing to that record</td></tr>
+  <tr><td class="tool">focused set: 143 test files</td><td><span class="no">1,391 tests, 1,387 pass, 4 fail</span> - the set is the union of <code>npm run test:module</code> for the nine files the cuts touched, minus <code>test/worktree-assistant.test.js</code> (row #569 owns its stall), plus <code>test/parent-line.test.js</code> from the turnover's own last landing. The full suite was not run</td></tr>
+</table>
+<h3>the four failures, named</h3>
+<table>
+  <tr><th>test file</th><th>status</th><th>why</th></tr>
+  <tr><td class="tool">test/assistant-queue-reattach.test.js</td><td><span class="warn">already red at 9e236116</span></td><td>fails on the untouched turnover tip with the same assertion; not this row's</td></tr>
+  <tr><td class="tool">test/junctioned-node-modules.test.js</td><td><span class="warn">already red at 9e236116</span></td><td>same, and it is the worktree-remove measurement in this host's temp layout</td></tr>
+  <tr><td class="tool">test/scan-roots.test.js</td><td><span class="warn">already red at 9e236116</span></td><td>same</td></tr>
+  <tr><td class="tool">test/parent-line.test.js</td><td><span class="warn">already red at 2bbb3755</span></td><td>its "the page's template is the renderer's, byte for byte" reads <code>public/rowstrips.css</code>, a sheet the turnover's own lineage never carried: the file is in row-497's merged commit <code>9450ae06</code> and absent from the merge <code>cf340e14</code> that landed it. Red before this branch's merge, and no page damage - the turnover's <code>public/index.html</code> links no such sheet.</td></tr>
+</table>
+<p class="small">Two more files went red once each in an earlier 142-file run and pass alone: <code>test/build-version-deadline.test.js</code> (2 failures, 4/4 alone) and <code>test/assistant-message-attachments.test.js</code> (EPERM removing its own temp dir). Both passed in the final run above, so they are load flakes, not regressions.</p>
+
+<h2>7. Six tests still read app.js for code that had moved</h2>
+<p>The eight commits repaired 31 test files, and six were missed. Each read <code>public/app.js</code> as text for a block that the cuts moved, so each went red on the recovered branch. Every assertion is kept: only the file it reads changed.</p>
+<table>
+  <tr><th>test</th><th>assertion that broke</th><th>reads now</th></tr>
+  <tr><td class="tool">test/agent-cleanup.test.js</td><td>"the agent-cleanup region is in public/app.js"</td><td><code>public/settings-window.js</code> (the painter and the two readers; the change listener stayed)</td></tr>
+  <tr><td class="tool">test/console-independence.test.js</td><td>"public/app.js has function sweepStaleBoard()" and reorderAgentCards</td><td><code>public/board/anchor.js</code>, added to the concatenation the test already builds</td></tr>
+  <tr><td class="tool">test/new-agent-reasoning.test.js</td><td>"window is not defined" - its slice of resetSpawnDefaults ran to the end of app.js</td><td>the slice now ends at <code>function fillAgentSlots(</code>, which is what follows the function</td></tr>
+  <tr><td class="tool">test/pipeline-modal.test.js</td><td>"the control's handler is in app.js", "the tab opens the modal in edit mode"</td><td><code>public/settings-window.js</code> for <code>openPipelineFlow</code>; the dropdown's listener stays in app.js</td></tr>
+  <tr><td class="tool">test/text-styles.test.js</td><td>"the skill size still offers Default"</td><td><code>public/settings-window.js</code> for <code>initFonts</code> and its pickers</td></tr>
+  <tr><td class="tool">test/theme-hue.test.js</td><td>"the projects load through the shared rule"</td><td><code>public/board/anchor.js</code> for the load and the roll; the key stays in app.js</td></tr>
+</table>
+
+<h2>8. What is left, and what is red</h2>
+<ul>
+  <li><b>Red before this row and still red:</b> <code>test/assistant-queue-reattach.test.js</code>, <code>test/junctioned-node-modules.test.js</code> and <code>test/scan-roots.test.js</code> fail identically at <code>9e236116</code>, and <code>test/parent-line.test.js</code> fails at <code>2bbb3755</code> over the missing <code>public/rowstrips.css</code>. They are the turnover's own debt, not a product of these cuts.</li>
+  <li><b>The full suite was not run</b> on this row: <code>test/worktree-assistant.test.js</code> stalls it and row #569 exists to fix that. The focused set above is the evidence.</li>
+  <li><b>next entries of the module map</b> - the split's remaining steps are still in app.js's 11,189 lines; this page covers entry 1 only.</li>
+</ul>
+
+<p class="small">Every number here is from a command run in this tree on 2026-11-28: <code>wc -l</code> for lines, a declaration count over the committed files for functions, <code>git diff --stat 92e1c3a7..wtgui/row-525-is-the-complete-brief-split-e5d42c</code> for the branch's 47 files, and the focused run's own totals for the test counts.</p>
+
+</main>
+</body>
+</html>

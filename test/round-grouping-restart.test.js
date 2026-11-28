@@ -10,14 +10,17 @@
 // The fix moves the grouping onto the same record as the name and the same read. This test boots the real panel twice
 // over one sandbox that has a queue task naming a round and NO parents.json at all: both boots must paint the name AND
 // the grouping, or the grouping is still living on the scan.
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { startPanel, git, configureRepo } from "../tools/panel-testkit.mjs";
+import { boot, git, configureRepo, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const ROUND_PARENT = "wtgui/round-a-052254";
 const ROUND_STAGE = "wtgui/round-a-stage-1-probe-6632b6";
@@ -119,17 +122,17 @@ test("a round's grouping and its names both survive a full panel restart, from t
   };
 
   // Two processes, one state dir: the second is the reader's restart.
-  for (const boot of [1, 2]) {
-    const panel = await startPanel({ dir, config, reuseConfig: boot === 2, keep: true });
+  for (const pass of [1, 2]) {
+    const panel = await boot({ dir, config, reuseConfig: pass === 2, keep: true });
     try {
       const { parent, stage } = await roundRows(panel, dir);
-      assert.equal(parent.round?.display, "Round A: the parent-tree note", `boot ${boot}: the parent tree's name`);
+      assert.equal(parent.round?.display, "Round A: the parent-tree note", `boot ${pass}: the parent tree's name`);
       assert.equal(parent.round?.role, "parent");
-      assert.equal(parent.round?.parentPath, null, `boot ${boot}: the parent tree is a sibling, never a child`);
-      assert.equal(stage.round?.display, "Stage 1: probe", `boot ${boot}: the stage tree's name`);
+      assert.equal(parent.round?.parentPath, null, `boot ${pass}: the parent tree is a sibling, never a child`);
+      assert.equal(stage.round?.display, "Stage 1: probe", `boot ${pass}: the stage tree's name`);
       assert.equal(stage.round?.role, "stage");
       assert.equal(stage.round?.position, 1);
-      assert.equal(stage.round?.parentPath, parentPath, `boot ${boot}: the stage tree groups under the round's parent tree`);
+      assert.equal(stage.round?.parentPath, parentPath, `boot ${pass}: the stage tree groups under the round's parent tree`);
     } finally {
       await panel.stop();
     }

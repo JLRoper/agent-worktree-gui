@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The git reading: cut 1 of public/core/command-summary.js (row 523)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#161a21; --card:#151a22; --line:#262c37; --text:#e6e9ef; --dim:#9aa4b2; --dimmer:#6b7482; --blue:#7fb2e8; --good:#7ec699; --bad:#e08a8a; --warn:#d8b06a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.62 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 44px 24px 80px; }
+  h1 { margin:0 0 6px; font-size:29px; line-height:1.16; letter-spacing:-0.02em; }
+  h2 { margin:40px 0 10px; font-size:20px; line-height:1.25; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { margin:22px 0 6px; font-size:14px; color:var(--dim); text-transform:uppercase; letter-spacing:0.05em; }
+  p { max-width:82ch; color:#c6cdd8; }
+  .sub { color:var(--dim); font-size:13px; margin:0 0 22px; }
+  .facts { display:grid; grid-template-columns:190px 1fr; gap:4px 14px; margin:16px 0 0; font-size:13.5px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family:ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; margin:14px 0 8px; font-size:13px; }
+  th, td { padding:8px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; }
+  td.num, th.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .good { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  code { font-family:ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12px; color:#c9d6e8; background:#11161d; border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  pre { margin:12px 0; padding:13px 15px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#11161d; color:#c9d6e8; font:12px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  ul, ol { max-width:82ch; color:#c6cdd8; }
+  li { margin:4px 0; }
+  .note { margin:16px 0; padding:12px 15px; border:1px solid var(--line); border-left:3px solid var(--blue); border-radius:8px; background:var(--card); color:#c6cdd8; font-size:13.5px; }
+  .verdict { margin:20px 0; padding:15px 17px; border:1px solid var(--line); border-left:4px solid var(--good); border-radius:8px; background:var(--panel); }
+  details { margin:10px 0; }
+  summary { cursor:pointer; color:var(--dim); font-size:13px; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+  .chip { font:11.5px/1.4 ui-monospace, Consolas, monospace; color:#c9d6e8; background:#11161d; border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  footer { margin-top:52px; padding-top:14px; border-top:1px solid var(--line); color:var(--dimmer); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The git reading: cut 1 of public/core/command-summary.js</h1>
+<p class="sub">Row 523, measured and run on 2026-11-28. Worktree <code>row-523-is-the-first-cut-of-public-core-79e439</code>, branch <code>wtgui/row-523-is-the-first-cut-of-public-core-79e439</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>f22b1c78</code>. Merged into that branch locally, not pushed.</p>
+
+<div class="verdict">
+<p><b>The cut.</b> <code>public/core/command-summary.js</code> was 1,058 lines: the splitter, the tokenizer, the wrappers, the git reading, the programs outside git, the effects and the summary, all in one IIFE that publishes one object. This row moves the git half, byte for byte, into <code>public/core/command-summary-git.js</code>, and leaves <code>public/core/command-summary.js</code> as the entry point, still publishing <code>window.wtCommandSummary</code> with the same four names.</p>
+<p><b>What the proof says.</b> The moved block is 11,368 bytes and 224 lines with sha256 <code>6618f2b35565d986be9066b731fcb56291e522ddef99c7d21cf8248c0f673a45</code>, identical to lines 407-630 of the base blob and gone from the parent (0 of its 111 distinctive lines, none of its six declarations). The published surface is the same four names with the same <code>typeof</code> and the same source hashes before and after; the page gains exactly one global, named in section 2. <code>node --check</code> parses both files and the test. The command-summary tests read <span class="good">21 of 21 pass</span> before and after. The approval gate reads <span class="good">14/18</span> at both ends with the same four reds, which are the head's. One git command draws the same line, in Chromium, on both sides: the projection's sha256 is <code>11a1467fef3a9cd887053209f52bf1c9d3ee233bf57ea83850a48175fec601d5</code> either way.</p>
+</div>
+
+<section>
+<h2>1. What moved, and where</h2>
+<dl class="facts">
+  <dt>base blob</dt><dd>f22b1c78:public/core/command-summary.js (1,058 lines, git blob 458793af)</dd>
+  <dt>moved range</dt><dd>lines 407-630, 224 lines, 11,368 bytes</dd>
+  <dt>sha256</dt><dd>6618f2b35565d986be9066b731fcb56291e522ddef99c7d21cf8248c0f673a45</dd>
+  <dt>new file</dt><dd>public/core/command-summary-git.js (246 lines: 16 of header, the wrapper, the 224-line block, the publish line)</dd>
+  <dt>entry point</dt><dd>public/core/command-summary.js (838 lines = 1,058 - 224 + 4: the splitter, the tokenizer, the wrappers, the non-git programs, the effects, the summary)</dd>
+  <dt>load order</dt><dd>public/index.html:1307-1310 puts /core/command-summary-git.js before /core/command-summary.js, itself before /app.js</dd>
+  <dt>cut commit</dt><dd>75878d5c</dd>
+  <dt>gate commit</dt><dd>125b672f</dd>
+</dl>
+<p>The six names in the new file are <code>pathsOf</code>, <code>countOf</code>, <code>GIT_GLOBAL_VALUE</code>, <code>gitParts</code>, <code>GIT_READS</code> and <code>gitStep</code>. Not one body was rewritten, not one identifier renamed, not one call site touched. The new file's moved block is lines 20-243; the header (1-16) is new prose that says what the file owns, and line 245 is the publish.</p>
+
+<h3>The boundary, and why it starts 32 lines above the card's number</h3>
+<p>The queue's card for this row, quoted from the panel's own task detail, is: <i>"Cut public/core/command-summary-git.js out of public/core/command-summary.js (439-630): gitStep, the one git reading. Wave A, rank 22 of docs/reports/module-separation-2026-11-28.html. Pure move; the module publishes one object (root.wtCommandSummary)."</i> The measurement on this base agrees with it exactly: <code>gitStep</code> is 439-630, 192 lines. The plan page itself was checked at HEAD and does not name this file at HEAD (it is a later rewrite of the page); the card was read from the earliest blob that carries the per-file cards, <code>2ffacfef:docs/reports/module-separation-2026-11-28.html</code>, whose section 2 table gives <code>public/core/command-summary.js</code> at 1,058 lines with <code>gitStep 439-630 (192)</code> as its longest unit.</p>
+<p>The cut moves four more declarations, 407-438, because they are read on BOTH sides of the seam:</p>
+<ul>
+<li><code>pathsOf</code> (407) is read by <code>gitStep</code> at base line 440 and by <code>nonGitStep</code> at base line 649;</li>
+<li><code>countOf</code> (408-412) is read by <code>gitStep</code> (base 458, 479, 497, 504, 583, 584, 628) and by the non-git programs (base 657, 667, 672, 676);</li>
+<li><code>GIT_GLOBAL_VALUE</code> (415) and <code>gitParts</code> (416-431) are the git subcommand parser the summary dispatches through at base line 915-916, and <code>gitParts</code> is the one git reading's own front door;</li>
+<li><code>GIT_READS</code> (433-437) is read only inside <code>gitStep</code>.</li>
+</ul>
+<p>A helper read on both sides of a module boundary cannot stay on one side of it, and copying it would be two sources of truth. So the module owns the pair and the entry point reads them back (section 2), and the span starts at 407 rather than 439. That is the one deviation from the card, and it is named in the new file's header (lines 6-10) and in the cut commit's message.</p>
+</section>
+
+<section>
+<h2>2. The export surface, before and after</h2>
+<p>The page loads classic scripts, so the surface that matters is what the page keeps. Here the entry point is an IIFE publishing one object, <code>window.wtCommandSummary</code>, and that object is the surface <code>public/board/approvals.js</code> calls and <code>test/approval-command-summary.test.js</code> imports. The probe evaluates the scripts in the page's load order in a fresh node process (<code>globalThis.window = globalThis</code>, then the git file if it exists, then the entry point) and projects the object to its sorted names, each name's <code>typeof</code>, and a sha256 of each member's own source.</p>
+<pre>names, sorted       ["MAX_CONSEQUENTIAL", "html", "splitSteps", "summarize"]   (before = after)
+typeof              number, function, function, function                        (before = after)
+source sha256       MAX_CONSEQUENTIAL 4b227777d4dd1fc6
+                    html              bf6e837d7c29b895
+                    splitSteps        d7f609f9626a79ee
+                    summarize         828371697f892b76                          (before = after)
+globals added       before ["wtCommandSummary"]
+                    after  ["wtCommandSummary", "wtCommandSummaryGit"]</pre>
+<p>So the sorted lists diff clean, and so do the kind map and the four source hashes: <code>html</code>, <code>summarize</code> and <code>splitSteps</code> are the same bytes, which is the strongest form of "the same export" available to a classic script.</p>
+
+<h3>What the re-export is, for a classic script</h3>
+<p>There is no import statement in <code>public/</code>, and this file is an IIFE, so there is no top-level scope to declare into either. The handoff is the page global: <code>public/core/command-summary-git.js:245</code> publishes <code>root.wtCommandSummaryGit = { countOf, gitParts, gitStep, pathsOf }</code>, and <code>public/core/command-summary.js:407-410</code> is the record that reads it back, under a comment that says why. In <code>public/index.html</code> the new tag is at line 1310, three lines above the entry point's tag at 1317; the entry point destructures the object the moment it evaluates, so the order is not an optimization, it is the contract.</p>
+<div class="note"><b>The one name the page gains.</b> <code>wtCommandSummaryGit</code> did not exist before this cut. A second script is a second global unless the module is folded into the first, and folding is what the cut is for; the card's sentence "the module publishes one object (root.wtCommandSummary)" is kept exactly as far as the published surface goes, and the new global is the classic script's import statement, listed here rather than left for a reader to find. Its four keys are internal to this area: nothing else in <code>public/</code> reads them, and <code>public/board/approvals.js</code> still calls <code>globalThis.wtCommandSummary.html(command, { root, esc })</code> unchanged.</div>
+</section>
+
+<section>
+<h2>3. The moved block, hashed, and the declaration partition</h2>
+<p>Both files were composed from the base blob (<code>git show f22b1c78:public/core/command-summary.js</code>), not from the edit in progress, so the block is the base's own bytes. Measured on the committed files:</p>
+<pre>base lines 407-630   224 lines  sha256 6618f2b35565d986be9066b731fcb56291e522ddef99c7d21cf8248c0f673a45
+module lines 20-243  224 lines  sha256 6618f2b35565d986be9066b731fcb56291e522ddef99c7d21cf8248c0f673a45
+equal                                    yes
+
+moved declarations    pathsOf, countOf, GIT_GLOBAL_VALUE, gitParts, GIT_READS, gitStep
+declared again in the entry point        []          (searched by name, at the IIFE's depth)
+distinctive moved lines (20+ chars) still in the entry point   0 of 111
+
+declaration partition (top-level names inside each IIFE)
+  base 44 = entry point 38 + module 6
+  missing from both []   added by the split []   duplicated []</pre>
+<p>Absence is proved by declaration name and by 111 distinctive lines, never by raw line membership: <code>}</code>, <code>};</code> and a shared <code>return ...</code> match trivially and would read as leftovers that are not there. The partition is the check the surface cannot make: it catches a block that landed twice or in neither file.</p>
+</section>
+
+<section>
+<h2>4. The syntax check</h2>
+<pre>node --check public/core/command-summary-git.js        exit 0
+node --check public/core/command-summary.js            exit 0
+node --check test/approval-command-summary.test.js     exit 0</pre>
+<p>The page scripts and the test are not parsed by any build step in this repo, so <code>node --check</code> is the syntax gate for all three.</p>
+</section>
+
+<section>
+<h2>5. The command-summary tests</h2>
+<p>One test file names this area, and the selector finds it from either path:</p>
+<pre>npm run test:module public/core/command-summary.js     -&gt; test/approval-command-summary.test.js
+npm run test:module public/core/command-summary-git.js -&gt; test/approval-command-summary.test.js</pre>
+<table>
+<tr><th>run</th><th class="num">tests</th><th class="num">pass</th><th class="num">fail</th><th class="num">exit</th></tr>
+<tr><td>at the base, f22b1c78</td><td class="num">21</td><td class="num good">21</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td>after the cut, 75878d5c</td><td class="num">21</td><td class="num good">21</td><td class="num">0</td><td class="num">0</td></tr>
+</table>
+<p>Two lines of the test are repairs, and both keep every assertion unchanged. The import now follows the page's order, because the entry point reads a global the other script publishes: <code>test/approval-command-summary.test.js:29-33</code>. And the source the purity assertions read is both files concatenated in that order (<code>test/approval-command-summary.test.js:43-45</code>), so the "no fetch, no clock, no import, no require" checks at lines 255-261 still cover the whole reading instead of only the half that stayed. No test was weakened, added or deleted, and the file's own path is still in its text, so the selector still picks it.</p>
+</section>
+
+<section>
+<h2>6. The approval gate, before and after</h2>
+<p><code>npm run verify:approval-summary</code> is the area's live gate: a throwaway panel, a stub Runs API, four real runs parked on approvals, and a headless Chromium at 1440x900 reading the painted card. It was run at the base and after the cut, and the two logs diff to nothing once job ids and durations are masked.</p>
+<table>
+<tr><th>run</th><th class="num">checks</th><th class="num">pass</th><th class="num">red</th><th>the reds</th></tr>
+<tr><td>at the base, f22b1c78</td><td class="num">18</td><td class="num">14</td><td class="num bad">4</td><td>the card is on the page (th-read, th-destroy, th-title, th-box)</td></tr>
+<tr><td>after the cut, 75878d5c</td><td class="num">18</td><td class="num">14</td><td class="num bad">4</td><td>the same four, same sentences</td></tr>
+</table>
+<pre>FAIL  the card is on the page (th-read) - no .turn-approval for the thread
+FAIL  the card is on the page (th-destroy) - no .turn-approval for the thread
+FAIL  the card is on the page (th-title) - no .turn-approval for the thread
+FAIL  the card is on the page (th-box) - no .turn-approval for the thread
+FAIL  14/18 checks</pre>
+<p><b>Attribution: these reds are the head's, not this cut's.</b> The gate never finds a <code>.turn-approval</code> for any of the four threads, so it cannot paint a summary on a card it cannot find; the run at <code>f22b1c78</code>, before a single byte moved, prints the same four and the same 14/18. The green half of the gate is the part that exercises this module - the splitter over the chained one-liner (eleven steps, eight programs, no fragment), one step drawn in full with seven folded, and no page error - and it is green at both ends. The row-521 cut's page reports the same four pre-existing reds on the deliver gates' own head, which is the same turnover tree.</p>
+</section>
+
+<section>
+<h2>7. One rendered git command</h2>
+<p>The tests prove the reading in node; this proves the page. <code>tools/verify-command-summary-git.mjs</code> (registered as <code>npm run verify:command-summary-git</code>) loads both scripts in the page's order into Chromium, draws seven commands through <code>window.wtCommandSummary.html</code>, and projects each block's painted text. <code>--root</code> runs the same gate against a base archive, so the before and after are two lines and the equality is the claim.</p>
+<pre>base (archive of f22b1c78)  LOADED public/core/command-summary.js
+                            PASS  7 commands rendered, 0 failure(s)
+                            SHA256 11a1467fef3a9cd887053209f52bf1c9d3ee233bf57ea83850a48175fec601d5
+after (75878d5c)            LOADED public/core/command-summary-git.js then public/core/command-summary.js
+                            PASS  7 commands rendered, 0 failure(s)
+                            SHA256 11a1467fef3a9cd887053209f52bf1c9d3ee233bf57ea83850a48175fec601d5</pre>
+<p>And the line itself, quoted from the projection verbatim - the head's label and chip run together in <code>textContent</code>, which is the gate's own joining and the same on both sides - for <code>git status --short &amp;&amp; git diff -- docs/readme.md</code>:</p>
+<pre>what this will doreads only | 2 harmless steps: git status, git diff -> git status: what has changed in this tree | git diff: compare the blob hashes of this path in the index and the worktree | reads only - nothing here is written, deleted or pushed</pre>
+<p>The same text, laid out the way the card draws it: the head with its <code>reads only</code> chip, one folded line naming both programs, the two steps it counted, and the plain sentence that says nothing is written.</p>
+<p>The seven commands cover the git reading's own branches (status, diff, add/commit/push, reset --hard, a <code>-C</code> global flag that only <code>gitParts</code> can parse, a log piped to head, rm --cached) and two non-git steps as a control, so the hash would move if either half changed.</p>
+</section>
+
+<section>
+<h2>8. The other gate</h2>
+<p><code>npm run absolute-paths</code> refuses this tree: <b>7 files naming a folder on this machine</b>, 31 lines. None of them is this cut's: the seven are <code>docs/reports/console-gate-band-452.html</code>, <code>docs/reports/landing-cut-2026-11-28.html</code>, <code>docs/reports/module-surface-seams.json</code>, <code>docs/reports/module-surface-seams-2026-11-28.html</code>, <code>docs/reports/wave-lane-counts/lane-counts.json</code>, <code>docs/reports/wave-views-cut-2026-11-28.html</code> and <code>test/maintenance.test.js</code>, and all seven are at the head, before this branch's commits. The gate is red at the head and this cut neither adds a line to it nor takes one away.</p>
+</section>
+
+<section>
+<h2>9. Where it lands</h2>
+<p>The target is the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code>, checked out in its own worktree, and the merge is local: no push, no PR, no remote branch. The target moved while this row ran - <code>a7ac20b1</code> when the run started, <code>4602588f</code> by the time the cut was ready - and the move to <code>4602588f</code> brought row 521's cut, which touched <code>public/index.html</code> for its own script tags.</p>
+<pre>git diff --stat f22b1c78 4602588f -- public/core/command-summary.js public/core/command-summary-git.js \
+    public/index.html test/approval-command-summary.test.js tools/verify-command-summary-git.mjs package.json
+  public/index.html | 23 +++++++++++++++++++++--      (row 521's tags, not this cut's lines)
+git merge-tree --write-tree 4602588f 125b672f   ->  clean, tree 7e0cfcaf
+git show 7e0cfcaf:public/index.html             ->  /core/command-summary-git.js at 1310, /board/deliver-frame.js at 1578</pre>
+<p>So the one overlapping file merges to both cuts' tags, and the merge is made in the turnover worktree with <code>--no-ff</code>.</p>
+<pre>first parent at merge time      0f714cd9   (the tip had moved again, from 4602588f)
+merge commit                    fc5777cc   parents 0f714cd9, 4fdb7d4e
+git diff --stat fc5777cc^1 fc5777cc     the 7 paths this cut owns, and nothing else
+git rev-parse fc5777cc:&lt;each path&gt;      equal to 4fdb7d4e:&lt;each path&gt; except public/index.html,
+                                         which also carries the target's own tags
+merged tree, taken there:     node --check clean; test:module 21/21 pass, exit 0; the published
+                              surface still the four names with the same hashes; the rendered
+                              projection 11a1467f..., 7 commands, 0 failures</pre>
+<p>The merge commit is reported on the row as well.</p>
+<div class="note"><b>The collision this row could see coming, and it arrived.</b> Its subject is <code>public/index.html</code>: every classic-script cut in this wave adds a tag to it, and row 521's <code>public/deliverables.js</code> cut (<code>wtgui/row-521-is-the-first-cut-of-public-b5bc56</code>) landed its tags first. Row 524's cut of the same entry point, <code>public/core/command-summary-programs.js</code>, will add a tag immediately below this one. The tags are one line each and the merge above proves the two that exist today combine; a third inside the same few lines is where a conflict will come from, and it will be a tag, not code.</div>
+</section>
+
+<section>
+<h2>10. Reproduce</h2>
+<pre># the cut, and what it touched
+git show --stat 75878d5c
+git show --numstat --format=%h 75878d5c
+
+# the block, from the two blobs
+git show f22b1c78:public/core/command-summary.js | sed -n '407,630p' | sha256sum
+git show 75878d5c:public/core/command-summary-git.js | sed -n '20,243p' | sha256sum
+
+# the surface, read the way the page reads it (git file first, then the entry point)
+npm run test:module public/core/command-summary.js
+
+# the gate, on this tree and on a base archive
+npm run verify:approval-summary
+git archive f22b1c78 | tar -x -C /tmp/command-summary-base
+npm run verify:command-summary-git -- --root /tmp/command-summary-base</pre>
+<p>No full suite was run for this cut: the brief forbids it, and the focused selector plus the two gates are the row's proof.</p>
+</section>
+
+<footer>Row 523. Cut 75878d5c, gate 125b672f, page 4fdb7d4e, base f22b1c78, merge fc5777cc into 20261127_2134_TASK-405_row-405-is-the-complete (first parent 0f714cd9 at merge time).</footer>
+</main>
+</body>
+</html>

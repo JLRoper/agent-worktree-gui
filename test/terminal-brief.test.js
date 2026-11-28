@@ -126,7 +126,7 @@ test("a worker is told how to spend one terminal call, with the measured numbers
     sweep(dir, repo);
   });
 
-  const job = await jobs.create({ prompt: "run a build without sitting on it", cwd: repo, existing: false, project: "fixture" });
+  const job = await jobs.create({ prompt: "look into how a long job is watched without sitting on it", cwd: repo, existing: false, project: "fixture" });
   assert.notEqual(job.status, "failed", `the run was accepted: ${job.error || ""}`);
   const body = stub.last();
   assert.ok(body.includes("Work in "), `this is a worker's brief, not the assistant's turn:\n${body}`);

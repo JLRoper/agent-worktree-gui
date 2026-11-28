@@ -18,14 +18,18 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readStyleSheets } from "./style-sheets.js";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const src = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
+// The press, the select and the window opener are load-time wiring and stay in app.js, so the two files are read apart.
+const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const settings = readFileSync(new URL("../public/settings.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const css = readStyleSheets();
 
+// The assistant reset was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
 const begin = src.indexOf("// ---- the assistant reset: a dry run, then one real clear");
 const end = src.indexOf("// ---- end the assistant reset");
-assert.ok(begin > 0 && end > begin, "the assistant reset region is in public/app.js");
+assert.ok(begin > 0 && end > begin, "the assistant reset region is in public/settings-window.js");
 const region = src.slice(begin, end);
 
 const THREAD = "panel-assistant-2";
@@ -330,10 +334,10 @@ test("the select is painted from the roster, keeps the reader's choice, and hide
 });
 
 test("the page binds the press and the select, and repaints the roster on a snapshot", () => {
-  assert.match(src, /\$\("btn-reset-assistant"\)\?\.addEventListener\("click", \(e\) => void resetAssistant\(e\.currentTarget\)\)/);
-  const changeAt = src.indexOf('$("reset-assistant")?.addEventListener("change"');
+  assert.match(app, /\$\("btn-reset-assistant"\)\?\.addEventListener\("click", \(e\) => void resetAssistant\(e\.currentTarget\)\)/);
+  const changeAt = app.indexOf('$("reset-assistant")?.addEventListener("change"');
   assert.ok(changeAt > 0, "the select is bound");
-  assert.match(src.slice(changeAt, changeAt + 120), /resetDisarm\(\);[\s\S]{0,8}paintResetRow\(\);/);
+  assert.match(app.slice(changeAt, changeAt + 120), /resetDisarm\(\);[\s\S]{0,8}paintResetRow\(\);/);
   const snapshotAt = settings.indexOf("function applySnapshot(data)");
   assert.ok(snapshotAt > 0, "applySnapshot is in public/settings.js");
   const snapshot = settings.slice(snapshotAt, settings.indexOf("\nfunction ", snapshotAt + 10));

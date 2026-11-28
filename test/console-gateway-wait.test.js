@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceBetween, sliceRegion } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceBetween, sliceRegion } from "../tools/panel-testkit.mjs";
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -19,8 +19,8 @@ const fmtSeconds = (s) => {
   return n < 60 ? `${n}s` : `${Math.floor(n / 60)}m ${String(n % 60).padStart(2, "0")}s`;
 };
 
-const waitRegion = sliceRegion(readSource("public/board/console.js"), "gateway wait line");
-const lineHtmlSrc = sliceBetween(readSource("public/board/console.js"), "function lineHtml(l, live = \"\", cls = \"\") {", "\nfunction burstGroups(");
+const waitRegion = sliceRegion(consoleSource(), "gateway wait line"); // public/board/console.js and its cuts
+const lineHtmlSrc = sliceBetween(consoleSource(), "function lineHtml(l, live = \"\", cls = \"\") {", "\nfunction burstGroups(");
 const clockSrc = sliceBetween(readSource("public/app.js"), "function tickLiveClocks() {", "\nsetInterval(tickLiveClocks");
 
 // The page's own functions, with the clock held still: `now` is the only thing a test moves.

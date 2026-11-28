@@ -79,6 +79,7 @@ import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
 import { ParentBook, isMainName } from "./lib/parents.js";
+import { parentLineFor } from "./lib/parent-line.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
 import { BRANCH_KINDS, CHILD_KINDS, KIND_LABELS, cutParentChoices, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
@@ -1531,11 +1532,16 @@ jobs.turnoverBranchFor = turnoverLookup({ registry, config });
 jobs.baseRefKindFor = baseRefKindLookup({ registry, config });
 // WHICH TURNOVER BRANCH A FEATURE'S CONTAINER IS, and the policy that decides whether a cut makes one. Read per cut,
 // like the two lookups above: the settings save updates the record the very next cut reads. `lib/project-turnover.js`
-// `planTurnoverCut` answers reuse (the project files a branch under this key), cut (free) or ask (the card).
+// `planTurnoverCut` answers reuse (the project files a branch under this key), cut (a landing cut makes its own, no
+// ask), ask (a non-landing caller's card) or `ok: false` (a landing cut that names no key).
 jobs.turnoverCutFor = (name, key = "", opts = {}) => {
   const project = (registry.projects || []).find((p) => p && p.name === name) || (config.projects || []).find((p) => p && p.name === name) || null;
-  return planTurnoverCut({ project, key, name: opts.name || "", at: opts.at instanceof Date ? opts.at : new Date() });
+  return planTurnoverCut({ project, key, name: opts.name || "", at: opts.at instanceof Date ? opts.at : new Date(), landing: opts.landing === true });
 };
+// THE REGISTRY'S WRITER, handed to the cut so a landing cut files the turnover branch it just made under its key
+// BEFORE the next cut for that key asks. One entry per key, accumulating: `rememberTurnoverBranch` appends and never
+// overwrites an earlier key, and `jobs.makeWorktree` only calls this for a container it actually cut.
+jobs.rememberTurnoverFor = (name, branch = "", key = "") => rememberTurnoverBranch(name, branch, key);
 // THE CARD a spawn's auto-cut parks on under `ask`/`one-per-feature`: the answer creates the feature's container, and
 // then RESUMES the same queue row as a fresh cut. `allowTurnoverAsk` owns that half (lib/turnover-ask.js): the container
 // is cut and joined to the project's list, the row is released from its park, and the ordinary spawner cuts the child
@@ -4810,23 +4816,37 @@ function withInitiatives(snap) {
 // The lookup is `jobs.treeKindFor`, the same matcher the push rule and the lift route use, so a branch renamed after
 // its cut still finds its record by tag and the row cannot disagree with the gate. A row with no record carries none
 // of these fields: absence is "nothing was written here", not a third kind.
-function applyTreeKind(row) {
+function applyTreeKind(row, project = null) {
   if (!row) return row;
+  const branch = String(row.branch || "").trim();
+  // A row standing on one of the project's turnover BRANCHES is the container by definition, whether or not a record
+  // was written for it: the branch is the project's own statement that this is where a feature's work collects. A cut
+  // made by the panel writes the same kind into the book; this is the branch that one was found by hand, or whose
+  // record was never written (a tree put on the branch before the kind rule existed).
+  const container =
+    project && branch
+      ? turnoverBranchesOf(project).find((entry) => String(entry.branch || "").trim().toLowerCase() === branch.toLowerCase()) || null
+      : null;
   const rec = typeof jobs.treeKindFor === "function" ? jobs.treeKindFor({ tree: row.path, branch: row.branch }) : null;
-  const kind = rec && BRANCH_KINDS.includes(String(rec.kind || "").trim()) ? String(rec.kind).trim() : "";
+  const kind = rec && BRANCH_KINDS.includes(String(rec.kind || "").trim()) ? String(rec.kind).trim() : container ? "turnover" : "";
   if (!kind) {
     delete row.branchKind;
     delete row.branchKindLabel;
     delete row.branchKindLifted;
     delete row.branchKindPreLiftedBy;
     delete row.branchKindParent;
+    delete row.turnoverContainer;
     return row;
   }
   row.branchKind = kind;
   row.branchKindLabel = KIND_LABELS[kind] || kind;
-  row.branchKindLifted = rec.lifted === true;
-  row.branchKindPreLiftedBy = rec.lifted === true && rec.preLiftedBy ? String(rec.preLiftedBy) : null;
-  row.branchKindParent = rec.parent || null;
+  row.branchKindLifted = rec?.lifted === true;
+  row.branchKindPreLiftedBy = rec?.lifted === true && rec.preLiftedBy ? String(rec.preLiftedBy) : null;
+  row.branchKindParent = rec?.parent || null;
+  // The container's own branch name, stamped so the page does not have to cross-check the project record for every
+  // row it draws; absent on every row that is not one of the project's turnover branches.
+  if (container) row.turnoverContainer = String(container.branch || branch);
+  else delete row.turnoverContainer;
   return row;
 }
 
@@ -4835,7 +4855,51 @@ function applyTreeKind(row) {
 // already 300 ms.
 function withTreeKinds(snap) {
   for (const project of snap.projects || []) {
-    for (const row of project.worktrees || []) applyTreeKind(row);
+    for (const row of project.worktrees || []) applyTreeKind(row, project);
+  }
+  return snap;
+}
+
+// WHERE A TREE WAS CUT FROM, in the row's own words (lib/parent-line.js). The row already carries the resolved parent
+// (`row.parent` / `row.parentSource`, from the parent book by way of the scan); what it could not say is HOW SURE that
+// answer is. This stamps the sentence onto the row, from two sources and never a third:
+//
+//   recorded    the cut book (`branch-parents.json`) through lib/worktrees.js `recordedParentFor`, keyed tag:<six hex>
+//               then tree:<path>. `jobs.loadParents()` is the ONE read of that file per snapshot - the same cost
+//               `withTreeKinds` already pays per row, spent once instead of once per row.
+//   reconstructed  the parent book (lib/parents.js), which is the only reconstruction path, with its reason. A
+//               backfilled answer is LABELLED reconstructed; it is never drawn as a record.
+//
+// A row that is the project's own checkout has no parent to name (it IS the base), and a row that is the project's
+// turnover branch has nothing above it - lib/parent-line.js says so for the second, and this leaves the first alone.
+// The SAME helper stamps a row frame (`rowExtras`), because a row frame replaces the page's row wholesale.
+function parentLineForRow(project, row, book) {
+  const checkout = normTreePath(project.path || "");
+  if (checkout && normTreePath(row.path || "") === checkout) return null;
+  const branch = String(row.branch || "").trim();
+  const rec = parents && typeof parents.get === "function" && branch ? parents.get(project.name, branch) : null;
+  const turnovers = new Set(turnoverBranchesOf(project).map((entry) => String(entry.branch || "").trim().toLowerCase()).filter(Boolean));
+  return parentLineFor({
+    book,
+    tree: row.path,
+    branch,
+    parent: (rec && rec.parent) || row.parent || null,
+    parentSource: (rec && rec.parentSource) || row.parentSource || "unknown",
+    why: (rec && rec.why) || "",
+    refused: (rec && rec.refused) || "",
+    mainBranch: project.mainBranch || null,
+    turnover: Boolean(branch) && turnovers.has(branch.toLowerCase()),
+  });
+}
+
+function withParentLines(snap) {
+  const book = typeof jobs.loadParents === "function" ? jobs.loadParents() : null;
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const line = parentLineForRow(project, row, book);
+      if (line) row.parentLine = line;
+      else delete row.parentLine;
+    }
   }
   return snap;
 }
@@ -4937,9 +5001,18 @@ function rowExtras(projectName, row) {
   return syncTiming.measure("row extras", () => {
     if (!row) return row;
     const out = { ...row };
+    const project = (registry.projects || []).find((p) => p.name === projectName) || null;
     // The kind rides the row frame for the same reason the owner and the round's name do: a `row` event REPLACES the
     // page's row, so a kind stamped only into the snapshot would blink off the mark on the next scan of that tree.
-    applyTreeKind(out);
+    applyTreeKind(out, project);
+    // WHERE IT WAS CUT FROM rides here too, and for a sharper reason: the chart's attachment reads this line, so a
+    // frame without it would detach a recorded child from its container until the next full snapshot. `jobs.treeParents`
+    // is the in-memory copy of the cut book the panel keeps current, so this is a map lookup, not a file read.
+    if (project) {
+      const line = parentLineForRow(project, out, jobs.treeParents instanceof Map ? jobs.treeParents : null);
+      if (line) out.parentLine = line;
+      else delete out.parentLine;
+    }
     if (!assistant) return out;
     out.assistant = assistantForRow(projectName, out);
     const rec = typeof assistant.roundNames === "function" ? assistant.roundNames().get(roundTreeKey(out.path)) : null;
@@ -5122,7 +5195,7 @@ function snapshotBody() {
   // second call. The initiatives are the same kind of fact and are applied here for the same reason. THE REVIEW LANE
   // IS APPLIED LAST OF ALL, so a row's delivery is on the row whenever a snapshot leaves this function - nothing above
   // it can strip the field.
-  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(withTreeKinds(snap))))));
+  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(withParentLines(withTreeKinds(snap)))))));
 }
 
 const heartbeat = setInterval(() => {
@@ -6586,6 +6659,57 @@ const server = createServer(async (req, res) => {
         localOnly: done.localOnly,
         container,
         row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(out.path)) || null,
+      });
+    }
+
+    // ---- starting a turnover container: the chart's row for a branch with no worktree --------------------------
+    // A turnover branch is a CONTAINER: children are cut from it, and their work rolls back into it. The chart draws
+    // every turnover branch the project names as a row of its own; a branch nothing stands on is that row with no
+    // worktree under it, and this is its one press. `jobs.cutTurnoverTreeFor` is the same cut the panel's own
+    // auto-container uses: it REUSES the worktree that already holds the branch (or the checkout, when it stands
+    // there), puts a tree on a local branch that has none, records the container as turnover with the parent it was
+    // cut from, and adopts the row. Nothing is pushed, nothing is landed and no pull request is opened - reconciliation
+    // is local by definition, and the branch's own landing stays the project's decision.
+    if (route === "/api/worktree/turnover-start" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = (registry.projects || []).find((p) => p.name === String(body.project || "").trim()) || null;
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const branch = String(body.branch || "").trim();
+      if (!branch) return sendJson(res, 400, { error: "branch is required: the turnover branch to put a worktree on" });
+      const named = turnoverBranchesOf(project).find((e) => String(e.branch || "").toLowerCase() === branch.toLowerCase()) || null;
+      if (!named) {
+        return sendJson(res, 409, {
+          error: `refused: ${branch} is not a turnover branch ${project.name} names - the container row is drawn only for one of those`,
+          branch,
+        });
+      }
+      const made = await jobs.cutTurnoverTreeFor({
+        repoDir: project.path,
+        project: project.name,
+        branch: named.branch,
+        base: project.mainBranch || "main",
+        mainBranch: project.mainBranch || null,
+        key: String(body.key || named.key || "").trim(),
+      });
+      if (!made.ok) return sendJson(res, 409, { ok: false, error: `refused: ${made.error || "the container could not be started"}`, branch });
+      if (!made.checkout && made.path) await scheduler.adoptWorktree(project.name, made.path).catch(() => false);
+      log(
+        `turnover: ${project.name} started ${made.branch}${made.checkout ? " (the checkout stands on it)" : ` at ${made.path}${made.reused ? " (reused)" : ""}`} - local only, nothing pushed`,
+      );
+      broadcastSnapshot();
+      return sendJson(res, 200, {
+        ok: true,
+        project: project.name,
+        branch: made.branch,
+        path: made.path,
+        reused: made.reused === true,
+        checkout: made.checkout === true,
+        pushed: false,
+        landed: false,
+        pr: null,
+        note: "a worktree now stands on the container: its children roll into it, and the row is reconciled like any other worktree. Nothing was pushed, landed or opened as a pull request.",
+        row: made.path ? store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(made.path)) || null : null,
       });
     }
 

@@ -126,6 +126,10 @@ test("a tree with no board row has no branch and no page at all", () => {
 // The two surfaces and the module they share. A second copy of the anchor in either caller is the drift the brief
 // names, and it would not fail any of the renderer's own tests above - so the copies themselves are what is pinned.
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The chart's branch cell was cut out of app.js into public/board/merge.js (cut 5 of the eight in
+// docs/reports/module-separation-2026-11-28.html); both files are checked, because a second copy of the anchor in
+// either one is the drift this test exists to stop.
+const merge = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const core = readFileSync(new URL("../public/core/branch-link.js", import.meta.url), "utf8");
 const index = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
@@ -134,11 +138,12 @@ test("the anchor's markup exists in ONE file: the shared renderer", () => {
   assert.equal((core.match(/<a class="/g) || []).length, 1, "the module draws the anchor");
   assert.match(core, /const LINK_CLASS = "branch-link"/);
   assert.equal((app.match(/<a class="branch-link"/g) || []).length, 0, "app.js draws no branch anchor of its own");
+  assert.equal((merge.match(/<a class="branch-link"/g) || []).length, 0, "the merge cut draws none either");
   assert.equal((assistant.match(/<a class="branch-link"/g) || []).length, 0, "assistant.js draws no branch anchor of its own");
 });
 
 test("both the chart row and the initiative's worktree list call the renderer", () => {
-  assert.match(app, /wtBranchLink\.branchNameHtml\(\{/, "the chart's branch cell calls the shared renderer");
+  assert.match(merge, /wtBranchLink\.branchNameHtml\(\{/, "the chart's branch cell calls the shared renderer");
   assert.match(assistant, /wtBranchLink\.branchNameHtml\(\{/, "the initiative's tree row calls the shared renderer");
   assert.equal((assistant.match(/wtBranchLink\.branchNameHtml\(/g) || []).length, 1, "one call site in the pane");
 });

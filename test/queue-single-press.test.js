@@ -25,8 +25,11 @@ import test from "node:test";
 import vm from "node:vm";
 
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const app = page("public/app.js");
-const renderJobs = page("public/render-jobs.js");
+// The reply queue was cut out of app.js into public/board/replies.js (cut 2 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so both scripts are read, in page order.
+const app = `${page("public/app.js")}\n${page("public/board/replies.js")}`;
+// The card is public/board/conversation.js since the render-jobs.js cut; the page load order is read.
+const renderJobs = ["public/board/stream-body.js", "public/board/conversation.js", "public/render-jobs.js"].map((f) => page(f)).join("\n");
 
 // One top-level function from a classic script, by name. `async` is part of some of them, so the prefix is optional.
 function grab(src, name) {

@@ -25,6 +25,9 @@ import { createDom } from "./fixtures/mini-dom.js";
 const page$ = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const ATTACHMENTS = page$("public/board/attachments.js");
 const PASTE_CHIPS = page$("public/board/paste-chips.js");
+// Row 517 cut the chip itself out into board/chip-edit.js; the page loads it first, and paste-chips.js
+// re-exports nine of its names, so this page has to load both in that order.
+const CHIP_EDIT = page$("public/board/chip-edit.js");
 const PASTE = Array.from({ length: 6 }, (_, i) => `pasted line ${i + 1} of the block`).join("\n");
 const THREAD = "wtgui-probe-undo-5480fc";
 const FILE = { name: "turnaround.txt", path: "attachments/1234-turnaround.txt", type: "text/plain", size: 2048, bytes: 2048 };
@@ -69,6 +72,7 @@ function page() {
   sandbox.globalThis = sandbox;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(ATTACHMENTS, ctx, { filename: "public/board/attachments.js" });
+  vm.runInContext(CHIP_EDIT, ctx, { filename: "public/board/chip-edit.js" });
   vm.runInContext(PASTE_CHIPS, ctx, { filename: "public/board/paste-chips.js" });
   return { dom, ctx, state, document: dom.document, uploads };
 }

@@ -7,8 +7,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
-import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import test, { after } from "node:test";
+import { boot, ROOT, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
@@ -26,7 +29,7 @@ function assetUrls(html) {
 
 let sharedPanel = null;
 test.before(async () => {
-  sharedPanel = await startPanel({ token: "build-test-token" });
+  sharedPanel = await boot({ token: "build-test-token" });
 });
 test.after(async () => {
   if (sharedPanel) await sharedPanel.stop();

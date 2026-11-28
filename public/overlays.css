@@ -1,9 +1,11 @@
 /* public/overlays.css
-   The deliverables list and the question cards.
+   The deliverables list, the pasted-block chip, and the cards a turn raises.
 
-   The deliverables popover, a pasted block folded into a chip, the turn's approval and question cards, and the
-   ghost and live turn rows. The reply composer - its box, its action row and the container query that reshapes
-   them in a narrow card - lives in public/console.css, with the console it belongs to.
+   The deliverables popover, a pasted block folded into a chip, the turn's approval and question cards, the ghost
+   and live turn rows, and the pager that walks the turns. The reply composer - its box, its action row and the
+   container query that reshapes them in a narrow card - lives in public/console.css, and the console head's
+   controls (collapse, maximize, star) in public/console-head.css, with the console they belong to; row 445 moved
+   them there.
 
    Split out of public/style.css with its rules moved verbatim: the selectors, declarations, comments and
    order below are that file's own text. public/index.html loads the sheets in the order the rules had in
@@ -229,9 +231,6 @@ a.as-task-ref {
 }
 a.as-task-ref:hover { color: #d7e6f7; border-bottom-color: #7fb3ff; background: #1a212b; }
 a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
-/* The name is the only thing allowed to give up width: without min-width:0 its nowrap text refuses to
-   shrink and pushes the buttons that follow it onto a second row. */
-.job-head .thread-name { min-width: 0; flex: 0 1 auto; }
 /* ---- a pasted block, collapsed into one inline chip ------------------------------------------------
    The box is contenteditable — a textarea cannot hold an inline widget — and the chip is a non-editable
    atom inside it, so the caret steps over it, Backspace deletes it whole, and nothing inside it is ever
@@ -602,33 +601,6 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .ghost-turn.parked .ghost-prompt { cursor: default; }
 .ghost-turn.parked .ghost-prompt:hover { background: transparent; outline: none; }
 .queue-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-button.btn-reply { position: absolute; left: 7px; bottom: 8px; z-index: 1; padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
-button.btn-reply:hover { background: #24466a; }
-
-/* minimize / expand one job card (click its header) */
-.job-head { cursor: pointer; user-select: none; }
-.job-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
-.job-head:hover .chev { color: var(--text); }
-
-/* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
-button.btn-max { padding: 1px 6px; font-size: 12px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
-button.btn-max:hover { color: var(--text); background: #232936; }
-/* liveness evidence: folds to its header, with the strongest line kept visible to the right */
-.live-block { margin-bottom: 6px; }
-.live-head { display: flex; align-items: baseline; gap: 7px; cursor: pointer; user-select: none; min-width: 0; }
-.live-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
-.live-head h4 { margin: 0; font-size: 11.5px; letter-spacing: .02em; color: var(--dim); flex: none; }
-.live-head:hover h4, .live-head:hover .chev { color: var(--text); }
-.live-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.live-block.collapsed ul { display: none; }
-/* tr.detail ul sets a plain 18px padding with a zero margin; this needs the same left tab the git
-   body gets, so it has to out-specify that rule rather than sit before it. */
-tr.detail .live-block ul { margin: 4px 0 10px 28px; }
-.live-block li { font-size: 11.5px; color: var(--dim); }
-/* star a turn to keep it above the paged turns (still accordionable, still in its page) */
-button.btn-star { background: transparent; border: none; padding: 0 6px 0 0; margin: 0; font-size: 16.5px; line-height: 1; color: var(--dimmer); cursor: pointer; vertical-align: -2px; }
-button.btn-star:hover { color: var(--text); }
-button.btn-star.on { color: #ffd479; }
 .pinned-turns { margin: 6px 0 8px; padding: 3px 0 3px 10px; border-left: 2px solid #6b4d16; }
 .pinned-head { display: flex; gap: 8px; align-items: center; font-size: 10.5px; letter-spacing: .04em; color: #ffd479; margin-bottom: 2px; }
 /* turns page five at a time: arrows sit next to the turn count in the card head. `flex: none` for the same reason

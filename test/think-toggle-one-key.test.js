@@ -18,10 +18,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
+import { consoleSource, readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
-const consoleSrc = readSource("public/board/console.js");
-const renderSrc = readSource("public/render-jobs.js");
+const consoleSrc = consoleSource(); // public/board/console.js and its four cuts, in page order
+// Cut 1 of render-jobs.js: the stream body is public/board/stream-body.js, loaded before the card.
+const renderSrc = `${readSource("public/board/stream-body.js")}\n${readSource("public/board/conversation.js")}\n${readSource("public/render-jobs.js")}`;
 const turnsSrc = readSource("public/turns.js");
 const appSrc = readSource("public/app.js");
 const indexSrc = readSource("public/index.html");

@@ -1,8 +1,9 @@
-// THE SENT DRAFT STAYS SENT, in-process: the ONE clear a send makes (`clearSentDraft`, public/app.js) covers
+// THE SENT DRAFT STAYS SENT, in-process: the ONE clear a send makes (`clearSentDraft`, public/board/replies.js) covers
 // every store a draft lives in - the map, the paste-chip mirror and the box's DOM - keyed on the thread the BOX is
 // bound to, and it leaves a draft the reader has typed since exactly where it is.
 //
-// WHAT IS DRIVEN: the shipped `clearSentDraft` sliced out of public/app.js and run against test/fixtures/mini-dom.js
+// WHAT IS DRIVEN: the shipped `clearSentDraft` sliced out of public/board/replies.js (it was cut out of app.js as
+// cut 2 of the eight in docs/reports/module-separation-2026-11-28.html) and run against test/fixtures/mini-dom.js
 // with only its free variables supplied (state, document, CSS, readBox, writeBox, forgetReplyDraft). Nothing here
 // re-implements the clear. The chip serialization itself is proved in a real browser by
 // tools/verify-reply-draft-send.mjs; this test supplies the plain-text half of the same read/write contract.
@@ -12,8 +13,8 @@ import test from "node:test";
 import { createDom } from "./fixtures/mini-dom.js";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
-const SOURCE = sliceBetween(app, "function clearSentDraft(thread", "// Typing state inside a card");
+const replies = readFileSync(new URL("../public/board/replies.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const SOURCE = sliceBetween(replies, "function clearSentDraft(thread", "// Typing state inside a card");
 
 const CSS = { escape: (s) => String(s).replace(/["\\\]]/g, (c) => `\\${c}`) };
 const THREAD = "wtgui-thread-under-test-1111aa";

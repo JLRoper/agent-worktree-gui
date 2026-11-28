@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "read": "2026-11-28, main at 2338e54f56baaa6100e976f7071784f872a7f7b2, 785 version bumps, 15 findings",
+  "why": "A gate that fails every landing with the same historical findings is not a signal: a worker cannot tell the defect it caused from the ones history already carried. verify-version-tags still computes and prints every finding in this file, with its reason, on every run and on both refs; a pin only stops that one finding from failing the exit code. A pin that names no finding any more fails the gate, so this file can describe history and can never hide a new defect.",
+  "note": "The identity of a pin is kind + version + sha + (for wrong-commit) the tag's commit. A tag moved onto a different wrong commit, a different declaring commit, or a finding that disappears is therefore a new fact, not this pin. A real defect pinned here carries the tag write that repairs it; when that write lands, the finding goes and the pin must be deleted, or the gate reports it as a stale pin.",
+  "pins": [
+    {
+      "kind": "backwards",
+      "version": "1.78.0",
+      "sha": "bf4b57b0d7401677f13c35027a903459355ee96e",
+      "reason": "A patch on the 1.78 line landed after main already read 1.79.0: the commit's own patch replaces 1.79.0 with 1.78.0, its annotated tag v1.78.0 is at that commit on main, and CHANGELOG.md renders the section with \"compare v1.79.0...v1.78.0\". The decrease is the release shape - the number, its tag and its changelog section all agree, so nothing here is unanchored. The check stays so a future decrease is still visible."
+    },
+    {
+      "kind": "backwards",
+      "version": "1.169.9",
+      "sha": "ff9f02f850bf5d01144b0d158d64205c56e140e7",
+      "reason": "A hotfix to the 1.169 line landed after main read 1.170.0: the commit's own patch replaces 1.170.0 with 1.169.9 and CHANGELOG.md renders \"compare v1.170.0...v1.169.9\". The number shipped and has its section; the tag for it is the separate wrong-commit finding v1.169.9, pinned below with its repair. The decrease itself is the release shape, not a defect."
+    },
+    {
+      "kind": "backwards",
+      "version": "1.170.5",
+      "sha": "9641ef62ddfa8a5965b810546fe29889a2d72b23",
+      "reason": "A hotfix to the 1.170 line landed after main read 1.171.0: the commit's own patch replaces 1.171.0 with 1.170.5 and CHANGELOG.md renders \"compare v1.171.0...v1.170.5\". Same shape as v1.169.9 (one release train, one evening). The tag for this number is pinned below with its repair."
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.76.22",
+      "sha": "a129ffdc7fcb0d07e4924f3e629da56429442861",
+      "tagCommit": "3fc0f3660f63e02bfc41601e11107d46ad31811e",
+      "reason": "The tag is on the branch's pre-merge copy of the bump commit: its tree is identical to main's a129ffdc7f, but that copy is not on main, and origin/wtgui/fix-the-injection-data-loss-in-agent-0401ab still holds it. Real anchor defect - a reader of main cannot open the commit the tag names. Needs a tag write, which this run may not do.",
+      "repair": "git tag -f -a v1.76.22 a129ffdc7f -m \"v1.76.22\" && git push --force origin v1.76.22"
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.76.23",
+      "sha": "e1ed843c86f770ae0a16d47085855cf0c6417e5e",
+      "tagCommit": "445ef5aa62167076c322c5331ed0fcc4eb6d5087",
+      "reason": "Same shape as v1.76.22: the tag is on the branch's pre-merge copy of the bump commit (identical tree, not on main), still held by origin/wtgui/reconcile-a-restart-killed-turn-on-any-4d407b. Real anchor defect, waiting on a tag write.",
+      "repair": "git tag -f -a v1.76.23 e1ed843c86 -m \"v1.76.23\" && git push --force origin v1.76.23"
+    },
+    {
+      "kind": "missing",
+      "version": "1.82.2",
+      "sha": "87291111c8681382818b066fd2c8cc99693e519e",
+      "reason": "main first declared 1.82.2 at 87291111c8 and neither origin nor this checkout has a v1.82.2 tag; CHANGELOG.md carries its section. Real: a released number with no anchor at all. Waiting on a tag write.",
+      "repair": "git tag -a v1.82.2 87291111c8 -m \"v1.82.2\" && git push origin v1.82.2"
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.91.2",
+      "sha": "89a1ad34ab045cfdf3e47e05b535a67bced81b81",
+      "tagCommit": "8c1e7e7286f563339309a294b93e3ba2963eb244",
+      "reason": "The tag is on the branch's pre-merge copy of the bump commit (identical tree to main's 89a1ad34ab, but not on main) and no branch holds that commit any more, so it is a fossil. Real anchor defect: the tag names a commit nobody can open, from main or from a branch.",
+      "repair": "git tag -f -a v1.91.2 89a1ad34ab -m \"v1.91.2\" && git push --force origin v1.91.2"
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.92.4",
+      "sha": "8fdbf4631294b543bcf2fecfded5b364fd461e8b",
+      "tagCommit": "13c03f42d852463369aab9cbb576af0962f42c3f",
+      "reason": "Same shape as v1.91.2: the tag is on a pre-merge copy of the bump commit (identical tree to 8fdbf46312 on main) and no branch holds that commit any more. Real anchor defect, waiting on a tag write.",
+      "repair": "git tag -f -a v1.92.4 8fdbf46312 -m \"v1.92.4\" && git push --force origin v1.92.4"
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.142.2",
+      "sha": "f66432cc1357abe125e3d7f196b87f31eedbf246",
+      "tagCommit": "38bd89d4bfbd18e306de7e94a5be00dec37c1dac",
+      "reason": "The tag is on the branch's own bump commit, and that tree is NOT what main landed: the merged commit also carried public/core/row-chips.js and test/row-chips.test.js (23 lines), and origin/wtgui/two-fixes-to-the-collision-card-in-this-6093c5 still holds it. Real: the tag names a state that was never released, not merely a duplicate of the released one.",
+      "repair": "git tag -f -a v1.142.2 f66432cc13 -m \"v1.142.2\" && git push --force origin v1.142.2"
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.169.9",
+      "sha": "ff9f02f850bf5d01144b0d158d64205c56e140e7",
+      "tagCommit": "9fff99366bb60cbbed36adb821f031f1895e7371",
+      "reason": "The tag is on the hotfix branch's pre-rebase copy: its parent package.json reads 1.169.7 while main's declaring commit ff9f02f850 has parent 1.170.0, and no branch holds it any more. Real: the pre-rebase commit is not the release main made.",
+      "repair": "git tag -f -a v1.169.9 ff9f02f850 -m \"v1.169.9\" && git push --force origin v1.169.9"
+    },
+    {
+      "kind": "wrong-commit",
+      "version": "1.170.5",
+      "sha": "9641ef62ddfa8a5965b810546fe29889a2d72b23",
+      "tagCommit": "488da3d1e28cb54ac5a73ea32329599b57aa24ac",
+      "reason": "The tag is on the hotfix branch's pre-rebase copy (parent package.json reads 1.170.3; main's declaring commit 9641ef62dd has parent 1.171.0) and no branch holds it. Real, the same shape as v1.169.9.",
+      "repair": "git tag -f -a v1.170.5 9641ef62dd -m \"v1.170.5\" && git push --force origin v1.170.5"
+    },
+    {
+      "kind": "missing",
+      "version": "1.173.2",
+      "sha": "7a8227c53e016407e892c64fdbf95553af9704a9",
+      "reason": "main first declared 1.173.2 at 7a8227c53e and no v1.173.2 exists on origin or in this checkout; CHANGELOG.md carries its section. Real: a released number with no anchor. Waiting on a tag write.",
+      "repair": "git tag -a v1.173.2 7a8227c53e -m \"v1.173.2\" && git push origin v1.173.2"
+    },
+    {
+      "kind": "missing",
+      "version": "1.189.0",
+      "sha": "623f386458c545827a9bc3350bfc861310175299",
+      "reason": "main landed 1.189.0 at 623f386458; the only tag is this checkout's v1.189.0 at 63ca119a15, the pre-landing twin the turnover branch origin/20261127_1422_TASK-371_build-the-initiative-tag still holds, and origin publishes none. Real: the tag was written on the branch and never moved or pushed.",
+      "repair": "git tag -f -a v1.189.0 623f386458 -m \"v1.189.0\" && git push --force origin v1.189.0"
+    },
+    {
+      "kind": "missing",
+      "version": "1.191.0",
+      "sha": "db287788d601342a2ac46f0c364281cd2ba85deb",
+      "reason": "main first declared 1.191.0 at db287788d6 (the CSS split landing, #940) and no v1.191.0 exists on origin or in this checkout; CHANGELOG.md carries its section. Real: a released number with no anchor. Waiting on a tag write.",
+      "repair": "git tag -a v1.191.0 db287788d6 -m \"v1.191.0\" && git push origin v1.191.0"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 // The point of the module is that it reports what a file says TODAY, with the line each value sits on,
 // and that a source it cannot read becomes a sentence instead of a guess. So these tests build a real
 // config.yaml fixture and assert line numbers against the text they wrote, not against a snapshot.
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -20,7 +20,10 @@ import {
   remoteWritesSource,
 } from "../lib/gateway-permissions.js";
 import { policyFrom } from "../lib/remote-writes.js";
-import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, ROOT, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 const lineOf = (text, needle, from = 0) => {
   const lines = String(text).split("\n");
@@ -379,7 +382,7 @@ const readPolicyRoute = async (panel) =>
 test("a panel booted on PANEL_CONFIG reports that config's remoteBranchPolicy", async () => {
   // A value the checkout's file does not carry, so the payload itself says which file was read.
   const distinctive = ["deny", "allow"].find((policy) => policy !== checkoutPolicy);
-  const panel = await startPanel({
+  const panel = await boot({
     config: { assistant: { enabled: false }, remoteBranchPolicy: distinctive, projects: [] },
   });
   try {
@@ -401,7 +404,7 @@ test("a panel booted on PANEL_CONFIG reports that config's remoteBranchPolicy", 
 
 test("the checkout's policy is never shown to a panel booted on its own config.json", async () => {
   const distinctive = ["deny", "allow"].find((policy) => policy !== checkoutPolicy);
-  const panel = await startPanel({
+  const panel = await boot({
     config: { assistant: { enabled: false }, remoteBranchPolicy: distinctive, projects: [] },
   });
   try {

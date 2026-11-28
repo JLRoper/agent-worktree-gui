@@ -14,18 +14,28 @@
 //               file that does not load is replaced instead of refused), and when it lands the tab RE-READS: the
 //               eleven appear and the control goes away, because a repaired bundle needs no second press.
 //
-// The page's own code is sliced out of public/app.js and driven against a DOM stub just big enough for this tab, the
-// way test/pipeline-editor-repaint.test.js drives the editor.
+// The page's own code is sliced out of the page's classic scripts and driven against a DOM stub just big enough for
+// this tab, the way test/pipeline-editor-repaint.test.js drives the editor.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { pdlCatalogue } from "../lib/pipeline-source.js";
-import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { sliceBetween, sliceRegion } from "../tools/panel-testkit.mjs";
 
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The Settings window was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the pipeline tab's region is read from the file that carries it.
+// The three listeners that drive the tab are load-time wiring and stay in app.js, so they are sliced from there and
+// run after the region: the press under test is still the shipped listener, not a direct call.
+const app = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
 const region = sliceRegion(app, "settings > pipeline");
+const appWiring = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const wiring = sliceBetween(
+  appWiring,
+  "// Wired once, at load: the two controls are static markup",
+  '$("btn-settings")?.addEventListener',
+);
 
 const SEED_DOC = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
 // The file a reader's install carried before the repair: the seed with one gate's `routes` map missing, which the
@@ -170,6 +180,7 @@ function makePanel({ ladder = { version: 1, supported: 1, pipelines: {}, dropped
     "esc",
     "confirm",
     `${region}
+${wiring}
      return {
        get index() { return pipelinesIndex; },
        set index(v) { pipelinesIndex = v; },

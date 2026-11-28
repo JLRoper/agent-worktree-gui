@@ -19,7 +19,7 @@ import { readFile } from "node:fs/promises";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import {
   DEFAULT_TURNOVER_POLICY,
@@ -42,7 +42,10 @@ import {
 } from "../lib/project-turnover.js";
 import { isTurnoverBranchName } from "../lib/turnover-base.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes, turnoverOut } from "../routes/project-turnover.js";
-import { configureRepo, git, startPanel } from "../tools/panel-testkit.mjs";
+import { boot, configureRepo, git, stopBootedPanels } from "../tools/panel-testkit.mjs";
+
+// One file-level hook, registered once and never per test: boot()'s registry, swept after the last test.
+after(stopBootedPanels);
 
 // ---- 1: the read side ------------------------------------------------------------------------------------------
 test("an absent or unreadable turnover field reads as no branch, and a name is trimmed to one line", () => {
@@ -349,7 +352,7 @@ test("the route answers the shapes a caller can send, and its read carries the c
     assert.match(h.sent[0].payload.error, /PUT is not allowed/);
   }
   {
-    const h = harness({ body: { project: "alpha", turnoverBranch: "feature/x" }, token: "secret" });
+    const h = harness({ body: { project: "alpha", turnoverBranch: "feature/x" }, token: "tok-test-alpha" });
     h.req.authorised = false;
     await h.routes(h.req, {}, TURNOVER_PATH, new URL(`http://x${TURNOVER_PATH}`));
     assert.equal(h.sent[0].status, 403);
@@ -518,7 +521,7 @@ test("a save lands in config.json, reads back out of the route, and rides the ne
   // `alpha` starts WITH a turnover branch (as a hand-edited config would hold it), `beta` starts without the key at
   // all, and `gamma` is discovered from the scan root but NOT named in config.json - the three shapes the writer has
   // to answer for: edit, add-to-known, and add-a-row-for-a-discovered-project.
-  const panel = await startPanel({
+  const panel = await boot({
     dir,
     keep: false,
     config: {

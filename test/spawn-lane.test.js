@@ -15,7 +15,10 @@
 //   4. after the holder settles the row starts normally;
 //   5. the digest's SKIP and the cut's refusal are ONE sentence: `SKIP: ` + the exact message the cut throws;
 //   6. an explicit, recorded exception allows the overlap and says who allowed it and which file - and it is the only
-//      way past the lane, one holder and one file at a time.
+//      way past the lane, one holder and one file at a time;
+//   7. EVERY claimed file is in the lane, not the row's head file (queue row 483): two rows whose shared files are
+//      BEHIND both heads are still one lane, the second is refused BY NAME with the shared file named, nothing is cut,
+//      and the refusal raises the card row 419 added.
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -59,7 +62,7 @@ async function ask(p, { task = "", tree = "", project = "proj", assistantId = ""
   const handler = createSpawnCheckRoutes({
     assistant: p.assistant,
     getProjects: () => [p.project],
-    config: { token: "secret" },
+    config: { token: "tok-test-alpha" },
     sendJson: (res, status, body) => {
       out.status = status;
       out.body = body;
@@ -72,7 +75,7 @@ async function ask(p, { task = "", tree = "", project = "proj", assistantId = ""
   if (project) query.set("project", project);
   if (assistantId) query.set("assistantId", assistantId);
   const url = new URL(`http://localhost${SPAWN_CHECK_PATH}${query.toString() ? `?${query}` : ""}`);
-  await handler({ method: "GET", headers: { "x-panel-token": "secret" } }, {}, SPAWN_CHECK_PATH, url);
+  await handler({ method: "GET", headers: { "x-panel-token": "tok-test-alpha" } }, {}, SPAWN_CHECK_PATH, url);
   return out;
 }
 
@@ -297,4 +300,80 @@ test("clearing the exception puts the lane back, and an exception needs a file t
   const late = p.assistant.queueMutate("assistant-1", "allow-overlap", { id: next.id, file: "public/style.css", by: "reader" });
   assert.equal(late.ok, false);
   assert.match(late.error, /no live run holds public\/style\.css/);
+});
+
+// ---- 7. every claimed file, not the head file ---------------------------------------------------------------
+//
+// The measured defect (queue row 483): the lane was keyed to a row's head file, so a row claiming
+// `public/app.js, public/index.html, public/console.css` passed on the first while a live peer held the other two, and
+// the collision was filed as a notice after both had run. The rows here share public/index.html and public/console.css
+// and NEITHER names either as its head - #1's head is public/app.js and #2's is docs/notes.md - so a head-only guard
+// would answer ok, cut a second worker, and never name the file.
+test("the lane covers EVERY claimed file: an overlap behind both rows' heads is refused by name, and the card says it", async (t) => {
+  const p = fixture(t);
+  const holder = queue(p, {
+    title: "the live row",
+    files: ["public/app.js", "public/index.html", "public/console.css"],
+    thread: "t-holder",
+  });
+  running(p, holder.id);
+  standRun(p, { rowId: holder.id, jobId: "job-holder", runId: "run_holder", thread: "t-holder" });
+  const next = queue(p, { title: "the second row", files: ["docs/notes.md", "public/index.html", "public/console.css"] });
+  assert.deepEqual(holder.files[0], "public/app.js");
+  assert.deepEqual(next.files[0], "docs/notes.md", "neither row names a shared file as its head - the pair this lane used to miss");
+
+  const pre = await ask(p, { task: next.id });
+  assert.equal(pre.status, 200);
+  assert.equal(pre.body.ok, false, "a shared file behind the head refuses the row, exactly as a head file does");
+  const check = pre.body.checks[0];
+  assert.equal(check.check, "lane");
+  assert.equal(check.code, "file_busy");
+  assert.deepEqual(
+    [...check.files].sort(),
+    ["public/console.css", "public/index.html"],
+    "the refusal carries BOTH files the rows share, not only the first one it found",
+  );
+  assert.match(pre.body.reason, new RegExp(`files in use by #${holder.id} \\(job run_holder on thread t-holder, running\\)`), "the live holder is named");
+  assert.match(pre.body.reason, new RegExp(`#${next.id} also claims`), "the row being refused is named");
+  assert.match(pre.body.reason, /public\/index\.html/, "and the file that holds it is named");
+  assert.match(pre.body.reason, /public\/console\.css/, "both of them, not the head of either row");
+  assert.doesNotMatch(pre.body.reason, /docs\/notes\.md/, "the row's own head file is not what holds it");
+
+  // The CUT refuses in the same words and cuts nothing - the pre-flight cannot be stricter than the line.
+  const calls = spawned(p);
+  await assert.rejects(
+    () => p.assistant.startSpawn({ prompt: "the second row", taskId: next.id, existing: true, target: p.free, project: "proj", assistantId: "assistant-1" }),
+    (err) => {
+      assert.equal(err.code, "spawn-task");
+      assert.equal(err.message, sentence(pre.body), "the cut throws the pre-flight's sentence, word for word");
+      assert.match(err.message, /public\/index\.html/, "the refusal names the file it found");
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0, "no spawner ran");
+  assert.equal(p.assistant.queueView("assistant-1").tasks.find((x) => x.id === next.id).state, "queued", "the row was not moved");
+
+  // THE CARD (queue row 419): the refusal is visible where the reader looks, and its evidence labels the row and the
+  // reason - a refusal the reader never sees is the absence row 419 is about.
+  const card = p.assistant.alerts.find((a) => a.rule === "spawn-refused" && a.status === "open" && Number(a.taskId) === next.id);
+  assert.ok(card, "the lane refusal raised a card for this row");
+  assert.match(card.title, new RegExp(`SPAWN refused: SPAWN IN #${next.id}`));
+  assert.match(card.detail, /public\/index\.html/, "the card carries the file the rows collide on");
+  assert.match(card.detail, /the fix: wait for job run_holder/, "and the remedy that unsticks it");
+  assert.equal(card.evidence.find((e) => e.label === "row")?.value, `#${next.id}`);
+  assert.equal(card.evidence.find((e) => e.label === "what happened")?.value, "nothing was cut: no tree, no job and no thread exist for this line");
+
+  // And the ORDER agrees with the refusal: the row is in the holder's lane and waits on it by name, even though the
+  // holder is not the head it named.
+  const view = p.assistant.queueView("assistant-1");
+  const row = view.tasks.find((x) => x.id === next.id);
+  assert.equal(row.lane, "public/console.css", "one lane for two rows that share a file behind both heads, named by the file they share");
+  assert.equal(row.laneHead, false);
+  assert.equal(row.laneHeadId, holder.id, "the live holder heads it");
+  assert.ok(row.waitingOn, "a live peer in the lane is a wait, not only a SKIP");
+  assert.equal(row.waitingOn.id, holder.id);
+  assert.equal(row.waitingOn.file, "public/console.css", "the wait carries the file the pair collide on");
+  const line = view.digest.find((l) => l.includes(`#${next.id} queued`));
+  assert.ok(line.includes(`SKIP: ${sentence(pre.body)}`), `the digest prints the cut's sentence verbatim:\n${line}`);
+  assert.match(line, /waiting on #1 \(lane public\/console\.css\)$/, `the order names the holder and the lane:\n${line}`);
 });

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The render-jobs cut: public/render-jobs.js into public/board/stream-body.js and public/board/conversation.js</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; --warn:#8a5a10; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 220px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.tool { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; overflow-wrap:anywhere; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The render-jobs cut: one file into two</h1>
+<p class="sub">agent-worktree-gui 1.197.0. Row #539, cut of the module-separation plan's entry 15: <code>public/render-jobs.js</code>, 1,282 lines, split into the two cuts the plan names. A pure move, one commit per cut, every name still a page-wide binding, and the browser draws the same #jobs table before and after.</p>
+
+<dl class="facts">
+  <dt>base commit</dt><dd>96e5b974, the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code></dd>
+  <dt>the plan's card</dt><dd>entry 15 of <code>docs/reports/module-separation-2026-11-28.html</code>, read from 2ffacfef and measured there at 3bb43694</dd>
+  <dt>branch</dt><dd>wtgui/row-539-is-one-cut-of-the-module-b5e8a7</dd>
+  <dt>public/render-jobs.js before</dt><dd>1,282 lines</dd>
+  <dt>public/render-jobs.js after</dt><dd>55 lines: the pre-cut header (1-44), a blank, and a note naming the two modules</dd>
+  <dt>new files</dt><dd>public/board/stream-body.js (277 lines), public/board/conversation.js (1,007 lines)</dd>
+  <dt>moved</dt><dd>1,236 lines in two blocks: 255 (249 non-blank) and 981 (966 non-blank)</dd>
+  <dt>page surface</dt><dd>26 names, 21 functions, before and after</dd>
+  <dt>focused suite</dt><dd>20 files, 218 tests, 218 pass, 0 fail, at the base, after each cut, and at the turnover head</dd>
+</dl>
+
+<h2>1. The two cuts</h2>
+<p>Every range was re-measured on 96e5b974 before a line moved. The plan's card gives cut 1 as 46-302 and cut 2 as 303-1,282; the one correction is at line 302, and section 2 says why.</p>
+<table>
+  <tr><th>commit</th><th class="n">cut</th><th>new file</th><th>base range</th><th class="n">lines</th><th class="n">non-blank</th><th>what moves</th></tr>
+  <tr><td class="tool">15bd54dd</td><td class="n">1</td><td class="tool">public/board/stream-body.js</td><td class="tool">46-300</td><td class="n">255</td><td class="n">249</td><td>streamBodyHtml, mdRunHtml, emptyConsoleHtml, condensedBodyHtml, turnBody, conversationTaskLink, turnBlock</td></tr>
+  <tr><td class="tool">2758f8a5</td><td class="n">2</td><td class="tool">public/board/conversation.js</td><td class="tool">302-1,282</td><td class="n">981</td><td class="n">966</td><td>stuckChipHtml, conversationHtml, jobHtml, the queued repaints and their timers, activeTextInput, scheduleRenderJobs, reaimHotHit, renderJobs, paintAgentBadges, the delta's batch and flushJobBatch, updateJob, conversationSignature, paintCardMeta, renderConversation</td></tr>
+</table>
+<p>Both blocks are taken from the base blob (<code>git show 96e5b974:public/render-jobs.js</code>), not from a part-edited file, and a script compared them line for line after each commit: the moved block equals the base range exactly, and the same lines are absent from the parent. Not one body was rewritten, not one name renamed, not one call site touched.</p>
+
+<h2>2. The boundary the card gets one line wrong</h2>
+<p>Line 300 is <code>turnBlock</code>'s closing brace and line 301 is the blank after it. Line 302 is the comment heading of the <em>stuck-turn chip</em> section, and the heading belongs with the function it introduces at <code>public/render-jobs.js:319</code>. The plan's first range ends at 302 and its second begins at 303, which would put half of one comment block in each file and leave a heading in <code>stream-body.js</code> introducing a function that lives in <code>conversation.js</code>.</p>
+<p>So cut 1 takes the code span to the closing brace, 46-300 (the same convention row #538 used for <code>lib/scheduler.js</code>), and cut 2 takes 302-1,282. One consequence is worth saying plainly: the card's one-line summary puts "the stuck chip" under cut 1, but its own range puts the chip in cut 2, and the range decides. The chip and the only function that calls it, <code>conversationHtml</code>'s head, are now in the same file.</p>
+
+<h2>3. What the line counts say</h2>
+<pre>before
+  1282 public/render-jobs.js
+after
+    55 public/render-jobs.js
+   277 public/board/stream-body.js
+  1007 public/board/conversation.js
+after the two cuts together: 1,339 lines (the base's 1,282 plus 57 lines of
+two headers and the parent's note)</pre>
+<p>The base's 1,282 lines reconstruct exactly: header 1-44 (44), blank 45 (1), cut 1's 255, blank 301 (1), cut 2's 981. What stays is the 44-line header plus the note; the plan's "about 45 lines stay" is the header and its blank, and the note adds 10 lines.</p>
+
+<h2>4. The page surface, before and after</h2>
+<p>This half of the tree has no <code>import</code>/<code>export</code>: public scripts are classic scripts in a fixed order, and a top-level <code>function</code> is a window property while a top-level <code>let</code> is a script-scope binding every later script reads by bare name. The re-export is therefore the page itself: both new scripts load before <code>app.js</code>, and <code>public/app.js:166</code>'s <code>window.WMApp.jobs</code> door still names 17 of the 26 bindings and resolves them to the same globals.</p>
+<p>The probe concatenates the job-card scripts in the order <code>public/index.html</code> loads them, evaluates them as one script, and asks for all 26 names by <code>typeof</code>:</p>
+<pre>before (public/render-jobs.js alone)
+  names: 26, {"function":21,"boolean":2,"object":2,"number":1}
+  missing: (none)
+after (stream-body.js + conversation.js + render-jobs.js)
+  names: 26, {"function":21,"boolean":2,"object":2,"number":1}
+  missing: (none)</pre>
+<p>One function moved that no other file names by design: <code>conversationTaskLink</code> is called only by <code>conversationHtml</code>, and it travelled in cut 1 because it sits between <code>turnBody</code> and <code>turnBlock</code>. That is a boundary of the range, not a coupling: both names are page-wide and the call is the line it was.</p>
+
+<h2>5. The load order</h2>
+<table>
+  <tr><th>public/index.html</th><th>script</th><th>what it declares</th></tr>
+  <tr><td class="tool">line 1601</td><td class="tool">/board/stream-body.js</td><td>cut 1: the turn's body and the block it sits in</td></tr>
+  <tr><td class="tool">line 1606</td><td class="tool">/board/conversation.js</td><td>cut 2: the card and the render and update path</td></tr>
+  <tr><td class="tool">line 1612</td><td class="tool">/render-jobs.js</td><td>nothing: the load-order anchor and the note</td></tr>
+</table>
+<p>All three sit after <code>/render-projects.js</code> and before <code>/app.js</code>, which is the order the two modules need and the order the file had as one script. The comment above the last tag says what the tag is now, so a reader who sees an empty <code>render-jobs.js</code> next to a live script list is not left guessing.</p>
+
+<h2>6. The rendered comparison</h2>
+<p>One throwaway panel (<code>tools/panel-testkit.mjs</code>, its own config and job store, no gateway), a fixed store of four threads with one turn each, and a real Chromium page. The probe reads <code>#jobs</code> after the first paint and a settling second, and projects every card and turn: its class list, head line, turn ids and fold state, and each console's rows as tag names, class names and text. It ran once on the base tree and once on the finished one, same fixture, same viewport, with <code>data-live-from</code> span text blanked so a ticking clock cannot read as a difference.</p>
+<pre>before: 4 card(s), 4 turn(s), 8 console row(s)
+  card render-jobs-fixture-d  not-running   turn [turn] 2 rows  jl jl-out / jl jl-dim jl-sep
+  card render-jobs-fixture-c  complete      turn [turn] 1 row   jl jl-out
+  card render-jobs-fixture-b  exited        turn [turn] 2 rows  jl jl-out / tgrp tgrp-flat jl-sep
+  card render-jobs-fixture-a  complete      turn [turn] 3 rows  jl jl-out / tgrp tgrp-flat jl-sep / jl jl-out jl-sep
+after:  4 card(s), 4 turn(s), 8 console row(s)  - the same four lines, row for row
+cards: equal | chips: equal | empty state: equal | page errors: equal</pre>
+<p>The console text matched too, not just the row count: card a drew <code>the first console line</code>, a tool group headed <code>terminal git status</code> with its one-line <code>clean</code> result, and <code>the last console line</code>; card b drew its failed turn's line and its <code>npm test</code> group; card d drew its line plus the panel's own <code>result ready for review</code> separator. The whole <code>cards</code> array compared equal with <code>==</code>, and <code>conversationSignature</code>'s own <code>data-sig</code> matched on all four cards.</p>
+<p class="note">The stuck-turn chip did not appear in either run: the store computes <code>stuck</code> at read time, so a seeded value does not survive into the card. The chip's rendered shape is pinned by <code>test/stuck-turn-chip.test.js</code> instead, which now reads <code>public/board/conversation.js</code> and kept every assertion.</p>
+
+<h2>7. What ran, and what it answered</h2>
+<table>
+  <tr><th>gate</th><th>answer</th></tr>
+  <tr><td class="tool">node --check, every touched script and test</td><td><span class="ok">clean</span> - three scripts (stream-body, conversation, render-jobs) and the tests each cut touched</td></tr>
+  <tr><td class="tool">moved block equals the base range</td><td><span class="ok">clean</span> - 255 lines equal to base 46-300, 981 equal to base 302-1,282, both absent from the parent</td></tr>
+  <tr><td class="tool">page surface probe</td><td><span class="ok">26 of 26 names present, same type for each</span> - before and after</td></tr>
+  <tr><td class="tool">focused set: npm run test:module public/render-jobs.js</td><td><span class="ok">20 files, 218 tests, 218 pass, 0 fail</span> - at the base, after cut 1 and after cut 2, and the same 218 pass at the turnover head</td></tr>
+  <tr><td class="tool">rendered #jobs comparison</td><td><span class="ok">equal</span> - 4 cards, 4 turns, 8 console rows, every class and every line</td></tr>
+  <tr><td class="tool">npm run absolute-paths</td><td><span class="warn">refused at the turnover head as well</span> - 4 files in this tree name a machine folder and 5 do at the turnover head; none of them is a file this row touched</td></tr>
+</table>
+<p>The full suite was not run: the row asks for the focused set only.</p>
+
+<h2>8. What is left</h2>
+<ul>
+  <li>The plan's entry 15 is done in two commits, and the two modules are the ones the card names.</li>
+  <li><code>public/render-jobs.js</code> is a 55-line header with a script tag. If a later entry of the plan wants the anchor gone, deleting the tag and the file is a one-line landing; nothing else reads it.</li>
+  <li>Four tests were repaired twice, once per cut, because each read one region that moved in a different commit. A later cut of this area can add the new script to the same concatenations rather than hunting the region.</li>
+</ul>
+
+<p class="small">Every number here is from a command run in this tree on 2026-11-28: <code>wc -l</code> for lines, the base-blob comparison for the moved blocks, the surface probe above for the names, the focused run's own totals for the test counts, and the #jobs probe's JSON for the rendered comparison.</p>
+
+</main>
+</body>
+</html>

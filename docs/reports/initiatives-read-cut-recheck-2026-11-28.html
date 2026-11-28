@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Row 516 re-checked: the initiative read is already on the turnover, and this tree's cut is the same block</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 190px minmax(0, 1fr); gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; overflow-wrap:anywhere; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; overflow-wrap:anywhere; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  td.n { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+  .names { columns:2; column-gap:26px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; margin:10px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Row 516 re-checked: the initiative read is already on the turnover</h1>
+<p class="sub">agent-worktree-gui 1.197.1, branch <code>wtgui/row-516-is-the-second-cut-of-routes-2afe1d</code>, cut from the turnover branch <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>b4f88ad9</code>. The row's cut landed from the row's earlier tree while this tree was building its own: the two cuts move the same block, hash the same, and export the same five names. This page is the independent re-check and the record of the collision, not a second landing of the cut. All line numbers are 1-based in the file named beside them.</p>
+
+<dl class="facts">
+  <dt>queue row</dt><dd>#516 - the module-separation plan's entry 18, the read half</dd>
+  <dt>the plan's card</dt><dd>docs/reports/module-separation-2026-11-28.html at 2ffacfef, entry 18: routes/initiatives-read.js for "the view and the archive blockers", card lines 75-421</dd>
+  <dt>the base</dt><dd>b4f88ad9, the turnover branch's tip when both trees were cut</dd>
+  <dt>this tree's cut</dt><dd>51c12933 - <code>routes/initiatives.js</code> 732 -&gt; 393 lines, <code>routes/initiatives-read.js</code> 378 lines</dd>
+  <dt>the landed cut</dt><dd>8a121c70 from <code>wtgui/row-516-is-the-second-cut-of-routes-8f3391</code> - 732 -&gt; 395 + 371, merged as <code>f33ea054</code>, its page <code>1774f51c</code> merged as <code>b15161e7</code></dd>
+  <dt>the moved block</dt><dd>base blob 94-436, 343 lines, byte-identical in both cuts and in the base (sha256 <code>3296a0418243f855f9dc707f40d1587852c0fb9bb3720e4da2ba149013f27bda</code> with the block's final newline; <code>e12a30f3bb13dff5377be924bf26a44abaada3c838276b82b3d5ef7cffabf8c4</code> without it, the convention the landed page quotes)</dd>
+  <dt>the exports</dt><dd>5 before, 5 after, 0 missing, 0 added - in this cut and in the landed one</dd>
+  <dt>the focused set</dt><dd>13 files, 171 tests, 168 pass, 3 fail at the base, after this cut and on the landed tree - the same 3</dd>
+  <dt>the wave tests</dt><dd>test/waves-write.test.js 22/22, test/waves-route.test.js 8/8, this tree and the landed tree</dd>
+  <dt>the live read</dt><dd>GET /api/initiatives: 200, 2,686 bytes, the same body at all three points with the answer's clock and the seed's generated id masked</dd>
+  <dt>this page's landing</dt><dd>docs only: the merge resolves the three product files to the landed copies, so it adds this page and nothing else; its sha is reported in the row's final message</dd>
+  <dt>push / PR</dt><dd>none - the turnover is local and the reader decides when it lands</dd>
+</dl>
+
+<h2>1. Two trees, one row: what happened</h2>
+<p>Row 516 was spawned twice. The first spawn's tree, <code>row-516-is-the-second-cut-of-routes-8f3391</code>, ran and landed its cut while this tree, <code>row-516-is-the-second-cut-of-routes-2afe1d</code>, was reading the file and building its own. Both trees were cut from <code>b4f88ad9</code>, so both saw the same 732-line <code>routes/initiatives.js</code> and the same 94-436 span.</p>
+<table>
+  <tr><th>commit</th><th>tree</th><th>what it is</th></tr>
+  <tr><td class="n">b4f88ad9</td><td>turnover</td><td>the tip both trees were cut from (row 515's page merge)</td></tr>
+  <tr><td class="n">8a121c70</td><td>8f3391</td><td>the landed cut: the read half leaves the route file, 343 lines verbatim</td></tr>
+  <tr><td class="n">f33ea054</td><td>turnover</td><td>that cut's merge, parents <code>4cbe6540</code> and <code>8a121c70</code></td></tr>
+  <tr><td class="n">1774f51c</td><td>8f3391</td><td>that tree's page for the cut</td></tr>
+  <tr><td class="n">b15161e7</td><td>turnover</td><td>that page's merge - the turnover tip when this page was written</td></tr>
+  <tr><td class="n">51c12933</td><td>this tree</td><td>this tree's independent cut of the same block</td></tr>
+</table>
+<p>The ordering is the whole finding: the row was satisfied before this tree could merge, and the two cuts were built without either tree seeing the other's work.</p>
+<pre>git cherry -v 20261127_2134_TASK-405_row-405-is-the-complete HEAD
+# + 51c1293311d1145c228c36506a9921e149fe7f61 cut(routes): the initiative reads leave routes/initiatives.js
+# (a "+" is a commit the turnover does not carry by patch id: this tree's cut is a duplicate in content, not an applied commit)
+
+git log --oneline -1 20261127_2134_TASK-405_row-405-is-the-complete      # b15161e7
+git merge-base --is-ancestor 1774f51c 20261127_2134_TASK-405_...        # true - the page was already on the turnover</pre>
+
+<h2>2. The two cuts are the same block</h2>
+<p>Both trees took the same decision: the card's 75-421 was re-measured on <code>b4f88ad9</code> as 94-436, because row 515 had already removed the write half below it and row 578's commits sit above it, and the two path constants the card's range opens on stay in the parent. Both moved <code>nameOf</code>, <code>lastTouched</code>, <code>taskRowOf</code>, <code>initiativesView</code> and <code>archiveBlockers</code> verbatim, exported <code>nameOf</code> from a statement at the foot of the new file rather than by editing its moved line, imported it back for the write composition, and re-exported the two public names so every caller keeps importing <code>routes/initiatives.js</code>.</p>
+<table>
+  <tr><th></th><th>this tree (51c12933)</th><th>landed (8a121c70)</th></tr>
+  <tr><td>moved span in the base blob</td><td class="n">94-436, 343 lines</td><td class="n">94-436, 343 lines</td></tr>
+  <tr><td>sha256 of the moved block (LF, with its final newline)</td><td class="n">3296a0418243f855...</td><td class="n">3296a0418243f855...</td></tr>
+  <tr><td>parent after the cut</td><td class="n">393 lines</td><td class="n">395 lines</td></tr>
+  <tr><td>new module</td><td class="n">378 lines</td><td class="n">371 lines</td></tr>
+  <tr><td>the prefix's exports</td><td class="n">5 (unchanged)</td><td class="n">5 (unchanged)</td></tr>
+  <tr><td>the source-reading test</td><td>reads the new module for the fold's loop</td><td>joins the parent and the new module</td></tr>
+</table>
+<p>The differences are prose and two lines: this tree's header says why the file exists and what the read is, the landed one's says what moved and what stayed; this tree keeps one more blank line and one more import comment in the parent; and the repaired test reads the moved file alone here where the landed one reads both files. No executable line differs, which is what the identical block hash and the identical five exports say in numbers.</p>
+<pre>diff routes/initiatives-read.js (this tree) :(landed)
+# header and import comments only; the 343 moved lines are equal line for line
+
+diff routes/initiatives.js (this tree) :(landed)
+# header paragraph, four import comments, one blank line; the code below is equal
+
+git diff --stat f33ea054 b15161e7 -- routes test lib server.js public
+# (empty: the landed page's merge added docs only, so f33ea054 and the turnover tip carry the same code)</pre>
+
+<h2>3. The landed cut, re-verified independently</h2>
+<p>This tree did not take the landed page's word for it. The turnover's code at <code>f33ea054</code> was exported with <code>git archive</code> into a scratch directory (its code is identical to the tip <code>b15161e7</code>, whose only change is the docs page), and every check below ran against that export, plus the same checks on this tree's own cut and on the base blob.</p>
+<h3>The five exports, before, after, and landed</h3>
+<pre>node surface.mjs &lt;root&gt;/routes/initiatives.js   # the base blob b4f88ad9, in this tree
+{"count":5,"names":["INITIATIVES_PATH","TAGS_PATH","archiveBlockers","createInitiativesRoutes","initiativesView"]}
+
+node surface.mjs &lt;root&gt;/routes/initiatives.js   # this tree's cut 51c12933
+{"count":5,"names":["INITIATIVES_PATH","TAGS_PATH","archiveBlockers","createInitiativesRoutes","initiativesView"]}
+
+node surface.mjs &lt;root&gt;/routes/initiatives.js   # the landed export of f33ea054
+{"count":5,"names":["INITIATIVES_PATH","TAGS_PATH","archiveBlockers","createInitiativesRoutes","initiativesView"]}
+
+diff of the sorted lists: 0 lines, all three ways</pre>
+<div class="names">INITIATIVES_PATH<br>TAGS_PATH<br>archiveBlockers<br>createInitiativesRoutes<br>initiativesView</div>
+<p>The landed module publishes three names of its own (<code>archiveBlockers</code>, <code>initiativesView</code>, <code>nameOf</code>) at <code>routes/initiatives-read.js:80</code>, <code>:335</code> and <code>:371</code>; the parent imports them at <code>routes/initiatives.js:88</code>, re-exports the two public ones at <code>:99</code>, and keeps <code>INITIATIVES_PATH</code> (<code>:93</code>), <code>TAGS_PATH</code> (<code>:95</code>) and <code>createInitiativesRoutes</code> (<code>:101</code>). The read's memo is still in the parent (<code>routes/initiatives.js:312</code> <code>rebuildView</code>, <code>:326</code> <code>cachedView</code>, <code>:358</code> <code>dropView</code>), the write dispatcher is composed at <code>:364</code>, and the prefix still ends in one delegation (<code>:387</code>).</p>
+
+<h3>The moved block, on all three sides</h3>
+<pre>git show b4f88ad9:routes/initiatives.js | sed -n '94,436p' | sha256sum
+# 3296a0418243f855f9dc707f40d1587852c0fb9bb3720e4da2ba149013f27bda  (343 lines)
+
+git show f33ea054:routes/initiatives-read.js | sed -n '27,369p' | sha256sum
+# 3296a0418243f855f9dc707f40d1587852c0fb9bb3720e4da2ba149013f27bda  (the landed module)
+
+git show 51c12933:routes/initiatives-read.js | sed -n '32,374p' | sha256sum
+# 3296a0418243f855f9dc707f40d1587852c0fb9bb3720e4da2ba149013f27bda  (this tree's module)
+
+# the landed page quotes e12a30f3bb13dff5... for the same bytes: that is the digest of the 343 lines joined
+# without the block's final newline. Both numbers are right, and neither page contradicts the other.</pre>
+<p>The absence was checked by declaration and by distinctive line, never by raw membership: the base parent declares eight top-level names, this tree's parent three and its read module five (8 = 3 + 5, none missing, none twice), and of the 90 distinctive moved lines (40+ characters, not a comment) 1 also occurs in the parent - <code>  const status = initiatives.statusOf();</code>, which the parent's own <code>unreadable()</code> helper has carried since before the cut (base line 488; it appears twice in the base and once after). It is the parent's line, not a leftover.</p>
+
+<h3>node --check</h3>
+<pre>node --check routes/initiatives.js && node --check routes/initiatives-read.js
+# clean, this tree
+
+node --check routes/initiatives.js && node --check routes/initiatives-read.js   # in the landed export
+# clean, f33ea054</pre>
+
+<h2>4. The tests, and the three that are red before any cut</h2>
+<p>The set is <code>node tools/test-module.mjs routes/initiatives.js</code>: the 13 test files that name or import the file. It ran on the untouched base (this tree, with the base blob in place), on this tree's cut, and on the landed export, all with <code>node --test --test-concurrency=4</code>.</p>
+<table>
+  <tr><th>run</th><th>files</th><th>tests</th><th>pass</th><th>fail</th><th>the failures</th></tr>
+  <tr><td>base b4f88ad9</td><td class="n">13</td><td class="n">171</td><td class="n">168</td><td class="n no">3</td><td>the three below, red before this row's cut</td></tr>
+  <tr><td>this tree's cut 51c12933</td><td class="n">13</td><td class="n">171</td><td class="n">168</td><td class="n no">3</td><td>the same three, the same assertions, the same actual/expected</td></tr>
+  <tr><td>the landed tree, f33ea054</td><td class="n">13</td><td class="n">171</td><td class="n">168</td><td class="n no">3</td><td>the same three</td></tr>
+  <tr><td>test/waves-write.test.js</td><td class="n">1</td><td class="n">22</td><td class="n ok">22</td><td class="n">0</td><td>this tree and the landed tree</td></tr>
+  <tr><td>test/waves-route.test.js</td><td class="n">1</td><td class="n">8</td><td class="n ok">8</td><td class="n">0</td><td>this tree and the landed tree</td></tr>
+</table>
+<h3>The three failures, named</h3>
+<table>
+  <tr><th>test</th><th>assertion</th><th>actual / expected</th></tr>
+  <tr><td>test/initiative-tier-route.test.js:91 "the settings route stores a level, refuses one it does not know, and the next request obeys"</td><td class="n">:102 <code>(await view()).tier.id</code></td><td class="n">'all' / 'own'</td></tr>
+  <tr><td>test/initiative-tier-route.test.js:134 "at ask-me-only-to-remove, the same attach is free and the detach asks - and the answer is recorded"</td><td class="n">:152 <code>after.treeCount</code></td><td class="n">1 / 0</td></tr>
+  <tr><td>test/initiative-tier-route.test.js:183 "at ask-me-for-everything, a create asks and its answer creates - and an edit asks too"</td><td class="n">:194 <code>after.initiatives.length</code></td><td class="n">3 / 4</td></tr>
+</table>
+<p>All three are the answered-question path: a write parked on the permission tier and answered "once" is not on the store when the next read arrives. They fail identically on the untouched base, so they are the turnover's own red, not this row's, and this page does not claim them green.</p>
+
+<h2>5. One live read, at all three points</h2>
+<p>A probe outside the tree boots the real <code>server.js</code> through <code>tools/panel-testkit.mjs</code> over a fixed sandbox, seeds one initiative with the store's own <code>create</code> on a fixed clock, wipes the sandbox so the read's memo starts cold, and makes one real <code>GET /api/initiatives</code>. It ran with the base blob in place, with this tree's cut, and against the landed export, and the three answers were compared field by field.</p>
+<pre>GET /api/initiatives
+  base b4f88ad9        200  initiatives 1, archived 0, tier "all", 2,686-byte body
+  this tree 51c12933   200  initiatives 1, archived 0, tier "all", 2,686-byte body
+  landed f33ea054      200  initiatives 1, archived 0, tier "all", 2,686-byte body
+  body keys: archived at caps counts error file found initiatives readable tags tier tiers waveStatus
+
+before vs after:  identical, 0 diff lines (3,562 bytes of pretty-printed JSON)
+before vs landed: identical, 0 diff lines</pre>
+<p class="small">Two fields are masked because a read may answer them differently every time: the document's own <code>at</code> clock, and the initiative id the store generates for the seed (which carries a random suffix). Every other field, including the tier document, the caps, the tag registry view, the wave status and the folded initiative, was compared as answered.</p>
+<div class="note">This check earned its place during the run: the first live read of this tree's own cut answered 500, <code>WAVE_GATE_CHOICES is not defined</code>, because the fold's <code>waveStatus</code> block reads that name and the new module's import list did not carry it. The import was added and the pair above was re-run. The landed cut already had the name, so the turnover was never on that path.</div>
+
+<h2>6. The landing this merge makes</h2>
+<p>The cut is already on the turnover, so this branch's merge does not re-land it. The merge is <code>--no-ff</code> and resolves the three product files (<code>routes/initiatives.js</code>, <code>routes/initiatives-read.js</code>, <code>test/initiative-fold.test.js</code>) to the landed copies, which is the copy the turnover already carries. What the merge adds is this page and nothing else: no code line, no test line, no version bump, no push and no pull request. The turnover branch stays local, and the reader decides when it lands.</p>
+<pre># in the turnover worktree, over its tip b15161e7
+git merge --no-ff -X ours wtgui/row-516-is-the-second-cut-of-routes-2afe1d
+git diff --stat &lt;merge&gt;^1 &lt;merge&gt;
+#  docs/reports/initiatives-read-cut-recheck-2026-11-28.html | 1 file changed
+# (the merge's first-parent diff is this page; the product files are byte-identical to the tip's)</pre>
+<p>Two pages now exist for row 516. The landed one, <code>docs/reports/initiatives-read-cut-2026-11-28.html</code> at <code>1774f51c</code>, is the cut's own account, and its numbers were re-derived here rather than assumed. This page is the re-check: the same block, the same exports, the same tests and the same answer from the read, measured by the second tree, plus the collision record that neither tree could write alone.</p>
+
+<h2>7. What this page did not do, and what the row still owns</h2>
+<ul>
+  <li>It did not land a second cut. This tree's <code>51c12933</code> stays on its branch as the duplicate it is, resolved to the landed copies at the merge.</li>
+  <li>It did not touch the landed module, the parent, the test or the version. <code>package.json</code> is 1.197.1 before and after.</li>
+  <li>It pushed nothing and opened no pull request: the turnover is the local roll-up and the reader decides when it lands.</li>
+  <li>The row's own tree, <code>row-516-is-the-second-cut-of-routes-8f3391</code>, is the one that carries the cut; this one carries the re-check.</li>
+</ul>
+<p class="small">Base <code>b4f88ad9</code>; this tree's cut <code>51c12933</code>; the landed cut <code>8a121c70</code>, merged <code>f33ea054</code>; the landed page <code>1774f51c</code>, merged <code>b15161e7</code>. Measured 2026-11-28 in this tree, the turnover worktree and a <code>git archive</code> export of <code>f33ea054</code>. Every command quoted above was run in one of those three places, and the numbers are its output.</p>
+</main>
+</body>
+</html>

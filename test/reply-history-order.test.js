@@ -27,6 +27,22 @@ import vm from "node:vm";
 
 const APP_SRC = process.env.WTGUI_APP_SRC || new URL("../public/app.js", import.meta.url);
 const app = readFileSync(APP_SRC, "utf8").replace(/\r\n/g, "\n");
+// turnPrompts was cut out of app.js into public/board/replies.js (cut 2 of the eight in
+// docs/reports/module-separation-2026-11-28.html). A RED-FIRST run against an older checkout has no such file, so it
+// is read when it is there and skipped when it is not.
+const repliesSrc = (() => {
+  try {
+    return [
+      readFileSync(new URL("../public/board/replies.js", import.meta.url), "utf8"),
+      readFileSync(new URL("../public/board/spawn.js", import.meta.url), "utf8"),
+    ]
+      .join("\n")
+      .replace(/\r\n/g, "\n");
+  } catch {
+    return "";
+  }
+})();
+const pageSrc = `${app}\n${repliesSrc}`;
 const STORE_KEY = "wtgui.replyHistory";
 
 // One top-level `const X = ...;` from the page, so the test reads the same regex and the same storage key it does.
@@ -60,12 +76,12 @@ const source = [
   constLine("PANEL_PROMPT"),
   constLine("REPLY_HISTORY_KEY"),
   constLine("REPLY_HISTORY_MAX"),
-  grab(app, "replyHistoryStore"),
-  maybeGrab(app, "replyHistoryEntries"),
-  grab(app, "rememberReply"),
-  maybeGrab(app, "promptClock"),
-  grab(app, "turnPrompts"),
-  grab(app, "recallReply"),
+  grab(pageSrc, "replyHistoryStore"),
+  maybeGrab(pageSrc, "replyHistoryEntries"),
+  grab(pageSrc, "rememberReply"),
+  maybeGrab(pageSrc, "promptClock"),
+  grab(pageSrc, "turnPrompts"),
+  grab(pageSrc, "recallReply"),
 ].join("\n");
 
 assert.ok(constLine("REPLY_HISTORY_KEY").includes(STORE_KEY), `the page's history key is ${STORE_KEY}`);

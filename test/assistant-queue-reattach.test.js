@@ -20,10 +20,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { configureRepo, git as runGit, post as postJson, slash as sl, sliceRegion, startPanel as boot, waitForRow as waitRow } from "../tools/panel-testkit.mjs";
+import { configureRepo, git as runGit, post as postJson, queueCardsSource, slash as sl, sliceRegion, sliceRegions, startPanel as boot, waitForRow as waitRow } from "../tools/panel-testkit.mjs";
 
-const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
-const region = sliceRegion(cards, "the queue sub-tab");
+const cards = queueCardsSource(); // public/queue-cards.js and its cuts, in page order
+const region = sliceRegions(cards, "the queue sub-tab");
 
 const esc = (s) =>
   String(s ?? "")

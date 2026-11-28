@@ -26,7 +26,12 @@ const { TAG_CHIP_FIRST, tagChips, tagFilterMatch, tagFilterParse, tagFilterQuery
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const style = readStyleSheets();
-const route = readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8");
+// The prefix is answered by two files after row 515: routes/initiatives.js keeps the guard, the fold and the memo,
+// and routes/initiatives-write.js holds the tag registry and every write the assertions below read for.
+const route = [
+  readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8"),
+  readFileSync(new URL("../routes/initiatives-write.js", import.meta.url), "utf8"),
+].join("\n");
 
 const tags = (...idents) => idents.map((ident, at) => ({ id: `tag_${at + 1}`, ident, name: `${ident} tag`, color: "violet" }));
 

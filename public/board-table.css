@@ -1,0 +1,2410 @@
+/* public/board-table.css
+   The board table: the project boxes and their root groups, the table, its cells and rows, the
+   row's controls, chips and strips, the expanded row's detail, and the agent cards it holds.
+
+   This is the board's own sheet. It was public/board.css, which owned the board's frame and 46 of
+   the 316 rules that matched inside #projects; the other 270 lived in eleven other sheets because
+   the 2026-11-27 split cut style.css by source position, not by surface. The table's structure was
+   in public/chart.css (a sheet the split never touched), its row controls in public/rows.css, its
+   strips in public/rowstrips.css, the project header's chips in public/boardchips.css and the
+   detail's liveness block in public/overlays.css. They all live here now, so a change to the board
+   table opens ONE file.
+
+   Everything moved was moved verbatim: the selectors, declarations, comments and order are the
+   source sheets' own text. The blocks are appended in the order their sheets loaded (board, rows,
+   overlays, rowstrips, boardchips, chart), which is the order they held in the cascade before the
+   move, and public/index.html loads this sheet where board.css stood. Nothing was reordered against
+   a rule it used to beat. tools/verify-board-table-sheet.mjs proves the move: every rule is present
+   exactly once with its own declarations, and every element under #projects computes the same style
+   and the same box on the pre-move commit and this one, at 1160 and at 420 px.
+
+   Two subjects that are not the table's still ride here because they sat in board.css: the page
+   frame (`main`, `.empty`), the approvals dock and the New agent form. A later cut owns them.
+   ------------------------------------------------------------------------------------------------ */
+
+/* The board is the page's ONE horizontal scroll container. It is also the element whose box is the chart's width, so
+   anything that ever did grow past it (a table planned before the assistant rail opened, a console line that cannot
+   wrap) is reachable by scrolling HERE instead of being clipped at the rail's left edge with no way to reach it. In
+   practice nothing overflows: `fitColumns` plans every table to this box, and `columnPlan` normalises the sum of the
+   columns to it exactly. */
+main { padding: 14px 16px 40px; overflow-x: auto; }
+.empty { color: var(--dim); padding: 10px 14px; }
+
+/* `overflow: visible`, not `hidden`: a card that clips is a card that can hide the far end of a row with no scrollbar
+   to reach it — which is exactly how the chart ran under the docked assistant rail. The rounded corners the clip used
+   to cut for the two head rows are drawn onto those rows instead (below and on `.root-head`). */
+.project {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 18px;
+  overflow: visible;
+}
+/* The head paints its own background, so it carries the top corners the card's clip used to cut for it. */
+.project > .project-head:first-child { border-radius: 9px 9px 0 0; }
+
+/* ---- a themed project box (Ctrl+click its title row) -----------------------------------------
+   One hue, applied to the surfaces that belong to the project and nothing else: the box outline, its
+   title row, the column header and the legend. The verdict badges, the chips and the text inside the
+   rows keep their own colours - the theme says WHICH project you are looking at, never what a row
+   means. Saturation and lightness are fixed here so any hue reads on the dark palette. */
+section.project.has-hue { border-color: hsl(var(--proj-hue) 40% 34%); background: hsl(var(--proj-hue) 20% 10%); }
+section.project.has-hue > .project-head[data-toggle-project] {
+  background: linear-gradient(180deg, hsl(var(--proj-hue) 34% 17%), hsl(var(--proj-hue) 30% 13%));
+  border-bottom-color: hsl(var(--proj-hue) 36% 27%);
+}
+section.project.has-hue > .project-head[data-toggle-project] h2 { color: hsl(var(--proj-hue) 75% 80%); }
+section.project.has-hue > .project-head[data-toggle-project] .chev { color: hsl(var(--proj-hue) 55% 62%); }
+section.project.has-hue > .project-head[data-toggle-project] .path { color: hsl(var(--proj-hue) 25% 60%); }
+section.project.has-hue > .project-head.meta-line {
+  background: hsl(var(--proj-hue) 26% 12%);
+  border-bottom-color: hsl(var(--proj-hue) 32% 24%);
+}
+section.project.has-hue > .wt-scroll > table > thead > tr > th {
+  background: hsl(var(--proj-hue) 30% 14%);
+  border-bottom-color: hsl(var(--proj-hue) 30% 24%);
+  color: hsl(var(--proj-hue) 20% 70%);
+}
+section.project.has-hue > .wt-scroll > table > tbody > tr.row:hover { background: hsl(var(--proj-hue) 28% 14%); --row-rest-bg: hsl(var(--proj-hue) 28% 14%); }
+section.project.has-hue > .legend { background: hsl(var(--proj-hue) 22% 11%); border-top-color: hsl(var(--proj-hue) 30% 22%); }
+
+.project-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.project-head h2 { margin: 0; font-size: 14px; }
+.project-head .path { color: var(--dimmer); font-size: 12px; font-family: var(--mono); }
+.project-head .spacer { flex: 1; }
+/* a project starts minimized to its title line; click the line (or its chevron) to open it */
+.project-head[data-toggle-project] { cursor: pointer; user-select: none; }
+.project-head[data-toggle-project] .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
+.project-head[data-toggle-project]:hover .chev { color: var(--text); }
+/* The two fixed cards (New agent / Agents) collapse the same way — their head rows are the handle. */
+.project-head[data-toggle-fixed] { cursor: pointer; user-select: none; }
+.project-head[data-toggle-fixed] .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
+.project-head[data-toggle-fixed]:hover .chev { color: var(--text); }
+section.project.fixed-collapsed > *:not(.project-head) { display: none; }
+section.project.fixed-collapsed > .project-head { border-bottom: 0; }
+section.project.collapsed .project-head.meta-line,
+section.project.collapsed > .wt-scroll,
+section.project.collapsed .legend { display: none; }
+
+/* ---- folder layer ------------------------------------------------------------
+   Projects are nested in one accordion per folder (a scan root, or the parent folder of a
+   project that lives outside every root). The folder header stays readable when collapsed. */
+.root-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px);
+  /* Not clipped, for the same reason `.project` is not: the card is the page's folder, and a clip here would swallow a
+     table that outgrew main instead of letting main scroll it. The head carries the folder's top corners. */
+  overflow: visible;
+}
+.root-group > .root-head { border-radius: 11px 11px 0 0; }
+.root-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  user-select: none;
+}
+.root-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); letter-spacing: 0.01em; }
+.root-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
+.root-head:hover .chev { color: var(--text); }
+.root-head .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.root-head .spacer { flex: 1; }
+/* The folder's own project filter, in its header. Quiet until there is something in it — the folder
+   header is a summary first, a tool second. */
+.root-filter { display: flex; align-items: center; gap: 4px; flex: 0 1 230px; min-width: 120px; cursor: default; }
+.root-search {
+  flex: 1 1 auto; min-width: 0; width: 100%;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 7px; font: 11.5px var(--mono); outline: none;
+}
+.root-search::placeholder { color: var(--dimmer); }
+.root-search:focus { border-color: #4a5a72; background: var(--panel); }
+.root-search:not(:placeholder-shown) { border-color: #3f4b5e; color: var(--text); }
+.root-search-clear {
+  display: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px;
+  background: none; color: var(--dimmer); font-size: 11px; line-height: 1; cursor: pointer;
+}
+.root-search-clear.is-on { display: inline-block; }
+.root-search-clear:hover { color: var(--text); background: var(--panel-2); }
+.root-count { font-size: 10.5px; color: var(--dimmer); min-width: 0; }
+.root-count.on { color: var(--dim); }
+/* A filtered-out project is hidden outright; `hidden` alone loses to `section.project`'s own display. */
+section.project.is-filtered-out { display: none; }
+/* Focus mode's own hiding (a double-click on the top bar): a project with no row whose tree has a live panel. It is a
+   separate class from the root filter's, so the two narrowings never write each other's state. */
+section.project.is-focus-out { display: none; }
+.root-empty { display: none; margin: 10px 14px 14px; font: 11.5px var(--mono); color: var(--dimmer); }
+.root-empty.is-on { display: block; }
+button.btn-root-collapse { padding: 3px 9px; font-size: 11px; }
+button.btn-root-collapse:hover { background: #232936; }
+/* all projects / last 7 days — a view toggle, so it uses a neutral accent, not a category colour */
+button.btn-root-recent { padding: 3px 9px; font-size: 11px; min-width: 38px; }
+button.btn-root-recent:hover { background: #232936; }
+button.btn-root-recent.on { color: var(--text); border-color: #4a5a72; background: #263041; font-weight: 700; }
+button.btn-root-clone {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: 700 19px/26px system-ui, sans-serif;
+  color: #7ee787;
+  background: var(--green-bg);
+  border-color: #1f4a2a;
+}
+button.btn-root-clone:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb950; }
+.root-clone {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.root-clone[hidden] { display: none; }
+.root-clone input {
+  flex: 1;
+  min-width: 260px;
+  max-width: 560px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font: 12px var(--mono);
+}
+.root-clone input:focus { outline: none; border-color: var(--blue); }
+/* The host dropdown beside the repo input: the ids come from hosts.json, the labels from the record's own name. */
+.root-clone select {
+  min-width: 150px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font: 12px var(--mono);
+}
+.root-clone select:focus { outline: none; border-color: var(--blue); }
+.root-clone .dim { font-size: 11.5px; }
+.root-clone .clone-err { color: var(--red); }
+.root-group.collapsed .root-head { border-bottom: 0; }
+.root-group.collapsed .root-body { display: none; }
+.root-body { padding: 14px 14px 0; }
+
+/* ---- the board table, moved out of public/chart.css ------------------------------------------------
+   The fifteen rules below are the ones whose selectors named #projects in chart.css: the project's left
+   rail, the wrapper's frame, the row's indent, the guide line the markers hang on, the child ticks and
+   lanes, and the chart header's metrics. They are the board table's own styling, so the sheet named for
+   the board holds them. Selectors and declarations are chart.css's own text, in chart.css's order, byte
+   for byte; only the sheet changed. chart.css keeps the ring's paint and the poll controls. */
+
+/* ---- hierarchy: a worktree row hangs under its project ------------------------
+   The board repeats one card style at three levels, so a worktree row and a collapsed project read alike
+   and the eye has to search for which one it is looking at. The rail plus indent makes the relation
+   explicit, and the column header steps back so it stops reading as another band of projects. */
+#projects section.project { border-left: 3px solid #33405a; }
+#projects section.project > .wt-scroll {
+  /* The rail inset on the left and a matching buffer on the right. It used to be 24px on the left and 2px on the
+     right, so the last column (the row's ✕) sat against the panel's rounded corner and the table header bled into
+     it - the right edge read as a seam where the left read as a margin. The WRAPPER carries it now, not the table:
+     the rail is the one thing that has to stay put while the chart scrolls sideways under it.
+
+     BOTH edges are the SAME 1px rule, drawn here rather than on the table so it spans the header and every row
+     including the detail cards, and so the table's own borders stay what the cell rules say they are. The left rule
+     alone made the right side read as unfinished: the table stopped mid-card with nothing to close it. Each rule's
+     inner edge is the table's own edge (border-box: `clientWidth` is already the content box `fitColumns` plans to),
+     so the pair frames the chart exactly, and `td.row-actions` keeps the gutter the last control needs to clear the
+     right one. */
+  width: calc(100% - 48px);
+  margin-left: 24px;
+  border-left: 1px solid #2b3644;
+  border-right: 1px solid #2b3644;
+}
+
+/* ---- the chart no longer scrolls sideways itself --------------------------------------------------------------
+   `fitColumns` (app.js) plans every column to the CARD's width and `columnPlan` normalises the sum to it exactly, so
+   the table always fits and the wrapper is a wrapper: the chart's horizontal scroll - if anything ever escapes it -
+   belongs to `main`, the page's one horizontal scroll container. The old `.wt-scroll.is-scroll` mode (a floor-width
+   table scrolling inside the card, with its spanning rows pinned under a scroller) is gone: with the assistant rail
+   open the card is 480px narrower, that mode kept the pre-rail floor, and the card clipped the overrun at the rail's
+   left edge with no scrollbar to reach it. */
+#projects tbody tr.row td { padding-left: 12px; }
+/* ---- a worktree cut from another one hangs under it ------------------------------------------------
+   The panel records the branch every tree was cut from (`row.parent`), so the board draws it: the child steps in
+   under the parent row, one indent per level (the depth rides on the row as --child-depth, so a tree cut from a
+   child steps in again without a second rule), and it keeps every cell it had - its own branch, its own verdict, its
+   own actions.
+
+   ONE RULE FOR EVERY ROW, depth 0 included. The grouping writes the depth onto every row (public/render-projects.js
+   `paintRowGroup`), so a row that hangs under nothing (a group's PARENT row, or a tree no round cut) carries 0 and
+   lands in exactly the same column as any other top-level row. The rule used to be scoped to `.is-child`, which left
+   a parent with no indent variable at all and let the markers in its name cell decide where its text started: the
+   fold pushed its own row's text 18px right, into the children's column.
+
+   ONE L, NOT A LADDER. A child row used to draw two: the project's rail glyph, moved in to its own depth
+   (the rule that follows), and the └ the row leads with (`.child-tick`, public/render-projects.js). Two L's on one
+   row read as a depth of two, and at the second tier they read as a rung of a ladder nobody drew. The rail is the
+   PROJECT's line and stops being a group marker at the moment a row hangs under another: a child draws no rail glyph
+   at all, and its single marker is the L it leads with.
+
+   ONE GUIDE COLUMN PER DEPTH, AND IT IS THE TRIANGLE'S OWN AXIS. Depth d's axis is 20px + 16px*d from the cell's
+   left edge: the fold's 16px box starts on the cell's own padding (12px + 16px*d), so the triangle is centred on that
+   axis, and the L a child leads with has its vertical stroke 8px to the LEFT of that padding - which is exactly the
+   axis of the depth above. So the guide runs straight down out of the triangle the group hangs from, each depth is
+   one 16px step from its parent's guide, and two children's L's meet on one line instead of stepping away from it.
+   (It used to be neither: the fold was laid out after the tick's 7px box and its 2px gap, so on a parent row the
+   triangle's centre sat 8px LEFT of the L its children drew, and on a child row the triangle sat 25px from the
+   parent's - not the 16 one step is - and 17px right of that row's own L. Two tiers of that and the tree read as a
+   staircase.)
+
+   The L is drawn with borders rather than set in a glyph. A glyph's vertical stroke starts a few pixels into its own
+   box and ends a few pixels above its own baseline, so it can neither stand on the axis nor reach the row's edges -
+   which is the other half of the staircase, and the reason two L's never read as one line. A hairline can be placed
+   on the axis exactly, and it runs the row's full height so the stroke continues into the row above it. */
+/* The line the markers hang on: the row's own text line - the cell's 7px top padding plus half of the 20px play
+   button. The triangle, the L's corner and the lane out of a parent all read it from here. */
+#projects tbody tr.row { --guide-line: 17px; }
+#projects tbody tr.row > td.name { padding-left: calc(12px + 16px * var(--child-depth, 0)); }
+#projects tbody tr.row.is-child > td:first-child::before { content: none; }
+/* The lane a child leads with: its vertical stroke IS the guide, on the axis of the row it hangs from (4px +
+   16px * depth is one step less than the cell's own padding), and its corner is a hairline on the row's line. It runs
+   one pixel past the padding box, over the cell's own bottom border, so it meets the next row's stroke with no seam -
+   a child with a sibling below keeps the stroke to its foot, which is what makes two L's read as one line. */
+#projects tbody tr.row .child-tick {
+  position: absolute;
+  left: calc(4px + 16px * var(--child-depth, 1));
+  top: 0; bottom: -1px;
+  width: 8px;
+  border-left: 1px solid #465668;
+  pointer-events: none;
+}
+/* The last child of a group closes the lane: its stroke stops at the corner instead of running on, because a stroke
+   that continued past the corner would promise a row that is not there. */
+#projects tbody tr.row.is-last-child .child-tick { bottom: auto; height: calc(var(--guide-line) + 1px); }
+/* The corner: from the guide to the cell's own padding, on the row's line. */
+#projects tbody tr.row .child-tick::after {
+  content: "";
+  position: absolute;
+  left: 0; top: var(--guide-line); width: 8px; height: 1px;
+  background: #465668;
+}
+/* The lanes of the ancestors that are still open above this row. A grandchild hangs INSIDE its parent's group, so a
+   group's guide has to keep running past it; without these the line breaks on exactly the rows that are deepest - the
+   parent's stroke ends at the bottom of the parent's row and the next sibling's begins two rows down. One span per
+   open depth, placed on that depth's axis by public/render-projects.js `paintLanes`, and only for the depths whose
+   ancestor still has a sibling below it: the lane of a group's last child turns its corner and stops. */
+#projects tbody tr.row .child-lane {
+  position: absolute;
+  left: calc(4px + 16px * var(--lane-depth));
+  top: 0; bottom: -1px;
+  width: 1px;
+  background: #465668;
+  pointer-events: none;
+}
+/* The lane OUT of a parent's own row: from under the fold to the row's foot, so the line the children's L's are cut
+   from begins at the triangle rather than half a row below it. Same column as the children's own L
+   (20px + 16px * depth). A folded group has nothing under it for the lane to continue into, so it draws none. */
+#projects tbody tr.row.is-parent:not(.is-folded) td:first-child::after {
+  content: "";
+  position: absolute;
+  left: calc(20px + 16px * var(--child-depth, 0));
+  top: calc(var(--guide-line) + 8px);
+  bottom: 0;
+  width: 1px;
+  background: #465668;
+}
+
+#projects tbody tr.row td:first-child { position: relative; }
+#projects tbody tr.row td:first-child::before {
+  content: "\251c"; /* ├ */
+  position: absolute; left: -13px; top: 5px;
+  color: #465668; font-size: 12px; line-height: 1;
+}
+/* The last row of a project closes the rail. `:has(~ tr.row)` ignores the detail rows that sit between
+   a row and the next one, which `:last-of-type` cannot do. A CHILD row is excluded: it draws no rail glyph at all
+   (the rule above), so closing the rail on one would put the ladder's first L back on exactly the rows that hang. */
+#projects tbody tr.row:not(.is-child):not(:has(~ tr.row)) td:first-child::before { content: "\2514"; /* └ */ }
+/* The row's tree glyph hangs in the wrapper's left inset, which is where the card's rail is. It used to have an
+   `.is-scroll` variant that moved it inside the cell because a sideways scroller clipped it; the chart does not
+   scroll inside the card any more, so the inset is always there to hang it in. */
+#projects thead th {
+  font-size: 10px; color: #66717f; letter-spacing: .07em; border-bottom-color: #1b222c;
+}
+
+
+/* agents owned by a worktree, listed inside that row's detail */
+/* The rule closes the agent list rather than opening it: the bar sits at the BOTTOM of the list when the setting
+   is off (above the cards by default), so the detail reads "what this tree is doing", then a line, then the
+   reference material. */
+.agents-block { margin-top: 4px; padding-top: 0; padding-bottom: 10px; border-bottom: 1px solid #1d222b; }
+/* With revivable sessions underneath, those belong to the same list: the line moves below them instead of
+   cutting between the cards and the sessions. */
+.agents-block:has(+ .sessions-block) { border-bottom: 0; padding-bottom: 2px; }
+/* The add-agent bar's position is the reader's choice (Settings > Display > Add-agent bar at top). On, one class on
+   the body flips the stack: the bar is the first flex item, the cards follow it. Off, the block stays a plain stack
+   and the bar closes the list. CSS-only, so the toggle moves every open row at once without repainting a card. */
+body.addbar-top .agents-block { display: flex; flex-direction: column; }
+body.addbar-top .agents-block > .btn-add-agent,
+body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; margin-bottom: 8px; }
+.agents-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
+/* Sessions the row knows about but the board has no card for. The gateway still has the
+   conversation, so these are offered back one at a time rather than auto-attached. No heading and no
+   rule: the revive button says what the row is, and a label above three buttons was furniture. */
+.sessions-block { margin-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #1d222b; }
+/* A card head spends 14px of padding plus 47px on its glyph and chevron before the status pill; the
+   revive button starts in that same column, so "revive" and "EXITED" read down one edge of the row. */
+/* A session row is an agent head without a card: same glyph, same chevron, and the revive button in the
+   column and with the metrics of a status pill — but grey glyph (no card) and a blue pill (an action, not
+   a state). The 15px is the card's 1px border plus its 14px padding, so the two glyphs line up exactly. */
+.session-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px 3px 15px; border-radius: 6px; font-size: 12px; }
+.session-row:hover { background: var(--band); }
+.session-row .agent-glyph { flex: 0 0 auto; color: var(--dimmer); font-size: 13px; line-height: 1; }
+.session-row .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 18px; display: inline-block; flex: 0 0 auto; }
+.session-row:hover .agent-glyph, .session-row:hover .chev { color: var(--dim); }
+.session-row .session-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
+.session-row .session-name { flex: 1 1 auto; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-row .session-id { flex: none; font-size: 10.5px; color: var(--dimmer); }
+.session-row .spacer { flex: 1; }
+/* The metrics are .pill's, so "REVIVE" and "EXITED" are the same size sitting in the same column. */
+.btn-revive {
+  flex: none; padding: 2px 7px; border: 1px solid #2f5a7a; border-radius: 999px;
+  background: var(--blue-bg); color: #9ecbff;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; line-height: 1.5;
+  cursor: pointer;
+}
+.btn-revive:hover { background: #16202c; border-color: #2f5a7a; }
+.btn-revive:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
+/* "waiting on you" — an agent blocked on an approval. Its colours live with the other .sig modifiers
+   further down the file: .sig and .chip are single-class rules declared after this point, so a rule
+   here loses on source order and the badge renders grey instead of amber. */
+.approval.jump { box-shadow: 0 0 0 3px #d2992288; }
+
+/* ---- approvals ----
+   A floating stack, not a section in the page: approvals are an interruption, and a card above the board both
+   pushed the agent list down and scrolled away from the agent it was about. Pinned bottom-right, it costs no
+   page height and is reachable wherever the reader has scrolled. */
+.approval-dock {
+  position: fixed; right: 16px; bottom: 16px; z-index: 45;
+  width: 400px; max-width: calc(100vw - 32px); max-height: min(62vh, 560px);
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid #6b4d16; border-radius: 10px;
+  box-shadow: 0 14px 36px #000a; overflow: hidden;
+}
+.approval-dock[hidden] { display: none; }
+.ap-dock-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; background: var(--amber-bg); border-bottom: 1px solid #4a3a17; }
+.ap-dock-head .spacer { flex: 1; }
+.ap-dock-head #btn-dock-approvals { border: 0; background: none; color: var(--amber); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.ap-dock-head #btn-dock-approvals:hover { color: var(--text); }
+.approval-dock.is-folded #approval-list { display: none; }
+.approval-dock.is-folded .ap-dock-head { border-bottom: 0; }
+/* Nothing pending: the head says so, and the amber "a question is waiting" chrome goes with the question. The dock
+   can still be open for a receipt or a review — it just must not LOOK like an unanswered request. */
+.approval-dock.is-quiet { border-color: #2f6b3f; }
+.approval-dock.is-quiet .ap-dock-head { background: var(--green-bg); border-bottom-color: #2f6b3f; }
+.approval-dock.is-quiet .ap-dock-head .mono,
+.approval-dock.is-quiet .ap-dock-head #btn-dock-approvals { color: #8fd6a0; }
+#approval-list { overflow: auto; }
+/* A group of records that are OVER. Its own head is what keeps a green check out from under "waiting on you": the
+   label names the group, the `clear` empties it, and neither counts as a pending request. */
+.ap-group { border-top: 1px solid var(--line); }
+.ap-group:first-child { border-top: 0; }
+.ap-group-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); background: var(--surface); border-bottom: 1px solid var(--line); }
+.ap-group-head .spacer { flex: 1; }
+.ap-group-head button { border: 1px solid var(--line); background: none; color: var(--dim); font: inherit; font-size: 10.5px; text-transform: none; letter-spacing: 0; padding: 1px 7px; border-radius: 5px; cursor: pointer; }
+.ap-group-head button:hover { color: var(--text); border-color: var(--dim); }
+.rw-record { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 5px 10px 5px 12px; font-size: 11px; color: #8fd6a0; border-left: 2px solid #2f6b3f; background: rgba(47,107,63,.10); cursor: pointer; }
+.rw-record.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
+.rw-record:hover { background: rgba(47,107,63,.18); }
+.rw-record.is-deny:hover { background: rgba(107,42,42,.18); }
+.rw-record-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rw-record .rw-note { flex: 1 1 100%; white-space: normal; }
+.rw-x { flex: 0 0 auto; border: 0; background: none; color: inherit; opacity: .55; font: inherit; line-height: 1; padding: 0 3px; cursor: pointer; }
+.rw-x:hover { opacity: 1; }
+/* An auto-allowed write, after the fact. Same raised box as a question, in green: the reader was never asked, so the
+   card is the only record - Keep closes it, Unwind is the one inverse the record offers. The card is ONE summary
+   line (what, the branch, the repo, the sha and when); the command, the tree, the policy and what Unwind runs sit
+   behind the `details` disclosure, so the branch is stated once instead of four times down a 400px dock. */
+.rw-review { padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(47,107,63,.06); }
+.rw-review:last-child { border-bottom: 0; }
+/* The summary: one line carrying the action and the branch, and - when a long branch needs the width - the
+   repo/sha/when as a muted second line. The branch keeps its TAIL (the identifying part, the way tailPath keeps a
+   path's last segments) rather than being cut down to "wtgui/...", and the full text with the exact clock is the
+   head's title. */
+.rw-review-head { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; white-space: nowrap; font-size: 11px; color: #8fd6a0; }
+.rw-review-line { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.rw-review-act { flex: 0 0 auto; }
+.rw-review-branch { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: var(--text); }
+.rw-review-meta { flex: 0 0 auto; margin-left: auto; padding-left: 6px; font-size: 10px; color: var(--dim); }
+.rw-review .ap-cmd { margin: 0 0 5px; max-height: 120px; }
+.rw-review-details { margin-top: 6px; }
+.rw-review-sum { font-size: 10.5px; color: var(--dim); cursor: pointer; width: fit-content; }
+.rw-review-sum:hover { color: var(--text); }
+.rw-review-sum:focus-visible { outline: 1px solid #3fb950; outline-offset: 2px; }
+.rw-review-details[open] .rw-review-sum { color: var(--text); }
+.rw-review-body { margin: 4px 0 0 2px; padding: 4px 0 1px 12px; border-left: 1px solid #2a3a2f; }
+.rw-detail { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; font-size: 10.5px; line-height: 1.45; }
+.rw-detail-key { flex: 0 0 62px; color: var(--dimmer); }
+.rw-detail-val { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: #c9d3c2; }
+.rw-detail-val code { color: var(--text); }
+.rw-note { margin-top: 5px; font-size: 10.5px; line-height: 1.4; color: #d8c79a; }
+.rw-review .btn-deny { border-color: #6b2a2a; color: #ff9c9c; }
+.rw-review .btn-deny:hover { background: rgba(107,42,42,.18); }
+/* Keep is the SAFE answer, so it owns the whole row: stacked and stretched, with Unwind's red bar underneath. It used
+   to sit inline beside Unwind, where Unwind only filled the row because its label was wider than the card and Keep
+   was a narrow chip. Scoped to .rw-review on purpose — .ap-actions is shared with approvals and every other card. */
+.rw-review .ap-actions { flex-direction: column; align-items: stretch; }
+.rw-review .ap-actions button { width: 100%; text-align: center; }
+.rw-review button.rw-keep { background: var(--green-bg); border-color: #1f4a2a; color: #7ee787; }
+.rw-review button.rw-keep:hover { background: #1f4a2a; border-color: #3fb950; color: #d6ffe0; }
+/* The permission box for a remote write wears the same chrome as a parked turn's approval (.turn-approval), which
+   is deliberately in-card markup. Inside the dock it needs nothing but a trim: the dock already has the border and
+   the shadow, so the inner box keeps its own colour and loses the outer glow. */
+#approval-list .turn-approval { margin: 0 0 0 0; border-radius: 0; border: 0; border-bottom: 1px solid #4a3a17; box-shadow: none; }
+#approval-list .turn-approval .ta-head { font-size: 11px; }
+/* The dock's cards are a corner of the screen, so the summary is trimmed to the steps and the flags: the same
+   reading, less air. It is never removed - a push parked here is exactly the one a reader has to judge. */
+#approval-list .ta-summary { margin: 6px 0 4px; padding: 6px 8px; }
+#approval-list .ta-summary-steps li { font-size: 11px; }
+#approval-list .turn-approval .ta-note { margin-top: 6px; font-size: 11px; color: #d8c79a; }
+#approval-list .turn-approval-done { border-radius: 0; }
+.approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.approval:last-child { border-bottom: 0; }
+.ap-head { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+/* The agent's name is the point of the head: one line, cut rather than wrapped. */
+.ap-head .ap-agent { flex: 0 1 auto; min-width: 0; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.ap-head .spacer { flex: 1; }
+.ap-cmd {
+  margin: 6px 0 4px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow: auto;
+}
+.ap-desc { font-size: 12px; margin-bottom: 4px; }
+.ap-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.ap-actions .ap-err { color: var(--red); font-size: 11.5px; }
+.ap-head .warn { color: var(--amber); }
+button.btn-plus {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: 700 19px/26px system-ui, sans-serif;
+  color: #7ee787;
+  background: var(--green-bg);
+  border: 1px solid #2ea043;
+  border-radius: 7px;
+  align-self: center;
+}
+button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb950; }
+.form input#job-cwd {
+  width: 520px;
+  max-width: 70vw;
+  font-family: var(--mono);
+}
+.form label.cwd { font-family: var(--mono); }
+.form select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font: 12px var(--mono);
+  max-width: 240px;
+}
+/* The model picker carries provider-qualified ids ("anthropic/claude-sonnet-5.5") and now a price
+   and coding-rating column beside each one; the shared 240px cap cut them off, and this is the one
+   select in the form whose value is read before spawning. */
+.form select#job-model { min-width: 210px; max-width: 460px; }
+.project.armed { box-shadow: 0 0 0 2px #2ea04380; transition: box-shadow .2s; }
+/* The card's grey host/remote bar WRAPS on purpose: at a high zoom (or a narrow window) the fetched stamp and the
+   host chip drop to a second line instead of pushing each other off the card's right edge.
+   The two push controls are NOT on this bar any more: they ride the grey remote-mapping row (`.host-form`, drawn by
+   the host chip), between that row's line and its `host` field — see `.host-form .push-controls` below. */
+.project-head.meta-line { padding-top: 6px; padding-bottom: 6px; flex-wrap: wrap; row-gap: 6px; }
+.push-controls { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.push-field { display: inline-flex; align-items: center; gap: 3px; font: 10.5px var(--mono); color: var(--dimmer); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.push-select { max-width: 168px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 1px 3px; font: 10.5px var(--mono); }
+.push-select:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+/* A disabled select reads as disabled: the force-override owns it, and the note beside it says which setting does. */
+.push-select[disabled] { color: var(--dimmer); opacity: .7; cursor: not-allowed; }
+.push-repo-note { font: 10px var(--mono); color: #f0c674; border: 1px solid #4d3d12; background: var(--amber-bg); border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.chip.good { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.chip.bad { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+.chip.warn { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.chip.info { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+/* How many of a folder's projects are on the frequent (recent-tier) scan. Quiet on purpose: it states the
+   schedule, not a problem, so it must not read as a warning the way .warn and .bad do. */
+.chip.scan { color: #a7d8c9; border-color: #21453b; background: #101f1b; }
+/* "live" is a Hermes-session fact, so it wears the same violet as the ⧉ hermes chip. */
+.chip.live { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+/* The project's "n panel agents" chip: a LIGHTER violet than the live/hermes chip (#c8a6ff), so the two
+   can sit next to each other and still be told apart. It is a Hermes-agent fact, not a warning, so it
+   never turns amber just because those agents are between turns. */
+.chip.agents { color: #ecd9ff; border-color: #55407a; background: #2a2044; }
+/* The panels chip is clickable while something is running (jump to that agent), so it has to look it. */
+button.chip { cursor: pointer; font-family: inherit; }
+button.chip:hover { filter: brightness(1.22); }
+button.chip:active { transform: translateY(1px); }
+/* "n hermes": external CLI sessions executing a turn — the same violet as the row's hermes chip, so the two
+   read as one kind of evidence rather than as another flavour of the panel's own agents. */
+/* External Hermes sessions: the same grey-to-violet rule as the panel chip, but in the darker violet, so the
+   two never read as the same thing. */
+.chip.hermes.on { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+.chip.claude.on { color: #f0a878; border-color: #5c3a22; background: #2a1c12; }
+
+/* ---- new-agent form ---- */
+.form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+.form textarea, .form #job-prompt {
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: 13px/1.45 var(--mono);
+  resize: vertical;
+}
+/* Three lines tall, which is what rows="3" was on the textarea this used to be: growBoxToDraft reads the
+   same number off data-rows and takes it from here. */
+.form #job-prompt { min-height: 74px; overflow-y: auto; }
+.form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.form label { color: var(--dim); font-size: 11.5px; display: flex; gap: 5px; align-items: center; font-family: var(--mono); }
+.form input[type="text"], .form input:not([type]) {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font: 12px var(--mono);
+  width: 130px;
+}
+.form input[type="number"] { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: 12px var(--mono); width: 90px; }
+.form label.chk { color: var(--dim); }
+.form label.chk code { background: #20242c; padding: 1px 4px; border-radius: 3px; }
+.cmd {
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--console);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  color: #c8d1dc;
+}
+#spawn-msg { font-size: 11.5px; min-height: 15px; }
+/* An empty message line is not a placeholder: with nothing to report the New agent card should end at its
+   last field, not carry 29px of reserved height and two flex gaps for text that may never come. */
+#spawn-warn:empty, #spawn-msg:empty { display: none; }
+
+/* ---- the row's controls, marks and artifacts, moved out of public/rows.css ---------------------
+   The artifacts button and its popover, the cut/reconcile/remove controls, rename and fold, the
+   collision marks and ruling notes, the review chips and the delete confirmation: every one of them
+   is a decision the row offers, so the row's own sheet holds them. */
+
+/* Files an agent produced: the count sits right after the worktree name, the list hangs off it.
+   Rows are "open in an editor" + the path + "copy", because the point is to grab the file or its
+   location and go. */
+.btn-artifacts {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #151a22;
+  color: var(--text);
+  font: 11px/1.5 var(--term);
+  cursor: pointer;
+}
+.btn-artifacts:hover { border-color: #3b4757; background: #1b2230; }
+/* Three controls now: the child cut (+), the reconcile (⟳) and the remove (✕). The width is the three buttons plus
+   their gaps and the cell's own 4px insets, so a fourth control (or a wider glyph) has to move this number with it. */
+.row-actions { width: 74px; text-align: center; white-space: nowrap; }
+/* ＋ cut a child worktree off this row's branch: the same quiet-at-rest family as the ⟳ and the ✕, in the panel's
+   "additive" ink rather than the delete's red. It is the only one of the three that MAKES something, so its hover is
+   the blue-green rather than either neighbour's. */
+.btn-child-tree {
+  border: 1px solid var(--line);
+  background: #15181e;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 5px;
+  margin-right: 3px;
+  cursor: pointer;
+  opacity: .55;
+}
+tr.row:hover .btn-child-tree { opacity: 1; }
+.btn-child-tree:hover { background: #16211d; border-color: #2f4a3f; color: #8fe0bd; }
+.btn-child-tree:disabled { cursor: progress; opacity: .5; }
+.btn-child-tree.is-starting { animation: pill-again-spin .9s linear infinite; }
+/* The container row's START: the one control a turnover branch with no worktree carries. It makes the container tree
+   rather than changing one, so it reads as a word - start - in the same additive ink as the + beside it. */
+.btn-start-turnover {
+  border: 1px solid var(--line);
+  background: #15181e;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 6px;
+  cursor: pointer;
+  opacity: .8;
+}
+.btn-start-turnover:hover { background: #16211d; border-color: #2f4a3f; color: #8fe0bd; opacity: 1; }
+.btn-start-turnover:disabled { cursor: progress; opacity: .5; }
+/* THE ∅ MARK: the row attaches nowhere, and its tooltip carries the cut book's own reason. Amber is the panel's
+   "look at this" ink; it is deliberately neither the review's ▣ nor the delete's red - it is a fact about the picture. */
+.parent-gap {
+  margin-left: 4px;
+  color: #d9a441;
+  font: 11px/1 var(--term);
+  cursor: help;
+}
+/* The row's own refresh, to the LEFT of the ✕ and in the same family: quiet at rest, bright under the pointer, and a
+   spin while the read is in flight (the panel's own "this is happening" for a glyph control — no label change). */
+.btn-refresh-tree {
+  border: 1px solid var(--line);
+  background: #15181e;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 5px;
+  margin-right: 3px;
+  cursor: pointer;
+  opacity: .55;
+}
+tr.row:hover .btn-refresh-tree { opacity: 1; }
+.btn-refresh-tree:hover { background: #1b2230; border-color: #3b4757; color: var(--text); }
+.btn-refresh-tree:disabled { cursor: progress; opacity: .5; }
+.btn-refresh-tree.is-starting { animation: pill-again-spin .9s linear infinite; }
+.btn-del-tree {
+  border: 1px solid #3a2226;
+  background: #1a1216;
+  color: #ff7d72;
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 5px;
+  cursor: pointer;
+  opacity: .55;
+}
+/* Rename a worktree: quiet until the row is under the pointer, so a board of rows is not a board of buttons. */
+.btn-row-rename {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 4px;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: .55;
+  vertical-align: 1px;
+}
+.btn-row-rename:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
+.btn-row-rename:disabled { opacity: .3; cursor: progress; }
+tr.row:hover .btn-row-rename { opacity: .9; }
+
+/* The fold on a parent row: it puts the trees cut from this one out of sight under it, and brings them back. The same
+   quiet-at-rest family as the ✎ — a board of rows must not look like a board of buttons — but it stays readable while
+   the group is folded (the state has to be visible from the row, not only from the children that are no longer on
+   screen). `is-folded` is the closed chevron; the tooltip and aria-expanded carry the count.
+
+   It is PLACED, not laid out: a fixed 16px box centred on the row's guide axis, which is the cell's own padding
+   (12px + 16px * depth) plus half the box, and the same axis the children's L hangs on (public/board.css). It was a
+   flex item in the name line, which put it after the tick's 7px box and its 2px gap and 9px off that axis - the
+   triangle of a parent row sat off to the left of the guide its children were drawn on. A fold that sized itself to
+   its glyph would also make one row's name line a pixel wider than the next, so the box stays fixed. */
+.btn-row-fold {
+  position: absolute;
+  left: calc(12px + 16px * var(--child-depth, 0));
+  top: calc(var(--guide-line, 17px) - 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  width: 16px; height: 16px; padding: 0; margin: 0;
+  cursor: pointer;
+  opacity: .55;
+}
+.btn-row-fold:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
+.btn-row-fold.is-folded { color: var(--fg); opacity: .9; }
+tr.row:hover .btn-row-fold { opacity: .9; }
+/* The lead slot of a row's name line: a FIXED 25px gutter reserved on every row, so the row's text starts in the
+   same column whatever markers the row carries. While the slot sized itself to its contents, a fold pushed its own
+   row's text 18px right, so a group's parent row sat in its children's column and a nested parent's fold put its
+   name further in than the child's below it. The markers no longer take part in that layout at all: the fold is
+   placed on the guide axis and the L one step to its left (public/board.css), both against the cell, so the slot is
+   empty space of a fixed width. `:empty { display: none }` was exactly the rule that broke the alignment; it must
+   never come back. */
+td.name > .name-line > .row-lead { display: block; flex: none; width: 25px; }
+
+/* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
+   scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not
+   look like a board of buttons) and impossible to miss while locked. */
+.btn-row-lock {
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 3px;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: .38;
+  vertical-align: 1px;
+  filter: grayscale(1);
+}
+.btn-row-lock:hover { background: #232b3a; border-color: var(--line); opacity: 1; filter: none; }
+.btn-row-lock.is-locked { opacity: 1; filter: none; }
+.btn-row-lock:disabled { opacity: .4; cursor: progress; }
+tr.row:hover .btn-row-lock { opacity: .85; }
+/* The branch toggle lives in the branch cell, right after the branch name, so "this branch is locked" is read
+   where the branch is read. */
+.btn-branch-lock { margin-left: 4px; font-size: 10px; }
+/* A locked row says so at rest: the name is drawn in the lock's own amber, so the state survives a glance down the
+   column without any tooltip being opened. */
+tr.row.is-locked td.name .row-name { color: #e8c07a; }
+tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
+/* THE VIOLET COLLISION MARK, and the card the reader rules on. The FOURTH row mark, deliberately unlike the other
+   three: the lock is the yellow 🔒 (a state the reader sets), the turnover mark is the blue ⇄ (a branch
+   relationship), the review mark is the amber ▣ (a box to tick), and this one is a VIOLET ◆ - the one mark that is
+   about a RELATIONSHIP BETWEEN TWO ROWS, not about this row alone.
+   ON A ROW THE MARK IS THE PRESS, not a passive glyph: `collisionDiamondHtml` (public/board-scaffold.js) draws ONE
+   button per row with this class plus `collision-diamond`, and public/chart.css owns its box, its 24x24 hit target,
+   its filled/open and outlined/resolved states and its focus ring. This rule is the ink and the glyph both surfaces
+   share; the card's head mark below is still a `role="img"` span.
+   The two inks that matter: `is-reader` (the pair is waiting on the reader) was the brightest violet, and the ruled
+   state faded to a muted one and kept the marker, because a ruled overlap is still a fact about the row - it is how a
+   re-detected pair reads as already ruled instead of as a fresh alarm. The row's diamond now says that through its
+   two diamond states (`is-open` / `is-waiting` / `is-resolved`), which is what the browser gates read. */
+.collision-mark {
+  flex: none;
+  margin-left: 3px;
+  font: 11px/1 var(--term);
+  color: #c9a0ff;
+  vertical-align: 1px;
+  cursor: help;
+}
+.collision-mark.is-reader { color: #e4c8ff; text-shadow: 0 0 6px #7a4fbf; }
+.collision-mark.is-ruled { color: #8b7aa8; }
+/* A VERDICT, not an alarm: a note the panel settled by absence (nothing on the board and no live agent answers to the
+   name). It keeps the marker, because the report is still a fact about the row, but it fades to the quietest violet -
+   the same "nothing is waiting on you" the ruled state reads as. */
+.collision-mark.is-absent { color: #6f6285; }
+/* A row in a live pair is marked at rest, like a row awaiting review: the point of the mark is that nobody has to
+   hover to discover two workers are in each other's way. */
+tr.row.has-collision { box-shadow: inset 2px 0 0 #6b4f9e; }
+tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0 0 #7a5a1e; }
+
+/* THE COLLISION CARD: the evidence (the shared paths as chips, the branch relation as a sentence, the other tree by
+   path and branch), the state, and the two presses that ARE the ruling. Drawn under both rows, violet-edged, so the
+   reader can tell it from the amber result card beside it at a glance. */
+.collision-block {
+  margin: 6px 0 8px;
+  border: 1px solid #3b2d5c;
+  border-left: 3px solid #a371f7;
+  border-radius: 6px;
+  background: #17131f;
+  padding: 6px 10px 8px;
+}
+.collision-block.is-ruled { border-left-color: #4b6b55; border-color: #2a4432; background: #141a15; }
+/* Settled without a ruling: quiet, not green (green reads as a decision the reader made). */
+.collision-block.is-absent { border-left-color: #4a4458; border-color: #2c2836; background: #16141b; }
+.collision-block.is-absent .collision-head h4 { color: #b9aed0; }
+.collision-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.collision-head .collision-mark { margin-left: 0; font-size: 12px; }
+.collision-block.is-ruled .collision-head .collision-mark { color: #8b7aa8; }
+.collision-head h4 { margin: 0; font: 600 11px/1.6 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #c9a0ff; }
+.collision-block.is-ruled .collision-head h4 { color: #9fe0b4; }
+.collision-other { font: 12px/1.6 var(--sans, var(--term)); color: #e8ddff; min-width: 0; }
+.collision-other b { color: #fff; font-weight: 600; }
+.collision-branch {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 10px;
+  color: #b79ae6;
+  border: 1px solid #3b2d5c;
+  border-radius: 999px;
+  padding: 0 6px;
+  margin-left: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collision-state { font-size: 10px; border-radius: 999px; padding: 0 6px; border: 1px solid #3b2d5c; color: #c9a0ff; }
+.collision-state.is-reader { border-color: #6b4f9e; color: #efe2ff; background: #241a38; }
+.collision-state.is-ruled { border-color: #2a4432; color: #9fe0b4; }
+.collision-state.is-absent { border-color: #4a4458; color: #c3b6dc; }
+.collision-when { margin-left: auto; font-size: 10px; color: var(--dimmer); }
+/* THE CARD ABOVE THE FOLD, and it is three compact rows: the two sides (identity on one line, the task's title on
+   the next), the shared files as chips, and the two ruling presses. Everything that took a paragraph - the git
+   lines, the stand-down prose, task numbers - is an accordion section below, closed until asked for. */
+.collision-summary { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* A column flex container still refuses to shrink below its widest child unless every level says it may: a branch
+   name is one long token, and without these the whole summary pushed past the 560px popup and clipped its own right
+   edge instead of ellipsising inside it. */
+.collision-summary > *, .collision-sides, .collision-side, .collision-side-top, .collision-side-title { min-width: 0; }
+.collision-side-title { overflow: hidden; }
+.collision-say { font: 12px/1.6 var(--sans, var(--term)); color: #f0e6d2; }
+.collision-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; min-width: 0; }
+.collision-files { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.collision-files-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--dimmer); }
+.collision-chip {
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid #3b2d5c;
+  background: #1e1730;
+  color: #d6c2ff;
+  max-width: 46ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collision-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+/* THE PAIR, drawn once: the two trees as two compact blocks, the row's own side marked "this row" and the other named
+   as the counterpart. Both rows draw the same two sides, so neither side has to work out who the other one is. They
+   stack rather than sit side by side: at 560px a shared row gave each tree 250px, which ellipsised the name and
+   wrapped the branch - the identity a reader came for was the first thing squeezed out. */
+.collision-sides { display: flex; flex-wrap: nowrap; gap: 4px; align-items: stretch; flex-direction: column; }
+.collision-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #33284d;
+  border-radius: 6px;
+  background: #1b1528;
+  padding: 3px 7px 4px;
+  font-size: 11px;
+  color: #e8ddff;
+}
+.collision-side.is-mine { border-color: #6b4f9e; background: #241a38; }
+.collision-side.is-other { border-style: dashed; }
+.collision-side-top { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+.collision-side-role { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #a893d1; }
+.collision-side-name { color: #fff; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+/* The task's own title, ONE line: the full title is the This row / Counterpart section's, and a summary that wrapped
+   every long title is the paragraph this redesign removed. The title attribute still hands over the whole of it. */
+.collision-side-title { display: flex; min-width: 0; padding-left: 2px; }
+.collision-side-title .collision-task-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d7cbf0; }
+.collision-task { font-size: 10px; color: #c9a0ff; border: 1px solid #3b2d5c; border-radius: 999px; padding: 0 5px; }
+/* THE TASK A SIDE IS WORKING, beside the tree and branch it already showed: the queue row's number, its own title,
+   the assistant whose queue holds it and its state. It is the one line that says whether two trees are on the SAME
+   work or merely both landing into main - which is the question a collision card exists to answer. A tree with no
+   owning row says so in those words; a side whose task is done or parked reads as already stood down. */
+.collision-side-task { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.collision-task-name { font: 11px/1.5 var(--sans, var(--term)); color: #efe6ff; min-width: 0; overflow-wrap: anywhere; }
+.collision-task-who { font-size: 10px; color: #a893d1; }
+.collision-task-state { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; border-radius: 999px; padding: 0 5px; border: 1px solid #3b2d5c; color: #c9a0ff; }
+.collision-task-state.is-running { border-color: #2f5d6b; color: #8fd7e8; }
+.collision-task-state.is-queued { border-color: #4b3a75; color: #d6c2ff; }
+.collision-task-state.is-done { border-color: #2a4432; color: #9fe0b4; }
+.collision-task-state.is-parked { border-color: #5c4a22; color: #e8c98f; }
+.collision-side-task.is-none { font-size: 10px; color: var(--dimmer); font-style: italic; }
+.collision-side.is-finished { border-style: dotted; }
+.collision-side.is-finished .collision-side-name { color: #c9c2d6; font-weight: 500; }
+/* THE ACCORDION. A section header is a real button carrying its own one line of key info, and the body below it is
+   `hidden` while closed - so a minimised section still reads, and a closed one is out of the tab order. */
+.collision-accordion { margin-top: 6px; border-top: 1px solid #2c2340; }
+.collision-acc { border-bottom: 1px solid #241d33; }
+.collision-acc:last-child { border-bottom: 0; }
+.collision-acc-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.collision-acc-head:hover { background: #1d172a; }
+.collision-acc-head:focus-visible { outline: 2px solid #a371f7; outline-offset: 1px; }
+.collision-acc-chev { flex: none; width: 8px; font-size: 9px; color: #a893d1; }
+.collision-acc-title { flex: none; font: 600 10px/1.7 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #c9a0ff; }
+.collision-acc-key {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  color: #b9aed0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collision-acc-body { display: flex; flex-direction: column; gap: 4px; padding: 1px 2px 6px 16px; }
+/* `display:flex` above would beat the `hidden` attribute's UA rule, so the closed state is said here as well. */
+.collision-acc-body[hidden] { display: none; }
+.collision-acc-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 11px; color: #e8ddff; flex-wrap: wrap; }
+.collision-acc-label { flex: none; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--dimmer); min-width: 4ch; }
+.collision-acc-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+.collision-acc-path { font-size: 10px; color: var(--dim); word-break: break-all; }
+/* A side that yielded, and WHY: "its notice #12 was done". On both rows, because the reason is the thing each side
+   otherwise had to ask the other for. */
+.collision-stood { font-size: 11px; color: #9fe0b4; }
+.collision-peer { font-size: 10px; color: var(--dim); word-break: break-all; }
+.collision-notes { list-style: none; margin: 0; padding: 0; font-size: 11px; color: #e8ddff; }
+.collision-notes li { padding-left: 2px; }
+.collision-ruling-note { font-size: 11px; color: #9fe0b4; }
+/* The verdict line: quiet violet, not the green of a ruling the reader made. */
+.collision-ruling-note.collision-absent { color: #c3b6dc; }
+.collision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 1px; }
+.btn-collision-rule, .btn-collision-ask, .btn-collision-clear {
+  border: 1px solid #4b3a75;
+  background: #241a38;
+  border-radius: 5px;
+  color: #e4c8ff;
+  font: 11px/1.8 var(--sans, var(--term));
+  padding: 0 9px;
+  cursor: pointer;
+}
+.btn-collision-rule:hover, .btn-collision-ask:hover { background: #2e2246; border-color: #7a5bb8; color: #fff; }
+.btn-collision-clear { border-color: #2a4432; background: #141a15; color: #9fe0b4; }
+.btn-collision-rule:focus-visible, .btn-collision-ask:focus-visible, .btn-collision-clear:focus-visible { outline: 2px solid #a371f7; outline-offset: 1px; }
+.btn-collision-rule:disabled, .btn-collision-ask:disabled, .btn-collision-clear:disabled { opacity: .45; cursor: progress; }
+
+/* THE AMBER REVIEW MARK, and the press that clears it. A third row mark, deliberately unlike the other two: the lock
+   is the yellow 🔒 (an emoji, a state the reader sets), the turnover mark is a blue ⇄ (a branch relationship), and
+   this one is an AMBER ▣ - a filled square with a corner cut (a box to tick), its own colour, its own class. It sits
+   after both in the name line, so a row carrying all three reads left to right: name, lock, branch, review.
+   Amber (#ffb454) is used by nothing else in the name line: the lock's amber is the text colour of a LOCKED row and
+   the emoji itself, never a glyph in this family, so the two cannot be confused at a glance. */
+.review-mark {
+  flex: none;
+  margin-left: 3px;
+  font: 11px/1 var(--term);
+  color: #ffb454;
+  vertical-align: 1px;
+  cursor: help;
+}
+.btn-review-done {
+  border: 1px solid #6b4b1c;
+  background: #2a2110;
+  border-radius: 4px;
+  color: #ffca7a;
+  font: 10px/1.5 var(--term);
+  padding: 0 5px;
+  margin-left: 4px;
+  cursor: pointer;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.btn-review-done:hover { background: #3a2c14; border-color: #a5762a; color: #ffe2ae; }
+.btn-review-done:focus-visible { outline: 2px solid #ffb454; outline-offset: 1px; }
+.btn-review-done:disabled { opacity: .45; cursor: progress; }
+/* A row carrying an unconsumed result is marked at rest, not only on hover: the lane exists so a finished row cannot
+   be forgotten, and a marker that appears on hover is a marker nobody sees. */
+tr.row.has-review { box-shadow: inset 2px 0 0 #7a5a1e; }
+
+/* The header's review count and its bulk press. Quiet at zero (no badge, no amber) and unmistakable above it. */
+.btn-review { position: relative; }
+.btn-review.has-review { border-color: #6b4b1c; color: #ffca7a; }
+.btn-review.is-on { background: #2a2110; border-color: #a5762a; color: #ffe2ae; box-shadow: inset 0 0 0 1px #a5762a; }
+#review-badge {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ffb454;
+  color: #1a1408;
+  font: 600 10px/16px var(--term);
+  text-align: center;
+}
+#review-badge[hidden] { display: none; }
+.btn-review-all {
+  border: 1px solid #6b4b1c;
+  background: #2a2110;
+  border-radius: 6px;
+  color: #ffca7a;
+  font: 11px/1.6 var(--sans, var(--term));
+  padding: 0 8px;
+  cursor: pointer;
+}
+.btn-review-all:hover { background: #3a2c14; border-color: #a5762a; }
+.btn-review-all[hidden] { display: none; }
+
+/* THE RESULT CARD, under a finished row: the run's one-line summary, the report as a real anchor, and the next steps
+   as chips. Not folded - it is the thing the lane brought the reader here to read - and its own amber edge says the
+   same thing the row's ▣ says. */
+.review-block {
+  margin: 6px 0 8px;
+  border: 1px solid #4a3a18;
+  border-left: 3px solid #ffb454;
+  border-radius: 6px;
+  background: #1c1810;
+  padding: 6px 10px 8px;
+}
+.review-block.is-reviewed { border-left-color: #3c6b46; background: #141a15; border-color: #2a4432; }
+.review-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.review-head .review-mark { margin-left: 0; font-size: 12px; }
+.review-block.is-reviewed .review-head .review-mark { color: #7fd39a; }
+.review-head h4 { margin: 0; font: 600 11px/1.6 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #ffca7a; }
+.review-block.is-reviewed .review-head h4 { color: #9fe0b4; }
+.review-summary { font: 12px/1.6 var(--sans, var(--term)); color: #f0e6d2; }
+.review-when { margin-left: auto; font-size: 10px; color: var(--dimmer); }
+.review-stamp { font-size: 10px; color: #9fe0b4; border: 1px solid #2a4432; border-radius: 999px; padding: 0 6px; }
+.review-body { margin-top: 5px; display: flex; flex-direction: column; gap: 5px; }
+.review-anchor { font: 11px/1.7 var(--term); }
+.review-anchor .out-file { color: #8fd3ff; text-decoration: underline dotted; }
+.review-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+.review-path { color: var(--dim); }
+/* The next steps, as chips: one per line the run put under its "Next steps" heading, capped at four by the stores so
+   a long list can never push the agents below the fold. */
+.review-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; }
+.review-chip {
+  border: 1px solid #3b3322;
+  background: #262117;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font: 11px/1.6 var(--term);
+  color: #e4d8bd;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-chip::before { content: "→ "; color: #a5762a; }
+/* The refusal shown in place of the delete question. Same row chrome, in the lock's ink rather than the delete's red,
+   because nothing was deleted and the answer is "unlock it first", not "are you sure". */
+tr.row-confirm.row-locked td { background: #1b170d; border-top-color: #6b5324; border-bottom-color: #6b5324; color: #f0e0b8; }
+/* The lift question: the same row chrome in the kind mark's ink. A lift is not a delete and it is not a refusal, so it
+   borrows neither the red question nor the amber refusal; its yes is the panel's green "start something" button. */
+tr.row-confirm.row-kind-confirm td { background: #0f1620; border-top-color: #22364c; border-bottom-color: #22364c; color: #d5e5f5; }
+tr.row-confirm .rc-kind { color: #9ecbff; font-weight: 600; }
+tr.row-confirm .rc-refusal { color: #ff9c94; font-weight: 600; }
+tr.row-confirm .rc-lock { color: #e8c07a; font-weight: 600; }
+/* A delete that has been accepted but has not finished scanning: the x stays put, greyed and click-proof,
+   so the click is visibly registered and cannot be repeated. */
+.btn-del-tree.pending, .btn-del-tree:disabled {
+  opacity: .3 !important; cursor: default; border-color: var(--line); background: #14171d; color: var(--dimmer);
+}
+tr.row:hover .btn-del-tree { opacity: 1; }
+.btn-del-tree:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
+/* A merged, clean worktree deletes without the question, so its x is drawn quieter than the one that
+   asks first: grey at rest, the same red on hover as every other delete. */
+.btn-del-tree.is-direct { border-color: var(--line); background: #15181e; color: var(--dim); }
+.btn-del-tree.is-direct:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
+/* The confirmation is its own row under the tree, so the question has room to say what will happen. */
+tr.row-confirm td {
+  padding: 6px 10px;
+  background: #17100f;
+  border-top: 1px solid #3a2226;
+  border-bottom: 1px solid #3a2226;
+  font-size: 12px;
+  color: #e8d7d5;
+}
+tr.row-confirm .btn-del-yes,
+tr.row-confirm .btn-del-no {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid #57262a;
+  background: #24161a;
+  color: #ff9c94;
+  font: 11px/1.6 var(--term);
+  cursor: pointer;
+}
+tr.row-confirm .btn-del-no { border-color: var(--line); background: #151a22; color: var(--text); }
+tr.row-confirm .rc-actions { display: flex; gap: 8px; align-items: center; flex: none; }
+/* The ⟳ offer's action: the panel's green "start something" rather than the delete red, because this button starts an
+   agent in the tree; `not now` keeps the neutral Cancel styling beside it. */
+tr.row-confirm .btn-refresh-yes {
+  margin-left: 0;
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid #2b4a37;
+  background: #14211a;
+  color: #8fe3b0;
+  font: 11px/1.6 var(--term);
+  cursor: pointer;
+}
+tr.row-confirm .btn-refresh-yes:hover { border-color: #3d6b4e; background: #17281e; color: #b6f2cd; }
+tr.row-confirm .btn-refresh-yes:disabled { opacity: .5; cursor: progress; }
+/* The naming question's evidence line: the commit subjects and files the offered name was read from, on their own
+   line so the question still fits one row of the table. */
+tr.row-confirm .rc-evidence { margin-top: 2px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The confirmation is one cell spanning the table: message on the left, Cancel then Delete on the right. It used
+   to hand the buttons to the narrow actions column, which a fixed-width table cannot widen for one row. */
+tr.row-confirm .row-confirm-cell { display: flex; align-items: center; gap: 12px; }
+tr.row-confirm .rc-msg { flex: 1 1 auto; min-width: 0; }
+tr.row-confirm .rc-actions { display: flex; gap: 8px; flex: none; }
+tr.row-confirm .rc-actions button { margin-left: 0; white-space: nowrap; }
+tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
+.artifacts-pop {
+  position: fixed;
+  z-index: 60;
+  width: 380px;
+  min-width: 300px;
+  max-width: 90vw;
+  height: 260px;
+  min-height: 120px;
+  max-height: 70vh;
+  overflow: auto;
+  /* Drag the corner to grow it: the list is where you work, not a tooltip. */
+  resize: both;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #10141b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+}
+.artifacts-pop .ap-head { padding: 3px 6px 6px; font-size: 11px; }
+.artifacts-pop .ap-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border-radius: 6px; }
+.artifacts-pop .ap-row:hover { background: var(--band); }
+.artifacts-pop .ap-kind { flex: none; font-size: 11px; opacity: .75; }
+.artifacts-pop .ap-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #7fb3ff;
+  font: 12px/1.5 var(--term);
+  cursor: pointer;
+  text-align: left;
+}
+.artifacts-pop .ap-name:hover { text-decoration: underline; }
+.artifacts-pop .ap-name.is-url { color: #8ee08a; }
+.artifacts-pop .ap-copy,
+.artifacts-pop .ap-del,
+.artifacts-pop .ap-del-yes,
+.artifacts-pop .ap-del-no {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #151a22;
+  color: var(--dimmer);
+  font: 10px/1.6 var(--term);
+  cursor: pointer;
+}
+.artifacts-pop .ap-copy:hover { color: var(--text); border-color: #3b4757; }
+.artifacts-pop .ap-copy.is-copied { color: #8ee08a; border-color: #2f5a33; }
+.artifacts-pop .ap-del:hover { color: #ff9c94; border-color: #57262a; }
+.artifacts-pop .ap-confirm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #ffd08a; }
+.artifacts-pop .ap-del-yes { color: #ff9c94; border-color: #57262a; }
+.artifacts-pop .ap-del-no { color: var(--text); }
+
+/* ---- the row detail's liveness block, moved out of public/overlays.css --------------------------
+   The block sits in the row's detail, between the merge-state strip and the agent cards, and leads
+   the detail before the strips are folded. It is the row's, not the deliverables sheet's. */
+
+/* liveness evidence: folds to its header, with the strongest line kept visible to the right */
+.live-block { margin-bottom: 6px; }
+.live-head { display: flex; align-items: baseline; gap: 7px; cursor: pointer; user-select: none; min-width: 0; }
+.live-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.live-head h4 { margin: 0; font-size: 11.5px; letter-spacing: .02em; color: var(--dim); flex: none; }
+.live-head:hover h4, .live-head:hover .chev { color: var(--text); }
+.live-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.live-block.collapsed ul { display: none; }
+/* tr.detail ul sets a plain 18px padding with a zero margin; this needs the same left tab the git
+   body gets, so it has to out-specify that rule rather than sit before it. */
+tr.detail .live-block ul { margin: 4px 0 10px 28px; }
+.live-block li { font-size: 11.5px; color: var(--dim); }
+
+/* ---- the row's strips: git, description, release and TODO, moved out of public/rowstrips.css ----
+   The strips hang under an open row and read the same cells' values, so they are the row's own
+   detail. public/utilities.css keeps the panel's type/status utilities and public/console-head.css
+   the console head's buttons, which are not the row's. */
+
+/* git / commit / diff detail: one summary line, body only when unfolded */
+.git-block { margin-bottom: 6px; }
+.git-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.git-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+/* Same heading treatment as LIVENESS EVIDENCE below it: tr.detail h4 already supplies the small caps
+   size, tracking and colour, so this only stops the flex row from squashing it. */
+.git-head h4 { margin: 0; flex: none; }
+.git-head:hover .chev, .git-head:hover h4, .git-head:hover .git-summary { color: var(--text); }
+.git-summary { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.git-block.collapsed .git-body { display: none; }
+.git-body { padding: 4px 0 0 28px; }
+/* The merge-state facts are a bullet list, one fact per line: as a single "·"-joined run the reader had to find
+   "cherry" inside it, and the head's summary (first bullet when open) is just another fact in the same list. The
+   description's bullets are the SAME list — one sentence per line — and are styled from here rather than from a rule
+   of their own, which is what keeps the two strips' bullets identical in family, size and colour. The first bullet of
+   each carries `git-summary-line`: it is the same role in both, the line the head shows while folded, repeated as the
+   list's first item, and it is the brighter of the two colours. */
+.git-body .git-list, .desc-body .git-list { margin: 0 0 6px; padding-left: 15px; }
+.git-body .git-list li, .desc-body .git-list li { font: 11.5px/1.6 var(--mono); color: var(--dim); }
+.git-body .git-list li.git-summary-line, .desc-body .git-list li.git-summary-line { color: #c8d1dc; }
+/* Folded, the summary rides on the head line. Unfolded, it drops into the list as its first bullet and the head
+   keeps just its title - done in CSS so the toggle stays a class flip and the detail is not re-rendered to
+   rearrange one span. */
+.git-block:not(.collapsed) .git-head .git-summary { display: none; }
+/* The commits this tree carries off remote main: the row's own full-width list, one commit per line. The three-column
+   flex row that used to hold this, Modified and Untracked is gone — a long commit list was clipped there and a long
+   file list was squeezed into 300px beside its neighbours. Nothing here caps the height: a tree with fifty commits
+   extends and the panel scrolls, rather than hiding the tail. */
+.git-body .git-commits { margin: 2px 0 8px; }
+.git-body .git-commits-list { margin: 3px 0 0; padding-left: 15px; }
+.git-body .git-commits-list li { font: 11.5px/1.6 var(--mono); color: #c8d1dc; overflow-wrap: anywhere; }
+/* Modified and Untracked: one-line strips under the commit list, each with its own fold. Folded, a strip is a
+   chevron, its title and its count and nothing else; opened, its names indent under it like the commit list's. */
+.git-sub { margin: 0 0 2px; }
+.git-sub-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.git-sub-head .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 13px; flex: none; }
+.git-sub-head h4 { margin: 0; flex: none; }
+.git-sub-head:hover .chev, .git-sub-head:hover h4 { color: var(--text); }
+.git-sub.collapsed > ul { display: none; }
+.git-sub > ul { margin: 2px 0 6px; padding-left: 15px; }
+.git-sub > ul li { font: 11.5px/1.6 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+/* WHAT THIS BRANCH WAS STARTED TO DO: the strip ABOVE merge state. Same shape as the two under it — a chevron, a
+   small-caps title, a one-line peek while folded, and, open, a bullet list of its own sentences — because it is the
+   same kind of thing, and the three strips a worktree's detail opens with should read as one column. What differs is
+   the fold: it starts FOLDED (the peek is what a reader wants without opening anything) and the UNFOLD is remembered
+   per row (localStorage), so the rows a reader opened stay open across a reload. */
+.desc-block { margin-bottom: 6px; }
+.desc-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.desc-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.desc-head h4 { margin: 0; flex: none; }
+.desc-head:hover .chev, .desc-head:hover h4, .desc-head:hover .desc-first { color: var(--text); }
+.desc-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.desc-block.collapsed .desc-body { display: none; }
+.desc-block:not(.collapsed) .desc-head .desc-first { display: none; }
+.desc-body { padding: 2px 0 4px 28px; }
+/* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
+.desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
+/* A RELEASE request (lib/worktrees.js) is one line at the top of the detail: the verdict the panel's executor wrote
+   back and the reason the worker gave. The left rule carries the state colour — green removed, amber refused, blue
+   still waiting on the executor — and the gate that said no is part of the sentence, so a refusal needs no second
+   line. Signal colours, so they stay out of the contrast slider's surface map. */
+.release-block {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0;
+  margin: 0 0 5px; padding: 2px 0 2px 9px; border-left: 2px solid var(--line);
+  font: 11.5px/1.6 var(--mono); color: var(--dim);
+}
+.release-block .release-mark { flex: none; color: var(--dimmer); }
+.release-block .release-word { flex: none; color: var(--dim); }
+.release-block .release-state { flex: none; color: var(--text); }
+.release-block .release-when { flex: none; color: var(--dimmer); }
+.release-block .release-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+.release-block.removed { border-left-color: var(--green); }
+.release-block.removed .release-state { color: var(--green); }
+.release-block.refused { border-left-color: var(--amber); }
+.release-block.refused .release-state { color: var(--amber); }
+.release-block.requested { border-left-color: var(--blue); }
+.release-block.requested .release-state { color: var(--blue); }
+
+/* ---- the worktree's TODO list ------------------------------------------------------------------------------------ */
+/* The third strip in the row's family, with the description above it and MERGE STATE under it. FOLDED it reads the
+   OLDEST item still open (the lowest id whose status is todo or doing — NOT the last one that moved) with a done/total
+   count; UNFOLDED it lists every item with its status glyph, owner and age, and offers the reader the four things they
+   can do to one. The head is a real <button>, so the section is keyboard reachable, and so is every control inside it
+   — the two strips beside it are click-only. */
+.todo-block { margin-bottom: 6px; }
+.todo-head {
+  display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0;
+  width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left;
+}
+.todo-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.todo-head .todo-title { flex: none; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.todo-head:hover .chev, .todo-head:hover .todo-title, .todo-head:hover .todo-first { color: var(--text); }
+.todo-head:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.todo-count { font-size: 11.5px; color: var(--dim); flex: none; }
+/* What the last ⟳ thought looked closed — a question, not a change. Amber like the panel's other "this wants your
+   judgement" signals, and quiet in size so it never outranks the counts it sits beside. */
+.todo-proposal {
+  flex: none; font-size: 10px; line-height: 1.5; padding: 0 6px; border-radius: 999px;
+  border: 1px solid #5a4a22; background: #221d10; color: #e0b341;
+}
+.todo-head:hover .todo-proposal { border-color: #7a6327; color: #f0c674; }
+.todo-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.todo-block.collapsed .todo-body { display: none; }
+.todo-block:not(.collapsed) .todo-head .todo-first { display: none; }
+.todo-body { padding: 2px 0 4px 28px; }
+.todo-body .todo-list { margin: 0 0 6px; padding-left: 15px; list-style: none; }
+.todo-body .todo-list li { font: 11.5px/1.7 var(--mono); color: var(--dim); }
+/* One item is a LINE — glyph, id, its words, its controls — and, UNDER it, the facts about the item as a nested
+   bullet list: its owner, who touched it, when, and its optional note and files. The facts used to ride the far right
+   of that line (`margin-left:auto` on a full-width flex row), so on a 1,400px row a three-word item and its owner sat
+   a screen apart and the reader had to zoom out to read one row. Nothing about the line itself changed; only where its
+   facts sit. The left rule is what makes the nesting visible at a glance: bullets hang off the item they describe. */
+.todo-item { display: block; padding: 1px 0 3px; }
+/* Inline flow lets the words share their first line with the status and their last with the action buttons.
+   Flex wrapping would move the entire text span onto a line of its own. Keep flex only for the inline editor. */
+.todo-line { display: block; min-width: 0; overflow-wrap: anywhere; }
+.todo-line:has(.todo-edit) { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+/* The disclosure that folds ONE item's facts away, in front of its line so what it opens starts at the same left edge
+   as the words it belongs to. FOLDED is an item's default: the facts are up to three bullets about one item and two of
+   them carry the same worker string, so a twelve-item list was thirty-six lines of repetition around the twelve lines
+   worth reading. Each item opens on its own, and the choice is remembered per worktree + item (localStorage,
+   `wm.openTodoFacts`). The chevron takes the UI font on purpose: `▸`/`▾` in the mono stack render as nothing on
+   Windows, and the item's line is set in mono. */
+.todo-item .todo-facts-btn {
+  flex: none; font: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: var(--dimmer);
+  line-height: 1;
+}
+.todo-item .todo-facts-btn .chev { font-family: var(--ui); font-size: 11px; line-height: 1; display: inline-block; width: 11px; }
+.todo-item .todo-facts-btn:hover .chev { color: var(--text); }
+.todo-item .todo-facts-btn:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.todo-item.collapsed .todo-meta { display: none; }
+.todo-item .todo-glyph { flex: none; color: var(--dimmer); }
+.todo-item.todo-done .todo-text, .todo-item.todo-dropped .todo-text { color: var(--dimmer); text-decoration: line-through; }
+.todo-item.todo-doing .todo-glyph { color: var(--text); }
+.todo-item .todo-id { flex: none; }
+/* The fact list: indented under the item's words, one bullet per fact, and no wider indent than the text it belongs
+   to. `list-style: disc` draws the bullet in the list's own padding, so the markers line up in a column beside the
+   left rule rather than drifting with the length of each fact. */
+.todo-item .todo-meta {
+  margin: 1px 0 1px 22px;
+  padding: 1px 0 1px 14px;
+  list-style: disc;
+  border-left: 1px solid var(--line);
+}
+.todo-body .todo-list .todo-meta li { font: 10.5px/1.55 var(--mono); color: var(--dimmer); overflow-wrap: anywhere; }
+.todo-fact-label { margin-right: 1px; color: var(--dim); }
+.todo-body .todo-list .todo-meta .todo-note { color: var(--dim); }
+.todo-btn { background: none; border: 0; color: var(--dimmer); cursor: pointer; font: inherit; padding: 0 2px; }
+.todo-btn:hover { color: var(--text); }
+.todo-btn.on { color: var(--text); }
+.todo-btn.add { color: var(--dim); }
+.todo-edit, .todo-add-input {
+  flex: 1 1 320px; min-width: 160px; background: #20242c; border: 1px solid var(--line); color: var(--text);
+  font: 11.5px/1.5 var(--mono); padding: 2px 6px; border-radius: 4px;
+}
+.todo-add { margin-top: 2px; display: flex; gap: 6px; align-items: baseline; }
+.todo-journal { margin-top: 4px; font-size: 10.5px; }
+.todo-journal ul { margin: 0; padding-left: 15px; }
+.todo-journal li { font-size: 10.5px; color: var(--dimmer); }
+
+/* ---- the project header's chips and their forms, moved out of public/boardchips.css ------------
+   The host, rules, turnover, board and cleanup chips sit in the project's header row (inside
+   #projects), with the forms they open. boardchips.css held them and the page footer; the footer is
+   page chrome and now lives in public/chrome.css. */
+
+/* ---- the host chip in a project's header, and its Discover strip -------------------------------------------- */
+/* The chip is a statement about DATA ("this project's links come from sefl-bitbucket, IT/Menu"), so it is quiet when
+   the mapping exists and louder when it does not: an unmapped project is the one case where the reader has something
+   to do, and it is exactly the case that used to read as a silently missing link. */
+button.btn-host {
+  margin-left: 10px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-host:hover { color: var(--text); border-color: #3a4250; }
+button.btn-host.is-mapped { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-host.is-unmapped { color: #f0c674; border-color: #4a3a1f; background: #2a2318; }
+button.btn-host .host-coords { color: inherit; opacity: .75; }
+button.btn-host:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+.host-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 7px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font: 11.5px var(--mono);
+}
+/* The row is TWO items: the sentence and one cluster holding every control — the push pair first, then the mapping
+   fields. As one flex container the four controls wrap together, so a narrow row (150% zoom) moves the pair, host
+   and coordinates as a block instead of leaving the selects on the sentence's line. */
+.host-form .host-line { color: var(--dim); flex: 1 1 auto; max-width: max-content; min-width: 200px; }
+.host-form .host-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; margin-left: auto; }
+.host-form .host-line.clone-err { color: var(--red); }
+.host-form .host-field { display: flex; gap: 5px; align-items: center; color: var(--dimmer); white-space: nowrap; }
+/* The two push selects are the first items in the mapping cluster, ahead of `host` and `coordinates`, so the pair is
+   read next to the remote it governs and wraps with the fields rather than on the sentence's line. They keep the
+   card's compact 10.5px scale — the row's own `select` rule is a size up and would spend the room the mapping fields
+   need — and `flex: 0 0 auto` keeps both selects whole: the cluster wraps, never a label inside the pair. */
+.host-form .push-controls { flex: 0 0 auto; }
+.host-form .push-select { max-width: 168px; padding: 1px 3px; font: 10.5px var(--mono); }
+.host-form select,
+.host-form input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+  font: 11.5px var(--mono);
+}
+.host-form input { min-width: 220px; }
+.host-form select:focus,
+.host-form input:focus { outline: none; border-color: var(--blue); }
+.host-form button {
+  padding: 4px 9px;
+  font: 11.5px var(--mono);
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--text);
+  cursor: pointer;
+}
+.host-form button:hover:not(:disabled) { border-color: #3a4250; background: #262b34; }
+.host-form button:disabled { opacity: .55; cursor: progress; }
+
+/* ---- the rules chip, and its bar in the same grey strip ----------------------------------------------------- */
+/* The chip is drawn at ZERO too, so the control that gives a project its first rule is findable on a project that has
+   none. It is the host chip's pillow - same height, type scale and radius - so the second head line reads as one row
+   of facts, and it turns blue only while its bar is open, which is the state the reader pressed it into. */
+button.btn-rules {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-rules.has-rules { color: var(--dim); border-color: #333b47; }
+button.btn-rules:hover { color: var(--text); border-color: #3a4250; }
+button.btn-rules.is-open { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-rules:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+
+/* ---- the turnover chip, and the one field it opens ------------------------------------------------------------ */
+/* The head line's fourth chip, between rules: (what a worker here is told) and board: (who claims the repo now):
+   "turnover: <branch>" is where this project's work rolls up. The same pillow as the other three, so the line reads
+   as one row of facts; green when a branch is named, because a named turnover branch is the fact that stops a worker
+   being briefed to push a new remote branch, and blue while its bar is open. */
+button.btn-turnover {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.btn-turnover.has-turnover { color: #9fd7b4; border-color: #2b4736; }
+button.btn-turnover:hover { color: var(--text); border-color: #3a4250; }
+button.btn-turnover.is-open { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-turnover:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+/* The editor is a column like the rules bar: the branch, the save, the close, then the sentence that says what a tree
+   cut from it is told. One row of controls, because there is exactly one value. */
+.turnover-form { flex-direction: column; align-items: stretch; gap: 6px; }
+.turnover-form .host-line { max-width: none; min-width: 0; }
+.turnover-form .turnover-body { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.turnover-form .turnover-input { flex: 1 1 auto; min-width: 160px; max-width: 420px; }
+/* The kind: three words, and the third one is why this field exists - a branch the panel has to find, so the name
+   field beside it is disabled until the reader picks one of the two named kinds again. The policy: the same shape, and
+   its words are the read's own labels ("free - add a turnover branch without asking"), so it is given room for the
+   longest of the three. */
+.turnover-form .turnover-kind,
+.turnover-form .turnover-policy { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.turnover-form .turnover-select { max-width: 260px; }
+.turnover-form .turnover-policy .turnover-select { max-width: 480px; }
+.turnover-form .turnover-hint { white-space: normal; }
+
+/* ---- the board chip, and the claims it opens in the same grey strip ------------------------------------------- */
+/* The third chip of the second head line, after host: (where the links come from) and rules: (what a worker here is
+   told): "board: N" is how many of the repo's .agentboard claims name a live PID. Same pillow as the other two, so
+   the line reads as one row of facts; violet while a claim is alive, because that is the same "something is working
+   here" fact the row chips state, and blue while its bar is open, which is the state the reader pressed it into. */
+button.btn-board {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-board.is-live { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+button.btn-board:hover { color: var(--text); border-color: #3a4250; }
+button.btn-board.is-open { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-board:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+/* The claim list is a column like the rules editor, not the mapping form's one row: one line per live claim, a PID
+   and what it says it is doing, then the stale count and the .agentboard path on the strip's own line. */
+.board-form { flex-direction: column; align-items: stretch; gap: 6px; }
+.board-form .host-line { max-width: none; min-width: 0; }
+.board-form .board-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.board-form .board-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.board-form .board-pid { flex: 0 0 auto; color: #c8a6ff; }
+.board-form .board-goal { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.board-form .board-empty { font: 11px var(--mono); }
+/* The strip stretches its children to the card's width, which is right for the rules editor's rows and wrong for a
+   lone close button: left alone it drew a full-width bar with one word on it. */
+.board-form > button { align-self: flex-start; }
+
+/* ---- the cleanup chip, and the keep-or-drop calls it opens ----------------------------------------------------- */
+/* The FIFTH chip of that second head line, after host:, rules:, turnover: and board:. The SAME pill as those four -
+   the same padding, mono size, radius and surface, and the same 6px gap from the one before it - because the line reads
+   as one row of facts and a control with its own height would break it. Its colour carries its phase: grey at rest
+   (nothing read yet), amber armed (a plan is waiting for the second press), blue-grey busy (a read or an apply is
+   running), green done, red failed with the failed repo's name in the label. */
+button.btn-cleanup {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-cleanup:hover { color: var(--text); border-color: #3a4250; }
+button.btn-cleanup.is-armed { color: #f0c674; border-color: #4a3a1f; background: #2a2318; }
+button.btn-cleanup.is-busy { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); cursor: progress; }
+button.btn-cleanup.is-done { color: #9fd7b4; border-color: #2b4736; }
+button.btn-cleanup.is-error { color: #f28b82; border-color: #5a2a26; background: #2a1817; }
+button.btn-cleanup:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+/* The list is a column like the board's claim list: one line per worktree, the call on the right, and the reason
+   allowed to wrap under its own name rather than pushing the button off the card. */
+.cleanup-form { flex-direction: column; align-items: stretch; gap: 6px; }
+.cleanup-form .host-line { max-width: none; min-width: 0; }
+.cleanup-form .cleanup-rows { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cleanup-form .cleanup-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.cleanup-form .cleanup-name { flex: 0 0 auto; color: var(--text); }
+.cleanup-form .cleanup-branch { flex: 0 0 auto; }
+.cleanup-form .cleanup-verdict { flex: 0 0 auto; font: 10.5px var(--mono); padding: 0 6px; border-radius: 9px; border: 1px solid var(--line); }
+.cleanup-form .cleanup-verdict.v-remove { color: #f28b82; border-color: #5a2a26; }
+.cleanup-form .cleanup-verdict.v-merge { color: #c8a6ff; border-color: #3b2d5c; }
+.cleanup-form .cleanup-verdict.v-keep { color: #f0c674; border-color: #4a3a1f; }
+.cleanup-form .cleanup-verdict.v-skip { color: var(--dimmer); }
+.cleanup-form .cleanup-merge { color: #9fd7b4; }
+.cleanup-form .cleanup-why { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.cleanup-form .cleanup-row.is-done .cleanup-name { opacity: .7; }
+.cleanup-form .cleanup-call { flex: 0 0 auto; font: 10.5px var(--mono); padding: 0 7px; border-radius: 9px; cursor: pointer; }
+.cleanup-form .cleanup-call.is-drop { color: #f28b82; border: 1px solid #5a2a26; background: #2a1817; }
+.cleanup-form .cleanup-call.is-keep { color: #9fd7b4; border: 1px solid #2b4736; background: #16241c; }
+.cleanup-form .cleanup-call:disabled { opacity: .55; cursor: progress; }
+.cleanup-form .cleanup-empty { font: 11px var(--mono); }
+.cleanup-form .cleanup-actions { display: flex; gap: 6px; }
+.cleanup-form .cleanup-actions > button { align-self: flex-start; }
+
+/* ---- the cleanup chip's drop-all button, its confirm and the list of what it refused --------------------------- */
+/* The SAME pill again, one control to the LEFT of the cleanup chip in the head line and the first button of the
+   bar's action row (one renderer draws both). Red-inked while it has rows to drop, because it removes things; muted
+   and unpressable at zero and while another cleanup action is running. */
+button.btn-cleanup-drop-all {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid #5a2a26;
+  background: #2a1817;
+  color: #f28b82;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-cleanup-drop-all:hover { color: #ffb4ad; border-color: #7a3a34; }
+button.btn-cleanup-drop-all:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+button.btn-cleanup-drop-all.is-off,
+button.btn-cleanup-drop-all:disabled { color: var(--dimmer); border-color: var(--line); background: #20242c; cursor: default; opacity: .8; }
+/* The confirm: a sentence, then the two answers. It sits under the bar's line and above the rows it is about, so the
+   count and the list it counts are read together. */
+.cleanup-form .cleanup-confirm {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  border: 1px solid #4a3a1f;
+  border-radius: 8px;
+  background: #241f16;
+}
+.cleanup-form .cleanup-confirm-text { flex: 1 1 320px; min-width: 0; color: #f0c674; overflow-wrap: anywhere; }
+.cleanup-form .cleanup-confirm-go {
+  font: 10.5px var(--mono);
+  padding: 1px 8px;
+  border-radius: 9px;
+  border: 1px solid #5a2a26;
+  background: #2a1817;
+  color: #f28b82;
+  cursor: pointer;
+}
+.cleanup-form .cleanup-confirm-go:focus-visible { outline: 1px solid #f0c674; outline-offset: 2px; }
+.cleanup-form .cleanup-confirm-cancel {
+  font: 10.5px var(--mono);
+  padding: 1px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+}
+/* What the run did: one line, and one list entry per refusal with its own reason. */
+.cleanup-form .cleanup-drop-all-result { display: flex; flex-direction: column; gap: 3px; }
+.cleanup-form .cleanup-drop-all-result .mono { font: 11px var(--mono); color: #9fd7b4; }
+.cleanup-form .cleanup-drop-all-result.has-failures .mono { color: #f0c674; }
+.cleanup-form .cleanup-drop-failures { list-style: none; margin: 0; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 2px; }
+.cleanup-form .cleanup-drop-failures li { font: 11px var(--mono); color: var(--dimmer); overflow-wrap: anywhere; }
+.cleanup-form .cleanup-drop-failures li::before { content: "refused: "; color: #f28b82; }
+
+/* The stack under the head: bars are appended in open order and the newest is drawn FIRST, so a rules bar opened
+   while the host bar is up sits directly above it. The bars keep `.host-form`'s grey band, so the strip is the same
+   one the host chip has always opened; only the reading order inside the rules bar is a column. */
+.proj-bars { display: block; }
+.rules-form { flex-direction: column; align-items: stretch; gap: 6px; }
+.rules-form .host-line { max-width: none; min-width: 0; }
+.rules-form .rules-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rules-form .rules-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rules-form .rules-empty { font: 11px var(--mono); }
+.rules-form .rule-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The row owns the width: the strip's `input { min-width: 220px }` is for the one-field mapping form, and inside a
+   row of three buttons it would push the controls off the card at a narrow zoom. */
+.rules-form input { min-width: 0; flex: 1 1 auto; }
+.rules-form .rule-n { flex: 0 0 auto; width: 18px; text-align: right; color: var(--dimmer); font-size: 10.5px; }
+.rules-form .rule-btn { flex: 0 0 auto; padding: 3px 8px; font: 11px var(--mono); line-height: 1.2; }
+.rules-form .rule-btn:disabled { opacity: .3; cursor: default; }
+.rules-form .rule-del:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+.rules-form .rules-add { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rules-form .rules-add button { flex: 0 0 auto; }
+
+/* ---- the table's structure, cells and rows, moved out of public/chart.css ------------------------
+   chart.css is the worktree chart's sheet, and the chart is the age column: the ring that fills
+   toward the next read, its figure, and the legend under the table. Everything else it carried was
+   the table's structure - the fixed layout, the column widths, the header and cells, the rows and
+   their flashes, the row-agent button and add-agent bar, the branch cells, the verdict badges, the
+   merge-state chooser, the sig marks, the detail frame and the row chips - so it is here. The
+   comment blocks moved with their rules. */
+
+/* Dragging across worktree rows should pick up the names and branches and nothing else. The head hash, the
+   ahead/behind and cherry counts, the PR cell, the dirty counts, the age and the verdict badge are read, never
+   copied, and they used to spill into every selection. Scoped to `tr.row`: a card's console output, prompt and
+   transcript must stay selectable. */
+tr.row td:nth-child(n + 3),
+tr.row td:nth-child(n + 3) * { user-select: none; }
+/* The play glyph and the count chips sit inside those two cells but are controls, not text worth copying. */
+tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-select: none; }
+/* Fixed layout, because auto layout let the columns size themselves from their content: one project with long
+   branch names and a long verdict grew to 1714px inside a 1468px card, and `.project` clips its children - so
+   the right-hand end (the session id on a revive row, the delete ✕) was cut off with no scrollbar to reach it.
+   Fixed layout makes the table fit its card; the text columns ellipsize instead of pushing it wider. */
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+/* Proportions follow what the rows actually hold, measured across all 140 of them at a 1477px table.
+   Widest real cell per column: worktree 495, branch 378, life 189, verdict 200, PR 142, tip 96, ahead/behind 111,
+   cherry 89, dirty 89, actions 53 - 1842 in total, so not everything fits whole.
+   The old split gave Life 248px to show "0s" and a ring while Worktree (281) and Branch (207) cut their two
+   identifying values short: that is the blank space on the right the left columns should have been using.
+   Now the two identifying columns take what the low-information ones give up. Result on the live board: worktree
+   413px (2 of 140 rows still ellipsize), branch 332 (2), Life 121 (1), Verdict 186 (0), Tip/Ahead/Cherry/Dirty 0.
+   PR keeps only enough for "none" - a real PR title ellipsizes, which is the cheapest thing to lose. */
+/* Proportions follow what the 140 rows actually hold. Measured at a 1477px table the widest cells wanted:
+   worktree 495, branch 378, life 189, verdict 200, PR 142, tip 96, ahead/behind 111, cherry/dirty 89. Nothing can
+   fit all of that, so the two identifying columns get the room and the low-information ones give it up: Life held
+   248px to show "0s" and a ring, and PR is usually "none". Tip, Ahead/Behind, Cherry, Dirty and Verdict keep enough
+   for their widest real value. */
+/* The percentages below are only what the table looks like before the first measurement: `fitColumns` (app.js) sizes
+   every column from its own content on the first paint and again whenever a row changes, and writes px widths onto
+   the header cells. They stay as the fallback for the frame before that runs - and they are the numbers this all
+   replaced, which is why the worktree column starts starved. */
+thead th:nth-child(1) { width: 28%; }   /* worktree: name + agent badge + chips — the widest thing in the row */
+thead th:nth-child(2) { width: 22.5%; } /* branch */
+thead th:nth-child(3) { width: 6.2%; }  /* tip */
+thead th:nth-child(4) { width: 5.6%; }  /* ahead / behind */
+thead th:nth-child(5) { width: 4.8%; }  /* cherry +/- */
+thead th:nth-child(6) { width: 3.8%; }  /* PR: "none" in almost every row */
+thead th:nth-child(7) { width: 4.8%; }  /* dirty */
+thead th:nth-child(8) { width: 8.2%; }  /* life / next read: "never live" still fits whole */
+thead th:nth-child(9) { width: 12.6%; } /* verdict */
+thead th:nth-child(10) { width: 5%; }
+/* The delete cell is its own column: a fixed 34px plus the cell's padding was 4px wider than the card at a
+   narrow window, and the ✕ was the thing that fell off. Slim on the left, and a real gutter on the RIGHT because
+   the chart draws its closing rule there now: the ✕ used to end 4px from the table's edge, which against a
+   down-to-the-pixel rule reads as touching it. 10px is the same gutter every other cell keeps on its right
+   (`tbody td`), so the newest edge is not the one column that crowds its own control. */
+td.row-actions { padding-left: 4px; padding-right: 10px; }
+/* A verdict badge is an inline-block with its own width, so the cell's ellipsis never reached it: it was cut
+   mid-word. Truncate the badge itself, and keep the age cell's chips from spilling past their column. */
+td.age { overflow: hidden; }
+td.verdict .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+/* ---- the kind a cut recorded: ONE LETTER in a column of its own --------------------------------
+   T = turnover tree (the feature container: its children are cut from it and merge back into it locally), R =
+   research tree (local only). The cell is the column
+   `kind` (public/charts.js CHART_COLUMNS), immediately LEFT of the verdict, because it used to lead the verdict cell
+   and the badge's words (ON MAIN, MERGED) were the part that got clipped. The letter is a chip the size of the branch
+   cell's `local` one, never a word: the name line's controls already compete for the row's width,
+   and a sentence there is what the earlier landing exists to avoid. R and I are BUTTONS while the record is unlifted,
+   with the focus ring a real control needs; an upgraded tree reads T in the allowed green, because that is what it
+   behaves as - its tooltip is where the kind it was survives. */
+.kind-mark {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 3px;
+  border: 1px solid #1c3a56;
+  border-radius: 3px;
+  background: var(--blue-bg);
+  color: #9ecbff;
+  font: 600 9.5px/13px var(--mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+button.kind-mark { appearance: none; cursor: pointer; }
+.kind-mark.kind-research { color: #ffca7a; border-color: #5a4a1c; background: #221a0c; }
+button.kind-mark.kind-research:hover { color: #ffe2ae; border-color: #a5762a; background: #2f2410; }
+button.kind-mark.kind-research:focus-visible { outline: 2px solid #ffb454; outline-offset: 1px; }
+/* Implementation is local only for the same reason research is, and its own ink keeps the two readable side by side:
+   the turnover container is the plain blue chip, research amber, implementation a cooler steel. */
+.kind-mark.kind-implementation { color: #9fd0ff; border-color: #2a4664; background: #0f1a26; }
+button.kind-mark.kind-implementation:hover { color: #c8e6ff; border-color: #4a7aa8; background: #16273a; }
+button.kind-mark.kind-implementation:focus-visible { outline: 2px solid #6cb6ff; outline-offset: 1px; }
+/* An upgraded R or I draws T, not its old letter with a tick: the cell says what the tree behaves as, and the lifted
+   green is what still separates it from a turnover tree the cut itself recorded. */
+.kind-mark.is-lifted { color: #8fe3b0; border-color: #2b4a37; background: #14211a; }
+/* In the legend the same letters are a decoder, not a cell's mark: they keep their ink and lose the cell's margins. */
+.legend .kind-mark { margin-right: 3px; margin-left: 3px; vertical-align: 0; }
+/* By CLASS, not by position: the chart draws between ten and twelve cells per row (the owner column comes and goes by
+   itself, and any column can be hidden in Settings), so `nth-child(9)` pointed at a different column on almost every
+   board. A cell that ellipsizes its own text is what keeps the table inside the card at any width. */
+td.name, td.branch, td.owner, td.pr, td.verdict, td.kind { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The kind's own cell is one chip wide. The mark's right margin separates it from a neighbour inside a shared cell,
+   and there is no neighbour here any more, so the cell's inset is all the room it needs. */
+td.kind { overflow: hidden; white-space: nowrap; }
+td.kind .kind-mark { margin-right: 0; }
+/* The owner cell's compact tag: "M1" for Manager 1, "M2" for the second Manager, "A1" for a row the server could not
+   label. A tag and not a word, because the column that answers "whose tree is this" has to fit beside ten others —
+   the long form ("Assistant #2 — Manager") is the cell's tooltip and the row's detail bullet. It is a chip so it reads
+   as a value rather than as text that happens to be short, and it is deliberately not `.assistant`: that class is the
+   rail's (a sticky 480px flex column), and a cell that carried it inherited the whole rail. */
+td.owner { overflow: hidden; }
+/* The initiative cell: chips, at the panel's chip size and set in the same mono as the owner tag, because the two
+   columns sit beside each other and a reader should read them as the same kind of fact (a name from the panel, not
+   from git). The cell is one line and ellipsised: several initiatives on one tree is legal, but a column cannot grow
+   a second line without breaking the table's row height, so the tooltip carries the whole list and the tab is where
+   the work is read. */
+td.initiative { overflow: hidden; white-space: nowrap; }
+.initiative-chip {
+  display: inline-block;
+  max-width: 100%;
+  margin-right: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 15px;
+  vertical-align: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #b9c6d8;
+  border-color: #33465c;
+  background: #16202b;
+}
+.initiative-chip:last-child { margin-right: 0; }
+/* THE CHIP IS PRESSABLE (public/app.js delegates the press, public/assistant.js opens the map on that card). It has to
+   look like something a press does something to, and the keyboard's focus has to be visible on a span the browser does
+   not draw a focus ring for - a 2px green ring outside the chip, the same green the chart's own flash uses, so a
+   reader tabbing the column can see where they are. The chip keeps its one-line ellipsis and its tone: this adds no
+   padding and no colour of its own. */
+.initiative-chip[role="button"] { cursor: pointer; }
+.initiative-chip[role="button"]:hover { color: #e6eef8; border-color: #4d6a8a; background: #1b2937; }
+.initiative-chip[role="button"]:active { transform: translateY(1px); }
+.initiative-chip[role="button"]:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+.owner-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 5px;
+  border: 1px solid #2f3b4c;
+  border-radius: 5px;
+  background: #1a212b;
+  color: #a9c0dd;
+  font: 600 10px/15px var(--mono);
+  letter-spacing: .04em;
+  vertical-align: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The chip is a PRESS (public/app.js ownerCellHtml): it opens that assistant's chat with the row's project, worktree
+   and branch already named in the box. It keeps the tag's own look above - that rule is the chip, and it wins on
+   font, border and background because both are one class - and only gains what a button needs: a cursor, a hover, a
+   focus ring, and `appearance: none` so no platform draws its own button chrome over the chip. */
+button.owner-tag {
+  appearance: none;
+  cursor: pointer;
+  text-align: center;
+}
+button.owner-tag:hover { border-color: #4a6076; color: #d7e6f7; background: #202a36; }
+button.owner-tag:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
+/* The owner bullet's fallback sentence: the reader's stored owner is gone, so Assistant #1 has the tree. Dimmer
+   than the line it follows, because the label is the answer and this is only why it is not the answer they set. */
+.git-owner .owner-fallback { color: var(--dimmer); }
+/* The worktree cell is the only cell whose content competes for its own width: a name that can run long, the rename
+   ✎, and the agent chips. Laid out as inline content the name took the whole cell, and the chips were the part that
+   got clipped - the row showed "…" where its agents were. As a flex row the name ellipsizes instead, and the
+   buttons and chips keep their whole width: what the row is called is the one thing that can afford to lose letters.
+
+   THE NAME COLUMN'S FLOOR IS IN public/charts.js (CHART_COLUMNS `name`), not here: the chart is `table-layout: fixed`
+   and sizes every column from that measured plan, so a min-width on this line would be a second opinion nobody reads.
+   The floor moved with the counts chip's removal - the pill's width used to be part of what the column asked for. */
+td.name > .name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+td.name .row-name { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.name .btn-row-agent, td.name .btn-row-rename, td.name .sig { flex: none; }
+
+/* The edge between two header cells is the column's handle. The header is already `position: sticky`, so it is a
+   containing block for this absolutely placed strip - no extra positioning of the th is needed (which would break
+   the stickiness). It stays invisible until the pointer is on it: a board of column edges would read as a grid of
+   vertical rules. */
+.col-grip {
+  /* Inside its own header cell, not straddling the boundary: the NEXT cell is its own sticky stacking context and
+     paints over anything that reaches into it, so a grip centred on the edge was unclickable on its right half. */
+  position: absolute; top: 0; right: 0; width: 9px; height: 100%;
+  cursor: col-resize; z-index: 6;
+  border-right: 2px solid transparent;
+}
+.col-grip:hover, .col-grip.is-dragging { border-right-color: #3d6ea8; }
+body.col-resizing { user-select: none; }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; }
+thead th {
+  position: sticky;
+  top: 57px;
+  background: #131820;
+  color: var(--dimmer);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  z-index: 5;
+  /* A header is a label, not a paragraph: squeezed below its own width it ellipsizes ("AHEAD…") instead of stacking
+     "AHEA / D / BEHIND", which is what a wrapped label does to a row of 40px columns at 1280px with the rail open. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: top; }
+
+/* A fold hides a whole group where it stands — the child rows AND the details, questions and offers hanging under
+   them. Nothing leaves the document, which is the point: an open console, a half-typed reply and a scroll position
+   are all still there when the group opens again. */
+tr.is-fold-hidden { display: none !important; }
+
+tbody tr.row { cursor: pointer; }
+/* A flash fades back to whatever the row's own background is, not to a hardcoded endpoint: an open row and a
+   hovered row are not transparent, and a themed project's hover is its own tint. Without this the animation ended
+   on the wrong colour and the row snapped back on the last frame. */
+tbody tr.row { --row-rest-bg: transparent; }
+tbody tr.row:hover { background: var(--hover); --row-rest-bg: var(--hover); }
+tbody tr.row.expanded { background: var(--hover); --row-rest-bg: var(--hover); }
+
+/* How long a flash lasts is a setting (Settings > Board > Flash time): the three durations below are read from
+   --flash-row / --flash-project / --flash-ring, which the page sets from that number. */
+@keyframes flashrow {
+  from { background-color: #1f3a2a; }
+  to { background-color: var(--row-rest-bg, transparent); }
+}
+tbody tr.row.flash { animation: flashrow var(--flash-row, 900ms) ease-out; }
+/* The same pulse for a refresh that found nothing: the row is known current, but an agent did not move
+   in it. Deliberately a lift in the panel's own grey, not a tint — this one should be noticed only if
+   you are watching for it. */
+@keyframes flashrow-idle {
+  from { background-color: #232833; }
+  to { background-color: var(--row-rest-bg, transparent); }
+}
+tbody tr.row.flash-idle { animation: flashrow-idle var(--flash-row, 900ms) ease-out; }
+/* Settings > Grey flash off: the row is still re-read, it just says nothing about it. The green flash above is
+   deliberately not gated - that one means a sign of life was found. */
+body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
+/* A section's own background is mostly covered by its children, so the flash has to reach the title
+   row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
+   section carries the ring. */
+/* Only a COLLAPSED project flashes: it is the reader's only way to know something happened inside a box they are not
+   looking into. The bar takes the wash and the box its ring, which for a collapsed section is just the bar's edge.
+   An open project never flashes - the worktree rows are right there under it and they say what happened; painting
+   the whole panel green only repeated it, over the table. */
+@keyframes flashsection {
+  from { box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
+  to { box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
+}
+/* The title row flashes as a wash over whatever it is already painted with. A themed project's head is an opaque
+   linear-gradient, and animating background-color behind an opaque background-image is invisible - which is why a
+   themed project looked like it never flashed. An inset shadow paints over the gradient and fades like the rest. */
+@keyframes flashhead {
+  from { box-shadow: inset 0 0 0 999px rgba(46, 96, 66, .92); }
+  to { box-shadow: inset 0 0 0 999px rgba(46, 96, 66, 0); }
+}
+section.project.collapsed.flash { animation: flashsection var(--flash-project, 1100ms) ease-out; }
+section.project.collapsed.flash .project-head { animation: flashhead var(--flash-project, 1100ms) ease-out; }
+
+button.btn-row-agent {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-right: 2px;
+  font: 700 10px/18px system-ui, sans-serif;
+  color: #7ee787;
+  background: var(--green-bg);
+  border: 1px solid #1f4a2a;
+  border-radius: 5px;
+  vertical-align: middle;
+}
+button.btn-row-agent:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb950; }
+/* While the row's ▶ is probing every stopped agent in the worktree there is nothing to click it for. */
+button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
+/* The add-agent bar: the width of an agent card, half its height, a white + in the middle. It replaced the row's ▶
+   as the way to start an agent in a worktree, so it sits right where that decision is made — under the cards, and
+   present even when the row has none. */
+/* A minimized agent card measures 94px on this panel, so half of one is 47px. */
+/* Its green is a setting, not a constant. The bar is meant to be bright and solid - it is the one thing on the row
+   you click to start an agent - but "bright" is not one number on every screen: the same green reads like a warning
+   label on a dark 4K panel. Settings > Display > Add-agent bar moves lightness and saturation on one scale and
+   writes these five variables. The values here are the resting palette before that runs. */
+.btn-add-agent {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 47px; margin: 8px 0 2px; padding: 0;
+  background: var(--addbar, #215f35); border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
+  box-shadow: inset 0 1px 0 #ffffff1f;
+  color: #fff; font: 700 24px/1 system-ui, sans-serif; cursor: pointer;
+}
+.btn-add-agent:hover { background: var(--addbar-hover, #27723f); border-color: var(--addbar-hover-edge, #319051); }
+.btn-add-agent:active { background: var(--addbar-active, #1b502d); }
+.btn-add-agent > span { transform: translateY(-1px); }
+/* Clicking the bar turns it into this field, in place: same 47px box and the same green, so the row does not move and
+   the reader keeps reading the row they were on. The prompt goes to the New agent card on Enter - the field is a
+   shortcut into that path, not a second spawn form. */
+.add-agent-form { display: flex; width: 100%; margin: 8px 0 2px; }
+/* The field is a chipbox (board/paste-chips.js) rather than an <input>: a pasted block collapses to a chip
+   here too. It keeps its single line — line-height is the box's height, and a short paste arrives with its
+   line breaks stripped, exactly as an <input> did with them. */
+.add-agent-input {
+  width: 100%; min-height: 47px; padding: 0 14px; box-sizing: border-box;
+  background: var(--addbar, #215f35); color: #fff;
+  border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
+  box-shadow: inset 0 1px 0 #ffffff1f;
+  font: 500 13.5px/47px var(--mono); white-space: nowrap; overflow: hidden;
+  outline: none;
+}
+.add-agent-input:empty::before { color: #ffffffa6; }
+.add-agent-input .paste-chip { line-height: 1.6; vertical-align: middle; }
+.add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
+.add-agent-input:disabled { opacity: .7; cursor: progress; }
+/* A branch the remote actually has: the name itself is the link, so the cell keeps its `mono branch` sizing and
+   only the colour says "this opens something". Hover underlines it rather than moving it — a row is a dense grid
+   and a shifting column under the pointer is worse than no affordance. */
+td.branch a.branch-link { color: #7fb2e8; text-decoration: none; }
+td.branch a.branch-link:hover { text-decoration: underline; }
+td.branch a.branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; border-radius: 2px; }
+/* No copy on the remote: plain text, and one dim word that answers "which trees have a remote copy" at a glance.
+   Deliberately small and quiet — most rows of a research fleet carry it, and a loud marker on most rows is noise. */
+td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #55606e; border: 1px solid #2b323c; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+/* The remote could not be asked: the same little word, in the amber the panel uses for "not answered" everywhere
+   else. It must not read as `local` — that would be the panel inventing an answer — so it says `unverified` and its
+   tooltip quotes the project's fetch note. Same box, different colour: the shape is familiar, the claim is weaker. */
+td.branch .branch-unverified { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #8a7448; border: 1px dashed #4a3f28; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+td.branch .branch-plain { color: #9aa6b4; }
+/* The base this row is measured against, when it is not the project's single base (lib/base-branches.js): a project
+   whose environments are long-lived branches measures each tree against its own. Quiet at rest and smaller than the
+   branch, because it is context for the verdict rather than a second name. A base that is MISSING keeps its chip so
+   a NO BASE REF row names the ref that is gone, in the amber the panel uses for "not answered". */
+td.branch .branch-base { margin-left: 6px; font-size: 10px; color: #6f7c8b; }
+td.branch .branch-base::before { content: "→ "; color: #4f5a68; }
+td.branch .branch-base.is-missing { color: #8a7448; }
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.badge.merged { color: #7ee787; background: var(--green-bg); border-color: #1f4a2a; }
+.badge.unmerged { color: #ff9c94; background: var(--red-bg); border-color: #57262a; }
+.badge.onmain { color: #9ecbff; background: var(--blue-bg); border-color: #1c3a56; }
+.badge.nocommits { color: var(--dim); background: #20242c; border-color: var(--line); }
+.badge.error { color: var(--dim); background: #20242c; border-color: var(--line); }
+/* A row whose path is no longer a tree of its own: nothing is being claimed about work, so it reads as inert — the
+   same grey as a no-commits badge, and its tooltip carries the reason lib/own-tree.js gave. */
+.badge.released { color: var(--dim); background: #20242c; border-color: var(--line); border-style: dashed; }
+.badge.stale { opacity: .65; border-style: dashed; }
+/* A tree that has VANISHED from disk (lib/store.js markStale, for a row the tree cache or an agent still holds): the
+   row stays so its cards stay under it, and the badge says the folder is not there rather than claiming anything about
+   the work. Amber, not red: nothing is wrong with the WORK, the folder moved. The tooltip carries "last seen <when> at
+   <path> - <reason>", so the row answers the question the unattached list would have asked. */
+.badge.gone { color: var(--amber); background: var(--amber-bg); border-color: #5a4a1c; border-style: dashed; }
+/* A row served from the cached tree list (lib/tree-cache.js): its verdict is the unknown one until its own read lands. */
+.badge.cached { opacity: .8; border-style: dotted; }
+/* The "waiting for the first scan" group in the unattached panel: a caption and its cards, never counted as unattached. */
+.job-pending { border-left: 2px dashed #4a3a17; padding-left: 10px; margin-bottom: 10px; }
+.job-pending > p.empty { margin: 0 0 8px; color: var(--amber); }
+
+/* The UNMERGED chip is a control, not a statement: it starts the merge agent for its row. It keeps the badge's own
+   colours and shape (it is still a verdict), and only gains what a button needs - a pointer, a hover that is visibly
+   the same red, and a press that answers. `is-merging` is a live merge agent in that tree; the server refuses a second
+   one anyway, so the disabled state is the honest one to draw. A dirty row's chip stays a span: pressing it can do
+   nothing, and a dead button is worse than a sentence. */
+.badge.merge-start { font-family: inherit; cursor: pointer; }
+/* The glyph is the whole affordance, the way the ↻ on NOT-RUNNING is: a status chip that names an action is the
+   button, so it says so on its own face instead of growing a second control beside it. */
+.merge-glyph { margin-left: 6px; font-size: 11px; opacity: .75; }
+.badge.merge-start:hover .merge-glyph { opacity: 1; }
+.badge.merge-start:hover { background: #4a1f24; border-color: #8f3b41; color: #ffb4ad; }
+.badge.merge-start:active { transform: translateY(1px); }
+.badge.merge-start:focus-visible { outline: 2px solid #ff9c94; outline-offset: 1px; }
+.badge.merge-start:disabled { cursor: default; transform: none; }
+.badge.merge-start.is-merging,
+.badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
+
+/* The chip's chooser: five outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
+   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The buttons
+   are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations, and a
+   reader picking one should see the others whole. "Check whether it is on <main>" is the fourth: read-only in the
+   branches, and the one that ends in this worktree going to the Recycle Bin. */
+.merge-chooser {
+  position: fixed;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 380px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #14171c;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-head { font-size: 11px; color: var(--dim); padding: 2px 4px 4px; line-height: 1.4; }
+.mc-from { display: block; color: var(--dimmer); font-family: var(--mono); font-size: 10px; margin-top: 2px; }
+.mc-choice {
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #1b1f26;
+  color: var(--fg);
+  cursor: pointer;
+}
+.mc-choice:hover { background: #222833; border-color: #3a4250; }
+.mc-choice:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 1px; }
+.mc-choice:disabled { cursor: default; opacity: .55; }
+.mc-choice.is-roll:not(:disabled) { border-color: #4f6d3a; color: #b8e08a; }
+.mc-choice.is-roll:not(:disabled):hover { background: #1d2419; }
+/* The rebase is mechanical — one git command, no run — so it reads as a tool rather than a destination: a quiet steel
+   outline that never competes with the green roll or the blue check. */
+.mc-choice.is-rebase:not(:disabled) { border-color: #3f4a5a; color: #c8d3e2; }
+.mc-choice.is-rebase:not(:disabled):hover { background: #1b2129; border-color: #55647a; }
+.mc-choice.is-ask { color: var(--dim); }
+/* The check is the one outcome that can delete the tree, so it is coloured like the ON MAIN badge it is trying to
+   prove: quiet when it is just a question, blue when the answer is one it can act on. */
+.mc-choice.is-check:not(:disabled) { border-color: #1c3a56; color: #9ecbff; }
+.mc-choice.is-check:not(:disabled):hover { background: #16202c; border-color: #2b527a; }
+.mc-note-check { color: #7d93a8; }
+.mc-note-rebase { color: #8d9bb0; }
+.mc-note { font-size: 10px; color: var(--dimmer); padding: 2px 4px; line-height: 1.45; }
+
+/* The Ahead / Behind cell (public/app.js, "ahead / behind cell"): ↑ not pushed lights with .dirty, ↓ not pulled lights
+   blue, and a count taken while the last fetch was failing is dotted with a ? beside it. */
+.ab-down { color: var(--blue); }
+.ab-stale { border-bottom: 1px dotted #6b7686; opacity: .75; }
+.ab-q { color: #8a7448; margin-left: 2px; }
+.ab-legacy { cursor: help; }
+.pr-open { color: #f0c674; }
+.pr-merged { color: var(--dim); }
+/* A PR whose page the project's host record can build: the chip is the link, coloured as it already was, so the cell
+   gains an affordance without gaining a second control. Same rule as the branch cell — the row is a dense grid and a
+   shifting column under the pointer is worse than no affordance. */
+a.pr-link { text-decoration: none; }
+a.pr-link:hover { text-decoration: underline; }
+a.pr-link:focus-visible { outline: 1px solid currentColor; outline-offset: 1px; border-radius: 2px; }
+
+.sig {
+  display: inline-block;
+  font-size: 10px;
+  font-family: var(--mono);
+  padding: 1px 5px;
+  margin: 2px 3px 0 0;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.sig-hermes { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+/* Claude Code sessions: warm orange, so they never read as the violet Hermes evidence. */
+.sig-claude { color: #f0a878; border-color: #5c3a22; background: #2a1c12; }
+button.sig { cursor: pointer; font-family: var(--mono); }
+button.sig:hover { filter: brightness(1.25); }
+/* The row's panel chip wears the same LIGHT lavender as the project's "⧉ n panels", so the two read as
+   one family and neither is mistaken for the deeper violet of the hermes chip next to it. */
+.sig-panel { color: #ecd9ff; border-color: #55407a; background: #2a2044; font-weight: 700; }
+.sig-panel-done { color: var(--dim); border-color: var(--line); background: #20242c; }
+/* An agent parked on a permission request is the one state on the board that needs a human, so it
+   wears the loudest amber. This has to sit AFTER .sig and .chip: those are single-class rules, so a
+   rule declared above them loses on source order and the badge renders grey instead of amber. The
+   .chip form is the project-level count, which has to read with the whole project folded. */
+.sig-approval,
+.chip.sig-approval { color: #ffd479; border-color: #6b4d16; background: var(--amber-bg); font-weight: 700; }
+/* Waiting on an ANSWER is not waiting on an ALLOW: the question chip carries the light purple the panel uses
+   for its own surfaces, so the two parked states are told apart without reading them. */
+.sig-question,
+.chip.sig-question { color: #ecd9ff; border-color: #55407a; background: #2a2044; font-weight: 700; }
+
+.sig-board { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.sig-port { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.sig-files { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+.sig-idle { color: var(--dimmer); }
+.sig-board-live { color: #f0c674; }
+
+tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; }
+/* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
+   reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
+   The pair is closed off by one hairline, and the agents follow under it. WHAT THIS BRANCH WAS STARTED TO DO
+   leads the two of them, at the same size, so the worktree's three strips read as one column. */
+tr.detail > td > .detail-inner > .desc-block, tr.detail > td > .detail-inner > .git-block, tr.detail > td > .detail-inner > .live-block { margin: 0; }
+tr.detail > td > .detail-inner > .desc-block .desc-head,
+tr.detail > td > .detail-inner > .git-block .git-head,
+tr.detail > td > .detail-inner > .live-block .live-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .desc-block .desc-head .chev,
+tr.detail > td > .detail-inner > .git-block .git-head .chev,
+tr.detail > td > .detail-inner > .live-block .live-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .desc-block h4,
+tr.detail > td > .detail-inner > .git-block h4,
+tr.detail > td > .detail-inner > .live-block h4 { margin: 0; font-size: 10.5px; }
+tr.detail > td > .detail-inner > .git-summary, tr.detail > td > .detail-inner > .live-first { font-size: 11px; }
+/* The TODO strip is the fourth of that column: same head metrics as the three above it, same 28px indent for its list,
+   and the same compact type. Its head is a <button>, so the metrics are set on the button itself. */
+tr.detail > td > .detail-inner > .todo-block { margin: 0; }
+tr.detail > td > .detail-inner > .todo-block .todo-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .todo-block .todo-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .todo-block .todo-head .todo-title { font-size: 10.5px; }
+tr.detail > td > .detail-inner > .todo-block .todo-count,
+tr.detail > td > .detail-inner > .todo-block .todo-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .todo-block .todo-body { padding: 0 0 6px 28px; }
+/* What the row's own ⟳ found: one dim line per action, newest first, under MERGE STATE. Not a fold — it is at most three
+   short lines, and the point of it is to be readable without a click. */
+tr.detail > td > .detail-inner > .refresh-journal { margin: 0; padding: 0 0 4px 0; font-size: 11px; line-height: 1.6; }
+tr.detail > td > .detail-inner > .refresh-journal .rj-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr.detail > td > .detail-inner > .refresh-journal .rj-at { color: var(--dimmer); margin-right: 5px; }
+/* The description's own text and its folded peek, in the sizes the two strips below it use. Its bullets are the
+   shared fact list (`.desc-body .git-list`, styled with the merge state's), on the same 28px indent the two strips'
+   lists use, so the three strips read as one column under their three headings. */
+tr.detail > td > .detail-inner > .desc-block .desc-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .desc-block .desc-body { padding: 0 0 6px 28px; }
+tr.detail > td > .detail-inner > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
+tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+tr.detail ul { margin: 0 0 12px; padding-left: 18px; }
+tr.detail li { font-family: var(--mono); font-size: 12px; color: #c8d1dc; }
+tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+
+/* ---- the result chip, and the collision diamond, as one-line controls (public/board-scaffold.js,
+   public/core/row-chips.js) ---------------------------------------------------------------------------------------
+   The result card and the collision card used to be blocks in the row's detail: two paragraphs of height that only
+   existed once the row was open. The result is a chip now, and both cards are popups behind their controls.
+
+   The RESULT chip has a cell of its own - the chart's `reviewedExtra` column, immediately right of the name - because
+   two review chips in the name line left the name ellipsised on every row that carried both.
+
+   The COLLISION side is ONE 24x24 diamond in the name line, and no counts chip: the row used to spend two small
+   diamonds plus a "0 open . 1 resolved" pill on the same fact. The diamond IS the press now, so the width that pill
+   took belongs to the name. Its box is 24x24 (the hit target a control needs) and it is pulled back by a 4px negative
+   block margin, so the row's one-line height does not move: the pill it replaced was 17px tall, and the diamond's
+   outer box is 16px in the line's flow.
+
+   Every selector here is this feature's own. The two cards keep their own styles (public/style.css `.review-block`,
+   `.collision-block`) and are only re-scoped inside the popup below, so nothing shared is edited. */
+td.name .name-line > .rowchip, td.name .name-line > .collision-diamond { flex: none; }
+/* The result chip's own cell: one line, and the chip never wider than the column it was given. The chip's own
+   `max-width: 210px` is what it may take when the column is wide; here it is capped by the cell, and the chip's text
+   ellipsises inside its own pill rather than spilling past the column's edge. */
+td.reviewed-extra { overflow: hidden; white-space: nowrap; }
+td.reviewed-extra .rowchip { max-width: 100%; vertical-align: middle; }
+.rowchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 210px;
+  padding: 0 6px;
+  border: 1px solid #2f3b4c;
+  border-radius: 999px;
+  background: #1a212b;
+  color: #a9c0dd;
+  font: 600 10px/15px var(--mono);
+  letter-spacing: .02em;
+  vertical-align: 1px;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+}
+.rowchip .rowchip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rowchip .rowchip-glyph { flex: none; font-size: 9px; opacity: .9; }
+.rowchip .rowchip-chev { flex: none; font-size: 8px; opacity: .85; }
+.rowchip:hover { border-color: #4a6076; color: #d7e6f7; background: #202a36; }
+.rowchip:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
+/* Expanded: a ring in the chip's own ink, so the strip says which card is up without a second colour language. */
+.rowchip[aria-expanded="true"] { box-shadow: inset 0 0 0 1px currentColor; }
+/* The RESULT chip wears the card's own two colours: amber while the lane is waiting on a check, green once it has
+   been read. Same pair as .review-block / .review-block.is-reviewed, at chip size. */
+.rowchip.result-chip.is-awaiting { color: #ffca7a; border-color: #4a3a18; background: #1c1810; }
+.rowchip.result-chip.is-reviewed { color: #9fe0b4; border-color: #2a4432; background: #141a15; }
+/* THE COLLISION DIAMOND: one per row, the press the pair card hangs off. The INK states are the same two the row's
+   mark kept - the bright violet is a pair waiting on the READER, the calmer violet a pair still with both assistants -
+   and the resolved state is BOTH quieter and a different SHAPE (◇ instead of ◆), so a reader who cannot tell the two
+   violets apart still reads the state. The open state also grows a ring, which is a non-colour cue of its own. */
+.collision-diamond {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  /* 24x24 is the control's hit target, not the line's height: the 4px the box adds at each end is taken back by the
+     margin, so a row that carries a collision is exactly as tall as one that does not (and as tall as it was when the
+     counts pill sat here). See the section comment above. */
+  margin: -4px 0 -4px 2px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #c9a0ff;
+  font: 12px/1 var(--term);
+  appearance: none;
+  cursor: pointer;
+  vertical-align: 1px;
+}
+.collision-diamond .collision-diamond-glyph { line-height: 1; }
+.collision-diamond.is-waiting { color: #e4c8ff; border-color: #6b4f9e; background: #241a38; text-shadow: 0 0 6px #7a4fbf; }
+.collision-diamond.is-open { color: #c9a0ff; border-color: #3b2d5c; background: #17131f; }
+.collision-diamond.is-resolved { color: #8b7aa8; border-color: #2c3744; background: transparent; }
+.collision-diamond:hover { color: #efe2ff; border-color: #6b4f9e; background: #241a38; }
+/* The focus ring is a solid 2px light blue at 2px offset: 9.6:1 against the row's own #161c24 and 3.4:1 against the
+   diamond's own violet border, so it clears 3:1 on both sides of the edge it draws. */
+.collision-diamond:focus-visible { outline: 2px solid #9ec6ff; outline-offset: 2px; }
+/* Open: the same inset ring the chips wear, in the diamond's own ink, so "this card is up" reads without a chevron. */
+.collision-diamond[aria-expanded="true"] { box-shadow: inset 0 0 0 1px currentColor; }
+
+/* THE CARD BEHIND A CHIP. Fixed and measured from the chip by placeRowChipPop(), which clamps its width to the
+   viewport, slides it left to fit and flips it above the chip when there is no room below - so at 768 wide the card
+   takes the window it has and wraps, rather than being clipped at the edge. Scrolling inside it keeps a long pair
+   card readable on a short window. */
+.rowchip-pop {
+  position: fixed;
+  z-index: 80;
+  overflow: auto;
+  padding: 8px 10px 10px;
+  border: 1px solid #33465c;
+  border-radius: 8px;
+  background: #11161d;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+.rowchip-pop .rowchip-pop-body { min-width: 0; }
+.rowchip-pop .rowchip-pop-x {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 0 4px;
+  border: 1px solid #2f3b4c;
+  border-radius: 4px;
+  background: #1a212b;
+  color: #a9c0dd;
+  font: 600 10px/15px var(--mono);
+  cursor: pointer;
+}
+.rowchip-pop .rowchip-pop-x:hover { color: #fff; border-color: #4a6076; }
+.rowchip-pop .rowchip-pop-x:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
+/* The card keeps its own look and gives up its outer margins (the popup's padding is the frame now), and the two
+   places a pair card can overflow - the sides strip and the shared-file chips - are allowed to wrap and shrink. */
+.rowchip-pop .review-block, .rowchip-pop .collision-block { margin: 0; max-width: 100%; }
+.rowchip-pop .review-summary, .rowchip-pop .collision-say, .rowchip-pop .collision-peer { overflow-wrap: anywhere; }
+.rowchip-pop .collision-sides { min-width: 0; flex-wrap: wrap; }
+.rowchip-pop .collision-side { min-width: 0; }
+
+/* ---- the sliver window: a page 300 px tall is the board ---------------------------------------------------
+   Moved verbatim from public/late.css by row 446, which dissolved that file. These are the sliver block's page and
+   board rules; the header's one rule is in public/chrome.css and the page row's two are in public/assistant.css,
+   each placed after the rule it has to beat. Nothing here needed late.css's last position: every selector below is
+   this sheet's alone, base.css's body rule loads before this sheet and no later sheet names any of them. */
+
+/* ---- a window squashed to a sliver: the folder heads ARE the board ------------------------------------------
+   The reader can shrink this window to a 157 px band (the size the two-folder check measures). Down there the
+   header, the two folded agent cards and the folder cards' own bodies push the second folder below the glass:
+   measured 175.9-224.9 and 329.9-378.9 of 157, so "two folders" read as one folder and a scrollbar. The chrome
+   above the board is not what that height is for. The two folder heads are, because they are the board's two
+   halves and everything else is reachable by scrolling inside them.
+
+   So a window under 300 px of height lays the page out as panes instead of a page: the header stops being a
+   sticky band over the board and becomes the first row of a full-height column, the two folded agent cards
+   become ONE slim row side by side, and the folder cards become columns whose heads share a row while each body
+   scrolls inside its own card. Measured at 1879x157 after the change: both heads at 83.9-120.9, i.e. 36 px above
+   the bottom of the window, with each folder's list scrolling in the 29 px left under its head.
+
+   Nothing is hidden and nothing is re-aimed: the heads, their chips, their filters, their project bodies and
+   every project in them are the same elements; only which box scrolls changes. #spawn-strip keeps its place
+   above the pair when a proposed worker is waiting for a click. */
+@media (max-height: 300px) {
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+  #spawn-strip { grid-area: spawn; }
+  #newagent { grid-area: newagent; }
+  #agents { grid-area: agents; }
+  /* A card left open in this band scrolls inside itself rather than eating the board's row. */
+  #newagent, #agents { margin: 0; min-width: 0; }
+  #newagent:not(.fixed-collapsed), #agents:not(.fixed-collapsed) { max-height: 30vh; overflow: auto; }
+  #newagent > .project-head, #agents > .project-head { padding: 3px 10px; flex-wrap: nowrap; }
+  #newagent > .project-head .path, #agents > .project-head .path { display: none; }
+  #newagent > .project-head button, #agents > .project-head button { padding: 1px 7px; }
+  /* The board: one column per folder, one shared head row, each folder's list scrolling on its own. */
+  #projects {
+    grid-area: board;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 8px;
+  }
+  #projects > .root-group { margin: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #projects > .root-group.collapsed { align-self: start; }
+  /* One head row per column: the folder's own path ellipsizes rather than wrapping the head to a second line (the
+     name is the same text: `textContent` still reads it whole, and the title carries it), while its chips, its
+     filter and its buttons stay. 37 px instead of the 75 a wrapped head measured. */
+  #projects > .root-group > .root-head { flex: none; padding: 4px 12px; flex-wrap: nowrap; overflow: hidden; }
+  #projects > .root-group > .root-head h2 { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #projects > .root-group > .root-head .chips { flex: 0 0 auto; flex-wrap: nowrap; }
+  #projects > .root-group > .root-head .root-filter { flex: 0 1 200px; min-width: 96px; }
+  /* One line per control: a 62 px "collapse" button wrapped its own label to two lines and made the head 12 px
+     taller than the row it shares. */
+  #projects > .root-group > .root-head button { white-space: nowrap; }
+  #projects > .root-group > .root-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+}

@@ -20,7 +20,9 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 await import("../public/core/branch-link.js");
 const wtBranchLink = globalThis.wtBranchLink;
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The branch cell moved out of app.js into public/board/merge.js (cut 5 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
+const src = readFileSync(new URL("../public/board/merge.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "branch cell: the link, and the local chip", "branch cell");
 
 const esc = (s) =>

@@ -29,6 +29,11 @@
 //   9. a console shorter than the cap can be pulled past it
 //  10. a click in the console's own text is not a resize
 //
+// THE BAND IS THE MODULE'S. How far the box may grow, and where it stops, is `band()` and `limit()` in
+// public/core/console-grip.js, in LAYOUT px. This gate asks those functions with the values the press reads instead of
+// subtracting a viewport room of its own, and asserts the drawn foot against the viewport edge at 100, 90 and 110
+// zoom - the readings that tell a layout room from one that mixed the visual viewport with a layout top.
+//
 // A NOTE ON DIRECTION. The console is a block in the flow: its top edge does not move, so dragging the corner UP makes
 // the box SHORTER and DOWN makes it TALLER. The monotonic reading below is therefore "the height moves one way for
 // the whole leg, 20px a step" - up shrinks, down grows - which is the only shape a top-anchored box can have.
@@ -124,6 +129,24 @@ const measure = (page, thread) =>
       boxKids: grip && grip.parentElement ? [...grip.parentElement.children].map((n) => `${n.tagName}.${n.className || ""}`) : [],
       marchOutside: Boolean(grip && grip.parentElement && !grip.parentElement.querySelector(".march")),
       roomBelow: card ? Math.round(document.documentElement.scrollHeight - (window.scrollY + card.getBoundingClientRect().bottom)) : -1,
+      // THE BAND, FROM THE MODULE THE PAGE RUNS. How far the box may grow is `band()` in public/core/console-grip.js, in
+      // LAYOUT px, and this gate must not keep a viewport subtraction of its own: it asks that function with the values
+      // the press reads (`top: rect.top / z`, the zoom, the sheet's floor, the viewport, the 8px gap). The fixture has no
+      // scrollport, so the viewport is the only edge, and the step-1 checks say so before a null pane edge is believed.
+      band: (() => {
+        const grip = window.wtConsoleGrip;
+        if (!grip || typeof grip.band !== "function") return null;
+        const z = grip.zoom();
+        const b = grip.band({
+          top: r.top / z,
+          z,
+          floor: typeof outFloor === "function" ? outFloor(cs) : 0,
+          paneBottom: null,
+          viewport: window.innerHeight,
+          gap: grip.GAP_PX,
+        });
+        return { min: b.min, room: b.room, edge: b.edge, paneRoom: b.paneRoom, viewRoom: b.viewRoom, z, top: r.top, gap: grip.GAP_PX, viewport: window.innerHeight };
+      })(),
       // The page's own topbar WRAPS (`flex-wrap`, position: sticky, in the flow). One row more or less is 38px of
       // everything below it, so a rewrap between two moves moves the card under a pointer that has not moved. It is
       // watched here so a reading that is really a topbar rewrap says so instead of blaming the grip.
@@ -262,6 +285,35 @@ const clipOf = (page, thread, m) =>
   );
 
 const near = (a, b, tol = 0.6) => Math.abs(a - b) <= tol;
+// The one thing a room in LAYOUT px has to satisfy: the console's foot, drawn back in VISUAL px, is the viewport edge
+// less the gap the gesture keeps under it. `top` is the rect's visual top; the room and the gap are layout lengths, so
+// the scale is applied once, to their sum. A room that mixed a visual viewport with a layout top reads the same as the
+// right one at 100% and lands 10% off the edge at the two zoom probes below.
+const footOnEdge = (b, tol = 1) => Boolean(b) && near(b.top + (b.room + b.gap) * b.z, b.viewport, tol);
+const footPx = (b) => (b ? +(b.top + (b.room + b.gap) * b.z).toFixed(1) : NaN);
+// The same band at a zoom this page is not drawn at: the top is held at the pixel it was measured at, so the reading is
+// about the units and not about the reflow.
+const bandAt = (page, thread, z) =>
+  page.evaluate(
+    ({ t, zz }) => {
+      const card = document.querySelector(`.job[data-thread="${t}"]`);
+      const pre = card && card.querySelector("pre.job-out");
+      const grip = window.wtConsoleGrip;
+      if (!pre || !grip || typeof grip.band !== "function") return null;
+      const r = pre.getBoundingClientRect();
+      const cs = getComputedStyle(pre);
+      const b = grip.band({
+        top: r.top / zz,
+        z: zz,
+        floor: typeof outFloor === "function" ? outFloor(cs) : 0,
+        paneBottom: null,
+        viewport: window.innerHeight,
+        gap: grip.GAP_PX,
+      });
+      return { min: b.min, room: b.room, edge: b.edge, paneRoom: b.paneRoom, viewRoom: b.viewRoom, top: r.top, z: zz, gap: grip.GAP_PX, viewport: window.innerHeight };
+    },
+    { t: thread, zz: z },
+  );
 const monotone = (heights, dir) =>
   heights.every((h, i) => i === 0 || (dir === "down" ? h > heights[i - 1] : h < heights[i - 1]));
 
@@ -281,7 +333,16 @@ async function main() {
     console.log(`sandbox: ${panel.base}`);
     await withBrowser(
       async ({ page, pageErrors }) => {
-        await openPage(page, panel.base, { selector: `pre.job-out` });
+        // The Unattached agents card ships MINIMIZED (row 416: FIXED_DEFAULT_COLLAPSED in public/app.js) and every console
+        // here lives in it. Open it the way a reader does - a press on the card's own head, which records the choice
+        // (`wm.fixedChosen`), so the reload in step 8 finds it open again instead of waiting for a hidden console.
+        await openPage(page, panel.base, { selector: "#agents" });
+        await page.waitForFunction(() => typeof state !== "undefined", null, { timeout: 30_000 });
+        await page.evaluate(() => {
+          if (document.getElementById("agents")?.classList.contains("fixed-collapsed")) {
+            document.querySelector('[data-toggle-fixed="agents"]')?.click();
+          }
+        });
         await page.waitForSelector(`.job[data-thread="${LONG}"] pre.job-out`, { state: "visible", timeout: 20_000 });
         await page.waitForSelector(`.job[data-thread="${SHORT}"] pre.job-out`, { state: "visible", timeout: 20_000 });
         // Let the page finish arriving before anything is measured: the topbar's own status line is painted after the
@@ -311,6 +372,23 @@ async function main() {
         // card that this never happens, and this check is what says so.
         check(start.roomBelow > 600, "and the board has room under the card, so no scroll clamp can move it",
           `room below ${start.roomBelow}px`);
+        // THE ROOM IS THE MODULE'S. `band()` is asked with the press's own inputs and answers one room in LAYOUT px; the
+        // gate compares it to the edge it names and to the drawn foot, instead of subtracting a viewport room of its own
+        // (which is what the old line did, in mixed units, and could only ever be checked at 100% zoom).
+        check(Boolean(start.band) && start.band.edge === "viewport" && start.band.paneRoom == null,
+          "the corner's room is the band's, with the viewport its only edge",
+          start.band ? `room=${start.band.room} viewRoom=${start.band.viewRoom} paneRoom=${start.band.paneRoom} edge=${start.band.edge} floor=${start.band.min}` : "the band did not answer");
+        check(Boolean(start.band) && near(start.band.room, start.band.viewRoom),
+          "and it is that edge's own room, the nearer of the two the band keeps, not a subtraction here",
+          start.band ? `room=${start.band.room} viewRoom=${start.band.viewRoom}` : "");
+        check(footOnEdge(start.band), "the room is LAYOUT px: the console's foot is the viewport edge less the gap",
+          start.band ? `room=${start.band.room} top=${start.band.top} z=${start.band.z} foot=${footPx(start.band)} viewport=${start.band.viewport}` : "");
+        for (const probeZoom of [0.9, 1.1]) {
+          const b = await bandAt(page, LONG, probeZoom);
+          check(footOnEdge(b),
+            `the band's room is layout px at ${Math.round(probeZoom * 100)}% zoom: the console's foot is still the viewport edge`,
+            b ? `room=${b.room} top=${b.top} z=${b.z} foot=${footPx(b)} viewport=${b.viewport}` : "the band did not answer");
+        }
 
         // ---- 2. a press on the corner that does not move is not a resize: nothing is left pinned
         {
@@ -344,7 +422,26 @@ async function main() {
         // tracking and the 20px step are asserted while the box is above the floor, and the step that reaches it is
         // asserted to land ON it. Demanding 20px forever would be the viewport-only band's mistake in a second
         // costume: a stop the box really makes, read as a defect.
-        const floor = await page.evaluate(() => Number(window.wtConsoleGripDrag && window.wtConsoleGripDrag.min) || 0);
+        // THE BAND THE GESTURE IS OBEYING, read off the press's own record (`wtConsoleGripDrag`, public/core/console-grip.js)
+        // rather than re-derived from the box: the floor is the sheet's and the room is the module's, so this leg's stop
+        // is the module's number and not this file's arithmetic. The foot reading is the unit check - the record's top
+        // and room are layout lengths and the scale it froze is the one they are drawn back with.
+        const held = await page.evaluate(() => {
+          const d = window.wtConsoleGripDrag;
+          if (!d || !window.wtConsoleGrip) return null;
+          return { min: d.min, room: d.room, edge: d.edge, top: d.top, z: d.z, paneRoom: d.paneRoom, viewRoom: d.viewRoom,
+            gap: window.wtConsoleGrip.GAP_PX, viewport: window.innerHeight };
+        });
+        check(held && held.edge === "viewport" && held.paneRoom == null,
+          "the press froze the band's room, with the viewport its only edge for a board card",
+          held ? `room=${held.room} viewRoom=${held.viewRoom} paneRoom=${held.paneRoom} edge=${held.edge} floor=${held.min}` : "the press left no record");
+        check(held && near(held.room, Math.min(held.viewRoom == null ? Infinity : held.viewRoom, held.paneRoom == null ? Infinity : held.paneRoom)),
+          "and it is the nearer of the two rooms the band keeps, in layout px",
+          held ? `room=${held.room} of view ${held.viewRoom} / pane ${held.paneRoom}` : "");
+        check(held && near((held.top + held.room + held.gap) * held.z, held.viewport, 1),
+          "whose foot, drawn back at the frozen scale, is the viewport edge less the gap",
+          held ? `foot=${+((held.top + held.room + held.gap) * held.z).toFixed(1)} viewport=${held.viewport} top=${held.top} z=${held.z}` : "");
+        const floor = held ? held.min : 0;
         const above = (i) => g1.at.h - (i + 1) * STEP > floor + 0.5;
         const upGapsX = up.map((s) => Math.abs(s.gapX));
         const upGapsY = up.map((s) => Math.abs(s.gapY));
@@ -451,14 +548,28 @@ async function main() {
           const g3 = await grab(page, SHORT);
           const pull = [];
           for (let i = 1; i <= 13; i += 1) pull.push(await slide(page, SHORT, g3.x, g3.y + i * STEP));
+          // THE STOP IS THE BAND'S, through the module's own `limit` and the room the press froze. `want` is the pointer's
+          // own request (13 steps of visual travel, divided by the scale the press read); the stop is what the move would
+          // write for it. A shorter room moves this expectation with it instead of failing the box for obeying the band,
+          // and the foot reading in step 1 is what says the room is really the edge.
+          const pullBand = await page.evaluate(() => {
+            const d = window.wtConsoleGripDrag;
+            return d && window.wtConsoleGrip ? { min: d.min, room: d.room, edge: d.edge, z: d.z } : null;
+          });
+          const zPull = shortStart.band && shortStart.band.z > 0 ? shortStart.band.z : 1;
+          const wantPull = shortStart.h / zPull + (13 * STEP) / zPull;
+          const stopPull = pullBand
+            ? await page.evaluate(({ h, min, room }) => window.wtConsoleGrip.limit(h, min, room), { h: wantPull, min: pullBand.min, room: pullBand.room })
+            : wantPull;
           await page.mouse.up();
           await page.waitForTimeout(80);
-          check(pull.every((s) => Math.abs(s.gapY) <= TOL), "its grip tracks the pointer too",
-            `gaps ${pull.map((s) => s.gapY).join(",")}`);
+          const inside = pull.filter((s, i) => shortStart.h / zPull + ((i + 1) * STEP) / zPull < stopPull - 2);
+          check(inside.every((s) => Math.abs(s.gapY) <= TOL), "its grip tracks the pointer too, while the box is inside the band",
+            `gaps ${inside.map((s) => s.gapY).join(",")} of ${pull.length} moves${inside.length < pull.length ? ` (${pull.length - inside.length} at the stop)` : ""}`);
           const end = pull[pull.length - 1];
-          check(end.h > CAP && near(end.h, shortStart.h + 260),
-            "and the drag carries it past the cap the console otherwise sits on",
-            `h ${shortStart.h} -> ${end.h} (cap ${CAP})`);
+          check(end.h > CAP && near(end.h / zPull, stopPull, 1),
+            "and the drag carries it past the cap, to the height the module's limit keeps",
+            `h ${shortStart.h} -> ${end.h} (cap ${CAP}, want ${wantPull}, room ${pullBand ? pullBand.room : "?"}, stop ${stopPull})`);
         }
 
         // ---- 8. a reload rebuilds every card on the board: the console comes back at the height the reader chose,

@@ -31,9 +31,9 @@ const assistant = (over = {}) => ({
   ...over,
 });
 
-async function call(route, { method = "GET", query = "", token = "secret" } = {}) {
+async function call(route, { method = "GET", query = "", token = "tok-test-alpha" } = {}) {
   const res = answer();
-  const handler = createDigestRoutes({ assistant: assistant(), config: { token: "secret" }, sendJson: res.send, authorised: (req, t) => req.headers["x-panel-token"] === t });
+  const handler = createDigestRoutes({ assistant: assistant(), config: { token: "tok-test-alpha" }, sendJson: res.send, authorised: (req, t) => req.headers["x-panel-token"] === t });
   const req = { ...request(method), headers: { "x-panel-token": token } };
   const url = new URL(`http://localhost${route}${query}`);
   const handled = await handler(req, res, route, url);
