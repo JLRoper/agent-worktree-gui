@@ -6474,7 +6474,7 @@ const server = createServer(async (req, res) => {
       if (!rec) return sendJson(res, 404, { error: `no branch-parents record for ${cleanPath(path)} - nothing to lift` });
       log(`kind: ${cleanPath(path)} is lifted (kind ${rec.kind}) - its push now meets the ordinary controls`);
       // The record is on every surface that reads it now: the push rule (which reads the book), the row that pressed
-      // the lift, and every other open tab. Broadcast so a second tab's row turns from R to R-with-a-tick without a
+      // the lift, and every other open tab. Broadcast so a second tab's row turns from R or I to the upgraded T without a
       // reload - the same full frame a write of any other per-row fact sends.
       broadcastSnapshot();
       return sendJson(res, 200, {
