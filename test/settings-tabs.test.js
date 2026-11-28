@@ -26,7 +26,9 @@ import { readStyleSheets } from "./style-sheets.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const css = readStyleSheets().replace(/\/\*[\s\S]*?\*\//g, "");
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The Settings window was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the two regions are read from the file that carries them.
+const src = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
 
 const topbar = html.match(/<header class="topbar">([\s\S]*?)<\/header>/);
 assert.ok(topbar, "index.html must carry the top bar");

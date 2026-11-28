@@ -12,11 +12,13 @@ import { readStyleSheets } from "./style-sheets.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const css = readStyleSheets().replace(/\/\*[\s\S]*?\*\//g, "");
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The Settings window, Permissions tab included, was cut out of app.js into public/settings-window.js (cut 8 of the
+// eight in docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
+const src = readFileSync(new URL("../public/settings-window.js", import.meta.url), "utf8");
 
 const begin = src.indexOf("// ---- Permissions tab");
 const end = src.indexOf("// ---- settings window", begin);
-assert.ok(begin > 0 && end > begin, "the Permissions region is in public/app.js");
+assert.ok(begin > 0 && end > begin, "the Permissions region is in public/settings-window.js");
 const region = src.slice(begin, end);
 
 const rule = (selector) => {

@@ -19,7 +19,9 @@ import test from "node:test";
 import { readSource, sliceRegion } from "../tools/panel-testkit.mjs";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const region = sliceRegion(readSource("public/app.js"), "settings > updates: the release notes", "settings > updates");
+// The release-notes tab was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the region is read from the file that carries it.
+const region = sliceRegion(readSource("public/settings-window.js"), "settings > updates: the release notes", "settings > updates");
 
 // The page's own escaper: the notice carries a fetch's error text, so the escaping is part of the answer.
 const domFormat = readSource("public/core/dom-format.js");

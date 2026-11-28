@@ -25,7 +25,10 @@ import { readStyleSheets } from "./style-sheets.js";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").split(String.fromCharCode(13)).join("");
 const assistant = read("public/assistant.js");
-const app = read("public/app.js");
+// The Settings window was cut out of app.js into public/settings-window.js (cut 8 of the eight in
+// docs/reports/module-separation-2026-11-28.html), so the page's own scripts are read as one string: the opener the
+// chord calls, the bar's wiring and the painter it uses now live in the new file.
+const app = `${read("public/app.js")}\n${read("public/settings-window.js")}`;
 const html = read("public/index.html");
 const css = readStyleSheets();
 
@@ -41,7 +44,7 @@ function chordBranch() {
 
 test("exactly one place in the page binds Ctrl+Shift+S", () => {
   const owners = [];
-  for (const rel of ["public/app.js", "public/assistant.js", "public/settings.js", "public/render-jobs.js", "public/render-projects.js"]) {
+  for (const rel of ["public/app.js", "public/settings-window.js", "public/assistant.js", "public/settings.js", "public/render-jobs.js", "public/render-projects.js"]) {
     if (new RegExp(`KeyS|["']s["']|["']S["']`).test(read(rel).split("\n").filter((line) => /ctrlKey/.test(line) && !line.trim().startsWith("//")).join("\n"))) {
       owners.push(rel);
     }
