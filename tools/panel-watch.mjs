@@ -11,14 +11,18 @@
 //   1. GET /api/jobs (or read --jobs <fixture>), and read the job STORE (jobs.json, or --store <file>). The two
 //      are not the same list: /api/jobs carries runs the panel resurrected from the gateway after the store let
 //      them go, and a run the store does not hold has no row, queue entry or repair on the board.
-//   2. Hand both to sweepBoard (lib/panel-watch.js). It answers with the lines that are news:
+//   2. Hand both to sweepBoard (lib/panel-watch.js). It answers with the lines that are news, each LABELLED with
+//      the assistant that owns the run:
 //        - a LIVE failed run (store holds it, no endedAt) says so on every pass, because it is failing now;
 //        - a failed run that already ended, or that the store no longer holds, is reported ONCE and then never
-//          again - the state file remembers it by id, pruned by recency, never by id order.
+//          again - the state file remembers it by id, pruned by recency, never by id order;
 //      and a run still marked running past --long-run-minutes (default 55), which is a live condition too.
-//   3. POST the block to /api/assistant/say as `Watchdog: <line> | <line>`, the shape the panel's assistant has
-//      always been handed, and write the state ONLY after the panel accepted it. A refused announce (409 while
-//      a turn is running) leaves the state untouched, so the next pass retries the report instead of losing it.
+//   3. POST the items to /api/assistant/watchdog. The panel re-resolves each run's owner from its own board (never
+//      from this tool's words), says the block on the sentry's own page - `Watchdog: <line> | <line>`, the shape the
+//      reader has always been handed - and wakes the OWNER with the same alert id, so the assistant whose queue
+//      holds the row sees the alert too. The state is written ONLY after the panel accepted it. A refused announce
+//      (409 while a turn is running) leaves the state untouched, so the next pass retries the report instead of
+//      losing it.
 //
 // WHY THIS FILE EXISTS. The watch used to be a script outside this repo whose one-shot set was sorted and then
 // truncated to the newest 200 BY ID ORDER. Ids are hex, so every id that sorts low was dropped on each save and
@@ -207,6 +211,20 @@ async function readFeed() {
   return { jobs: Array.isArray(answer?.jobs) ? answer.jobs : [] };
 }
 
+/**
+ * The owner of every run the board shows, from the panel's own resolver. A panel that cannot answer is not a
+ * reason to fail the pass: the lines then say "owner unknown" - the honest answer - and the announce still
+ * delivers, because the panel resolves the owner again before it routes anything.
+ */
+async function readOwners() {
+  try {
+    const answer = await panelJson("/api/assistant/watchdog/owners");
+    return answer && answer.owners && typeof answer.owners === "object" ? answer.owners : {};
+  } catch {
+    return null;
+  }
+}
+
 function readStore() {
   const file = storeFile();
   if (!file) return { store: null, file: null, note: "no job store path could be resolved" };
@@ -230,12 +248,15 @@ async function pass({ dryRun = false, noAnnounce = false } = {}) {
   const loaded = readWatchState(STATE_FILE);
   const now = Date.now();
   const minutes = Number(flag("long-run-minutes"));
+  // The board's own answer, read once, so every line names the run's owner. No answer means "owner unknown".
+  const owners = await readOwners();
   const result = sweepBoard({
     jobs: Array.isArray(feed?.jobs) ? feed.jobs : [],
     store,
     state: loaded.state,
     now,
     longRunMinutes: Number.isFinite(minutes) && minutes > 0 ? minutes : LONG_RUN_MINUTES_DEFAULT,
+    ownerOf: owners ? (job) => owners[String(job?.id == null ? "" : job.id)] ?? null : null,
   });
   const text = result.alerts.length ? announceText(result.alerts) : "";
 
@@ -245,7 +266,10 @@ async function pass({ dryRun = false, noAnnounce = false } = {}) {
     else if (noAnnounce) announced = "not sent (--no-announce)";
     else {
       try {
-        await panelJson("/api/assistant/say", { method: "POST", body: { text } });
+        // The ITEMS, not the joined text: the panel resolves each run's owner from its own board and delivers the
+        // same alert to that owner's page and wakes. The line rides along for the sentry page's own words.
+        const items = result.items.map((it) => ({ jobId: it.id, kind: it.kind, line: it.line, thread: it.thread, runId: it.runId }));
+        await panelJson("/api/assistant/watchdog", { method: "POST", body: { alerts: items } });
         announced = "said";
       } catch (err) {
         announced = err && err.status === 409 ? "refused (a turn is already running); nothing recorded, next pass retries" : `failed: ${String((err && err.message) || err)}`;
