@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two console gates now assert the one band - row 452</title>
+<style>
+  body { margin: 0; padding: 32px 40px 64px; background: #0d1117; color: #d7dee9;
+         font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 1080px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; color: #f0f6ff; }
+  h2 { font-size: 18px; margin: 34px 0 10px; color: #f0f6ff; border-bottom: 1px solid #232b36; padding-bottom: 6px; }
+  p, li { margin: 8px 0; }
+  .sub { color: #8f9bab; font-size: 13px; margin-bottom: 26px; }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; color: #9fd1ff; }
+  pre { background: #121821; border: 1px solid #232b36; border-radius: 6px; padding: 12px 14px;
+        overflow-x: auto; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; color: #c9d4e2; }
+  pre b { color: #ffb4b4; font-weight: 600; }
+  pre i { color: #8be6a8; font-style: normal; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 6px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #212936; vertical-align: top; }
+  th { color: #a9b6c6; font-weight: 600; background: #121821; }
+  .ok { color: #7ee2a0; } .bad { color: #ff9d9d; }
+  .box { border: 1px solid #232b36; border-left: 3px solid #5aa9ff; background: #111823; border-radius: 4px;
+         padding: 12px 16px; margin: 16px 0; }
+  ul { padding-left: 22px; }
+</style>
+</head>
+<body>
+
+<h1>Two console gates now assert the one band</h1>
+<div class="sub">
+  agent-worktree-gui, branch <code>wtgui/row-452-is-the-complete-brief-two-3603fa</code>, cut from
+  <code>20261127_2134_TASK-405_row-405-is-the-complete</code> at <code>3eaccda0</code>. Measured 2026-11-28 on this tree.
+</div>
+
+<div class="box">
+  <b>The claim.</b> <code>tools/verify-console-height.mjs</code> and <code>tools/verify-console-resize.mjs</code> now take
+  every room, floor and stop from <code>band()</code> and <code>limit()</code> in <code>public/core/console-grip.js</code>
+  instead of carrying a viewport subtraction of their own. Both read the room in LAYOUT px, at the press's own zoom, and
+  both assert that the console's foot lands on the viewport edge less the gap. A band broken back to the historic
+  mixed-unit formula fails both gates at 90% and 110% zoom, which no 100% reading can see.
+</div>
+
+<h2>What was wrong</h2>
+<p>
+  The module replaced the old room with one function:
+  <code>band()</code> at <code>public/core/console-grip.js:72</code> answers <code>min</code> (the sheet's floor) and
+  <code>room</code> (the nearer of the pane's bottom and the viewport's bottom, minus the 8px gap) in layout px,
+  dividing both visual edges by the page zoom once:
+</p>
+<pre>const paneRoom = hasPane ? Number(opts.paneBottom) / z - top - gap : null;   // console-grip.js:82
+const viewRoom = hasView ? Number(opts.viewport) / z - top - gap : null;    // console-grip.js:83</pre>
+<p>
+  <code>limit()</code> at <code>public/core/console-grip.js:96</code> is the one clamp the move and the release both call.
+  Two gates that exist to guard that gesture still had their own copy of the arithmetic:
+</p>
+<ul>
+  <li>
+    <code>tools/verify-console-height.mjs</code> measured its fixture's room with
+    <code>Math.round(window.innerHeight - pre.getBoundingClientRect().top - 8)</code>. That is the historic formula:
+    <code>innerHeight</code> and the rect are visual lengths, the gesture divides both into layout px at the press, so the
+    gate only agreed with the module at 100% zoom. Its only use of the number was a fixture check
+    (<code>room &gt; 440</code>), so on a zoomed page it would have accepted a console whose real room was smaller: the
+    fixture measured against a number the gesture does not obey.
+  </li>
+  <li>
+    <code>tools/verify-console-resize.mjs</code> asserted none of the band's room: it read the floor off the drag record
+    and expected the pull leg to land on <code>shortStart.h + 260</code>, a number derived from the step count rather than
+    from the module's clamp. A box that stopped on a shorter room would have been reported as a short drag.
+  </li>
+</ul>
+<p>
+  A note on the counts in the brief. It quoted <code>verify-console-height</code> failing 30 of 59 and
+  <code>verify-console-resize</code> failing 4. On this tree, before any edit, both passed: 60 and 41 checks. An earlier
+  commit on the turnover branch (<code>5270cac9</code>, "gates: the console height and resize read the one band") had
+  already repaired the pressing and floor halves, which is what those failures were. What it did not remove is the
+  arithmetic above: the height gate still subtracted its own room, and neither gate could see the unit at any zoom but
+  100%. The canary below is what proves the repair is now complete.
+</p>
+
+<h2>What changed, gate by gate</h2>
+<table>
+  <tr><th>Gate</th><th>Before</th><th>Now</th></tr>
+  <tr>
+    <td><code>verify-console-height.mjs</code></td>
+    <td>own <code>innerHeight - rect.top - 8</code> room (<code>roomOf</code>), one reading at the page's zoom</td>
+    <td>
+      <code>bandOf()</code> at <code>tools/verify-console-height.mjs:478</code> asks
+      <code>window.wtConsoleGrip.band</code> with the press's own inputs (<code>top: rect.top / z</code>, the zoom,
+      <code>outFloor(cs)</code>, the pane edge when the card is a scrollport, <code>innerHeight</code>,
+      <code>GAP_PX</code>) and also returns <code>limit(420, min, room)</code> through
+      <code>tools/verify-console-height.mjs:511</code>. The one subtraction became seven checks: the room is above the
+      440px the drag needs, the fixture is the no-pane shape, the room is the band's own <code>viewRoom</code>, the foot
+      is the viewport edge (<code>footOnEdge</code>, <code>:521</code>), the same foot at 90% and at 110%, and
+      <code>limit</code> keeps 420.
+    </td>
+  </tr>
+  <tr>
+    <td><code>verify-console-resize.mjs</code></td>
+    <td>floor from the drag record, pull leg expected at <code>start + 260</code>, no band assertion</td>
+    <td>
+      <code>measure()</code> carries the band (<code>tools/verify-console-resize.mjs:136</code>); step 1 asserts its
+      edge, its <code>viewRoom</code> and its foot; the press record is checked for the same three
+      (<code>:420</code>); the pull leg's stop is <code>limit(want, min, room)</code> from the record
+      (<code>:552</code>) and the 20px step is asserted only while the box is inside the band (<code>:557</code>).
+    </td>
+  </tr>
+</table>
+<p>
+  Both gates also take the same two zoom probes (<code>0.9</code> and <code>1.1</code>) with the top held at the pixel it
+  was measured at, so the reading is about the units and not about the reflow. The probes cost no extra browser run: they
+  are a few <code>band()</code> calls against the page the gate already has open.
+</p>
+
+<h2>Evidence: the two gates on this tree</h2>
+<table>
+  <tr><th>Run</th><th>Checks</th><th>Result</th></tr>
+  <tr><td><code>verify-console-height.mjs</code>, before</td><td>60</td><td class="ok">PASS</td></tr>
+  <tr><td><code>verify-console-resize.mjs</code>, before</td><td>41</td><td class="ok">PASS</td></tr>
+  <tr><td><code>verify-console-height.mjs</code>, after</td><td>66</td><td class="ok">PASS</td></tr>
+  <tr><td><code>verify-console-resize.mjs</code>, after</td><td>49</td><td class="ok">PASS</td></tr>
+  <tr><td><code>verify-console-height.mjs</code>, band broken (canary)</td><td>2 of 66</td><td class="bad">FAIL</td></tr>
+  <tr><td><code>verify-console-resize.mjs</code>, band broken (canary)</td><td>2 of 49</td><td class="bad">FAIL</td></tr>
+</table>
+<p>The six new readings these gates now print on a passing run:</p>
+<pre>PASS  each console has viewport room under it for the 420px drag the band must allow  row 651.96875px home 606.78125px want &gt; 440px
+PASS  each is the board-card shape: no scrollport, so the viewport is the band's only edge  row edge=viewport pane=false | home edge=viewport pane=false
+PASS  the room is the band's own viewRoom, not a second subtraction in this file  row room=651.96875 viewRoom=651.96875 | home room=606.78125 viewRoom=606.78125
+PASS  the room is LAYOUT px: the console's foot lands on the viewport edge less the gap  row foot 1000.0 of 1000 | home foot 1000.0 of 1000
+PASS  the band's room is layout px at 90% zoom: the console's foot is still the viewport edge  room=725.2986111111111 top=340.03125 z=0.9 foot=1000.0 viewport=1000
+PASS  the band's room is layout px at 110% zoom: the console's foot is still the viewport edge  room=591.9715909090909 top=340.03125 z=1.1 foot=1000.0 viewport=1000
+PASS  so the 420px the drag lands on is the height the module's limit keeps  limit(420, 34, 651.96875) = 420</pre>
+<pre>PASS  the corner's room is the band's, with the viewport its only edge  room=684.109375 viewRoom=684.109375 paneRoom=null edge=viewport floor=34
+PASS  and it is that edge's own room, the nearer of the two the band keeps, not a subtraction here  room=684.109375 viewRoom=684.109375
+PASS  the room is LAYOUT px: the console's foot is the viewport edge less the gap  room=684.109375 top=207.890625 z=1 foot=900 viewport=900
+PASS  the band's room is layout px at 90% zoom: the console's foot is still the viewport edge  room=761.0104166666667 top=207.890625 z=0.9 foot=900 viewport=900
+PASS  the band's room is layout px at 110% zoom: the console's foot is still the viewport edge  room=621.1903409090909 top=207.890625 z=1.1 foot=900 viewport=900
+PASS  whose foot, drawn back at the frozen scale, is the viewport edge less the gap  foot=900 viewport=900 top=207.890625 z=1
+PASS  and the drag carries it past the cap, to the height the module's limit keeps  h 138.8 -&gt; 399 (cap 230, want 398.8, room 684.78125, stop 399)</pre>
+
+<h2>The canary: a deliberately broken band()</h2>
+<p>
+  <code>public/core/console-grip.js:82-83</code> was changed back to the historic mixed-unit formula (the visual viewport
+  minus the layout top), the two gates were run, and the file was restored. This is the exact edit:
+</p>
+<pre>-    const paneRoom = hasPane ? Number(opts.paneBottom) / z - top - gap : null;
+-    const viewRoom = hasView ? Number(opts.viewport) / z - top - gap : null;
++    const paneRoom = hasPane ? Number(opts.paneBottom) - top / z - gap : null;
++    const viewRoom = hasView ? Number(opts.viewport) - top / z - gap : null;</pre>
+<p>Each gate failed on its zoom probes, and on nothing else, which is the shape the fix is meant to have:</p>
+<pre>tools/verify-console-height.mjs
+<b>FAIL</b>  the band's room is layout px at 90% zoom: the console's foot is still the viewport edge  room=572.2083333333334 top=340.03125 z=0.9 foot=862.2 viewport=1000
+<b>FAIL</b>  the band's room is layout px at 110% zoom: the console's foot is still the viewport edge  room=710.9824380165289 top=340.03125 z=1.1 foot=1130.9 viewport=1000
+RESULT: FAIL (2 of 66 checks)
+
+tools/verify-console-resize.mjs
+<b>FAIL</b>  the band's room is layout px at 90% zoom: the console's foot is still the viewport edge  room=635.3449074074074 top=207.890625 z=0.9 foot=786.9 viewport=900
+<b>FAIL</b>  the band's room is layout px at 110% zoom: the console's foot is still the viewport edge  room=720.1895661157025 top=207.890625 z=1.1 foot=1008.9 viewport=900
+RESULT: FAIL (2 checks)</pre>
+<p>
+  At 90% the broken band stopped the box 138px short of the edge, at 110% it drew 131px past it. Both are the defect the
+  module's comment describes, and both are now a red gate rather than a reading a person has to notice.
+</p>
+<p>
+  One more change came out of this work and is worth naming: the height gate's <code>grab()</code> now checks the TOP the
+  gesture froze as well as the height it pinned (<code>tools/verify-console-height.mjs:298-302</code>). With the band
+  measured in the fixture, a press that landed after the board's anchor sweep had moved the console froze a top the gate
+  had not measured, and the drag then stopped on a room the gate never read: it reported 380 instead of 420. The press is
+  released and taken again when that happens, and a drag that does end short now prints the band's room and edge beside
+  the height.
+</p>
+
+<h2>The stylesheet question</h2>
+<p>
+  Neither gate opens <code>public/style.css</code>, so there was nothing to point at <code>tools/style-sheets.mjs</code>.
+  The only matches for <code>css</code> in either file are two sheet names in comments (<code>public/console.css</code>,
+  <code>public/board.css</code>) and two <code>style.cssText</code> assignments that draw the probe's pointer marker. Both
+  gates load the real page through <code>tools/panel-testkit.mjs</code>, so the sheets come from
+  <code>public/index.html</code> itself, in cascade order. The two gates that did open the removed file
+  (<code>verify-console-boxes.mjs</code>, <code>verify-console-fonts.mjs</code>) were converted by
+  <code>5270cac9</code>.
+</p>
+
+<h2>Reproduce</h2>
+<pre>cd "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-452-is-the-complete-brief-two-3603fa"
+node tools/verify-console-height.mjs     # RESULT: PASS (66 checks)
+node tools/verify-console-resize.mjs     # RESULT: PASS (49 checks)
+node --test test/console-grip.test.js test/console-height-store.test.js   # 31 pass</pre>
+<p>
+  For the canary, change <code>public/core/console-grip.js:82-83</code> to the two lines in the diff above and re-run
+  both: 2 of 66 and 2 checks fail, on the zoom probes.
+</p>
+
+</body>
+</html>
