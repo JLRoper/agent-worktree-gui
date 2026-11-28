@@ -86,12 +86,18 @@
 .as-qpane .as-task-agent-stack .as-task-agent .pill { margin-left: 0; }
 .as-qpane .as-task-agents { display: flex; flex-direction: row; flex-wrap: wrap; gap: 2px 6px; margin: 0; min-width: 0; }
 .as-qpane .as-task-agent { gap: 4px; padding: 0 3px 0 2px; }
-.as-qpane .as-task-agent .as-task-agent-thread { max-width: 210px; font-size: 10px; }
+/* THE BRANCH IS NAMED `project:branch` since #410, so the cap that used to hold a 35-character slug now holds the
+   project as well: 210 px cut the branch down to a dozen characters on the very card the ask was written from. 320 px
+   keeps the project and the slug's own head, and the code still truncates (with its own ellipsis and a title= carrying
+   the whole label) rather than pushing the title, the landing and the chips off the row. The Initiatives pane's
+   compact line is a different element (a bare thread span in panes.css) and keeps its 210 px, unchanged. */
+.as-qpane .as-task-agent .as-task-agent-thread { max-width: 320px; font-size: 10px; }
 .as-qpane .as-task-agent .as-task-agent-label { font-size: 10px; }
-/* WHERE THIS AGENT'S WORK IS, and how that tree lands: the project, the landed verdict, and a PR when the tree is a
-   turnover branch. It rides the agent's own line because one task can be carried by agents in different trees and
-   projects, and the task's own `worktree` only ever names the newest one. Dimmer than the thread and it shrinks
-   first, so a narrow card keeps the agent's name and loses the tail of this sentence. */
+/* WHERE THIS AGENT'S WORK IS, and how that tree lands: the landed verdict and a PR when the tree is a turnover branch.
+   The project is not in this sentence - it leads the line as `project:branch` - so nothing here repeats it. It rides
+   the agent's own line because one task can be carried by agents in different trees and projects, and the task's own
+   `worktree` only ever names the newest one. Dimmer than the thread and it shrinks first, so a narrow card keeps the
+   agent's name and loses the tail of this sentence. */
 .as-qpane .as-task-agent .as-task-agent-where { flex: 0 1 auto; min-width: 0; font-size: 9.5px; color: var(--dimmer); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .as-qpane .as-task-agent .pill { font-size: 9px; line-height: 1.5; padding: 0 5px; }
 .as-qpane .pill.pill-running { color: #7ee787; background: var(--green-bg); border-color: #1f4a2a; }

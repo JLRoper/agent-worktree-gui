@@ -12,6 +12,8 @@
 //     ✓ Done, ➡️ Move, ✕ Delete);
 //   - Move is a popover: no always-visible <select>, a ➡️ that opens it, and one pick per other assistant carrying
 //     data-as-qmove-to — the value the reassign route is posted with.
+//   - #410: the agent line's first text is `<project>:<branch>`, no `project <name>` fragment is left in the row,
+//     and the blue run chip is the row's last element, right of the session status chip.
 //
 // The region's top level only constructs a Map and declares functions, so evaluating it executes nothing that needs a
 // document. `esc`, the assistant list, the session lookup and the thread-label lookup are handed in.
@@ -470,4 +472,42 @@ test("the waiting-on chip draws the lane head the store derived, naming the lane
 
   const quiet = queueTaskHtml("assistant-1", { id: 9, title: "no lane", state: "queued", files: [] }, new Map());
   assert.ok(!quiet.includes("as-task-wait"), "a row with no lane head wears no chip");
+});
+
+test("#410: the agent line leads with project:branch and the run chip trails the status chip", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    {
+      id: 40,
+      title: "the line",
+      state: "running",
+      project: "agent-worktree-gui",
+      files: [],
+      threads: ["T-old", "T-live"],
+      runId: "run_live0001",
+      runBy: "run",
+      runStatus: "running",
+      // The queue's own per-thread decoration: each line knows the project of the tree its own thread ran in.
+      agentRows: [
+        { project: "agent-worktree-gui", verdict: "MERGED (1 commit)" },
+        { project: "agent-worktree-gui", verdict: "UNMERGED (4 commits)" },
+      ],
+    },
+    jobs([
+      ["T-old", { status: "failed" }],
+      ["T-live", { status: "running" }],
+    ]),
+  );
+  assert.ok(html.includes(">agent-worktree-gui:T-old</code>"), "the earlier agent's first text is project:branch");
+  assert.ok(html.includes(">agent-worktree-gui:T-live</code>"), "the live agent's first text is project:branch");
+  assert.ok(html.includes(">UNMERGED (4 commits)</span>"), "the landing sentence keeps the verdict");
+  assert.ok(!html.includes(">project "), "the late `project <name>` fragment is gone, the word included");
+  assert.ok(!/· project /.test(html), "and the sentence does not carry it either");
+  // The run chip is the ROW'S LAST ELEMENT: the status pill is immediately before it, so the row reads
+  // `... UNMERGED (4 commits) running run_live0001` and nothing can be drawn after the run id.
+  const liveRowStart = html.lastIndexOf('<div class="as-task-agent"');
+  const liveRow = html.slice(liveRowStart, html.indexOf("</div>", liveRowStart) + 6);
+  assert.match(liveRow, /class="pill pill-running"[^>]*>running<\/span>\s*<span class="as-task-agent-run" data-as-qrun="run_live0001"/, "the run chip follows the status chip");
+  assert.match(liveRow, /data-as-qrun="run_live0001"[^>]*>run_live0001<\/span>\s*<\/div>$/, "the run chip is the row's last element");
 });

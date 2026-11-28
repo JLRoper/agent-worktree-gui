@@ -449,20 +449,25 @@ window.WMApp.queueCards = function queueCards(deps) {
   // card's own chip — and pressing it opens that agent's card AND the console of the turn it is on (openAgentTurn),
   // not just the card header.
   //
-  // The RUN ID rides beside the current thread, because a thread is not one run: two records can share one slug (a
-  // failed attempt and its live retry), and the id is the only thing on the card that says which record the row's
-  // verdict was read from. A row with no run id says so — `guessing` — instead of letting a thread match pass for
-  // evidence.
+  // The RUN ID rides at the END of the row, after the agent's own status chip: a thread is not one run (two records
+  // can share one slug - a failed attempt and its live retry), and the id is the only thing on the card that says
+  // which record the row's verdict was read from. It trails the row so the id is read last, after the branch, the
+  // title, the landing and the status, and it is never mistaken for the agent's name. A row with no run id says
+  // `guessing` in the same slot instead of letting a thread match pass for evidence.
   // WHERE THIS AGENT'S WORK IS. The task's `worktree` is one path that moves with the newest link, so on its own it
   // cannot say where an earlier agent ran. `where` is this thread's own recorded tree (lib/assistant/queue.js
   // `threadTrees`), read back through the board row: the project it belongs to and how that tree LANDS - the verdict
   // for every kind (a research or implementation tree lands by merging locally, a turnover tree also carries a PR).
-  // Absent when the queue never wrote a tree for this thread, and then the line draws nothing extra: an absence is not
-  // the task's own project.
+  // Absent when the queue never wrote a tree for this thread: the line then falls back to the task's own project for
+  // the `project:branch` label, and this sentence draws nothing extra, because an absence is not a landing.
+  //
+  // The PROJECT is not in this sentence any more. It leads the line instead (`agent-worktree-gui:<branch>`, built in
+  // queueAgentHtml), where it is read first and cannot be confused with the verdict; the late `project <name>`
+  // fragment a reader photographed half way along the row is gone, the word included. The title keeps the tree path,
+  // so a reader who wants the project spelled out still finds it one hover away.
   function queueAgentWhere(where) {
     if (!where) return "";
     const parts = [];
-    if (where.project) parts.push(`project ${where.project}`);
     if (where.verdict) parts.push(String(where.verdict));
     if (where.pr?.number) parts.push(`PR #${where.pr.number} ${String(where.pr.state || "").toLowerCase()}`.trim());
     if (!parts.length) return "";
@@ -483,6 +488,12 @@ window.WMApp.queueCards = function queueCards(deps) {
     const rowRun = onCurrent && t?.state !== "queued" && roundLive ? { status: t.runStatus } : onCurrent && t?.runId && String(t?.runBy || "") === "run" ? { status: t.runStatus } : null;
     const job = rowRun || (jobs && typeof jobs.get === "function" ? jobs.get(thread) : null);
     const chip = queueAgentChip(job);
+    // THE LINE LEADS WITH WHERE THE WORK IS: `<project>:<branch>`, read before the title, the landing or the status.
+    // The thread's own recorded tree wins, because two agents on one card can be in two projects; a thread the queue
+    // never recorded a tree for falls back to the task's project, which the panel wrote when it cut the task. With
+    // no project anywhere the line keeps its bare thread, because a guessed project reads exactly like a fact.
+    const project = String(where?.project || queueProjectName(t) || "").trim();
+    const threadText = project ? `${project}:${thread}` : thread;
     const label = String(assistantThreadName(thread) || "").trim();
     const named = label && label !== thread;
     const open = `data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}"`;
@@ -518,11 +529,11 @@ window.WMApp.queueCards = function queueCards(deps) {
         : `<span class="${chip.cls}" title="${esc(`this agent's run is ${chip.word} — read from /api/jobs, not from the task record`)}">${chip.word}</span>`;
     return `<div class="as-task-agent" role="button" tabindex="0" ${open} title="${esc(title)}" aria-label="${esc(title)}">
             <span class="as-agent-mark is-${esc(chip.markState)}" aria-hidden="true">${chip.mark}</span>
-            <code class="as-task-agent-thread">${esc(thread)}</code>
-            ${runChip}
+            <code class="as-task-agent-thread" title="${esc(threadText)}">${esc(threadText)}</code>
             ${named ? `<span class="as-task-agent-label">${esc(label)}</span>` : ""}
             ${queueAgentWhere(where)}
             ${pill}
+            ${runChip}
           </div>`;
   }
 
