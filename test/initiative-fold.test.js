@@ -28,7 +28,13 @@ const { DOTS, PREVIEW_LINES, press, cut, countChips } = fold;
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const style = readStyleSheets();
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const route = readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8");
+// The prefix is answered by three files after row 516: routes/initiatives.js keeps the guard, the two constants and
+// the read's memo, routes/initiatives-write.js holds the tag registry and the writes, and routes/initiatives-read.js
+// holds the fold these assertions read for. The join is the prefix's source, so every assertion below is unchanged.
+const route = [
+  readFileSync(new URL("../routes/initiatives.js", import.meta.url), "utf8"),
+  readFileSync(new URL("../routes/initiatives-read.js", import.meta.url), "utf8"),
+].join("\n");
 
 // A node whose `closest` answers the selectors it is given: the press landed on an element, or inside one, that
 // matches those. That is the only thing the rule asks a node - which of the two card selectors answers first - so a
