@@ -19186,6 +19186,7 @@ const MAINTENANCE_PROCESSES_ID = "maintenance-processes";
 const MAINTENANCE_PROCESSES_SUMMARY_ID = "maintenance-processes-summary";
 const MAINTENANCE_REFRESH_ID = "btn-maintenance-refresh";
 const MAINTENANCE_RESULT_ID = (target) => `maintenance-result-${target}`;
+const MAINTENANCE_WINDOW_ID = (target) => `maintenance-window-${target}`;
 let maintenanceIndex = null;
 let maintenanceLoadedAt = 0;
 let maintenanceLoading = null;
@@ -19276,6 +19277,13 @@ function maintenanceTargetHtml(t) {
     detail +
     blocked +
     `<div class="maintenance-actions">` +
+    // The session store is the one target whose "unused for" window the reader chooses: 24 hours is the default, a
+    // week or a month reach further back. Every other target cleans what it holds, whole.
+    (target === "hermes-sessions"
+      ? `<label class="maintenance-window">unused for <select id="${esc(MAINTENANCE_WINDOW_ID(target))}">` +
+        `<option value="24">24 hours</option><option value="168">7 days</option><option value="720">30 days</option>` +
+        `</select></label>`
+      : "") +
     `<button type="button" data-maintenance-preview="${esc(target)}" title="${esc(`dry run: count what a clean of ${name} would remove, and remove nothing`)}">Preview</button>` +
     `<button type="button" data-maintenance-clean="${esc(target)}" title="${esc(cleanTitle)}"${canClean ? "" : " disabled"}>Clean</button>` +
     `</div>` +
@@ -19355,9 +19363,14 @@ async function runMaintenance(target, dryRun) {
   const node = document.getElementById(MAINTENANCE_RESULT_ID(target));
   if (node) node.textContent = dryRun ? "counting what a clean would remove…" : "cleaning…";
   try {
+    // Only the session target takes a window; it rides the same one clean (/api/maintenance/clean) as an extra field,
+    // read from the select the card drew — an absent or broken control falls back to the server's own default.
+    const windowEl = target === "hermes-sessions" ? document.getElementById(MAINTENANCE_WINDOW_ID(target)) : null;
+    const olderThanHours = windowEl ? Number(windowEl.value) || 24 : null;
+    const payload = olderThanHours ? { target, dryRun, olderThanHours } : { target, dryRun };
     const r = await apiFetch(
       "/api/maintenance/clean",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, dryRun }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
       { timeoutMs: 60000 },
     );
     const d = await r.json().catch(() => ({}));

@@ -33,6 +33,7 @@ class El {
     this.id = id;
     this._text = "";
     this._html = "";
+    this.value = "";
     this.listeners = {};
     this._classes = new Set();
     this.classList = {
@@ -68,6 +69,7 @@ function makePanel({ get, post } = {}) {
     "maintenance-targets",
     "maintenance-processes",
     "maintenance-processes-summary",
+    "maintenance-window-hermes-sessions",
     "btn-maintenance-refresh",
   ];
   const doc = {};
@@ -224,4 +226,30 @@ test("missing fields render as unknown instead of throwing", async () => {
   const census = doc.getElementById("maintenance-processes").textContent;
   assert.match(census, /sandbox panels unknown/, "an absent array is unknown, not zero");
   assert.match(census, /orphan panels unknown/);
+});
+
+test("the sessions card offers the unused-for window and the press carries it", async () => {
+  const answer = {
+    ok: true,
+    targets: [{ id: "hermes-sessions", label: "Hermes sessions", detail: "the stores", bytes: 8 * 1024 ** 3, files: 4, removable: true }],
+    processes: { sandboxPanels: [], testRunners: [], orphanPids: [] },
+  };
+  const { doc, api, calls } = makePanel({
+    get: async () => ({ ok: true, json: async () => answer }),
+    post: async (body) => ({
+      ok: true,
+      json: async () => ({ ok: true, target: body.target, dryRun: body.dryRun, removedFiles: 3, removedBytes: 0, remaining: 0 }),
+    }),
+  });
+
+  await api.loadMaintenance();
+  const html = doc.getElementById("maintenance-targets").innerHTML;
+  assert.match(html, /id="maintenance-window-hermes-sessions"/, "the card carries the window control");
+  assert.match(html, /<option value="24">/, "24 hours is offered");
+  assert.match(html, /<option value="168">/, "a week is offered");
+  assert.match(html, /<option value="720">/, "a month is offered");
+
+  doc["maintenance-window-hermes-sessions"].value = "168";
+  await api.runMaintenance("hermes-sessions", true);
+  assert.deepEqual(calls.posts[0], { target: "hermes-sessions", dryRun: true, olderThanHours: 168 }, "the chosen window rides the press");
 });
