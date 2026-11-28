@@ -4,16 +4,57 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.196.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.196.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-784 releases from v0.1.0 (2026-10-20) to v1.196.0 (2026-11-28), 2782 commits between the tags. Every release is anchored by an
-annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
-has no tag.
+785 releases from v0.1.0 (2026-10-20) to v1.196.1 (2026-11-28), 2810 commits between the tags. Every release is anchored by an
+annotated tag at the commit that first declared its version on main; `npm run verify:version-tags` fails when a
+bump has no tag, or when a version tag names a commit main never carried.
+
+## v1.196.1 — 2026-11-28 · 28 commits
+
+[`fb1db3b`](https://github.com/JLRoper/agent-worktree-gui/commit/fb1db3bcbd016a9d9e791695ae77cbdba297ccd2) · [compare v1.196.0...v1.196.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.196.0...v1.196.1)
+
+### Fixed
+
+- fix(watchdog): every sentry alert names its owner and reaches that assistant ([`fabfe10`](https://github.com/JLRoper/agent-worktree-gui/commit/fabfe10acaee8e0c4239a6023dc9b4d8abdf398b))
+- fix(queuesweep): a threadless row is not proven stale, and a queued row with a live job is linked ([`0168130`](https://github.com/JLRoper/agent-worktree-gui/commit/0168130ba22780b18cd8b1f10e95c85280d7efd5))
+
+### Docs & tests
+
+- docs: render the changelog - 784 releases ([`349c13d`](https://github.com/JLRoper/agent-worktree-gui/commit/349c13dd106597e1e6dd5b8a6117cd002629286b))
+- test(watchdog): the fixture tree is a neutral path, so the absolute-paths gate stays green ([`426fdd5`](https://github.com/JLRoper/agent-worktree-gui/commit/426fdd59dc55ceacdcca831d9c603b6f7e22a9cf))
+- docs(reports): the row 412 evidence - whose run it is, where one alert goes, and what was run ([`50a109f`](https://github.com/JLRoper/agent-worktree-gui/commit/50a109fdb124a9cb22f6c18973a60e0755cc23f6))
+- docs(reports): the version table follows the base to 1.194.0, so the row reads 1.194.1 ([`e547eaf`](https://github.com/JLRoper/agent-worktree-gui/commit/e547eaf8ad14beb4753d2aeae5bf65d9b28d17ce))
+- docs(reports): the console corner's room, proved at three zooms and two window heights ([`536feef`](https://github.com/JLRoper/agent-worktree-gui/commit/536feef4a614700acbac7938eb4df64b5a8a71b9))
+- docs(reports): name the merge by its branch, not by a hash that the next merge moves ([`00c8241`](https://github.com/JLRoper/agent-worktree-gui/commit/00c8241a00b29023ad22f4133ce4f570651f8352))
+- docs(reports): the suite's real counts, and the one failure that was this page ([`735cf6c`](https://github.com/JLRoper/agent-worktree-gui/commit/735cf6c85aab1dfc2b58f74b2a64d0a1c6479b54))
+- docs(reports): the row 404 tag repair, with the tag table and the gate's before and after ([`fa0b90c`](https://github.com/JLRoper/agent-worktree-gui/commit/fa0b90ca2ec9ff79014c561a726d439be931dd7d))
+- docs(reports): the row 404 report follows the base to 1.194.4 ([`946dda3`](https://github.com/JLRoper/agent-worktree-gui/commit/946dda3a40248c3c3f106e99a9e18dff65c1f849))
+- docs(reports): the landing's rebase, the four gates that read the band, and the suite's own caveat ([`393a887`](https://github.com/JLRoper/agent-worktree-gui/commit/393a887fd5193ed2bc1e139cc438b46e4ce83f15))
+- docs(reports): five drawings of one wave lane, and the 93px title that breaks today's ([`dc01e83`](https://github.com/JLRoper/agent-worktree-gui/commit/dc01e83ed27bd7378fc9d529de4567ce01fad51f))
+- docs(reports): the sweep page cites the lane predicate at its own line ([`66ecf09`](https://github.com/JLRoper/agent-worktree-gui/commit/66ecf09e5af099aba913d11b10ac1e2187e8f6e0))
+- docs(reports): the sweep page's tables wrap instead of clipping their last column ([`5b068e6`](https://github.com/JLRoper/agent-worktree-gui/commit/5b068e6e9486bfd1edf0b3f8e14db8b36834ef36))
+- docs(reports): the 7 off-main tags are settled, and the gate reads no off-main finding ([`3309ea2`](https://github.com/JLRoper/agent-worktree-gui/commit/3309ea22dda234672ffe8892629143ece0842651))
+- docs(reports): the turnover's version, read at the second rollup ([`92d6c40`](https://github.com/JLRoper/agent-worktree-gui/commit/92d6c40d435895f1b530b3a02e38188c3d8fcc76))
+- docs(reports): the sweep page records both reads of main, cut and merge ([`29fa927`](https://github.com/JLRoper/agent-worktree-gui/commit/29fa927913d6102de875af456b1a9e7861adbede))
+- docs(reports): the queue tab's two of five, with the store and the drawn list side by side ([`83cc07a`](https://github.com/JLRoper/agent-worktree-gui/commit/83cc07a312daca31bce22d00c9ae48caf2f2a92c))
+
+### Other
+
+- the console's corner stops at the pane or the viewport, and its grip is one module ([`a7be702`](https://github.com/JLRoper/agent-worktree-gui/commit/a7be70259628c5be000b63efe5a3cc2a69505556))
+- tools: a release tag must name a commit main carries ([`14bd369`](https://github.com/JLRoper/agent-worktree-gui/commit/14bd36989ba0c5de112b313074d2f431bbff0225))
+- gates: the console height and resize read the one band, and the two CSS readers read the split sheets ([`4ef1555`](https://github.com/JLRoper/agent-worktree-gui/commit/4ef155510c3114324681f15ee600c25d1ac2a4e9))
+- tools: read the page's sheets through one helper, and seed the queue gate's live holder ([`fe999c6`](https://github.com/JLRoper/agent-worktree-gui/commit/fe999c67edf1c8bcfe1081ecd772e600829a4627))
+- tools: the queue gate's holder needs no tree, so it adds no drive-letter path ([`20fd69b`](https://github.com/JLRoper/agent-worktree-gui/commit/20fd69b24610626b51e61e1ad61321b90b5c960f))
+- tools: the split gate's own version comes from the turnover branch, and the sweep page follows it ([`1d2a33d`](https://github.com/JLRoper/agent-worktree-gui/commit/1d2a33d5bd36201d9014b223b467a004aaaa95de))
+- tools: the two console gates read the page's sheets through the helper too ([`c7d15c8`](https://github.com/JLRoper/agent-worktree-gui/commit/c7d15c83593ac12758bce8d35165328637541f04))
+- the queue tab draws every open row, and re-reads when the queue file moves ([`1df6322`](https://github.com/JLRoper/agent-worktree-gui/commit/1df63221277d7f4d26af99a32be3a1fd7b74e3c7))
+- chore: 1.196.1 - the version this landing carries, above main's 1.196.0 ([`fb1db3b`](https://github.com/JLRoper/agent-worktree-gui/commit/fb1db3bcbd016a9d9e791695ae77cbdba297ccd2))
 
 ## v1.196.0 — 2026-11-28 · 6 commits
 
