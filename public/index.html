@@ -1304,6 +1304,10 @@
        needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
   <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
+  <!-- The git half of the reading below (cut 1, row 523): gitStep and the git subcommand parser, moved verbatim
+       out of the next script, which reads them back off window.wtCommandSummaryGit. It has to be evaluated BEFORE
+       core/command-summary.js, because the entry point destructures that object the moment it runs. -->
+  <script src="/core/command-summary-git.js"></script>
   <!-- The permission card's plain reading of the command: split on &&, ; and |, one short sentence per step, and
        the effects a reader is actually deciding about (deletes, history rewrites, pushes, PROD, a live port, a
        write outside the repo). NO model call and no lookup: a reading of the string, on the page, at paint time.
