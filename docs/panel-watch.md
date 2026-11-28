@@ -1,14 +1,39 @@
 # The board's watchdog sweep
 
 `tools/panel-watch.mjs` is the watch that runs on a clock instead of inside a panel turn: it looks at the board
-from outside, and when something needs a person or the assistant it hands one line block to
-`POST /api/assistant/say`. The decision it makes is `lib/panel-watch.js`, and `test/panel-watch.test.js` is the
-contract.
+from outside, and when something needs a person or the assistant it hands one block of news to
+`POST /api/assistant/watchdog`. The decision it makes is `lib/panel-watch.js`, and `test/panel-watch.test.js` is
+its contract. The delivery is the panel's: `test/watchdog-owner-routing.test.js` is that half's contract.
 
     node tools/panel-watch.mjs check                 # one pass, announce what is news
     node tools/panel-watch.mjs check --dry-run       # say what it would report, write nothing, announce nothing
     node tools/panel-watch.mjs check --json          # the pass as data, for a cron log
     node tools/panel-watch.mjs state                 # what the saved one-shot set holds
+
+## Whose run it is, and where the alert goes
+
+Every line names the run's OWNER: `LONG RUN 7a9f9a57 - ... has been running 64 min (owner: assistant-3)`. The
+owner is resolved from the board, in this order, and never guessed:
+
+1. the QUEUE ROW the run carried (the queue file's directory is the owner);
+2. the run's THREAD, when it is an assistant's own turn;
+3. the TREE's recorded owner (a tree the reader handed to another assistant);
+4. the run's own `assistantId` stamp.
+
+Nothing answers, and the line says `(owner unknown)` - never `assistant-1` by default. The old line named nobody,
+and a reader filled the gap with Assistant #1, which is how another assistant's row was reported as #1's own work.
+
+Delivery, all from ONE stored record, with the same alert id on every copy:
+
+- the sentry's own page (Assistant #1) gets the ledger turn, `Watchdog: <line> | <line>`, exactly as before;
+- the OWNER gets the alert row on its own Alerts page and a wake carrying the same id, so the assistant whose
+  queue holds the row sees it and can act;
+- the owner's `escalateTo` list is an EXTRA set of wake recipients, never a replacement.
+
+The sweep labels its lines from the panel's owner map (`GET /api/assistant/watchdog/owners`), and the panel
+re-resolves each owner before it delivers anything, so a caller's map can never decide where an alert goes. One
+record per run: a long run is a live condition said on every pass with the same id, and the sentry pass that sees
+the run stop closes it - the owner's row goes with it, and the ledger turn stays in the transcript as history.
 
 ## What one pass reads
 

@@ -160,6 +160,13 @@ test("a successful settle on a queue row fires exactly one sweep, and the wake c
   assert.match(text, /1\. Read the queue first/);
   assert.match(text, /2\. Every RUNNING row: does \/api\/jobs hold a live job for its thread\?/);
   assert.match(text, /3\. Every QUEUED row: is its deliverable already on main\?/);
+  // The two repairs this row adds to the sweep: a threadless row is not proven stale by a missing job (that vacuous
+  // pass is how #403 and #405 sat STALE while their jobs ran), and a queued row with a live job is linked, not
+  // started a second time.
+  assert.match(text, /A row with NO thread is not proven stale/, "a threadless row is not proved stale by a missing job");
+  assert.match(text, /thread slug matches the row's brief/, "the sweep looks for the run before it requeues the row");
+  assert.match(text, /linked to that job, never started a second time/, "a queued row with a live job is linked, not started twice");
+  assert.doesNotMatch(QUEUE_SWEEP_CHECKS, /[\u2013\u2014]/, "the checks are ASCII: no em or en dash in a wake the reader copies");
   assert.match(text, /4\. Every PARKED row: is the row it names as its blocker done\?/);
   // The wave rule rides with the four: the driver's own rule, said in the manager's words.
   assert.match(text, /5\. Every WAVE your rows belong to/);
