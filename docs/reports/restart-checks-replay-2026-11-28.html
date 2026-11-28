@@ -184,6 +184,7 @@ node --check lib/restart-checks.js  # no output, exit 0</pre>
     <tr><td><code>npm run test:module lib/restart.js</code>, after the cut</td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
     <tr><td><code>npm run test:module lib/restart.js -- --root &lt;turnover archive&gt;</code>, at <code>0ce44e77</code></td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
     <tr><td>the same, at <code>edd9873c</code></td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
+    <tr><td>the same, at <code>03191284</code>, the tip this note was written against</td><td>6 test files</td><td>92</td><td class="unmet">89</td><td class="unmet">3</td></tr>
     <tr><td><code>npm run test:module lib/restart-checks.js</code>, after the cut</td><td>4 test files</td><td>44</td><td class="met">44</td><td class="met">0</td></tr>
     <tr><td><code>node --test test/panel-restart.test.js</code> alone, after the cut</td><td>1 file</td><td>12</td><td class="met">12</td><td class="met">0</td></tr>
   </table>
@@ -240,7 +241,7 @@ node --check lib/restart-checks.js  # no output, exit 0</pre>
     <tr><td>08:44</td><td><code>edd9873c</code></td><td>row 515's initiative-write cut</td></tr>
     <tr><td>08:50</td><td><code>b4f88ad9</code></td><td>row 515's cut page, docs only</td></tr>
     <tr><td>08:54, the tip the first merge was made against</td><td><code>59097534</code></td><td>row 513's merge, carrying row 534's recheck page</td></tr>
-    <tr><td>08:56, the tip the final merge was made against</td><td><code>c2a6c75f</code></td><td>row 512's second restart cut, the controller moves out</td></tr>
+    <tr><td>08:56, the tip the second merge was made against</td><td><code>c2a6c75f</code></td><td>row 512's second restart cut, the controller moves out</td></tr>
   </table>
   <p class="cite">
     Row 512 landed after the first merge and moved <code>RestartController</code> out of <code>lib/restart.js</code>:
@@ -254,8 +255,9 @@ node --check lib/restart-checks.js  # no output, exit 0</pre>
     than a <code>git merge</code> in the turnover worktree: that worktree held another run's nine staged files, and a
     plain merge is refused while the index is dirty. The merge tree was read back against the tip before the ref moved,
     the new page was checked out into the turnover worktree and staged on its own, and the other nine files' staged
-    diff hashed the same before and after: <code>0383e2fa</code>. By the final merge the worktree was clean, so that
-    one is an ordinary <code>git merge --no-ff</code> there.
+    diff hashed the same before and after: <code>0383e2fa</code>. The final merge found the same nine files staged
+    again, and a plain <code>git merge</code> was refused a second time, so it took the same merge-tree and
+    commit-tree route; those nine files' staged diff hashed <code>0383e2fa</code> before and after that one too.
   </p>
   <p class="cite">
     No push, no pull request, no version bump. The turnover stays local and unpushed, and the reader decides when it
@@ -263,7 +265,7 @@ node --check lib/restart-checks.js  # no output, exit 0</pre>
   </p>
 
 
-  <p class="foot">Row 511, module-separation plan entry 16. Measured on this tree at <code>0654d6e2</code>, with the turnover read at <code>0ce44e77</code>, <code>edd9873c</code>, <code>b4f88ad9</code> and <code>59097534</code>.</p>
+  <p class="foot">Row 511, module-separation plan entry 16. Measured on this tree at <code>0654d6e2</code>, with the turnover read at <code>0ce44e77</code>, <code>edd9873c</code>, <code>b4f88ad9</code>, <code>59097534</code>, <code>c2a6c75f</code> and <code>03191284</code>.</p>
 </main>
 </body>
 </html>
