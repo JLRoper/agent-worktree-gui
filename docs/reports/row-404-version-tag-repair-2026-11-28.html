@@ -37,10 +37,12 @@
     declaration. <code>v1.193.0</code> now names <code>bad07428</code>, the commit main carries. <code>v1.193.1</code>
     was deleted: main never carried it, and the branch that held it is named below. Both release tools now refuse a
     version tag whose commit is not an ancestor of main, naming the tag and the branch, and
-    <code>npm run changelog</code> renders main's history so its top section is the version main reads.
+    <code>npm run changelog</code> renders main's history so its top section is the version main reads. The rule's
+    first run then named 7 older off-main tags, and the reader chose to settle them: all 7 are deleted, locally and
+    on origin, and the gate now reads no <code>off-main</code> finding.
   </div>
 
-  <h2>The base moved three times while the row was measured, so the invariant is the one that was proven</h2>
+  <h2>The base kept moving while the row was measured, so the invariant is the one that was proven</h2>
   <p>
     The row was written against main at <code>ef80d92d</code>, package.json <code>1.192.0</code>. Landings arrived
     while the repair was being made, and the row's own sentence ("main's top section is 1.192.0") became a statement
@@ -53,11 +55,13 @@
     <tr><td>23:54</td><td><code>c2ecc060</code></td><td>1.193.0</td><td>779</td><td>the first gate measurement (17 findings)</td></tr>
     <tr><td>00:08</td><td><code>632af659</code></td><td>1.194.0</td><td>780</td><td>a second landing, after the tag repair</td></tr>
     <tr><td>00:45</td><td><code>b5d4a3a6</code></td><td>1.194.3</td><td>781</td><td>a third landing, while the repoint was being written up</td></tr>
-    <tr><td>01:12</td><td><code>5bc3955e</code></td><td>1.194.4</td><td>782</td><td>the base every final number and the render below were measured on</td></tr>
+    <tr><td>01:12</td><td><code>5bc3955e</code></td><td>1.194.4</td><td>782</td><td>a fourth; the draft tag v1.194.4 moved onto main here</td></tr>
+    <tr><td>01:32</td><td><code>52708bbf</code></td><td>1.195.0</td><td>783</td><td>the base the final numbers and the render below were measured on</td></tr>
   </table>
   <p class="cite">
-    <code>git log -1 --format='%h %ci %s' main</code> at 01:13 EST on 2026-11-28; the render and the gate were run
-    against this base. The branch this tree rolls up into (20261127_2134_TASK-405) reads 1.195.0, above it.
+    <code>git log -1 --format='%h %ci %s' main</code> at 01:44 EST on 2026-11-28; the render and the gate were run
+    against this base. The branch this tree rolls up into (20261127_2134_TASK-405) also reads 1.195.0 - main reached
+    the same number from another landing, so the turnover's own bump belongs to whoever lands it.
   </p>
 
   <h2>The tag table: what each tag said, what was done, what it says now</h2>
@@ -152,22 +156,21 @@ delete it and name the branch that held it. Nothing was rendered.</pre>
 
   <h2>The render: main's top section is the version main reads, and no section exists for a number main skipped</h2>
   <pre>$ node tools/changelog.mjs --ref main
-changelog: wrote CHANGELOG.md - 782 releases (781 kept, 1 rendered), 2771 commits, 700427 chars, links from origin
+changelog: wrote CHANGELOG.md - 783 releases (782 kept, 1 rendered), 2776 commits, 701577 chars, links from origin
 
 $ node tools/changelog.mjs --ref main --check
-changelog: CHANGELOG.md is current - 782 releases
+changelog: CHANGELOG.md is current - 783 releases
 
-$ grep -n '^## v1\.19' CHANGELOG.md | head -5
-18:## v1.194.4 (2026-11-28, 5 commits)
-31:## v1.194.3 (2026-11-28, 3 commits)
-46:## v1.194.0 (2026-11-27, 5 commits)
-61:## v1.193.0 (2026-11-27, 5 commits)
-82:## v1.192.0 (2026-11-27, 3 commits)</pre>
+$ grep -n '^## v1\.19' CHANGELOG.md | head -4
+18:## v1.195.0 (2026-11-28, 5 commits)
+31:## v1.194.4 (2026-11-28, 5 commits)
+46:## v1.194.3 (2026-11-28, 3 commits)
+61:## v1.194.0 (2026-11-27, 5 commits)</pre>
   <p>
-    The top section is 1.194.4, the version main reads at the time of measurement, and the file reads current on
+    The top section is 1.195.0, the version main reads at the time of measurement, and the file reads current on
     main's history. There is no section for <code>v1.193.1</code>, <code>v1.193.2</code>, <code>v1.194.1</code> or
     <code>v1.194.2</code>: those numbers live on branches, and main's walk jumps the way its landings took it
-    (1.193.0 to 1.194.0, 1.194.0 to 1.194.3, 1.194.3 to 1.194.4). The only change the render makes to the file main
+    (1.193.0 to 1.194.0, 1.194.0 to 1.194.3, 1.194.4 to 1.195.0). The only change the render makes to the file main
     carries is the header's anchor sentence, which now states the rule:
   </p>
   <div class="quote">
@@ -185,18 +188,23 @@ $ grep -n '^## v1\.19' CHANGELOG.md | head -5
       <td class="unmet">17: 4 backwards, 8 wrong-commit, 5 missing (v1.192.0 among the missing; v1.191.1 wrong-commit)</td>
     </tr>
     <tr>
-      <td>this branch, after the repair</td>
+      <td>this branch, after the rule (the 7 off-main tags still present)</td>
       <td><code>5bc3955e</code> (1.194.4)</td><td>782</td>
       <td class="warn">22: 4 backwards, 7 wrong-commit, 4 missing, 7 off-main</td>
+    </tr>
+    <tr>
+      <td>after the 7 off-main tags were deleted at the reader's choice</td>
+      <td><code>52708bbf</code> (1.195.0)</td><td>783</td>
+      <td class="met">15: 4 backwards, 7 wrong-commit, 4 missing, 0 off-main</td>
     </tr>
   </table>
   <p>
     The row's three defects are closed: <code>v1.192.0</code> is no longer missing, <code>v1.191.1</code> no longer
-    reads wrong-commit, and <code>v1.193.1</code> is gone with its branch named. The 7 <code>off-main</code> findings
-    are the new rule doing its job on tags that were already there - listed below, each with the branch to settle it -
-    and the 4 backwards, 4 missing and 7 wrong-commit findings are the legacy noise this row did not scope (the same
-    classes that were red before it started).
-    <span class="cite">tools/verify-version-tags.mjs --ref main --json, measured 01:13 EST</span>
+    reads wrong-commit, and <code>v1.193.1</code> is gone with its branch named. The new rule's first run named 7
+    tags that a branch still held on a commit main never carried; those were deleted (below), and the gate now reads
+    no <code>off-main</code> finding at all. What is left is the legacy noise this row did not scope - 4 backwards
+    transitions, 7 wrong-commit anchors, 4 missing tags - the same classes that were red before it started.
+    <span class="cite">tools/verify-version-tags.mjs --ref main --json, measured 01:43 EST</span>
   </p>
   <h3>The tests this change adds, and the set that proves it</h3>
   <pre>$ node --test --test-concurrency=3 test/changelog-off-main.test.js test/changelog-scope.test.js \
@@ -209,44 +217,50 @@ tests 74 - pass 74 - fail 0</pre>
     <li>renderer: a side-branch tag is refused and nothing is written; a tag back on main's commit renders with main's version at the top; a neighbour's draft above main's newest does not block the render. <span class="cite">test/changelog-off-main.test.js:56-124</span></li>
   </ul>
 
-  <h2>What is left, named</h2>
+  <h2>The 7 off-main tags, settled at the reader's choice</h2>
   <p>
-    The new rule finds 7 version tags that a branch still holds on a commit main never carried. Each is a real
-    off-main claim; none is a defect this row introduced, and each has the same two dispositions:
+    The rule's first run named 7 version tags that a branch still held on a commit main never carried. Each was
+    deleted, locally and on origin, with the branch named here; none was a version main carries, and none was the
+    pre-landing anchor of a live branch (the one live draft in the first measurement, <code>v1.194.4</code>, landed
+    at 01:08 and its tag moved onto main's commit, so it was left alone).
   </p>
   <table>
-    <tr><th>Tag</th><th>Commit</th><th>Held by</th></tr>
-    <tr><td><code>v1.121.2</code></td><td><code>6ae43851</code></td><td><code>wtgui/unblock-worktree-creation-in-c-638385</code> (+ origin)</td></tr>
-    <tr><td><code>v1.184.0</code>, <code>v1.184.1</code>, <code>v1.187.0</code></td><td><code>e41b215b</code>, <code>7f6afcc4</code>, <code>7b5756eb</code></td><td><code>20261127_1422_TASK-371_build-the-initiative-tag</code> and the six branches merged from it (+ origin)</td></tr>
+    <tr><th>Tag deleted</th><th>Commit it named</th><th>The branch that held it</th></tr>
+    <tr><td><code>v1.121.2</code></td><td><code>6ae43851</code></td><td><code>wtgui/unblock-worktree-creation-in-c-638385</code> (+ its origin copy)</td></tr>
+    <tr><td><code>v1.184.0</code>, <code>v1.184.1</code>, <code>v1.187.0</code></td><td><code>e41b215b</code>, <code>7f6afcc4</code>, <code>7b5756eb</code></td><td><code>20261127_1422_TASK-371_build-the-initiative-tag</code> and the six branches merged from it</td></tr>
     <tr><td><code>v1.57.16</code>, <code>v1.57.19</code></td><td><code>c1edd132</code>, <code>992b1ce8</code></td><td><code>fix/pool-retire-safe</code></td></tr>
     <tr><td><code>v1.76.17</code></td><td><code>93ad5b4a</code></td><td><code>backup/wtgui-round-one-parent-tree-2026-11-10</code></td></tr>
   </table>
+  <pre>$ git tag -d v1.121.2 v1.184.0 ... ; git push origin :refs/tags/v1.121.2 :refs/tags/...   (one at a time)
+ - [deleted]           v1.121.2
+ - [deleted]           v1.184.0
+ - [deleted]           v1.184.1
+ - [deleted]           v1.187.0
+ - [deleted]           v1.57.16
+ - [deleted]           v1.57.19
+ - [deleted]           v1.76.17</pre>
   <p>
-    One more was a live draft in the first measurement and is not in this list: <code>v1.194.4</code> at
-    <code>960044f9</code>, held by <code>wtgui/make-the-kind-column-name-what-a-tree-87bc8d</code>. That tree landed
-    at 01:08, main now declares 1.194.4, and the tag moved onto main's commit - which is the rule working rather
-    than a gap in it.
-  </p>
-  <p>
-    The legacy findings the row did not scope, unchanged in class: 4 backwards transitions (1.76.13 to 1.76.12,
-    1.79.0 to 1.78.0, 1.170.0 to 1.169.9, 1.171.0 to 1.170.5), 7 wrong-commit anchors (v1.76.22, v1.76.23, v1.91.2,
-    v1.92.4, v1.142.2, v1.169.9, v1.170.5) and 4 missing tags (v1.82.2, v1.173.2, v1.189.0, v1.191.0 - the last was
-    declared in a merge resolution, so <code>version.mjs tag</code> refuses to invent an anchor for it). And 47 tags
-    are fossils no branch holds; they are notes, not findings, and deleting them is a cleanup row's job.
+    The gate then reads <b>15 findings</b> across 783 bumps with <b>no off-main finding</b>. What remains: the 4
+    backwards transitions (1.76.13 to 1.76.12, 1.79.0 to 1.78.0, 1.170.0 to 1.169.9, 1.171.0 to 1.170.5), the 7
+    wrong-commit anchors (v1.76.22, v1.76.23, v1.91.2, v1.92.4, v1.142.2, v1.169.9, v1.170.5) and the 4 missing tags
+    (v1.82.2, v1.173.2, v1.189.0, v1.191.0 - the last declared in a merge resolution, so <code>version.mjs tag</code>
+    refuses to invent an anchor for it). 47 tags are fossils no branch holds; they stay notes, and deleting them is a
+    cleanup row's job.
   </p>
 
   <h2>How the landing was done</h2>
   <p>
-    The work is two commits on <code>wtgui/row-404-is-re-scoped-and-its-lane-is-641bbc</code> (<code>cb477327</code>
-    the tools, tests, docs and render; <code>f34f87dd</code> the merge of <code>origin/main</code>), merged into the
-    turnover branch locally. No branch was pushed and no pull request was opened: that branch is where this project's
-    work rolls up. The tag repairs are the only remote writes, because the gate reads origin's tags and a local-only
-    repair would be undone by the next fetch.
+    The work is a set of commits on <code>wtgui/row-404-is-re-scoped-and-its-lane-is-641bbc</code> - the tools, the
+    tests, docs/versioning.md and the render (<code>cb477327</code>), the merge of <code>origin/main</code>
+    (<code>f34f87dd</code>), the report (<code>0dc63efc</code>, <code>57b0220f</code>), the render at 1.195.0
+    (<code>2787c394</code>) - merged into the turnover branch locally. No branch was pushed and no pull request was
+    opened: that branch is where this project's work rolls up. The remote writes are the tag refs, because the gate
+    reads origin's tags and a local-only repair would be undone by the next fetch.
   </p>
 
   <div class="foot">
     Measured in C:/ProjectDevelopment/agent-worktree-gui/.worktrees/row-404-is-re-scoped-and-its-lane-is-641bbc on
-    2026-11-28 at 01:13 EST, with main at <code>5bc3955e</code> (1.194.4). Every number above comes from a command in
+    2026-11-28 at 01:44 EST, with main at <code>52708bbf</code> (1.195.0). Every number above comes from a command in
     this worktree; the tag rows from <code>git cat-file</code>/<code>git ls-remote</code>, the findings from
     <code>tools/verify-version-tags.mjs --json</code>, the render from <code>tools/changelog.mjs --ref main</code>.
   </div>
